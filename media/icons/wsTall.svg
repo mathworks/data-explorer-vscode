@@ -1,0 +1,6 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M1.5 2.5C1.5 1.94772 1.94772 1.5 2.5 1.5H12.5C13.0523 1.5 13.5 1.94772 13.5 2.5V12.5C13.5 13.0523 13.0523 13.5 12.5 13.5H2.5C1.94772 13.5 1.5 13.0523 1.5 12.5V2.5Z" fill="var(--mw-icon-background-light-yellow, #FFF5BC)" stroke="var(--mw-icon-border-default-blue, #1656A7)"/>
+<path d="M8 4.5C8 4.77614 7.77614 5 7.5 5C7.22386 5 7 4.77614 7 4.5C7 4.22386 7.22386 4 7.5 4C7.77614 4 8 4.22386 8 4.5Z" fill="var(--mw-icon-glyph-content-blue, #1656A8)"/>
+<path d="M8 7.5C8 7.77614 7.77614 8 7.5 8C7.22386 8 7 7.77614 7 7.5C7 7.22386 7.22386 7 7.5 7C7.77614 7 8 7.22386 8 7.5Z" fill="var(--mw-icon-glyph-content-blue, #1656A8)"/>
+<path d="M8 10.5C8 10.7761 7.77614 11 7.5 11C7.22386 11 7 10.7761 7 10.5C7 10.2239 7.22386 10 7.5 10C7.77614 10 8 10.2239 8 10.5Z" fill="var(--mw-icon-glyph-content-blue, #1656A8)"/>
+</svg>

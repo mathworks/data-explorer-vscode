@@ -1,0 +1,371 @@
+{
+  "text": {
+    "format": "uncompressed-text",
+    "signals": {
+      "vars": [
+        "Kp",
+        "gainVec",
+        "offsetMat",
+        "flag",
+        "label",
+        "matParam"
+      ],
+      "values": {
+        "Kp": 2.5,
+        "gainVec": [
+          1,
+          2,
+          3
+        ],
+        "flag": true,
+        "label": "signal-label"
+      }
+    },
+    "common": {
+      "stored": [
+        "sharedGain",
+        "sharedOffset"
+      ],
+      "classes": {
+        "sharedGain": "double scalar",
+        "sharedOffset": "Simulink.Parameter"
+      },
+      "failed": [],
+      "failReasons": {},
+      "values": {}
+    },
+    "util": {
+      "stored": [
+        "utilConst"
+      ],
+      "classes": {
+        "utilConst": "double scalar"
+      },
+      "failed": [],
+      "failReasons": {},
+      "values": {}
+    },
+    "params": {
+      "stored": [
+        "scalarD",
+        "sglScalar",
+        "i8Scalar",
+        "i16Scalar",
+        "i32Scalar",
+        "u8Scalar",
+        "u16Scalar",
+        "u32Scalar",
+        "boolFlag",
+        "negD",
+        "rowVec",
+        "colVec",
+        "mat2x2",
+        "mat2x3",
+        "i32Vec",
+        "boolVec",
+        "emptyD",
+        "cplxScalar",
+        "cplxVec",
+        "charStr",
+        "strScalar",
+        "strArray",
+        "myStruct",
+        "nestedStruct",
+        "structArray",
+        "myCell",
+        "gravity",
+        "pInt16",
+        "sig1",
+        "MyBus",
+        "MyConnBus",
+        "MyNumType",
+        "MyAlias",
+        "MyValueType",
+        "MyEnum",
+        "MyLUT",
+        "MyBkpt",
+        "MyVarCtrl",
+        "MyVarExpr",
+        "MyVarVar"
+      ],
+      "classes": {
+        "scalarD": "double scalar",
+        "sglScalar": "single scalar",
+        "i8Scalar": "int8 scalar",
+        "i16Scalar": "int16 scalar",
+        "i32Scalar": "int32 scalar",
+        "u8Scalar": "uint8 scalar",
+        "u16Scalar": "uint16 scalar",
+        "u32Scalar": "uint32 scalar",
+        "boolFlag": "logical scalar",
+        "negD": "negative double",
+        "rowVec": "double row vector",
+        "colVec": "double column vector",
+        "mat2x2": "2x2 double matrix",
+        "mat2x3": "2x3 double matrix",
+        "i32Vec": "int32 row vector",
+        "boolVec": "logical vector",
+        "emptyD": "empty double",
+        "cplxScalar": "complex scalar",
+        "cplxVec": "complex vector",
+        "charStr": "char row",
+        "strScalar": "string scalar",
+        "strArray": "string array",
+        "myStruct": "scalar struct",
+        "nestedStruct": "nested struct",
+        "structArray": "struct array",
+        "myCell": "cell array",
+        "gravity": "Simulink.Parameter",
+        "pInt16": "Simulink.Parameter int16",
+        "sig1": "Simulink.Signal",
+        "MyBus": "Simulink.Bus",
+        "MyConnBus": "Simulink.ConnectionBus",
+        "MyNumType": "Simulink.NumericType",
+        "MyAlias": "Simulink.AliasType",
+        "MyValueType": "Simulink.ValueType",
+        "MyEnum": "EnumTypeDefinition",
+        "MyLUT": "Simulink.LookupTable",
+        "MyBkpt": "Simulink.Breakpoint",
+        "MyVarCtrl": "Simulink.VariantControl",
+        "MyVarExpr": "Simulink.VariantExpression",
+        "MyVarVar": "Simulink.VariantVariable"
+      },
+      "failed": [],
+      "failReasons": {},
+      "values": {
+        "scalarD": 3.14,
+        "i32Scalar": 42,
+        "u8Scalar": 200,
+        "boolFlag": true,
+        "charStr": "hello",
+        "strScalar": "worldString",
+        "rowVec": [
+          10,
+          20,
+          30,
+          40
+        ],
+        "mat2x2": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ]
+        ]
+      }
+    }
+  },
+  "binary": {
+    "format": "compressed-binary",
+    "signals": {
+      "vars": [
+        "Kp",
+        "gainVec",
+        "offsetMat",
+        "flag",
+        "label",
+        "matParam"
+      ],
+      "values": {
+        "Kp": 2.5,
+        "gainVec": [
+          1,
+          2,
+          3
+        ],
+        "flag": true,
+        "label": "signal-label"
+      }
+    },
+    "common": {
+      "stored": [
+        "sharedGain",
+        "sharedOffset"
+      ],
+      "classes": {
+        "sharedGain": "double scalar",
+        "sharedOffset": "Simulink.Parameter"
+      },
+      "failed": [],
+      "failReasons": {},
+      "values": {}
+    },
+    "util": {
+      "stored": [
+        "utilConst"
+      ],
+      "classes": {
+        "utilConst": "double scalar"
+      },
+      "failed": [],
+      "failReasons": {},
+      "values": {}
+    },
+    "params": {
+      "stored": [
+        "scalarD",
+        "sglScalar",
+        "i8Scalar",
+        "i16Scalar",
+        "i32Scalar",
+        "u8Scalar",
+        "u16Scalar",
+        "u32Scalar",
+        "boolFlag",
+        "negD",
+        "rowVec",
+        "colVec",
+        "mat2x2",
+        "mat2x3",
+        "i32Vec",
+        "boolVec",
+        "emptyD",
+        "cplxScalar",
+        "cplxVec",
+        "charStr",
+        "strScalar",
+        "strArray",
+        "myStruct",
+        "nestedStruct",
+        "structArray",
+        "myCell",
+        "gravity",
+        "pInt16",
+        "sig1",
+        "MyBus",
+        "MyConnBus",
+        "MyNumType",
+        "MyAlias",
+        "MyValueType",
+        "MyEnum",
+        "MyLUT",
+        "MyBkpt",
+        "MyVarCtrl",
+        "MyVarExpr",
+        "MyVarVar"
+      ],
+      "classes": {
+        "scalarD": "double scalar",
+        "sglScalar": "single scalar",
+        "i8Scalar": "int8 scalar",
+        "i16Scalar": "int16 scalar",
+        "i32Scalar": "int32 scalar",
+        "u8Scalar": "uint8 scalar",
+        "u16Scalar": "uint16 scalar",
+        "u32Scalar": "uint32 scalar",
+        "boolFlag": "logical scalar",
+        "negD": "negative double",
+        "rowVec": "double row vector",
+        "colVec": "double column vector",
+        "mat2x2": "2x2 double matrix",
+        "mat2x3": "2x3 double matrix",
+        "i32Vec": "int32 row vector",
+        "boolVec": "logical vector",
+        "emptyD": "empty double",
+        "cplxScalar": "complex scalar",
+        "cplxVec": "complex vector",
+        "charStr": "char row",
+        "strScalar": "string scalar",
+        "strArray": "string array",
+        "myStruct": "scalar struct",
+        "nestedStruct": "nested struct",
+        "structArray": "struct array",
+        "myCell": "cell array",
+        "gravity": "Simulink.Parameter",
+        "pInt16": "Simulink.Parameter int16",
+        "sig1": "Simulink.Signal",
+        "MyBus": "Simulink.Bus",
+        "MyConnBus": "Simulink.ConnectionBus",
+        "MyNumType": "Simulink.NumericType",
+        "MyAlias": "Simulink.AliasType",
+        "MyValueType": "Simulink.ValueType",
+        "MyEnum": "EnumTypeDefinition",
+        "MyLUT": "Simulink.LookupTable",
+        "MyBkpt": "Simulink.Breakpoint",
+        "MyVarCtrl": "Simulink.VariantControl",
+        "MyVarExpr": "Simulink.VariantExpression",
+        "MyVarVar": "Simulink.VariantVariable"
+      },
+      "failed": [],
+      "failReasons": {},
+      "values": {
+        "scalarD": 3.14,
+        "i32Scalar": 42,
+        "u8Scalar": 200,
+        "boolFlag": true,
+        "charStr": "hello",
+        "strScalar": "worldString",
+        "rowVec": [
+          10,
+          20,
+          30,
+          40
+        ],
+        "mat2x2": [
+          [
+            1,
+            2
+          ],
+          [
+            3,
+            4
+          ]
+        ]
+      }
+    }
+  },
+  "relationships": {
+    "model_to_sldd": [
+      {
+        "model": "top.slx",
+        "sldd": "params.sldd"
+      }
+    ],
+    "model_to_model": [
+      {
+        "model": "top.slx",
+        "ref": "plant.slx"
+      },
+      {
+        "model": "plant.slx",
+        "ref": "sub.slx"
+      }
+    ],
+    "model_to_mat": [
+      {
+        "model": "top.slx",
+        "mat": "signals.mat"
+      }
+    ],
+    "sldd_to_sldd": [
+      {
+        "sldd": "params.sldd",
+        "ref": "common.sldd"
+      },
+      {
+        "sldd": "util.sldd",
+        "ref": "common.sldd"
+      }
+    ]
+  },
+  "paramUsage": [
+    {
+      "block": "C1",
+      "property": "Value",
+      "param": "scalarD"
+    },
+    {
+      "block": "G1",
+      "property": "Gain",
+      "param": "gravity"
+    },
+    {
+      "block": "G2",
+      "property": "Gain",
+      "param": "Kp"
+    }
+  ]
+}

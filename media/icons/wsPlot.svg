@@ -1,0 +1,8 @@
+<svg width="16" height="18" viewBox="0 0 16 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="5.5" y="5.5" width="10" height="10" rx="1" fill="var(--mw-icon-background-light-yellow, #FFF5BC)" stroke="var(--mw-icon-border-default-blue, #1656A7)"/>
+<path d="M5.5 13.5C5.5 13.5 11 17 15.5 11.5" stroke="#0072BD" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M5.49963 12.9867C5.49963 12.9867 13.9346 16.4259 14.4996 5.5" stroke="#D95319" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M5.5 6.5C5.5 5.94772 5.94772 5.5 6.5 5.5H14.5C15.0523 5.5 15.5 5.94772 15.5 6.5V14.5C15.5 15.0523 15.0523 15.5 14.5 15.5H6.5C5.94772 15.5 5.5 15.0523 5.5 14.5V6.5Z" stroke="var(--mw-icon-border-default-blue, #1656A7)"/>
+<circle cx="5.5" cy="7.5" r="5" fill="var(--mw-icon-background-default-white, #FFFFFF)" stroke="var(--mw-icon-border-default-gray, #616161)"/>
+<path d="M5.5 4.5V7.49995H8.5" stroke="var(--mw-icon-glyph-content-gray, #616162)" stroke-linecap="square"/>
+</svg>

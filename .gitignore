@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist-test/
+coverage/
+.vscode-test/
+.vscode-test-web/
+*.vsix
+test/parity/dump-output.txt
+.DS_Store

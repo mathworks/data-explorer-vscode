@@ -1,0 +1,1 @@
+function y=libfun(x); y=2*x; end

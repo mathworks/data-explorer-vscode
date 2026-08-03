@@ -1,0 +1,7 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M3.5 3.5H14.5V13.5C14.5 14.0523 14.0523 14.5 13.5 14.5H3.5V3.5Z" fill="var(--mw-icon-background-light-yellow, #FFF5BC)" stroke="var(--mw-icon-border-default-blue, #1656A7)"/>
+<path d="M0.500049 3.5H3.50005V0.500171L13.5 0.500016C14.0523 0.500007 14.5 0.947725 14.5 1.50002L14.5001 3.50017L0.500049 3.5Z" fill="var(--mw-icon-background-default-selection, #B4DEFF)"/>
+<path d="M1.49995 14.5001C0.947684 14.5 0.500002 14.0523 0.500004 13.5001L0.500049 3.5V1.50006C0.500049 0.94775 0.947799 0.500026 1.50011 0.500057L3.50005 0.500171V14.5002L1.49995 14.5001Z" fill="var(--mw-icon-background-default-selection, #B4DEFF)"/>
+<path d="M0.500049 3.5L14.5001 3.50017L14.5 1.50002C14.5 0.947725 14.0523 0.500007 13.5 0.500016L3.50005 0.500171M0.500049 3.5L0.500004 13.5001C0.500002 14.0523 0.947684 14.5 1.49995 14.5001L3.50005 14.5002V0.500171M0.500049 3.5V1.50006C0.500049 0.94775 0.947799 0.500026 1.50011 0.500057L3.50005 0.500171M0.500049 3.5H3.50005V0.500171" stroke="var(--mw-icon-border-default-blue, #1656A7)"/>
+<path d="M7.5 1.5V13.5M11.5002 1.5V13.5M13.5 11.5H1.5M13.5 7.5H1.5" stroke="var(--mw-icon-border-default-blue, #1656A7)" stroke-linecap="square"/>
+</svg>

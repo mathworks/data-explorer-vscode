@@ -1,0 +1,530 @@
+{
+  "__MW_TEXT_COREPROPERTIES__": {
+    "release": "R2026b"
+  },
+  "__MW_TEXT_PARTS__": {
+    "__MW_TEXT_PART__/data/chunk0": {
+      "__MW_TEXT_content": {
+        "entries": [
+          {
+            "name": "Array",
+            "metadata": {
+              "uuid": "7751696f-9de5-4690-b5ef-c92df873dc12",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260506T140856.858540",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": [
+              1,
+              2,
+              3
+            ]
+          },
+          {
+            "name": "Array1",
+            "metadata": {
+              "uuid": "1f58fc62-b4c2-476e-b3ed-2fca052f1451",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260506T140915.028488",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": {
+              "_type": "double",
+              "_value": "Matrix(3,1)\n[1]\n[2]\n[3]"
+            }
+          },
+          {
+            "name": "CellArray",
+            "metadata": {
+              "uuid": "432413f2-accc-4080-bd2c-ef9a0c4752e2",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260506T140944.463132",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": {
+              "_array_type": "Cell",
+              "_dimensions": [
+                1,
+                3
+              ],
+              "_elements": [
+                1,
+                2,
+                3
+              ],
+              "_mw_element_type": "MATLABArray"
+            }
+          },
+          {
+            "name": "CellArray1",
+            "metadata": {
+              "uuid": "42ad9274-ac96-483f-9ecd-0d194a078f07",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260506T140955.206403",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": {
+              "_array_type": "Cell",
+              "_dimensions": [
+                3,
+                1
+              ],
+              "_elements": [
+                1,
+                2,
+                3
+              ],
+              "_mw_element_type": "MATLABArray"
+            }
+          },
+          {
+            "name": "CellMatrix",
+            "metadata": {
+              "uuid": "d06bef35-7e11-46c1-8b07-8508cc058642",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260506T141009.539505",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": {
+              "_array_type": "Cell",
+              "_dimensions": [
+                2,
+                2
+              ],
+              "_elements": [
+                1,
+                3,
+                2,
+                4
+              ],
+              "_mw_element_type": "MATLABArray"
+            }
+          },
+          {
+            "name": "Complex",
+            "metadata": {
+              "uuid": "54f0f81f-ba2b-4b69-8b40-1d443313ec4b",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260506T141112.619817",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": {
+              "_type": "cdata",
+              "_value": "  %)30     .    2     8    (    !@@        %    \"     $    !     0         )    \"             ! \"0    @            (0 \u0000\u0000\u0000"
+            }
+          },
+          {
+            "name": "Hybrid",
+            "metadata": {
+              "uuid": "b504228c-4c60-43b0-865e-2f808236c96c",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260506T141335.183115",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": {
+              "_array_type": "Cell",
+              "_dimensions": [
+                1,
+                2
+              ],
+              "_elements": [
+                {
+                  "_array_type": "Struct",
+                  "_dimensions": [
+                    1,
+                    1
+                  ],
+                  "_elements": [
+                    {
+                      "field": {
+                        "_type": "double",
+                        "_value": "Matrix(2,2)\n[1, 2]\n[3, 4]"
+                      }
+                    }
+                  ],
+                  "_fields": [
+                    "field"
+                  ],
+                  "_mw_element_type": "MATLABArray"
+                },
+                {
+                  "_array_type": "Cell",
+                  "_dimensions": [
+                    1,
+                    3
+                  ],
+                  "_elements": [
+                    {
+                      "_array_type": "Struct",
+                      "_dimensions": [
+                        1,
+                        1
+                      ],
+                      "_elements": [
+                        {}
+                      ],
+                      "_mw_element_type": "MATLABArray"
+                    },
+                    [
+                      1,
+                      2,
+                      3
+                    ],
+                    {
+                      "_array_type": "Cell",
+                      "_dimensions": [
+                        3,
+                        1
+                      ],
+                      "_elements": [
+                        1,
+                        2,
+                        3
+                      ],
+                      "_mw_element_type": "MATLABArray"
+                    }
+                  ],
+                  "_mw_element_type": "MATLABArray"
+                }
+              ],
+              "_mw_element_type": "MATLABArray"
+            }
+          },
+          {
+            "name": "Matrix",
+            "metadata": {
+              "uuid": "0101ecaa-8859-4d65-aca9-12f7c8650d23",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260506T140928.279361",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": {
+              "_type": "double",
+              "_value": "Matrix(2,2)\n[1, 2]\n[3, 4]"
+            }
+          },
+          {
+            "name": "NestedStruct",
+            "metadata": {
+              "uuid": "82974510-49d6-47be-a3c7-1486283d2cd4",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260506T141201.862682",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": {
+              "_array_type": "Struct",
+              "_dimensions": [
+                1,
+                1
+              ],
+              "_elements": [
+                {
+                  "field": {
+                    "_array_type": "Struct",
+                    "_dimensions": [
+                      1,
+                      1
+                    ],
+                    "_elements": [
+                      {
+                        "field": 1
+                      }
+                    ],
+                    "_fields": [
+                      "field"
+                    ],
+                    "_mw_element_type": "MATLABArray"
+                  },
+                  "field1": {
+                    "_array_type": "Struct",
+                    "_dimensions": [
+                      1,
+                      1
+                    ],
+                    "_elements": [
+                      {
+                        "field": 2,
+                        "field1": 3
+                      }
+                    ],
+                    "_fields": [
+                      "field",
+                      "field1"
+                    ],
+                    "_mw_element_type": "MATLABArray"
+                  },
+                  "field2": 4
+                }
+              ],
+              "_fields": [
+                "field",
+                "field1",
+                "field2"
+              ],
+              "_mw_element_type": "MATLABArray"
+            }
+          },
+          {
+            "name": "Number",
+            "metadata": {
+              "uuid": "44f93c7d-5f5e-46fe-9f13-5091b12b8bf5",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260506T140843.021970",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": 1
+          },
+          {
+            "name": "PI",
+            "metadata": {
+              "uuid": "8f81a8da-0ed2-4ea2-b475-8ccb851ad87c",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260506T141057.856163",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": 3.141592653589793
+          },
+          {
+            "name": "Struct",
+            "metadata": {
+              "uuid": "6bee62b9-3883-46d5-920b-6bd16b344107",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260506T141043.144406",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": {
+              "_array_type": "Struct",
+              "_dimensions": [
+                1,
+                1
+              ],
+              "_elements": [
+                {
+                  "a": 1,
+                  "b": 2.56
+                }
+              ],
+              "_fields": [
+                "a",
+                "b"
+              ],
+              "_mw_element_type": "MATLABArray"
+            }
+          },
+          {
+            "name": "char",
+            "metadata": {
+              "uuid": "c362975f-c574-4577-b810-b692f2e7b0ed",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260506T141410.913466",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": "abc"
+          },
+          {
+            "name": "string",
+            "metadata": {
+              "uuid": "2d294cf4-3e13-4d37-a10f-84f56dafcc30",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260506T141419.428803",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": [
+              "abc"
+            ]
+          },
+          {
+            "name": "stringArray",
+            "metadata": {
+              "uuid": "0fd7a89d-f426-4f92-ad17-bdf38eefc9e3",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260506T141452.826799",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": {
+              "_array_type": "String",
+              "_dimensions": [
+                1,
+                3
+              ],
+              "_elements": [
+                "abc",
+                "de",
+                "f"
+              ],
+              "_mw_element_type": "MATLABArray"
+            }
+          },
+          {
+            "name": "stringMatrix",
+            "metadata": {
+              "uuid": "50c5ae01-9f54-4568-8dcc-dedf1c68c5a0",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260518T194456.564398",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": {
+              "_array_type": "String",
+              "_dimensions": [
+                2,
+                2
+              ],
+              "_elements": [
+                "abc",
+                "f",
+                "de",
+                "gh i"
+              ],
+              "_mw_element_type": "MATLABArray"
+            }
+          },
+          {
+            "name": "stringVArray",
+            "metadata": {
+              "uuid": "c6ba0ae8-bc90-428b-865c-263b717ffc47",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260518T194428.595377",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": {
+              "_array_type": "String",
+              "_dimensions": [
+                3,
+                1
+              ],
+              "_elements": [
+                "abc",
+                "de",
+                "f"
+              ],
+              "_mw_element_type": "MATLABArray"
+            }
+          },
+          {
+            "name": "structArray",
+            "metadata": {
+              "uuid": "b645a740-7f01-436a-9985-ae66f962a3d5",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260518T194602.241627",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": {
+              "_array_type": "Struct",
+              "_dimensions": [
+                1,
+                2
+              ],
+              "_elements": [
+                {
+                  "a": 1,
+                  "b": 2
+                },
+                {
+                  "a": 1,
+                  "b": 3
+                }
+              ],
+              "_fields": [
+                "a",
+                "b"
+              ],
+              "_mw_element_type": "MATLABArray"
+            }
+          },
+          {
+            "name": "structMatrix",
+            "metadata": {
+              "uuid": "bee8fe02-908b-49ed-b57d-d4931c80e28a",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260518T194638.175530",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": {
+              "_array_type": "Struct",
+              "_dimensions": [
+                2,
+                2
+              ],
+              "_elements": [
+                {
+                  "a": 1,
+                  "b": 2
+                },
+                {
+                  "a": 1,
+                  "b": 4
+                },
+                {
+                  "a": 1,
+                  "b": 3
+                },
+                {
+                  "a": 1,
+                  "b": 5
+                }
+              ],
+              "_fields": [
+                "a",
+                "b"
+              ],
+              "_mw_element_type": "MATLABArray"
+            }
+          },
+          {
+            "name": "structVArray",
+            "metadata": {
+              "uuid": "e83bf49f-0bcc-491e-aa31-71739fce7b7a",
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "lastmod": "20260518T194616.500976",
+              "modifiedby": "weiwang",
+              "isderived": "0"
+            },
+            "value": {
+              "_array_type": "Struct",
+              "_dimensions": [
+                2,
+                1
+              ],
+              "_elements": [
+                {
+                  "a": 1,
+                  "b": 2
+                },
+                {
+                  "a": 1,
+                  "b": 3
+                }
+              ],
+              "_fields": [
+                "a",
+                "b"
+              ],
+              "_mw_element_type": "MATLABArray"
+            }
+          }
+        ],
+        "Dictionary References": [],
+        "AllowAccessBWS": false
+      }
+    }
+  }
+}

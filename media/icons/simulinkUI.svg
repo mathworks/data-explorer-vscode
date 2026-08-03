@@ -1,0 +1,6 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M0.5 1.5C0.5 0.947716 0.947715 0.5 1.5 0.5H13.5C14.0523 0.5 14.5 0.947715 14.5 1.5V13.5C14.5 14.0523 14.0523 14.5 13.5 14.5H1.5C0.947716 14.5 0.5 14.0523 0.5 13.5V1.5Z" stroke="var(--mw-icon-object-primary, #616160)"/>
+<path d="M2.5 5.5H10.5V7.5" stroke="var(--mw-icon-object-primary, #616160)" stroke-linecap="square" stroke-linejoin="round"/>
+<path d="M3 9V2L9 5.49999L3 9Z" fill="var(--mw-icon-object-primary, #616160)"/>
+<path d="M8 8.5C8 8.22386 8.22386 8 8.5 8H12.5C12.7761 8 13 8.22386 13 8.5V12.5C13 12.7761 12.7761 13 12.5 13H8.5C8.22386 13 8 12.7761 8 12.5V8.5Z" fill="var(--mw-icon-object-primary, #616160)"/>
+</svg>

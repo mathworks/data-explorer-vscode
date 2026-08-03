@@ -1,0 +1,7 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M0.5 2C0.5 1.72386 0.723858 1.5 1 1.5H5.45536C5.76395 1.5 6.05526 1.64247 6.24471 1.88606L7.19973 3.11394C7.38919 3.35753 7.68049 3.5 7.98908 3.5H14C14.2761 3.5 14.5 3.72386 14.5 4V13C14.5 13.2761 14.2761 13.5 14 13.5H1C0.723857 13.5 0.5 13.2761 0.5 13V2Z" fill="var(--mw-icon-background-default-white, #FFFFFF)" stroke="var(--mw-icon-border-default-gray, #616161)"/>
+<path d="M3.5 6V9M7.5 6V9M11.5 6V9" stroke="var(--mw-icon-glyph-content-gray, #616162)"/>
+<path d="M5 9H2L3.5 11L5 9Z" fill="var(--mw-icon-glyph-content-gray, #616162)"/>
+<path d="M9 9H6L7.5 11L9 9Z" fill="var(--mw-icon-glyph-content-gray, #616162)"/>
+<path d="M13 9H10L11.5 11L13 9Z" fill="var(--mw-icon-glyph-content-gray, #616162)"/>
+</svg>

@@ -1,0 +1,177 @@
+{
+  "name": "data-explorer-vscode",
+  "displayName": "Simulink Data Explorer Extension for Visual Studio Code",
+  "description": "Explore Simulink models, data dictionaries, MAT-files, and projects as interactive tables and relationship trees.",
+  "version": "1.0.1",
+  "publisher": "mathworks",
+  "private": true,
+  "license": "BSD-3-Clause",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mathworks/data-explorer-vscode.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Visualization"
+  ],
+  "main": "./dist/extension.js",
+  "browser": "./dist/web/extension.js",
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "dataExplorer.binaryView",
+        "displayName": "Data Explorer",
+        "selector": [
+          {
+            "filenamePattern": "*.sldd"
+          },
+          {
+            "filenamePattern": "*.mat"
+          },
+          {
+            "filenamePattern": "*.slx"
+          },
+          {
+            "filenamePattern": "*.prj"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "dataExplorer.tableView",
+        "displayName": "Data Explorer (editable)",
+        "selector": [
+          {
+            "filenamePattern": "*.sldd"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
+    "languages": [
+      {
+        "id": "json",
+        "extensions": [
+          ".sldd"
+        ]
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dataExplorer",
+          "title": "Simulink Data Explorer",
+          "icon": "media/dataexplorer.svg"
+        },
+        {
+          "id": "dataExplorerProperties",
+          "title": "Properties",
+          "icon": "media/properties.svg"
+        }
+      ]
+    },
+    "views": {
+      "dataExplorer": [
+        {
+          "id": "dataExplorer.sections",
+          "name": "Simulink Data Explorer",
+          "type": "tree"
+        }
+      ],
+      "dataExplorerProperties": [
+        {
+          "id": "dataExplorer.properties",
+          "name": "Properties",
+          "type": "webview"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "dataExplorer.openFile",
+        "title": "Open in Data Explorer",
+        "category": "Data Explorer"
+      },
+      {
+        "command": "dataExplorer.showProperties",
+        "title": "Data Explorer: Show Properties"
+      },
+      {
+        "command": "dataExplorer.viewAsText",
+        "title": "View as Text",
+        "category": "Data Explorer",
+        "icon": "$(json)"
+      },
+      {
+        "command": "dataExplorer.viewAsTable",
+        "title": "View as Table",
+        "category": "Data Explorer",
+        "icon": "$(table)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "dataExplorer.viewAsText",
+          "when": "activeCustomEditorId == dataExplorer.tableView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "dataExplorer.viewAsTable",
+          "when": "!activeCustomEditorId && resourceExtname == .sldd",
+          "group": "navigation@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "dataExplorer.viewAsText",
+          "when": "resourceExtname == .sldd && activeCustomEditorId == dataExplorer.tableView"
+        },
+        {
+          "command": "dataExplorer.viewAsTable",
+          "when": "resourceExtname == .sldd"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build:webview": "vite build",
+    "build:host": "node esbuild.mjs",
+    "build:web": "node esbuild.mjs --web",
+    "copy:icons": "node -e \"const fs=require('fs');fs.mkdirSync('dist/webview/icons',{recursive:true});for(const f of fs.readdirSync('media/icons'))fs.copyFileSync('media/icons/'+f,'dist/webview/icons/'+f)\"",
+    "build": "npm run build:webview && npm run copy:icons && npm run build:host",
+    "watch:host": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "compile:test": "node esbuild.test.mjs",
+    "pretest:integration": "npm run build && npm run compile:test",
+    "test:integration": "vscode-test",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "@lit/context": "^1.1.6",
+    "fast-xml-parser": "^5.8.0",
+    "fflate": "^0.8.3",
+    "highlight.js": "^11.11.1",
+    "lit": "^3.2.0"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "@vitest/coverage-v8": "^4.1.10",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.0.0",
+    "@vscode/test-web": "^0.0.81",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.24.0",
+    "happy-dom": "^20.9.0",
+    "mocha": "^11.7.6",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "vitest": "^4.1.7"
+  }
+}

@@ -1,0 +1,32 @@
+{
+	"__MW_TEXT_COREPROPERTIES__": {
+		"release": "R2027a"
+	},
+	"__MW_TEXT_PARTS__": {
+		"__MW_TEXT_PART__/data/chunk0": {
+			"__MW_TEXT_content": {
+				"entries": [
+					{
+						"name": "utilConst",
+						"metadata": {
+							"uuid": "a57c6a05-ccfc-4508-be1b-ae2cac3f4069",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20260704T015202.211794",
+							"modifiedby": "weiwang",
+							"isderived": "0"
+						},
+						"value": [
+							1,
+							2000,
+							3
+						]
+					}
+				],
+				"Dictionary References": [
+					"common.sldd"
+				],
+				"AllowAccessBWS": false
+			}
+		}
+	}
+}
