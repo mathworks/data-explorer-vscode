@@ -1,0 +1,52 @@
+# Tag-based release: build the extension, package the .vsix, and publish a
+# GitHub Release with the .vsix attached as a downloadable asset.
+#
+# Push an annotated tag matching `v*` (e.g. `v1.0.1`) to trigger this. The
+# packaged version comes from the tag (v1.0.1 -> 1.0.1) and must match the
+# version in package.json.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write # required to create the Release and upload assets
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (desktop + web)
+        run: |
+          npm run build
+          npm run build:web
+
+      # Package the version already declared in package.json (no bump). Fail
+      # early if the pushed tag doesn't match it, so releases stay consistent.
+      - name: Package VSIX
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME (=$VERSION) does not match package.json version $PKG_VERSION" >&2
+            exit 1
+          fi
+          npx vsce package --out "data-explorer-vscode-${VERSION}.vsix"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: data-explorer-vscode-*.vsix
+          generate_release_notes: true
