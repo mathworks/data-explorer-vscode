@@ -1,0 +1,39 @@
+# Continuous integration: typecheck, build (desktop + web), unit tests, and the
+# VS Code integration suite. Runs on every push to main and on pull requests.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build (desktop + web)
+        run: |
+          npm run build
+          npm run build:web
+
+      - name: Unit tests
+        run: npm test
+
+      # The integration suite launches a real VS Code instance, which needs a
+      # display on Linux — run it under a virtual framebuffer.
+      - name: Integration tests
+        run: xvfb-run -a npm run test:integration
