@@ -56,12 +56,11 @@ No MATLAB&reg; or Simulink installation is required to view or edit files — Si
 
 ## Release Notes
 
-### 0.1.0
+### 1.0.1
 
-- Viewing of Simulink models (`.slx`), data dictionaries (`.sldd`, textual and binary), MAT-files (`.mat`), and projects (`.prj`); read-only for all formats except textual `.sldd`.
-- Editing for textual (JSON) `.sldd`: change values and names, add children, and cut/copy/paste/delete entries via the right-click context menu, with native undo/redo, dirty indicator, save, and live two-way sync with the built-in JSON text editor.
-- Cross-format relationship tree grouped by project/folder, with health decorations (cycle, orphan, modified, missing).
-- Table editor with a selection-following Properties panel, name search, dual (table / JSON) view for textual `.sldd`, and Visual Studio Code theme integration.
+- Render read-only model and project entries in the normal text color.
+
+For earlier versions, see the [Releases page](https://github.com/mathworks/data-explorer-vscode/releases).
 
 ## License
 
