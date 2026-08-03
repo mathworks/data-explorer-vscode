@@ -1,0 +1,9 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M0.5 1.5C0.5 0.947716 0.947715 0.5 1.5 0.5H13.5C14.0523 0.5 14.5 0.947715 14.5 1.5V13.5C14.5 14.0523 14.0523 14.5 13.5 14.5H1.5C0.947716 14.5 0.5 14.0523 0.5 13.5V1.5Z" fill="var(--mw-icon-background-default-white, #FFFFFF)" stroke="var(--mw-icon-border-default-gray, #616161)"/>
+<path d="M10 2H12.5C12.7761 2 13 2.22386 13 2.5V4.5C13 4.77614 12.7761 5 12.5 5H10V2Z" fill="var(--mw-icon-background-red, #FF9D9A)"/>
+<path d="M5 6H12.5C12.7761 6 13 6.22386 13 6.5V8.5C13 8.77614 12.7761 9 12.5 9H5V6Z" fill="var(--mw-icon-background-red, #FF9D9A)"/>
+<path d="M9 10H12.5C12.7761 10 13 10.2239 13 10.5V12.5C13 12.7761 12.7761 13 12.5 13H9V10Z" fill="var(--mw-icon-background-red, #FF9D9A)"/>
+<path d="M2 2.5C2 2.22386 2.22386 2 2.5 2H10V5H2.5C2.22386 5 2 4.77614 2 4.5V2.5Z" fill="var(--mw-icon-glyph-content-blue, #1656A8)"/>
+<path d="M2 6.5C2 6.22386 2.22386 6 2.5 6H5V9H2.5C2.22386 9 2 8.77614 2 8.5V6.5Z" fill="var(--mw-icon-glyph-content-blue, #1656A8)"/>
+<path d="M2 10.5C2 10.2239 2.22386 10 2.5 10H9V13H2.5C2.22386 13 2 12.7761 2 12.5V10.5Z" fill="var(--mw-icon-glyph-content-blue, #1656A8)"/>
+</svg>

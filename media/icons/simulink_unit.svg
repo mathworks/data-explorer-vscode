@@ -1,0 +1,9 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M0.5 1C0.5 0.723858 0.723858 0.5 1 0.5H12C12.2761 0.5 12.5 0.723858 12.5 1V12C12.5 12.2761 12.2761 12.5 12 12.5H1C0.723858 12.5 0.5 12.2761 0.5 12V1Z" fill="var(--mw-icon-background-default-white, #FFFFFF)" stroke="var(--mw-icon-border-default-gray, #616161)"/>
+<rect x="1" y="1" width="11" height="1" fill="var(--mw-icon-background-default-dark-gray, #A6A6A6)"/>
+<path d="M2 6L5 6L5 3L4 3L4 5L3 5L3 3L2 3L2 6Z" fill="var(--mw-icon-glyph-content-gray, #616162)"/>
+<path d="M5.5 6.5C5.5 5.94772 5.94772 5.5 6.5 5.5H14.5C15.0523 5.5 15.5 5.94772 15.5 6.5V14.5C15.5 15.0523 15.0523 15.5 14.5 15.5H6.5C5.94772 15.5 5.5 15.0523 5.5 14.5V6.5Z" fill="white" stroke="var(--mw-icon-border-default-gray, #616161)"/>
+<path d="M10.4999 8.5H12.4999V11.5" stroke="var(--mw-icon-glyph-disabled-gray, #888889)" stroke-linecap="square"/>
+<path d="M10 10.5C10 10.2239 10.2239 10 10.5 10H13.5C13.7761 10 14 10.2239 14 10.5V13.5C14 13.7761 13.7761 14 13.5 14H10.5C10.2239 14 10 13.7761 10 13.5V10.5Z" fill="var(--mw-icon-alert-red, #B7313C)"/>
+<path d="M7 11V6L11 8.5L7 11Z" fill="var(--mw-icon-glyph-content-blue, #1656A8)"/>
+</svg>

@@ -1,0 +1,8 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M15.5 15C15.5 15.2761 15.2761 15.5 15 15.5H7C6.72386 15.5 6.5 15.2761 6.5 15V7C6.5 6.72386 6.72386 6.5 7 6.5H15C15.2761 6.5 15.5 6.72386 15.5 7V15Z" fill="var(--mw-icon-background-light-yellow, #FFF5BC)" stroke="var(--mw-icon-borderColor-light-blue, #268CDD)"/>
+<path d="M12.5 14.5V7.5M9.5 14.5V7.5M14.5 12.5H7.5M14.5 9.5H7.5" stroke="var(--mw-icon-background-medium-blue, #83CAFF)" stroke-linecap="square" stroke-linejoin="round"/>
+<path d="M12.5 12C12.5 12.2761 12.2761 12.5 12 12.5H4C3.72386 12.5 3.5 12.2761 3.5 12V4C3.5 3.72386 3.72386 3.5 4 3.5H12C12.2761 3.5 12.5 3.72386 12.5 4V12Z" fill="var(--mw-icon-background-light-yellow, #FFF5BC)" stroke="var(--mw-icon-borderColor-light-blue, #268CDD)"/>
+<path d="M9.5 11.5V4.5M6.5 11.5V4.5M11.5 9.5H4.5M11.5 6.5H4.5" stroke="var(--mw-icon-background-medium-blue, #83CAFF)" stroke-linecap="square" stroke-linejoin="round"/>
+<path d="M9.5 9C9.5 9.27614 9.27614 9.5 9 9.5H1C0.723858 9.5 0.5 9.27614 0.5 9V1C0.5 0.723858 0.723858 0.5 1 0.5H9C9.27614 0.5 9.5 0.723858 9.5 1V9Z" fill="var(--mw-icon-background-light-yellow, #FFF5BC)" stroke="var(--mw-icon-border-default-blue, #1656A7)"/>
+<path d="M6.5 8.5V1.5M3.5 8.5V1.5M8.5 6.5H1.5M8.5 3.5H1.5" stroke="var(--mw-icon-glyph-content-light-blue, #278CDD)" stroke-linecap="square" stroke-linejoin="round"/>
+</svg>

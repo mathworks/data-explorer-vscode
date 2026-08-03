@@ -1,0 +1,8 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="0.5" y="9.5" width="15" height="4" rx="1" fill="var(--mw-icon-background-default-light-gray, #F5F5F5)" stroke="var(--mw-icon-border-default-gray, #616161)"/>
+<rect x="13" y="11" width="1" height="1" fill="var(--mw-icon-glyph-content-green, #008014)"/>
+<rect x="0.5" y="5.5" width="15" height="4" rx="1" fill="var(--mw-icon-background-default-light-gray, #F5F5F5)" stroke="var(--mw-icon-border-default-gray, #616161)"/>
+<rect x="13" y="7" width="1" height="1" fill="var(--mw-icon-glyph-content-green, #008014)"/>
+<rect x="0.5" y="1.5" width="15" height="4" rx="1" fill="var(--mw-icon-background-default-light-gray, #F5F5F5)" stroke="var(--mw-icon-border-default-gray, #616161)"/>
+<rect x="13" y="3" width="1" height="1" fill="var(--mw-icon-glyph-content-green, #008014)"/>
+</svg>

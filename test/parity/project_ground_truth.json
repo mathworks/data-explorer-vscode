@@ -1,0 +1,26 @@
+{
+  "name": "MyProj",
+  "files": [
+    "models",
+    "projmodel.slx",
+    "utils",
+    "helper.m",
+    "startup.m"
+  ],
+  "pathFolders": [
+    "utils"
+  ],
+  "labels": [
+    {
+      "file": "projmodel.slx",
+      "category": "Status",
+      "name": "Reviewed"
+    }
+  ],
+  "references": [
+    "LibProj"
+  ],
+  "startupFiles": [
+    "startup.m"
+  ]
+}

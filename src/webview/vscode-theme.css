@@ -1,0 +1,46 @@
+/* Copyright 2026 The MathWorks, Inc. */
+/* Remap Data Explorer design tokens onto VS Code theme variables.
+   Imported after dex/styles/global.css so these win the cascade. */
+:root {
+  --dex-color-text: var(--vscode-foreground);
+  --dex-color-text-secondary: var(--vscode-descriptionForeground, var(--vscode-foreground));
+  --dex-color-text-muted: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+  --dex-color-text-disabled: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+  --dex-color-accent: var(--vscode-focusBorder);
+  --dex-color-accent-hover: var(--vscode-focusBorder);
+  --dex-color-accent-bg: var(--vscode-list-activeSelectionBackground);
+  --dex-color-error: var(--vscode-errorForeground);
+  --dex-color-warning: var(--vscode-editorWarning-foreground, var(--vscode-errorForeground));
+
+  --dex-bg-primary: var(--vscode-editor-background);
+  --dex-bg-secondary: var(--vscode-sideBar-background, var(--vscode-editor-background));
+  --dex-bg-tertiary: var(--vscode-editorWidget-background, var(--vscode-editor-background));
+  --dex-bg-hover: var(--vscode-list-hoverBackground);
+  --dex-bg-active: var(--vscode-list-activeSelectionBackground);
+  --dex-bg-activity-bar: var(--vscode-activityBar-background, var(--vscode-sideBar-background));
+
+  --dex-border-color: var(--vscode-panel-border, var(--vscode-editorWidget-border));
+  --dex-border-color-light: var(--vscode-editorWidget-border, var(--vscode-panel-border));
+  --dex-focus-ring: 0 0 0 1px var(--vscode-focusBorder);
+
+  --dex-font-family: var(--vscode-font-family);
+  --dex-font-mono: var(--vscode-editor-font-family, monospace);
+  --dex-font-size: var(--vscode-font-size, 13px);
+
+  --dex-syntax-comment: var(--vscode-editorLineNumber-foreground, #6a9955);
+  --dex-syntax-string: var(--vscode-debugTokenExpression-string, #ce9178);
+  --dex-syntax-number: var(--vscode-debugTokenExpression-number, #b5cea8);
+  --dex-syntax-keyword: var(--vscode-debugTokenExpression-name, #569cd6);
+  --dex-syntax-literal: var(--vscode-debugTokenExpression-boolean, #569cd6);
+  --dex-syntax-title: var(--vscode-symbolIcon-functionForeground, #dcdcaa);
+  --dex-syntax-meta: var(--vscode-descriptionForeground, #9cdcfe);
+
+  /* Right-click context menu — map onto VS Code menu tokens. A fully opaque
+     background neutralizes the component's hard-coded backdrop blur so it reads
+     as a native VS Code menu. */
+  --dex-context-menu-bg: var(--vscode-menu-background, var(--vscode-editorWidget-background));
+  --dex-context-menu-border: var(--vscode-menu-border, var(--vscode-editorWidget-border));
+  --dex-context-menu-hover: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
+  --dex-context-menu-active: var(--vscode-menu-selectionBackground, var(--vscode-list-activeSelectionBackground));
+  --dex-context-menu-separator: var(--vscode-menu-separatorBackground, var(--vscode-editorWidget-border));
+}

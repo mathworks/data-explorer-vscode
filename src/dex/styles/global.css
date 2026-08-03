@@ -1,0 +1,107 @@
+/* Copyright 2026 The MathWorks, Inc. */
+
+:root {
+  --dex-color-text: #333;
+  --dex-color-text-secondary: #555;
+  --dex-color-text-muted: #666;
+  --dex-color-text-disabled: #999;
+  --dex-color-accent: #0078d4;
+  --dex-color-accent-hover: #005a9e;
+  --dex-color-accent-bg: #cde4f7;
+  --dex-color-error: #d32f2f;
+  --dex-color-warning: #d83b01;
+  --dex-bg-primary: #fff;
+  --dex-bg-secondary: #f8f8f8;
+  --dex-bg-tertiary: #f5f5f5;
+  --dex-bg-hover: #e8e8e8;
+  --dex-bg-active: #e0e0e0;
+  --dex-border-color: #d0d0d0;
+  --dex-border-color-light: #e0e0e0;
+  --dex-focus-ring: 0 0 0 2px rgba(0, 120, 212, 0.4);
+  --dex-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --dex-font-mono: 'SF Mono', 'Menlo', 'Monaco', monospace;
+  --dex-font-size: 13px;
+  --dex-row-height: 28px;
+  /* Source-code syntax tokens (dex-code-viewer) — light / VS Code palette */
+  --dex-syntax-comment: #008000;
+  --dex-syntax-string: #a31515;
+  --dex-syntax-number: #098658;
+  --dex-syntax-keyword: #0451a5;
+  --dex-syntax-literal: #0451a5;
+  --dex-syntax-title: #795e26;
+  --dex-syntax-meta: #4e7ab5;
+}
+
+[data-theme="dark"] {
+  --dex-color-text: #e0e0e0;
+  --dex-color-text-secondary: #b0b0b0;
+  --dex-color-text-muted: #888;
+  --dex-color-text-disabled: #666;
+  --dex-color-accent: #4ba3e3;
+  --dex-color-accent-hover: #6db8ed;
+  --dex-color-accent-bg: #1a3a52;
+  --dex-color-error: #ef5350;
+  --dex-color-warning: #ff8a50;
+  --dex-bg-primary: #1e1e1e;
+  --dex-bg-secondary: #252525;
+  --dex-bg-tertiary: #181818;
+  --dex-bg-hover: #333;
+  --dex-bg-active: #3a3a3a;
+  --dex-bg-activity-bar: #252525;
+  --dex-border-color: #3a3a3a;
+  --dex-border-color-light: #333;
+  --dex-focus-ring: 0 0 0 2px rgba(75, 163, 227, 0.4);
+  /* Source-code syntax tokens — dark / VS Code palette */
+  --dex-syntax-comment: #6a9955;
+  --dex-syntax-string: #ce9178;
+  --dex-syntax-number: #b5cea8;
+  --dex-syntax-keyword: #569cd6;
+  --dex-syntax-literal: #569cd6;
+  --dex-syntax-title: #dcdcaa;
+  --dex-syntax-meta: #9cdcfe;
+}
+
+[data-theme="high-contrast"] {
+  --dex-color-text: #000;
+  --dex-color-text-secondary: #1a1a1a;
+  --dex-color-text-muted: #333;
+  --dex-color-text-disabled: #767676;
+  --dex-color-accent: #0050a0;
+  --dex-color-accent-hover: #003670;
+  --dex-color-accent-bg: #b8d4f0;
+  --dex-color-error: #b71c1c;
+  --dex-color-warning: #bf360c;
+  --dex-bg-primary: #fff;
+  --dex-bg-secondary: #f0f0f0;
+  --dex-bg-tertiary: #e8e8e8;
+  --dex-bg-hover: #d0d0d0;
+  --dex-bg-active: #c0c0c0;
+  --dex-border-color: #000;
+  --dex-border-color-light: #555;
+  --dex-focus-ring: 0 0 0 3px rgba(0, 80, 160, 0.6);
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  font-family: var(--dex-font-family);
+  font-size: var(--dex-font-size);
+  color: var(--dex-color-text);
+  background: var(--dex-bg-tertiary);
+}
+
+@media (forced-colors: active) {
+  button, [role="button"], [tabindex="0"] {
+    border: 1px solid ButtonText;
+  }
+  button:focus-visible, [role="button"]:focus-visible, [tabindex="0"]:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  input, select, textarea {
+    border: 1px solid ButtonText;
+  }
+}

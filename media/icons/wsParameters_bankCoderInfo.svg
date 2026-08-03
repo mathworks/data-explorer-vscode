@@ -1,0 +1,13 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<rect x="0.5" y="0.5" width="12" height="12" rx="1" fill="var(--mw-icon-background-default-selection, #B4DEFF)" stroke="var(--mw-icon-border-default-blue, #1656A7)"/>
+<rect x="2.5" y="2.5" width="3" height="3" rx="0.5" stroke="var(--mw-icon-glyph-content-blue, #1656A8)"/>
+<rect x="2.5" y="7.5" width="3" height="3" rx="0.5" stroke="var(--mw-icon-glyph-content-blue, #1656A8)"/>
+<path d="M7.5 2.5H9.5M8.5 4.5H10.5" stroke="var(--mw-icon-glyph-content-blue, #1656A8)" stroke-linecap="square" stroke-linejoin="round"/>
+<path d="M6 6C6 5.44771 6.44772 5 7 5H7.82838H10.5245H13.2206H14C14.5523 5 15 5.44772 15 6V15C15 15.5523 14.5523 16 14 16H13.2206H10.5245H7.82838H7C6.44772 16 6 15.5523 6 15V6Z" fill="var(--mw-icon-background-default-white, #FFFFFF)"/>
+<path d="M8 5.5H6.5C5.94772 5.5 5.5 5.94772 5.5 6.5V14.5C5.5 15.0523 5.94772 15.5 6.5 15.5H8" stroke="var(--mw-icon-glyph-content-blue, #1656A8)"/>
+<path d="M13 5.5H14.5C15.0523 5.5 15.5 5.94772 15.5 6.5V14.5C15.5 15.0523 15.0523 15.5 14.5 15.5H13" stroke="var(--mw-icon-glyph-content-blue, #1656A8)"/>
+<path d="M8.5 6V10" stroke="var(--mw-icon-glyph-content-blue, #1656A8)"/>
+<path d="M12.5 11V15" stroke="var(--mw-icon-glyph-content-blue, #1656A8)"/>
+<ellipse cx="12.5" cy="8" rx="1" ry="1.5" stroke="var(--mw-icon-glyph-content-blue, #1656A8)"/>
+<ellipse cx="8.5" cy="13" rx="1" ry="1.5" stroke="var(--mw-icon-glyph-content-blue, #1656A8)"/>
+</svg>

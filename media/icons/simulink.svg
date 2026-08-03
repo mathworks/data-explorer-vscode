@@ -1,0 +1,6 @@
+<svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M0.5 1.5C0.5 0.947715 0.947715 0.5 1.5 0.5H14.5C15.0523 0.5 15.5 0.947715 15.5 1.5V14.5C15.5 15.0523 15.0523 15.5 14.5 15.5H1.5C0.947715 15.5 0.5 15.0523 0.5 14.5V1.5Z" fill="var(--mw-icon-background-default-white, #FFFFFF)" stroke="var(--mw-icon-border-default-gray, #616161)"/>
+<path d="M2.5 5.5H11.5V8.5" stroke="var(--mw-icon-glyph-disabled-gray, #888889)" stroke-linecap="square"/>
+<path d="M3.5 8.5V2.5L8 5.49999L3.5 8.5Z" fill="var(--mw-icon-background-default-selection, #B4DEFF)" stroke="var(--mw-icon-glyph-content-blue, #1656A8)" stroke-linejoin="round"/>
+<path d="M9.5 10C9.5 9.72386 9.72386 9.5 10 9.5H13C13.2761 9.5 13.5 9.72386 13.5 10V13C13.5 13.2761 13.2761 13.5 13 13.5H10C9.72386 13.5 9.5 13.2761 9.5 13V10Z" fill="var(--mw-icon-background-red, #FF9D9A)" stroke="var(--mw-icon-glyph-content-red, #902623)"/>
+</svg>
