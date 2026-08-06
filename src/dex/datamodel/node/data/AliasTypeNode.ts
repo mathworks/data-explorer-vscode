@@ -12,8 +12,14 @@ export default class AliasTypeNode extends DataNode {
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.BaseType = (props.BaseType as string) || ''; this.Description = (props.Description as string) || ''; }
     get icon(): string { return this.isDerived ? 'typeAlias' : 'wsAlias'; }
     get dataType(): string { return CLASS_NAME; }
-    get displayValue(): string { return this.BaseType || '<1x1 ' + CLASS_NAME + '>'; }
-    getProperties(): PropClass[] { return [PropName, PropBaseType, PropDataType, PropDescription]; }
+    // An alias has no "value" — its base type ("double") is surfaced in the Data
+    // Type column via PropBaseType. The Value column is therefore empty and not
+    // editable.
+    get displayValue(): string { return ''; }
+    get valueEditable(): boolean { return false; }
+    // Table columns: PropBaseType owns the Data Type column, so PropDataType (which
+    // would show the class name 'Simulink.AliasType') is omitted here.
+    getProperties(): PropClass[] { return [PropName, PropBaseType, PropDescription]; }
     getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropBaseType, PropDataType, PropDescription] }]; }
     _getSerializedProperties(): Record<string, unknown> { const props = Object.assign({}, this.serial._properties as Record<string, unknown>); props.BaseType = this.BaseType; if ('Description' in (this.serial._properties as Record<string, unknown>) || this.Description) { props.Description = this.Description; } return props; }
     serializeValue(): unknown { const overrides: Record<string, unknown> = { BaseType: this.BaseType }; if ('Description' in (this.serial._properties as Record<string, unknown>) || this.Description) { overrides.Description = this.Description; } return this._serializeSimulinkObject(overrides); }

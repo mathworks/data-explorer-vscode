@@ -64,12 +64,22 @@ export default class DataNode extends BaseNode {
   Description?: string;
   _rawInput?: unknown;
   rawXml?: string;
+  // The architectural kind (e.g. 'DataInterface', 'StructType') from the
+  // systemcomposer catalog, set at parse time for arch entries. Overrides the
+  // class-identity dataType in the DataType column when present.
+  archKind?: string;
 
   constructor(name: string, parent: BaseNode | null, serial?: Record<string, unknown>) {
     super(name, parent);
     this.metadata = null;
     this.serial = serial || {};
     this.status = '';
+  }
+
+  // The value shown in the DataType column. Defaults to the class-identity
+  // dataType, but an arch entry surfaces its systemcomposer kind instead.
+  get displayDataType(): string {
+    return this.archKind || this.dataType;
   }
 
   get isEntry(): boolean {

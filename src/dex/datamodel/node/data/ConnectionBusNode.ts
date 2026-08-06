@@ -6,10 +6,33 @@ import type BaseNode from '../BaseNode';
 
 const CLASS_NAME = 'Simulink.ConnectionBus';
 
+// The default connection type when a physical element has no explicit domain.
+const DEFAULT_CONNECTION_TYPE = 'Connection: <domain name>';
+
 export class ConnectionBusElementNode extends BaseBusElementNode {
-    get dataType(): string { return 'Simulink.ConnectionElement'; }
+    Type: string;
+
+    constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) {
+        super(name, parent, props, serial);
+        // The element's connection type is stored in Type_internal (falling back
+        // to Type); when unset it is the generic 'Connection: <domain name>'.
+        const rawType = props.Type_internal !== undefined ? props.Type_internal : props.Type;
+        this.Type = (rawType as string) || DEFAULT_CONNECTION_TYPE;
+    }
+
+    get icon(): string { return 'typeConnectionElement'; }
+    get dataType(): string { return this.Type; }
     getProperties(): PropClass[] { return [PropName, PropDataType, PropDescription]; }
     getPILayout() { return [{ group: 'Element Properties', items: [PropName, PropDataType, PropDescription] }]; }
+
+    _applyElementOverrides(props: Record<string, unknown>): void {
+        const sp = this.serial._properties as Record<string, unknown>;
+        const typeKey = 'Type_internal' in sp ? 'Type_internal' : 'Type';
+        // Only write the type back when the source had it or it differs from the
+        // implicit default, so untyped elements stay untouched.
+        if (typeKey in sp || this.Type !== DEFAULT_CONNECTION_TYPE) { props[typeKey] = this.Type; }
+        if ('Description' in sp || this.Description) { props.Description = this.Description; }
+    }
 }
 
 export class ConnectionBusNode extends BaseBusNode {

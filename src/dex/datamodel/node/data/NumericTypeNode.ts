@@ -10,10 +10,13 @@ const CLASS_NAME = 'Simulink.NumericType';
 export default class NumericTypeNode extends DataNode {
     Description: string;
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.Description = (props.Description as string) || ''; }
-    get icon(): string { return 'wsNumeric'; }
+    get icon(): string { return this.isDerived ? 'typeNumeric' : 'wsNumeric'; }
     get dataType(): string { return CLASS_NAME; }
-    get displayValue(): string { return '<1x1 ' + CLASS_NAME + '>'; }
-    getProperties(): PropClass[] { return [PropName, PropDataType, PropDescription, PropValue]; }
+    // A NumericType has no scalar "value" — the Value column is empty and not
+    // editable (the class name is surfaced in the Data Type column).
+    get displayValue(): string { return ''; }
+    get valueEditable(): boolean { return false; }
+    getProperties(): PropClass[] { return [PropName, PropDataType, PropDescription]; }
     getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropValue, PropDataType, PropDescription] }]; }
     _getSerializedProperties(): Record<string, unknown> { const props = Object.assign({}, this.serial._properties as Record<string, unknown>); if ('Description' in (this.serial._properties as Record<string, unknown>) || this.Description) { props.Description = this.Description; } return props; }
     serializeValue(): unknown { const overrides: Record<string, unknown> = {}; if ('Description' in (this.serial._properties as Record<string, unknown>) || this.Description) { overrides.Description = this.Description; } return this._serializeSimulinkObject(overrides); }

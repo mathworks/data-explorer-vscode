@@ -17,6 +17,11 @@ export default class ObjectNode extends DataNode {
     }
 
     get icon(): string {
+        // A derived Simulink.ServiceBus is an Architectural Data ServiceInterface;
+        // give it the service-interface icon instead of the generic object one.
+        if (this.isDerived && this.arrayClass === 'Simulink.ServiceBus') {
+            return 'serviceInterfaces';
+        }
         return 'wsDefault';
     }
 

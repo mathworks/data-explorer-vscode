@@ -17,6 +17,45 @@ const SECTION_DEFS = [
     { key: 'other', label: 'Other Data', icon: 'databaseFolder' }
 ];
 
+// The systemcomposer interface dictionary classifies architectural entries
+// (which are stored as ordinary Simulink objects) into interface/type kinds.
+// Captured at parse time so the rest of the model can distinguish, e.g., a
+// StructType from a DataInterface (both are Simulink.Bus).
+export interface SystemComposerCatalog {
+    // Interface name -> systemcomposer type, from the PortInterfaceCatalog
+    // (e.g. CompositeDataInterface, CompositePhysicalInterface, ServiceInterface,
+    // ValueTypeInterface).
+    interfaces: Record<string, string>;
+    // Modeled data type name -> systemcomposer type, from the TypeCatalog
+    // (e.g. StructDataType, NumericType, EnumDataType, AliasType).
+    modeledDataTypes: Record<string, string>;
+}
+
+// Maps a systemcomposer type string to the friendly architectural kind shown to
+// the user. The kind is derived from the type, not the entry name (which is
+// user-chosen), so it stays correct regardless of what an entry is named.
+const SC_TYPE_TO_ARCH_KIND: Record<string, string> = {
+    'systemcomposer.architecture.model.interface.CompositeDataInterface': 'DataInterface',
+    'systemcomposer.architecture.model.interface.CompositePhysicalInterface': 'PhysicalInterface',
+    'systemcomposer.architecture.model.swarch.ServiceInterface': 'ServiceInterface',
+    'systemcomposer.architecture.model.interface.ValueTypeInterface': 'ValueType',
+    'systemcomposer.property.StructDataType': 'StructType',
+    'systemcomposer.property.NumericType': 'NumericType',
+    'systemcomposer.property.EnumDataType': 'EnumType',
+    'systemcomposer.property.AliasType': 'AliasType',
+};
+
+// Resolve the architectural kind (e.g. 'DataInterface', 'StructType') for an
+// entry name, or null if the catalog doesn't classify it. Interfaces are checked
+// before modeled data types.
+export function archKind(catalog: SystemComposerCatalog | null | undefined, entryName: string): string | null {
+    if (!catalog) {
+        return null;
+    }
+    const scType = catalog.interfaces[entryName] || catalog.modeledDataTypes[entryName];
+    return (scType && SC_TYPE_TO_ARCH_KIND[scType]) || null;
+}
+
 export default class SlddNode extends ContainerNode {
     coreProperties: Record<string, unknown> | null;
     dictionaryReferences: unknown[];
@@ -26,6 +65,7 @@ export default class SlddNode extends ContainerNode {
     rawXml: string | null;
     _zipMetadata: Record<string, unknown> | null;
     _dataSourceAttrs: Record<string, string> | null;
+    systemComposer: SystemComposerCatalog | null;
 
     constructor(name: string) {
         super(name, null);
@@ -37,6 +77,7 @@ export default class SlddNode extends ContainerNode {
         this.rawXml = null;
         this._zipMetadata = null;
         this._dataSourceAttrs = null;
+        this.systemComposer = null;
 
         SECTION_DEFS.forEach((def) => {
             this.addChild(new SectionNode(def.key, this, def.label, def.icon));
@@ -104,6 +145,10 @@ export default class SlddNode extends ContainerNode {
         const chunk = parts && (parts['__MW_TEXT_PART__/data/chunk0'] as Record<string, unknown>);
         const content = chunk && (chunk.__MW_TEXT_content as Record<string, unknown>);
 
+        // Parse the systemcomposer catalog first so entry parsing can use it to
+        // classify architectural entries (e.g. StructType vs DataInterface).
+        node.systemComposer = SlddNode._parseSystemComposer(parts);
+
         if (content) {
             node.dictionaryReferences = (content['Dictionary References'] as unknown[]) || [];
             node.allowAccessBWS = (content.AllowAccessBWS as boolean) || false;
@@ -113,12 +158,61 @@ export default class SlddNode extends ContainerNode {
                 const sectionKey = SlddNode.getSectionKey(entry);
                 const section = node.getSection(sectionKey);
                 if (section) {
-                    section.parseEntry(entry);
+                    section.parseEntry(entry, node.systemComposer);
                 }
             });
         }
 
         return node;
+    }
+
+    // Extract the interface and modeled-data-type classifications from the
+    // systemcomposer interface dictionary part, if present.
+    static _parseSystemComposer(parts: Record<string, unknown> | null): SystemComposerCatalog | null {
+        const part = parts && (parts['__MW_TEXT_PART__/simulink/systemcomposer/interfaceDictionary'] as Record<string, unknown>);
+        const content = part && (part.__MW_TEXT_content as Record<string, unknown>);
+        const entries = content && (content.entries as Record<string, unknown>[]);
+        if (!entries) {
+            return null;
+        }
+
+        const interfaces: Record<string, string> = {};
+        const modeledDataTypes: Record<string, string> = {};
+
+        const readName = (item: Record<string, unknown>): string => {
+            const c = (item.content as Record<string, unknown>) || {};
+            return (c.p_Name as string) || '';
+        };
+
+        entries.forEach((entry) => {
+            const entryContent = (entry.content as Record<string, unknown>) || {};
+
+            // PortInterfaceCatalog: named interfaces (data/physical/service/value).
+            const catalog = entryContent.p_PortInterfaceCatalog as Record<string, unknown> | undefined;
+            const catalogContent = catalog && (catalog.content as Record<string, unknown>);
+            const ifaceList = catalogContent && (catalogContent.p_Interfaces as Record<string, unknown>[]);
+            if (ifaceList) {
+                ifaceList.forEach((iface) => {
+                    const name = readName(iface);
+                    if (name) {
+                        interfaces[name] = (iface.type as string) || '';
+                    }
+                });
+            }
+
+            // TypeCatalog: modeled data types (struct/numeric/enum/alias).
+            const modeled = entryContent.p_ModeledDataTypes as Record<string, unknown>[] | undefined;
+            if (modeled) {
+                modeled.forEach((dt) => {
+                    const name = readName(dt);
+                    if (name) {
+                        modeledDataTypes[name] = (dt.type as string) || '';
+                    }
+                });
+            }
+        });
+
+        return { interfaces, modeledDataTypes };
     }
 
     static getSectionKey(entry: Record<string, unknown>): string {

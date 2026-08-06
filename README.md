@@ -56,6 +56,15 @@ No MATLAB&reg; or Simulink installation is required to view or edit files — Si
 
 ## Release Notes
 
+### 1.0.2
+
+- Refined the presentation of Architectural Data entries: accurate type names
+  (DataInterface, PhysicalInterface, ServiceInterface, ValueType, StructType,
+  NumericType, EnumType) in the Data Type column, dedicated icons for service
+  interfaces and struct types, and correct Value/Data Type mapping for each
+  interface element.
+- Render the Data Type column in italics and understate the section header rows.
+
 ### 1.0.1
 
 - Render read-only model and project entries in the normal text color.

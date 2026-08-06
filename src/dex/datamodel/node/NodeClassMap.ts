@@ -11,6 +11,7 @@ import ParameterNode from './data/ParameterNode';
 import SignalNode from './data/SignalNode';
 import { BusNode } from './data/BusNode';
 import { ConnectionBusNode } from './data/ConnectionBusNode';
+import { ServiceBusNode } from './data/ServiceBusNode';
 import { EnumTypeNode } from './data/EnumTypeNode';
 import AliasTypeNode from './data/AliasTypeNode';
 import ConfigSetNode from './data/ConfigSetNode';
@@ -37,6 +38,7 @@ const CLASS_MAP: Record<string, NodeClassType> = {
     'Simulink.Signal': SignalNode,
     'Simulink.Bus': BusNode,
     'Simulink.ConnectionBus': ConnectionBusNode,
+    'Simulink.ServiceBus': ServiceBusNode,
     'Simulink.NumericType': NumericTypeNode,
     'Simulink.AliasType': AliasTypeNode,
     'Simulink.ValueType': ValueTypeNode,

@@ -214,6 +214,11 @@ export default class MatlabVariableNode extends DataNode {
   }
 
   get icon(): string {
+    // In the Architectural Data section a plain variable is a derived Constant,
+    // shown with the arch-flavored icon rather than the workspace-variable one.
+    if (this.isDerived) {
+      return 'typeConstant';
+    }
     if (this._isOpaque) {
       return MCOS_ICON_MAP[this._opaqueClassName!] || 'wsDefault';
     }

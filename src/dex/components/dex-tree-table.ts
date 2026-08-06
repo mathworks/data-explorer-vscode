@@ -9,7 +9,9 @@ export interface TreeTableRow {
   ID: string;
   parent: string | null;
   Name: { label: string; iconId?: string; editable?: boolean; clipboardMode?: string };
-  Value: { text: string; editable?: boolean; clipboardMode?: string; linkTarget?: string } | string;
+  Value:
+    | { text: string; editable?: boolean; clipboardMode?: string; linkTarget?: string; editor?: string; options?: string[] }
+    | string;
   _valueEditable?: boolean;
   DataType: { text: string; clipboardMode?: string; linkTarget?: string } | string;
   Description: { text: string; clipboardMode?: string } | string;
@@ -283,6 +285,11 @@ export class DexTreeTable extends LitElement {
         border-right: none;
       }
 
+      /* The Data Type column is rendered in italics. */
+      td.col-DataType {
+        font-style: italic;
+      }
+
       :host([table-style='light']) td {
         border-right: none;
       }
@@ -343,6 +350,18 @@ export class DexTreeTable extends LitElement {
 
       .name-cell .label.readonly {
         color: var(--dex-color-text-muted, #666);
+      }
+
+      /* Section header rows are intentionally understated: muted gray, italic
+         Name, and no vertical cell borders so the row reads as one continuous
+         strip rather than a set of columns. */
+      tr.section-row .name-cell .label {
+        font-style: italic;
+        color: var(--dex-color-text-muted, #666);
+      }
+
+      tr.section-row td {
+        border-right: none;
       }
 
       .value-object {
@@ -417,7 +436,13 @@ export class DexTreeTable extends LitElement {
 
   @state() private _expandedIds: Set<string> = new Set();
   @state() private _filterText = '';
-  @state() private _editingCell: { rowId: string; columnId: string; value: string } | null = null;
+  @state() private _editingCell: {
+    rowId: string;
+    columnId: string;
+    value: string;
+    editor?: string;
+    options?: string[];
+  } | null = null;
   @state() private _scrollTop = 0;
   @state() private _viewportHeight = 400;
   @state() private _focusedCol = 0;
@@ -1259,7 +1284,7 @@ export class DexTreeTable extends LitElement {
           ? row.Value
           : { text: String(row.Value || ''), editable: row._valueEditable ?? false };
       if (!val.editable) return;
-      this._onCellDblClick(row.ID, 'Value', val.text || '');
+      this._onCellDblClick(row.ID, 'Value', val.text || '', (val as { editor?: string }).editor, (val as { options?: string[] }).options);
     } else if (columnId === 'Description') {
       if (row._valueEditable === false) return;
       const val = typeof row.Description === 'object' ? row.Description.text : String(row.Description || '');
@@ -1408,13 +1433,22 @@ export class DexTreeTable extends LitElement {
     }
   }
 
-  private _onCellDblClick(rowId: string, columnId: string, currentValue: string): void {
-    this._editingCell = { rowId, columnId, value: currentValue };
+  private _onCellDblClick(
+    rowId: string,
+    columnId: string,
+    currentValue: string,
+    editor?: string,
+    options?: string[],
+  ): void {
+    this._editingCell = { rowId, columnId, value: currentValue, editor, options };
     this.updateComplete.then(() => {
-      const input = this.shadowRoot?.querySelector('.edit-input') as HTMLInputElement;
+      const input = this.shadowRoot?.querySelector('.edit-input') as HTMLInputElement | HTMLSelectElement;
       if (input) {
         input.focus();
-        input.select();
+        // <select> has no text to select; only inputs/textareas support .select().
+        if (typeof (input as HTMLInputElement).select === 'function') {
+          (input as HTMLInputElement).select();
+        }
       }
     });
   }
@@ -1447,7 +1481,7 @@ export class DexTreeTable extends LitElement {
 
   private _commitEdit(): void {
     if (!this._editingCell) return;
-    const input = this.shadowRoot?.querySelector('.edit-input') as HTMLInputElement;
+    const input = this.shadowRoot?.querySelector('.edit-input') as HTMLInputElement | HTMLSelectElement;
     if (!input) return;
     const newValue = input.value;
     const oldValue = this._editingCell.value;
@@ -1550,6 +1584,17 @@ export class DexTreeTable extends LitElement {
       const linkTarget = (val as { linkTarget?: string }).linkTarget;
 
       if (isEditing) {
+        if (this._editingCell?.editor === 'select') {
+          const options = this._editingCell?.options || [];
+          return html`<select
+            class="edit-input"
+            @keydown=${this._onEditKeyDown}
+            @change=${this._onEditBlur}
+            @blur=${this._onEditBlur}
+          >
+            ${options.map((opt) => html`<option .value=${opt} ?selected=${opt === text}>${opt}</option>`)}
+          </select>`;
+        }
         return html`<input
           class="edit-input"
           .value=${text}
@@ -1822,12 +1867,13 @@ export class DexTreeTable extends LitElement {
                 const isSelected = this.selectedRowIds.includes(row.ID);
                 const isDragSource = this._dragSourceId === row.ID;
                 const isDropTarget = this._dropTargetId === row.ID;
+                const isSection = row.ID.indexOf('section:') === 0;
                 return html`
                   <tr
                     role="row"
                     aria-rowindex=${startIdx + ri + 2}
                     aria-selected=${isSelected}
-                    class="data-row ${isSelected ? 'selected' : ''} ${clipMode === 'cut' ? 'cut' : ''} ${clipMode ===
+                    class="data-row ${isSection ? 'section-row' : ''} ${isSelected ? 'selected' : ''} ${clipMode === 'cut' ? 'cut' : ''} ${clipMode ===
                     'copy'
                       ? 'copied'
                       : ''} ${isDragSource ? 'drag-source' : ''} ${isDropTarget && this._dropPosition === 'on'
@@ -1847,7 +1893,7 @@ export class DexTreeTable extends LitElement {
                       return html`<td
                         role="gridcell"
                         aria-colindex=${ci + 1}
-                        class="${isFocused ? 'focused' : ''}"
+                        class="col-${col} ${isFocused ? 'focused' : ''}"
                         @click=${(e: MouseEvent) => this._onCellClick(row.ID, ci, e)}
                         @dblclick=${() => this._onCellDblClickIfEditable(row, col)}
                       >

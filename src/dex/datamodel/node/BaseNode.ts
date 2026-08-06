@@ -7,6 +7,7 @@ export interface PropClass {
   editor: string;
   nodeProperty?: string;
   readValue?: (node: BaseNode) => string;
+  readOptions?: (node: BaseNode) => string[];
   format: (value: unknown) => string;
 }
 
@@ -17,6 +18,7 @@ export interface PropInfo {
   displayValue: string;
   editable: boolean;
   editor: string;
+  options?: string[];
 }
 
 export interface RowData {
@@ -68,6 +70,12 @@ export default class BaseNode {
 
   get dataType(): string {
     return '';
+  }
+
+  // The value shown in the DataType column; subclasses may override to show a
+  // friendlier type than the class-identity dataType.
+  get displayDataType(): string {
+    return this.dataType;
   }
 
   get displayValue(): string {
@@ -197,6 +205,7 @@ export default class BaseNode {
       displayValue,
       editable,
       editor: PropClassRef.editor,
+      options: PropClassRef.readOptions ? PropClassRef.readOptions(this) : undefined,
     };
   }
 
@@ -221,7 +230,13 @@ export default class BaseNode {
       if (colKey === 'Name') {
         row.Name = { label: info.displayValue, iconId: this.icon, disabled: this.disabled, editable: info.editable };
       } else if (colKey === 'Value') {
-        row.Value = info.displayValue;
+        // A 'select' editor carries its dropdown options on the cell so the
+        // webview can render a combobox instead of a text input.
+        if (info.editor === 'select') {
+          row.Value = { text: info.displayValue, editable: info.editable, editor: 'select', options: info.options || [] };
+        } else {
+          row.Value = info.displayValue;
+        }
         row._valueEditable = info.editable;
       } else {
         row[colKey] = info.displayValue;
@@ -236,7 +251,7 @@ export default class BaseNode {
       row._valueEditable = this.valueEditable;
     }
     if (!('DataType' in row)) {
-      row.DataType = this.dataType;
+      row.DataType = this.displayDataType;
     }
     if (!('Description' in row)) {
       row.Description = (this as unknown as { Description?: string }).Description || '';
