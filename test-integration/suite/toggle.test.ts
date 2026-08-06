@@ -58,6 +58,32 @@ async function waitForActiveViewType(
   assert.strictEqual(activeCustomViewType(), expected, 'active view type did not settle');
 }
 
+// Waiting on `activeCustomViewType() === undefined` alone is too weak for a swap
+// to the built-in text editor: it also matches the transient "no active tab"
+// moment mid-swap, so the wait can resolve before the text editor is actually
+// active (activeTextEditor still undefined). Poll for the real post-condition —
+// the plain text editor for this URI being active — instead.
+async function waitForActiveTextEditor(
+  uri: vscode.Uri,
+  timeoutMs = 5000,
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (
+      activeCustomViewType() === undefined &&
+      vscode.window.activeTextEditor?.document.uri.toString() === uri.toString()
+    ) {
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  assert.strictEqual(
+    vscode.window.activeTextEditor?.document.uri.toString(),
+    uri.toString(),
+    'plain text editor for the URI did not become active',
+  );
+}
+
 suite('Data Explorer .sldd editor toggle', () => {
   suiteSetup(async () => {
     // Give the extension host a moment to activate on the .sldd language.
@@ -108,7 +134,7 @@ suite('Data Explorer .sldd editor toggle', () => {
 
     await vscode.commands.executeCommand('dataExplorer.viewAsText', uri);
     // A plain text editor has no custom viewType and drives activeTextEditor.
-    await waitForActiveViewType(undefined);
+    await waitForActiveTextEditor(uri);
     assert.strictEqual(
       vscode.window.activeTextEditor?.document.uri.toString(),
       uri.toString(),
