@@ -9,7 +9,6 @@ const ALIASES: Record<string, string> = {
   string: 'wsString',
   parameter: 'wsParameters',
   bus: 'typeBus',
-  busElement: 'typeBusElement',
   enum: 'typeEnum',
   signal: 'typeSignal',
   alias: 'typeAlias',

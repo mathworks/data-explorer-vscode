@@ -7,3 +7,6 @@ coverage/
 *.vsix
 test/parity/dump-output.txt
 .DS_Store
+
+# Local-only internal notes — must never be pushed to the public remote
+CLAUDE.md

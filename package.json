@@ -2,7 +2,7 @@
   "name": "data-explorer-vscode",
   "displayName": "Simulink Data Explorer Extension for Visual Studio Code",
   "description": "Explore Simulink models, data dictionaries, MAT-files, and projects as interactive tables and relationship trees.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "mathworks",
   "private": true,
   "license": "BSD-3-Clause",

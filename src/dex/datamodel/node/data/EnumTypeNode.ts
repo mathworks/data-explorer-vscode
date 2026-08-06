@@ -5,6 +5,7 @@ import type { PropClass } from '../BaseNode';
 import type BaseNode from '../BaseNode';
 import PropName from '../../prop/PropName';
 import PropValue from '../../prop/PropValue';
+import PropEnumValue from '../../prop/PropEnumValue';
 import PropDataType from '../../prop/PropDataType';
 import PropDescription from '../../prop/PropDescription';
 
@@ -18,8 +19,21 @@ export class EnumValueNode extends DataNode {
         this.Value = props.Value;
         this.Description = (props.Description as string) || '';
     }
-    get icon(): string { return 'wsEnum'; }
+    // The enumeral that the parent EnumType defaults to gets the "current" icon;
+    // every other enumeral gets the plain bus-element icon. When the parent has no
+    // DefaultValue set, the first enumeral is treated as the current one.
+    get icon(): string {
+        const parent = this.parent as EnumTypeNode | null;
+        if (!parent) { return 'busElement'; }
+        const isCurrent = parent.DefaultValue
+            ? parent.DefaultValue === this.name
+            : parent.children[0] === this;
+        return isCurrent ? 'typeElement' : 'busElement';
+    }
     get dataType(): string { return CLASS_NAME; }
+    // An enumeral has no meaningful data type — the DataType column is empty
+    // (not applicable).
+    get displayDataType(): string { return ''; }
     get displayValue(): string { return this.Value !== undefined ? String(this.Value) : ''; }
     get disabled(): boolean { return true; }
     getProperties(): PropClass[] { return [PropName, PropValue, PropDescription]; }
@@ -41,9 +55,15 @@ export class EnumTypeNode extends DataNode {
     }
     get icon(): string { return this.isDerived ? 'typeEnum' : 'wsEnum'; }
     get dataType(): string { return CLASS_NAME; }
-    get displayValue(): string { return this.DefaultValue; }
-    getProperties(): PropClass[] { return [PropName, PropValue, PropDataType, PropDescription]; }
-    getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropValue, PropDataType, PropDescription] }]; }
+    // The Value column shows the enum's DefaultValue; when none is set it falls
+    // back to the first enumeral's name (the same one marked "current" by the
+    // child icon rule).
+    get displayValue(): string {
+        if (this.DefaultValue) { return this.DefaultValue; }
+        return (this.children[0] && this.children[0].name) || '';
+    }
+    getProperties(): PropClass[] { return [PropName, PropEnumValue, PropDataType, PropDescription]; }
+    getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropEnumValue, PropDataType, PropDescription] }]; }
 
     _getSerializedProperties(): Record<string, unknown> {
         const enumerals = this.children.map(function (child) { return (child as EnumValueNode).serializeValue(); });

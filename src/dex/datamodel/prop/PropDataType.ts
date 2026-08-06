@@ -10,7 +10,7 @@ export default class PropDataType {
     static defaultValue = '';
 
     static readValue(node: BaseNode): string {
-        return node.dataType;
+        return node.displayDataType;
     }
 
     static format(value: unknown): string {

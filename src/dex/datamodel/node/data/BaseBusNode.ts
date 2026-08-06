@@ -135,6 +135,7 @@ export class BaseBusNode extends DataNode {
         let defaultProps: Record<string, unknown>;
         if (className === 'Simulink.Bus') { defaultProps = { DataScope: 'Auto', Description: '', Elements_internal: [], HeaderFile: '', PreserveElementDimensions: false }; }
         else if (className === 'Simulink.ConnectionBus') { defaultProps = { Description: '', Elements_internal: [] }; }
+        else if (className === 'Simulink.ServiceBus') { defaultProps = { Description: '', Elements_internal: [] }; }
         else { defaultProps = {}; }
         const rawVal = { _array_class: className, _array_type: 'MATLABArray', _dimensions: [1, 1], _mw_element_type: 'MATLABArray', _elements: [{ _properties: defaultProps }] };
         const props = rawVal._elements[0]._properties;

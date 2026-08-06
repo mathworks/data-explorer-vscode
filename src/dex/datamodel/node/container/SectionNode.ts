@@ -5,6 +5,8 @@ import type { TableColumnConfig } from '../ContainerNode';
 import type BaseNode from '../BaseNode';
 import type DataNode from '../DataNode';
 import type { NodeClassMapAPI } from '../NodeRegistry';
+import type { SystemComposerCatalog } from './SlddNode';
+import { archKind as _archKind } from './SlddNode';
 
 import { NS_DESIGN, NS_CONFIGURATIONS, NS_OTHER, SECTION_NAMESPACE } from '../../SectionConstants.js';
 export { NS_DESIGN, NS_CONFIGURATIONS, NS_OTHER, SECTION_NAMESPACE };
@@ -35,6 +37,7 @@ const ALLOWED_TYPES: Record<string, string[]> = {
     'Simulink.Signal',
     'Simulink.Bus',
     'Simulink.ConnectionBus',
+    'Simulink.ServiceBus',
     'Simulink.data.dictionary.EnumTypeDefinition',
     'Simulink.AliasType',
   ],
@@ -191,7 +194,7 @@ export default class SectionNode extends ContainerNode {
     return baseName + i;
   }
 
-  parseEntry(rawEntry: Record<string, unknown>): DataNode | null {
+  parseEntry(rawEntry: Record<string, unknown>, systemComposer?: SystemComposerCatalog | null): DataNode | null {
     if (!_nodeClassMap) {
       return null;
     }
@@ -201,6 +204,18 @@ export default class SectionNode extends ContainerNode {
     if (rawEntry.rawXml) {
       dataNode.rawXml = rawEntry.rawXml as string;
     }
+
+    // Classify architectural entries via the systemcomposer catalog. The kind
+    // (e.g. 'DataInterface', 'StructType') is shown in the DataType column and
+    // also distinguishes a StructType from a DataInterface (both Simulink.Bus).
+    const kind = _archKind(systemComposer, entryName);
+    if (kind) {
+      dataNode.archKind = kind;
+      if (kind === 'StructType') {
+        (dataNode as unknown as { isStructType?: boolean }).isStructType = true;
+      }
+    }
+
     this.addChild(dataNode);
     return dataNode;
   }
