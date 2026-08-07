@@ -24,6 +24,8 @@ export interface INode {
     children: INode[];
     readonly id: string;
     readonly icon: string;
+    readonly className: string;
+    readonly kind: string;
     readonly dataType: string;
     readonly displayValue: string;
     readonly displayName: string;

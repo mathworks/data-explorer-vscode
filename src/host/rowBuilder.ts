@@ -3,9 +3,9 @@
 import ModelBlockNode from '../dex/datamodel/node/data/ModelBlockNode.js';
 
 // Columns shown across the dictionary tree (union that fits all sections).
-export const COLUMNS = ['Name', 'Value', 'DataType', 'Status', 'UsedBy'];
+export const COLUMNS = ['Name', 'Value', 'Class', 'Kind', 'DataType', 'Status', 'UsedBy'];
 export const COLUMN_LABELS: Record<string, string> = {
-  Name: 'Name', Value: 'Value', DataType: 'Data Type', Status: 'Status', UsedBy: 'Usage',
+  Name: 'Name', Value: 'Value', Class: 'Class', Kind: 'Kind', DataType: 'Data Type', Status: 'Status', UsedBy: 'Usage',
 };
 
 // Columns for a MATLAB/Simulink Project (.prj). buildRows is generic over
@@ -27,7 +27,7 @@ export function buildRows(sldd: any, modifiedNames?: Set<string>, readOnly = fal
       ID: `section:${section.name}`,
       parent: null,
       Name: { label: section.displayName || section.name, iconId: section.icon, editable: false, disabled: false },
-      Value: '', DataType: '', Status: '', UsedBy: '',
+      Value: '', Class: '', Kind: '', DataType: '', Status: '', UsedBy: '',
     });
     // Entry rows (flatten each entry subtree so nested struct/bus children appear)
     for (const entry of entries) {

@@ -38,7 +38,24 @@ const MODEL_ICONS = [
   'simulinkModel_FT',    // .slx data-source entries
 ];
 
-const ALL_REQUIRED = [...new Set([...TREE_KIND_ICONS, ...SLDD_ICONS, ...MODEL_ICONS])];
+// Design Data entry-node icons whose ids are referenced only from node getters
+// (bus/connection elements, enum items, variant entries). These render in the
+// webview, so a missing file shows a broken image rather than a fallback.
+const DATA_NODE_ICONS = [
+  'wsBusElement',            // Design Data Simulink.Bus element
+  'typeBusElement',          // Architectural Data DataInterface element
+  'typeStructElement',       // StructType element
+  'wsConnectionElement',     // Design Data Simulink.ConnectionBus element
+  'typeConnectionElement',   // Architectural Data PhysicalInterface element
+  'wsElement',               // Design Data enum "current" item
+  'typeElement',             // Architectural Data enum "current" item
+  'busElement',              // non-current enum item
+  'variantSettings',         // Simulink.VariantConfigurationData
+  'twoConnected_wsDefault',  // Simulink.VariantControl
+  'variant_wsParameters',    // Simulink.VariantVariable
+];
+
+const ALL_REQUIRED = [...new Set([...TREE_KIND_ICONS, ...SLDD_ICONS, ...MODEL_ICONS, ...DATA_NODE_ICONS])];
 
 describe('icon assets', () => {
   it.each(ALL_REQUIRED)('media/icons/%s.svg exists', (id) => {

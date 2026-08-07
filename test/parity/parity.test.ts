@@ -226,11 +226,11 @@ function graphSourceFor(variant: string, name: string): GraphSource {
       expect(row.Name).toBeTruthy();
     });
 
-    it('Simulink typed structure resolves correct dataType + children', () => {
-      expect(byEntry.get('MyAlias').dataType).toBe('Simulink.AliasType');
+    it('Simulink typed structure resolves correct className + children', () => {
+      expect(byEntry.get('MyAlias').className).toBe('Simulink.AliasType');
       expect(byEntry.get('MyBus').children.map((c: any) => c.name)).toEqual(['x', 'y']);
       expect(byEntry.get('MyConnBus').children.map((c: any) => c.name)).toEqual(['c1']);
-      expect(byEntry.get('sig1').dataType).toBe('Simulink.Signal');
+      expect(byEntry.get('sig1').className).toBe('Simulink.Signal');
     });
   });
 
@@ -255,7 +255,7 @@ function graphSourceFor(variant: string, name: string): GraphSource {
             let dv = '';
             try { dv = String(e.displayValue ?? ''); } catch { dv = 'ERR'; }
             let dt = '';
-            try { dt = String(e.dataType ?? ''); } catch { /* */ }
+            try { dt = String(e.className ?? ''); } catch { /* */ }
             const kids = (e.children ?? []).map((c: any) => c.name).join(',');
             m.set(e.name, `${dt}|${dv}|${kids}`);
           }

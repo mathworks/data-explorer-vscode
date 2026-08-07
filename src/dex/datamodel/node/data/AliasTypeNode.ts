@@ -11,7 +11,7 @@ export default class AliasTypeNode extends DataNode {
     BaseType: string; Description: string;
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.BaseType = (props.BaseType as string) || ''; this.Description = (props.Description as string) || ''; }
     get icon(): string { return this.isDerived ? 'typeAlias' : 'wsAlias'; }
-    get dataType(): string { return CLASS_NAME; }
+    get className(): string { return CLASS_NAME; }
     // An alias has no "value" — its base type ("double") is surfaced in the Data
     // Type column via PropBaseType. The Value column is therefore empty and not
     // editable.

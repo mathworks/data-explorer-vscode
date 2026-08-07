@@ -25,7 +25,7 @@ export default class ObjectNode extends DataNode {
         return 'wsDefault';
     }
 
-    get dataType(): string {
+    get className(): string {
         return this.arrayClass;
     }
 

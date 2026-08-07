@@ -11,7 +11,7 @@ export default class CustomObjectNode extends DataNode {
     Description: string;
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.Description = (props.Description as string) || ''; }
     get icon(): string { return 'object'; }
-    get dataType(): string { return CLASS_NAME; }
+    get className(): string { return CLASS_NAME; }
     get displayValue(): string { return '<1x1 ' + CLASS_NAME + '>'; }
     getProperties(): PropClass[] { return [PropName, PropValue, PropDataType, PropDescription]; }
     getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropValue, PropDataType, PropDescription] }]; }

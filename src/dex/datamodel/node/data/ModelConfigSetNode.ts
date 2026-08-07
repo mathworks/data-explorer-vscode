@@ -28,7 +28,7 @@ export default class ModelConfigSetNode extends BaseNode {
     return isRef ? 'configurationReference' : 'settings';
   }
 
-  get dataType(): string {
+  get className(): string {
     return this.objectClass;
   }
 

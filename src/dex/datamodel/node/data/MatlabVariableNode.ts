@@ -248,7 +248,7 @@ export default class MatlabVariableNode extends DataNode {
     }
   }
 
-  get dataType(): string {
+  get className(): string {
     if (this._isOpaque) {
       return this._opaqueClassName!;
     }
@@ -264,6 +264,20 @@ export default class MatlabVariableNode extends DataNode {
       default:
         return '';
     }
+  }
+
+  // A primitive variable's data type ('double', 'string', 'cell', …) is a real
+  // data type and belongs in the DataType column. An opaque MCOS variable's
+  // className is a Class name (e.g. 'Simulink.Parameter'), which is Class, not a
+  // data type — suppress it here so the column stays type-only.
+  get dataType(): string {
+    return this._isOpaque ? '' : this.className;
+  }
+
+  // Every plain MATLAB variable (scalar, array, cell, struct-like, or opaque
+  // MCOS object) is a "MATLAB Variable" regardless of its underlying class.
+  get kind(): string {
+    return 'MATLAB Variable';
   }
 
   get nameEditable(): boolean {

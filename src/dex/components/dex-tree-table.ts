@@ -14,6 +14,8 @@ export interface TreeTableRow {
     | string;
   _valueEditable?: boolean;
   DataType: { text: string; clipboardMode?: string; linkTarget?: string } | string;
+  Class?: { text: string; clipboardMode?: string } | string;
+  Kind?: { text: string; clipboardMode?: string } | string;
   Description: { text: string; clipboardMode?: string } | string;
   Status: { text: string; clipboardMode?: string } | string;
   UsedBy?: { text: string; linkTarget?: string } | { links: { text: string; linkTarget: string }[] } | string;
@@ -37,6 +39,8 @@ const BUFFER_ROWS = 10;
 const DEFAULT_WIDTHS: Record<string, number> = {
   Name: 25,
   Value: 20,
+  Class: 16,
+  Kind: 14,
   DataType: 18,
   Description: 15,
   UsedBy: 12,
@@ -46,11 +50,19 @@ const DEFAULT_WIDTHS: Record<string, number> = {
 const COLUMN_LABELS: Record<string, string> = {
   Name: 'Name',
   Value: 'Value',
+  Class: 'Class',
+  Kind: 'Kind',
   DataType: 'Data Type',
   Description: 'Description',
   UsedBy: 'Used By',
   Status: 'Status',
 };
+
+// The default column order and visibility. Class and Kind are supplementary
+// classifications, so they ship hidden; the user can enable them via the column
+// menu (and Reset restores this arrangement).
+const DEFAULT_COLUMN_ORDER = ['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class', 'Description'];
+const DEFAULT_HIDDEN_COLUMNS = ['Kind', 'Class'];
 
 @customElement('dex-tree-table')
 export class DexTreeTable extends LitElement {
@@ -67,13 +79,44 @@ export class DexTreeTable extends LitElement {
       }
 
       .filter-bar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
         padding: 4px 8px;
         border-bottom: 1px solid var(--dex-border-color-light, #e0e0e0);
         background: var(--dex-bg-secondary, #f8f8f8);
         flex: 0 0 auto;
       }
 
+      .columns-button {
+        flex: 0 0 auto;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 0 8px;
+        border: 1px solid var(--dex-border-color, #d0d0d0);
+        border-radius: 3px;
+        background: var(--dex-bg-primary, #fff);
+        color: var(--dex-color-text, inherit);
+        font-size: 12px;
+        font-family: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+        outline: none;
+      }
+
+      .columns-button:hover {
+        background: var(--dex-bg-hover, #e8e8e8);
+      }
+
+      .columns-button:focus-visible {
+        border-color: var(--dex-color-accent, #0078d4);
+      }
+
       .filter-input {
+        flex: 1 1 auto;
+        min-width: 0;
         width: 100%;
         height: 24px;
         padding: 2px 8px;
@@ -196,17 +239,18 @@ export class DexTreeTable extends LitElement {
         border-radius: 4px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         padding: 4px 0;
-        min-width: 140px;
+        min-width: 200px;
       }
 
       .column-menu-item {
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 4px 12px;
+        padding: 4px 12px 4px 6px;
         font-size: 12px;
         cursor: pointer;
         user-select: none;
+        white-space: nowrap;
       }
 
       .column-menu-item:hover {
@@ -220,6 +264,68 @@ export class DexTreeTable extends LitElement {
 
       .column-menu-item input[type='checkbox'] {
         margin: 0;
+      }
+
+      /* Left-side drag handle (industry-standard six-dot grip) signals the row is
+         reorderable; the whole row is draggable, but the handle shows grab intent. */
+      .column-menu-item .col-grip {
+        flex: 0 0 auto;
+        width: 12px;
+        text-align: center;
+        color: var(--dex-color-text-muted, #999);
+        cursor: grab;
+        user-select: none;
+        line-height: 1;
+      }
+
+      .column-menu-item:not(.disabled):hover .col-grip {
+        color: var(--dex-color-text, #444);
+      }
+
+      .column-menu-item.disabled .col-grip {
+        visibility: hidden;
+      }
+
+      .column-menu-item .col-label {
+        flex: 1 1 auto;
+      }
+
+      .column-menu-separator {
+        height: 1px;
+        margin: 4px 0;
+        background: var(--dex-border-color-light, #e0e0e0);
+      }
+
+      .column-menu-reset {
+        display: block;
+        width: calc(100% - 16px);
+        margin: 0 8px 2px;
+        padding: 4px 8px;
+        border: none;
+        border-radius: 3px;
+        background: transparent;
+        color: var(--dex-color-accent, #0078d4);
+        font-size: 12px;
+        font-family: inherit;
+        text-align: left;
+        cursor: pointer;
+        outline: none;
+      }
+
+      .column-menu-reset:hover {
+        background: var(--dex-bg-hover, #e8e8e8);
+      }
+
+      .column-menu-item.drag-over-top {
+        box-shadow: inset 0 2px 0 0 var(--dex-color-accent, #0078d4);
+      }
+
+      .column-menu-item.drag-over-bottom {
+        box-shadow: inset 0 -2px 0 0 var(--dex-color-accent, #0078d4);
+      }
+
+      .column-menu-item.dragging {
+        opacity: 0.5;
       }
 
       tr.data-row {
@@ -352,6 +458,12 @@ export class DexTreeTable extends LitElement {
         color: var(--dex-color-text-muted, #666);
       }
 
+      /* Class and Kind are computed, non-editable classifications; gray them so
+         the user reads them as read-only rather than editable cell values. */
+      .readonly-cell {
+        color: var(--dex-color-text-muted, #666);
+      }
+
       /* Section header rows are intentionally understated: muted gray, italic
          Name, and no vertical cell borders so the row reads as one continuous
          strip rather than a set of columns. */
@@ -453,12 +565,15 @@ export class DexTreeTable extends LitElement {
   @state() private _dropPosition: 'above' | 'on' | null = null;
 
   @state() private _columnWidths: Map<string, number> = new Map();
-  @state() private _columnOrder: string[] = [...Object.keys(DEFAULT_WIDTHS)];
-  @state() private _hiddenColumns: Set<string> = new Set();
+  @state() private _columnOrder: string[] = [...DEFAULT_COLUMN_ORDER];
+  @state() private _hiddenColumns: Set<string> = new Set(DEFAULT_HIDDEN_COLUMNS);
   @state() private _sortState: SortEntry[] = [];
   @state() private _columnMenuOpen = false;
   @state() private _columnMenuX = 0;
   @state() private _columnMenuY = 0;
+  @state() private _menuDragCol: string | null = null;
+  @state() private _menuDragOverCol: string | null = null;
+  @state() private _menuDragOverSide: 'top' | 'bottom' | null = null;
 
   private _resizingCol: string | null = null;
   private _resizeStartX = 0;
@@ -543,11 +658,26 @@ export class DexTreeTable extends LitElement {
     localStorage.setItem('dex-hidden-columns', JSON.stringify([...this._hiddenColumns]));
   }
 
-  private get _visibleColumns(): string[] {
-    if (this.columns) {
-      return this.columns;
+  // The set of columns this document supports. When the host provides `columns`
+  // that is authoritative; otherwise fall back to the built-in default order.
+  private get _availableColumns(): string[] {
+    return this.columns || [...Object.keys(DEFAULT_WIDTHS)];
+  }
+
+  // The user's preferred order restricted to the available columns, appending any
+  // available column the saved order doesn't mention (e.g. a newly added column).
+  private get _orderedColumns(): string[] {
+    const available = this._availableColumns;
+    const availableSet = new Set(available);
+    const ordered = this._columnOrder.filter((c) => availableSet.has(c));
+    for (const c of available) {
+      if (!ordered.includes(c)) ordered.push(c);
     }
-    return this._columnOrder.filter((c) => !this._hiddenColumns.has(c));
+    return ordered;
+  }
+
+  private get _visibleColumns(): string[] {
+    return this._orderedColumns.filter((c) => !this._hiddenColumns.has(c));
   }
 
   private _getColWidth(col: string, visibleCount: number): string {
@@ -698,13 +828,22 @@ export class DexTreeTable extends LitElement {
     this.requestUpdate();
   }
 
-  // --- Column Visibility ---
+  // --- Column Customization Menu ---
 
-  private _onHeaderContextMenu(e: MouseEvent): void {
+  // Toggle the column-customization dropdown, anchored under the button.
+  private _onColumnsButtonClick(e: MouseEvent): void {
     e.preventDefault();
     e.stopPropagation();
-    this._columnMenuX = e.clientX;
-    this._columnMenuY = e.clientY;
+    if (this._columnMenuOpen) {
+      this._columnMenuOpen = false;
+      return;
+    }
+    const btn = e.currentTarget as HTMLElement;
+    const rect = btn.getBoundingClientRect();
+    // Right-anchor the menu to the button (it grows leftward), so a button near
+    // the right edge doesn't push the dropdown off-screen and truncate labels.
+    this._columnMenuX = Math.max(0, window.innerWidth - rect.right);
+    this._columnMenuY = rect.bottom + 2;
     this._columnMenuOpen = true;
   }
 
@@ -718,6 +857,73 @@ export class DexTreeTable extends LitElement {
     }
     this._hiddenColumns = updated;
     this._persistHidden();
+  }
+
+  // Restore the default column order and visibility, discarding any customization.
+  private _resetColumns(e: Event): void {
+    e.stopPropagation();
+    this._columnOrder = [...DEFAULT_COLUMN_ORDER];
+    this._hiddenColumns = new Set(DEFAULT_HIDDEN_COLUMNS);
+    this._persistOrder();
+    this._persistHidden();
+  }
+
+  // --- Column reordering from the menu list ---
+
+  private _onMenuDragStart(col: string, e: DragEvent): void {
+    if (col === 'Name') {
+      e.preventDefault();
+      return;
+    }
+    this._menuDragCol = col;
+    if (e.dataTransfer) {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', col);
+    }
+  }
+
+  private _onMenuDragOver(col: string, e: DragEvent): void {
+    if (!this._menuDragCol || col === 'Name') return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    const item = e.currentTarget as HTMLElement;
+    const rect = item.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    this._menuDragOverCol = col;
+    this._menuDragOverSide = e.clientY < midY ? 'top' : 'bottom';
+  }
+
+  private _onMenuDragLeave(): void {
+    this._menuDragOverCol = null;
+    this._menuDragOverSide = null;
+  }
+
+  private _onMenuDrop(col: string, e: DragEvent): void {
+    e.preventDefault();
+    const dragged = this._menuDragCol;
+    this._menuDragCol = null;
+    this._menuDragOverCol = null;
+    const side = this._menuDragOverSide;
+    this._menuDragOverSide = null;
+    // Name is pinned first and can neither move nor be displaced.
+    if (!dragged || dragged === col || dragged === 'Name' || col === 'Name') return;
+
+    const order = [...this._orderedColumns];
+    const fromIdx = order.indexOf(dragged);
+    if (fromIdx < 0) return;
+    order.splice(fromIdx, 1);
+    let toIdx = order.indexOf(col);
+    if (side === 'bottom') toIdx += 1;
+    order.splice(toIdx, 0, dragged);
+
+    this._columnOrder = order;
+    this._persistOrder();
+  }
+
+  private _onMenuDragEnd(): void {
+    this._menuDragCol = null;
+    this._menuDragOverCol = null;
+    this._menuDragOverSide = null;
   }
 
   // --- Sorting ---
@@ -800,6 +1006,10 @@ export class DexTreeTable extends LitElement {
         if (typeof row.DataType === 'object' && 'links' in (row.DataType as any))
           return (row.DataType as any).links.map((l: any) => l.text).join(', ');
         return typeof row.DataType === 'object' ? (row.DataType as any).text : String(row.DataType || '');
+      case 'Class':
+        return typeof row.Class === 'object' ? row.Class.text : String(row.Class || '');
+      case 'Kind':
+        return typeof row.Kind === 'object' ? row.Kind.text : String(row.Kind || '');
       case 'Description':
         return typeof row.Description === 'object' ? row.Description.text : String(row.Description || '');
       case 'Status':
@@ -895,17 +1105,13 @@ export class DexTreeTable extends LitElement {
     const predicates: Array<(row: TreeTableRow) => boolean> = [];
     const tokens = text.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
 
+    // An unqualified term matches against every visible column, so the search
+    // stays in sync with whatever columns the user actually sees (Class, Kind,
+    // etc.) instead of a hardcoded subset.
+    const searchColumns = this._visibleColumns;
     const makeGenericPredicate = (term: string): ((row: TreeTableRow) => boolean) => {
       const lower = term.toLowerCase();
-      return (row) => {
-        return (
-          this._getCellText(row, 'Name').toLowerCase().includes(lower) ||
-          this._getCellText(row, 'Value').toLowerCase().includes(lower) ||
-          this._getCellText(row, 'DataType').toLowerCase().includes(lower) ||
-          this._getCellText(row, 'Description').toLowerCase().includes(lower) ||
-          this._getCellText(row, 'UsedBy').toLowerCase().includes(lower)
-        );
-      };
+      return (row) => searchColumns.some((col) => this._getCellText(row, col).toLowerCase().includes(lower));
     };
 
     for (const token of tokens) {
@@ -923,6 +1129,16 @@ export class DexTreeTable extends LitElement {
           const term = rawValue.toLowerCase();
           predicates.push((row) => {
             return this._getCellText(row, 'DataType').toLowerCase().includes(term);
+          });
+        } else if (prefix === 'class') {
+          const term = rawValue.toLowerCase();
+          predicates.push((row) => {
+            return this._getCellText(row, 'Class').toLowerCase().includes(term);
+          });
+        } else if (prefix === 'kind') {
+          const term = rawValue.toLowerCase();
+          predicates.push((row) => {
+            return this._getCellText(row, 'Kind').toLowerCase().includes(term);
           });
         } else if (prefix === 'status') {
           const term = rawValue.toLowerCase();
@@ -1645,6 +1861,16 @@ export class DexTreeTable extends LitElement {
       return html`<span>${this._highlight(dtText)}</span>`;
     }
 
+    if (columnId === 'Class') {
+      const val = typeof row.Class === 'object' ? row.Class.text : String(row.Class || '');
+      return html`<span class="readonly-cell">${this._highlight(val)}</span>`;
+    }
+
+    if (columnId === 'Kind') {
+      const val = typeof row.Kind === 'object' ? row.Kind.text : String(row.Kind || '');
+      return html`<span class="readonly-cell">${this._highlight(val)}</span>`;
+    }
+
     if (columnId === 'Description') {
       const val = typeof row.Description === 'object' ? row.Description.text : String(row.Description || '');
       if (isEditing) {
@@ -1781,8 +2007,10 @@ export class DexTreeTable extends LitElement {
             @input=${this._onFilterInput}
             @keydown=${this._onFilterKeyDown}
           />
+          ${this._renderColumnsButton()}
         </div>
         <div class="empty-state">No data</div>
+        ${this._renderColumnMenu()}
       `;
     }
 
@@ -1806,6 +2034,7 @@ export class DexTreeTable extends LitElement {
           @input=${this._onFilterInput}
           @keydown=${this._onFilterKeyDown}
         />
+        ${this._renderColumnsButton()}
       </div>
       <div
         class="table-container"
@@ -1824,7 +2053,7 @@ export class DexTreeTable extends LitElement {
               ${visibleCols.map((col) => html`<col style="width: ${this._getColWidth(col, visibleCols.length)}" />`)}
             </colgroup>
             <thead>
-              <tr role="row" @contextmenu=${(e: MouseEvent) => this._onHeaderContextMenu(e)}>
+              <tr role="row">
                 ${visibleCols.map(
                   (col, ci) => html`
                     <th
@@ -1907,36 +2136,73 @@ export class DexTreeTable extends LitElement {
           </table>
         </div>
       </div>
-      ${this._columnMenuOpen
-        ? html`
-            <div class="column-menu" style="left: ${this._columnMenuX}px; top: ${this._columnMenuY}px;">
-              ${this._columnOrder.map((col) => {
-                const isName = col === 'Name';
-                const isVisible = !this._hiddenColumns.has(col);
-                return html`
-                  <label
-                    class="column-menu-item ${isName ? 'disabled' : ''}"
-                    @click=${(e: Event) => {
-                      e.stopPropagation();
-                      if (!isName) this._toggleColumnVisibility(col);
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      .checked=${isVisible}
-                      .disabled=${isName}
-                      @change=${(e: Event) => {
-                        e.stopPropagation();
-                        if (!isName) this._toggleColumnVisibility(col);
-                      }}
-                    />
-                    ${this.columnLabels?.[col] || COLUMN_LABELS[col] || col}
-                  </label>
-                `;
-              })}
-            </div>
-          `
-        : nothing}
+      ${this._renderColumnMenu()}
+    `;
+  }
+
+  private _renderColumnsButton() {
+    return html`
+      <button
+        type="button"
+        class="columns-button"
+        title="Show, hide, and reorder columns"
+        aria-haspopup="true"
+        aria-expanded=${this._columnMenuOpen}
+        @click=${(e: MouseEvent) => this._onColumnsButtonClick(e)}
+      >
+        Columns ▾
+      </button>
+    `;
+  }
+
+  private _renderColumnMenu() {
+    if (!this._columnMenuOpen) return nothing;
+    return html`
+      <div class="column-menu" style="right: ${this._columnMenuX}px; top: ${this._columnMenuY}px;">
+        ${this._orderedColumns.map((col) => {
+          const isName = col === 'Name';
+          const isVisible = !this._hiddenColumns.has(col);
+          const overCls =
+            this._menuDragOverCol === col
+              ? this._menuDragOverSide === 'top'
+                ? 'drag-over-top'
+                : 'drag-over-bottom'
+              : '';
+          const draggingCls = this._menuDragCol === col ? 'dragging' : '';
+          return html`
+            <label
+              class="column-menu-item ${isName ? 'disabled' : ''} ${overCls} ${draggingCls}"
+              draggable=${isName ? 'false' : 'true'}
+              @dragstart=${(e: DragEvent) => this._onMenuDragStart(col, e)}
+              @dragover=${(e: DragEvent) => this._onMenuDragOver(col, e)}
+              @dragleave=${() => this._onMenuDragLeave()}
+              @drop=${(e: DragEvent) => this._onMenuDrop(col, e)}
+              @dragend=${() => this._onMenuDragEnd()}
+              @click=${(e: Event) => {
+                e.stopPropagation();
+                if (!isName) this._toggleColumnVisibility(col);
+              }}
+            >
+              <span class="col-grip" title="Drag to reorder">⋮⋮</span>
+              <input
+                type="checkbox"
+                .checked=${isVisible}
+                .disabled=${isName}
+                @click=${(e: Event) => e.stopPropagation()}
+                @change=${(e: Event) => {
+                  e.stopPropagation();
+                  if (!isName) this._toggleColumnVisibility(col);
+                }}
+              />
+              <span class="col-label">${this.columnLabels?.[col] || COLUMN_LABELS[col] || col}</span>
+            </label>
+          `;
+        })}
+        <div class="column-menu-separator"></div>
+        <button type="button" class="column-menu-reset" @click=${(e: Event) => this._resetColumns(e)}>
+          Reset to default
+        </button>
+      </div>
     `;
   }
 }

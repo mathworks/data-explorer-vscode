@@ -35,16 +35,19 @@ export class BusElementNode extends BaseBusElementNode {
         return val as number | undefined;
     }
 
-    // A StructType's elements use the struct-element icon; a DataInterface's use
-    // the plain bus-element icon.
-    get icon(): string { return (this.parent as { isStructType?: boolean } | null)?.isStructType ? 'typeStructElement' : 'typeBusElement'; }
-    get dataType(): string { return this.DataType; }
-    // Elements of a Simulink.Bus are normally read-only, but when the bus is a
-    // derived Architectural Data entry (a DataInterface) its elements are
-    // editable, including their names.
-    get nameEditable(): boolean {
-        return !!(this.parent && (this.parent as { isDerived?: boolean }).isDerived);
+    // A StructType's elements use the struct-element icon; a derived
+    // DataInterface's use the arch bus-element icon; a plain Design Data bus's
+    // use the workspace bus-element icon.
+    get icon(): string {
+        const parent = this.parent as { isStructType?: boolean; isDerived?: boolean } | null;
+        if (parent?.isStructType) { return 'typeStructElement'; }
+        return parent?.isDerived ? 'typeBusElement' : 'wsBusElement';
     }
+    // The element's Class is its object class (Simulink.BusElement), not its
+    // mapped data type — that belongs in the Data Type column below.
+    get className(): string { return 'Simulink.BusElement'; }
+    // A bus element's mapped data type is a real data type — show it in the column.
+    get dataType(): string { return this.DataType; }
     getProperties(): PropClass[] { return [PropName, PropDataType, PropMin, PropMax, PropUnit, PropDescription]; }
     getPILayout() { return [{ group: 'Element Properties', items: [PropName, PropDataType, PropMin, PropMax, PropUnit, PropDescription] }]; }
 
@@ -73,7 +76,7 @@ export class BusNode extends BaseBusNode {
         if (this.isStructType) { return 'typeStruct'; }
         return super.icon;
     }
-    get dataType(): string { return CLASS_NAME; }
+    get className(): string { return CLASS_NAME; }
     _createElementNode(name: string, props: Record<string, unknown>, serial: Record<string, unknown>): BusElementNode { return new BusElementNode(name, this, props, serial); }
     static ELEMENT_CLASS_NAME = 'Simulink.BusElement';
     static get defaultName(): string { return 'Bus'; }

@@ -10,7 +10,7 @@ export default class VariantControlNode extends DataNode {
     Value: unknown;
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.Value = props.Value !== undefined ? props.Value : ''; }
     get icon(): string { return 'twoConnected_wsDefault'; }
-    get dataType(): string { return CLASS_NAME; }
+    get className(): string { return CLASS_NAME; }
     get displayValue(): string { return PropValue.format(this.Value); }
     getProperties(): PropClass[] { return [PropName, PropValue, PropDataType]; }
     getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropValue, PropDataType] }]; }

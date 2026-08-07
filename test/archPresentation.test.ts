@@ -12,6 +12,9 @@ import { EnumTypeNode } from '../src/dex/datamodel/node/data/EnumTypeNode.js';
 import { BusNode } from '../src/dex/datamodel/node/data/BusNode.js';
 import { ConnectionBusNode } from '../src/dex/datamodel/node/data/ConnectionBusNode.js';
 import { ServiceBusNode } from '../src/dex/datamodel/node/data/ServiceBusNode.js';
+import StructNode from '../src/dex/datamodel/node/data/StructNode.js';
+// Registers the node class map so StructNode.parse can recurse into field values.
+import '../src/dex/datamodel/node/NodeClassMap.js';
 
 // Build the raw Simulink-object value wrapper a node's static parse() expects,
 // with a single element carrying the given _properties.
@@ -50,11 +53,11 @@ describe('ValueType DataType column', () => {
     expect(node.toRow()!.DataType).toBe('uint32');
   });
 
-  it('surfaces the mapped DataType even when the systemcomposer arch kind is set', () => {
-    // The arch kind ("ValueType") classifies the node, but the DataType column
-    // shows the underlying data type, not the kind.
+  it('surfaces the mapped DataType even when a classification is set', () => {
+    // The classification ("ValueType") sets the node's Kind, but the DataType
+    // column shows the underlying data type, not the kind.
     const node = ValueTypeNode.parse(rawVal('Simulink.ValueType', { DataType: 'single' }), 'VT', null);
-    node.archKind = 'ValueType';
+    node.classification = 'ValueType';
     expect(node.toRow()!.DataType).toBe('single');
   });
 });
@@ -97,24 +100,181 @@ describe('EnumType children (EnumItem)', () => {
   });
 });
 
-describe('systemcomposer arch kind in the DataType column', () => {
-  it('shows the arch kind for a DataInterface (derived Simulink.Bus)', () => {
-    const node = BusNode.parse(rawVal('Simulink.Bus', { Elements_internal: [] }), 'IF', null);
-    node.archKind = 'DataInterface';
-    expect(node.toRow()!.DataType).toBe('DataInterface');
+describe('EnumType child (EnumItem) icons', () => {
+  function makeEnum(defaultValue: string, derived = false): EnumTypeNode {
+    const enumerals = {
+      _array_type: 'Struct',
+      _dimensions: [2, 1],
+      _fields: ['Name', 'Value', 'Description'],
+      _elements: [
+        { Name: 'red', Value: 0, Description: '' },
+        { Name: 'green', Value: 1, Description: '' },
+      ],
+    };
+    const props: Record<string, unknown> = { Enumerals: enumerals };
+    if (defaultValue) props.DefaultValue = defaultValue;
+    const node = EnumTypeNode.parse(rawVal('Simulink.data.dictionary.EnumTypeDefinition', props), 'Color', null);
+    if (derived) node.metadata = { isderived: '1' };
+    return node;
+  }
+
+  it('Design Data: the enumeral matching DefaultValue uses wsElement, others busElement', () => {
+    const [red, green] = makeEnum('green').children;
+    expect(red.icon).toBe('busElement');
+    expect(green.icon).toBe('wsElement');
   });
 
-  it('shows "StructType" and marks isStructType for a struct-classified Bus', () => {
+  it('Design Data: with no DefaultValue, the first enumeral is current (wsElement)', () => {
+    const [red, green] = makeEnum('').children;
+    expect(red.icon).toBe('wsElement');
+    expect(green.icon).toBe('busElement');
+  });
+
+  it('Architectural Data (derived): the current enumeral uses typeElement', () => {
+    const [red, green] = makeEnum('green', true).children;
+    expect(red.icon).toBe('busElement');
+    expect(green.icon).toBe('typeElement');
+  });
+});
+
+// The DataType column shows a real data type only. It never surfaces the node's
+// Class (the class-identity dataType, e.g. 'Simulink.Bus') or its architectural
+// Kind (classification, e.g. 'DataInterface') — those are distinct concepts with
+// their own columns. The Class and Kind are still retained on the node for that use.
+describe('Class and Kind are suppressed from the DataType column', () => {
+  it('shows an empty DataType for a DataInterface (derived Simulink.Bus), keeping the Kind on the node', () => {
+    const node = BusNode.parse(rawVal('Simulink.Bus', { Elements_internal: [] }), 'IF', null);
+    node.classification = 'DataInterface';
+    expect(node.toRow()!.DataType).toBe('');
+    // The classification and Class (className) are still available on the model.
+    expect(node.classification).toBe('DataInterface');
+    expect(node.className).toBe('Simulink.Bus');
+  });
+
+  it('shows an empty DataType for a struct-classified Bus but still marks isStructType', () => {
     const node = BusNode.parse(rawVal('Simulink.Bus', { Elements_internal: [] }), 'S', null);
-    node.archKind = 'StructType';
+    node.classification = 'StructType';
     node.isStructType = true;
-    expect(node.toRow()!.DataType).toBe('StructType');
+    expect(node.toRow()!.DataType).toBe('');
     expect(node.icon).toBe('typeStruct');
   });
 
-  it('falls back to the class dataType when no arch kind is set', () => {
+  it('shows an empty DataType (not the Class name) for a plain Design Data Bus', () => {
     const node = BusNode.parse(rawVal('Simulink.Bus', { Elements_internal: [] }), 'B', null);
-    expect(node.toRow()!.DataType).toBe('Simulink.Bus');
+    expect(node.toRow()!.DataType).toBe('');
+    expect(node.className).toBe('Simulink.Bus');
+  });
+
+  it('shows an empty DataType for EnumType, NumericType and ServiceBus (all Class-only)', () => {
+    const en = EnumTypeNode.parse(
+      rawVal('Simulink.data.dictionary.EnumTypeDefinition', {
+        Enumerals: { _array_type: 'Struct', _dimensions: [1, 1], _fields: ['Name', 'Value', 'Description'], _elements: [{ Name: 'red', Value: 0, Description: '' }] },
+      }),
+      'Color',
+      null,
+    );
+    expect(en.toRow()!.DataType).toBe('');
+    const nt = NumericTypeNode.parse(rawVal('Simulink.NumericType', {}), 'NT', null);
+    expect(nt.toRow()!.DataType).toBe('');
+    const svc = ServiceBusNode.parse(rawVal('Simulink.ServiceBus', { Elements_internal: [] }), 'SVC', null);
+    expect(svc.toRow()!.DataType).toBe('');
+  });
+});
+
+describe('bus element icons (Design Data vs Architectural Data)', () => {
+  function derive<T extends { metadata: Record<string, unknown> | null }>(node: T): T {
+    node.metadata = { isderived: '1' };
+    return node;
+  }
+
+  it('a plain Design Data Bus element uses wsBusElement', () => {
+    const node = BusNode.parse(
+      rawVal('Simulink.Bus', { Elements_internal: elementsInternal('Simulink.BusElement', [{ Name: 'a' }]) }),
+      'B',
+      null,
+    );
+    expect(node.children[0].icon).toBe('wsBusElement');
+  });
+
+  it('a derived DataInterface element uses typeBusElement', () => {
+    const node = derive(
+      BusNode.parse(
+        rawVal('Simulink.Bus', { Elements_internal: elementsInternal('Simulink.BusElement', [{ Name: 'a' }]) }),
+        'IF',
+        null,
+      ),
+    );
+    expect(node.children[0].icon).toBe('typeBusElement');
+  });
+
+  it('a StructType element uses typeStructElement (regardless of ws/type)', () => {
+    const node = derive(
+      BusNode.parse(
+        rawVal('Simulink.Bus', { Elements_internal: elementsInternal('Simulink.BusElement', [{ Name: 'a' }]) }),
+        'S',
+        null,
+      ),
+    );
+    node.isStructType = true;
+    expect(node.children[0].icon).toBe('typeStructElement');
+  });
+
+  it('a plain Design Data ConnectionBus element uses wsConnectionElement', () => {
+    const node = ConnectionBusNode.parse(
+      rawVal('Simulink.ConnectionBus', {
+        Elements_internal: elementsInternal('Simulink.ConnectionElement', [{ Name: 'p' }]),
+      }),
+      'C',
+      null,
+    );
+    expect(node.children[0].icon).toBe('wsConnectionElement');
+  });
+
+  it('a derived PhysicalInterface element uses typeConnectionElement', () => {
+    const node = derive(
+      ConnectionBusNode.parse(
+        rawVal('Simulink.ConnectionBus', {
+          Elements_internal: elementsInternal('Simulink.ConnectionElement', [{ Name: 'p' }]),
+        }),
+        'PH',
+        null,
+      ),
+    );
+    expect(node.children[0].icon).toBe('typeConnectionElement');
+  });
+});
+
+describe('bus element Name is editable (normal color, not grayed)', () => {
+  it('a Design Data Bus element reports an editable Name', () => {
+    const node = BusNode.parse(
+      rawVal('Simulink.Bus', { Elements_internal: elementsInternal('Simulink.BusElement', [{ Name: 'a' }]) }),
+      'B',
+      null,
+    );
+    const row = node.children[0].toRow()!;
+    expect((row.Name as { editable?: boolean }).editable).toBe(true);
+  });
+
+  it('a derived DataInterface Bus element also reports an editable Name', () => {
+    const node = BusNode.parse(
+      rawVal('Simulink.Bus', { Elements_internal: elementsInternal('Simulink.BusElement', [{ Name: 'a' }]) }),
+      'IF',
+      null,
+    );
+    node.metadata = { isderived: '1' };
+    const row = node.children[0].toRow()!;
+    expect((row.Name as { editable?: boolean }).editable).toBe(true);
+  });
+});
+
+describe('real data types remain in the DataType column', () => {
+  it('a struct variable shows "struct"', () => {
+    const node = StructNode.parse(
+      { _array_type: 'Struct', _dimensions: [1, 1], _fields: ['a'], _elements: [{ a: 1 }] },
+      'S',
+      null,
+    );
+    expect(node.toRow()!.DataType).toBe('struct');
   });
 });
 

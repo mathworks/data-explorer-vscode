@@ -34,7 +34,7 @@ export default class DataSourceNode extends BaseNode {
         return this.fullPath;
     }
 
-    get dataType(): string {
+    get className(): string {
         if (this.name.endsWith('.sldd')) { return 'Data Dictionary'; }
         if (this.name.endsWith('.slx')) { return 'Simulink Model'; }
         return 'MAT File';

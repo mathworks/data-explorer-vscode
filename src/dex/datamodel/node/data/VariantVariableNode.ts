@@ -10,7 +10,7 @@ export default class VariantVariableNode extends DataNode {
     Specification: string;
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.Specification = (props.Specification as string) || ''; }
     get icon(): string { return 'variant_wsParameters'; }
-    get dataType(): string { return CLASS_NAME; }
+    get className(): string { return CLASS_NAME; }
     get displayValue(): string { return PropSpecification.format(this.Specification); }
     getProperties(): PropClass[] { return [PropName, PropSpecification, PropDataType]; }
     getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropSpecification, PropDataType] }]; }

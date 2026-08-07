@@ -21,19 +21,22 @@ export class EnumValueNode extends DataNode {
     }
     // The enumeral that the parent EnumType defaults to gets the "current" icon;
     // every other enumeral gets the plain bus-element icon. When the parent has no
-    // DefaultValue set, the first enumeral is treated as the current one.
+    // DefaultValue set, the first enumeral is treated as the current one. A
+    // derived (Architectural Data) enum uses the arch "current" icon; a plain
+    // Design Data enum uses the workspace variant.
     get icon(): string {
         const parent = this.parent as EnumTypeNode | null;
         if (!parent) { return 'busElement'; }
         const isCurrent = parent.DefaultValue
             ? parent.DefaultValue === this.name
             : parent.children[0] === this;
-        return isCurrent ? 'typeElement' : 'busElement';
+        if (!isCurrent) { return 'busElement'; }
+        return parent.isDerived ? 'typeElement' : 'wsElement';
     }
-    get dataType(): string { return CLASS_NAME; }
+    get className(): string { return CLASS_NAME; }
     // An enumeral has no meaningful data type — the DataType column is empty
     // (not applicable).
-    get displayDataType(): string { return ''; }
+    get dataType(): string { return ''; }
     get displayValue(): string { return this.Value !== undefined ? String(this.Value) : ''; }
     get disabled(): boolean { return true; }
     getProperties(): PropClass[] { return [PropName, PropValue, PropDescription]; }
@@ -54,7 +57,7 @@ export class EnumTypeNode extends DataNode {
         this.Description = (props.Description as string) || '';
     }
     get icon(): string { return this.isDerived ? 'typeEnum' : 'wsEnum'; }
-    get dataType(): string { return CLASS_NAME; }
+    get className(): string { return CLASS_NAME; }
     // The Value column shows the enum's DefaultValue; when none is set it falls
     // back to the first enumeral's name (the same one marked "current" by the
     // child icon rule).

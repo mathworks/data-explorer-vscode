@@ -32,7 +32,7 @@ export default class ModelReferenceNode extends BaseNode {
         return this.blockPath;
     }
 
-    get dataType(): string {
+    get className(): string {
         return 'Model Reference';
     }
 
