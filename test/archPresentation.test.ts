@@ -17,8 +17,11 @@ import SignalNode from '../src/dex/datamodel/node/data/SignalNode.js';
 import BreakpointNode from '../src/dex/datamodel/node/data/BreakpointNode.js';
 import LookupTableNode from '../src/dex/datamodel/node/data/LookupTableNode.js';
 import VariantConfigurationDataNode from '../src/dex/datamodel/node/data/VariantConfigurationDataNode.js';
+import ConfigSetNode from '../src/dex/datamodel/node/data/ConfigSetNode.js';
+import ConfigSetRefNode from '../src/dex/datamodel/node/data/ConfigSetRefNode.js';
+import type DataNode from '../src/dex/datamodel/node/DataNode.js';
 // Registers the node class map so StructNode.parse can recurse into field values.
-import '../src/dex/datamodel/node/NodeClassMap.js';
+import { parseValue } from '../src/dex/datamodel/node/NodeClassMap.js';
 
 // Build the raw Simulink-object value wrapper a node's static parse() expects,
 // with a single element carrying the given _properties.
@@ -294,6 +297,30 @@ describe('object nodes with no scalar value: empty, non-editable Value', () => {
 
   it('VariantConfiguration shows an empty, non-editable Value', () => {
     const row = VariantConfigurationDataNode.parse(rawVal('Simulink.VariantConfigurationData', { Value: 'foo' }), 'vc', null).toRow()!;
+    expect(row.Value).toBe('');
+    expect(row._valueEditable).toBe(false);
+  });
+
+  it('a Simulink.VariantConfigurations container parses to an empty, non-editable Value and keeps its class identity', () => {
+    // The on-disk entry's class is the plural container 'Simulink.VariantConfigurations',
+    // which routes to the same node. It must not fall through to ObjectNode's
+    // "<1x1 ...>" placeholder.
+    const node = parseValue(rawVal('Simulink.VariantConfigurations', {}), 'VariantConfigurations', null) as DataNode;
+    const row = node.toRow()!;
+    expect(row.Value).toBe('');
+    expect(row._valueEditable).toBe(false);
+    expect(node.className).toBe('Simulink.VariantConfigurations');
+    expect(node.kind).toBe('Variant Configuration');
+  });
+
+  it('ConfigSet shows an empty, non-editable Value', () => {
+    const row = ConfigSetNode.parse(rawVal('Simulink.ConfigSet', { Name: 'Configuration' }), 'cfg', null).toRow()!;
+    expect(row.Value).toBe('');
+    expect(row._valueEditable).toBe(false);
+  });
+
+  it('ConfigSetRef shows an empty, non-editable Value', () => {
+    const row = ConfigSetRefNode.parse(rawVal('Simulink.ConfigSetRef', { SourceName: 'src' }), 'ref', null).toRow()!;
     expect(row.Value).toBe('');
     expect(row._valueEditable).toBe(false);
   });

@@ -41,7 +41,7 @@ const ALLOWED_TYPES: Record<string, string[]> = {
     'Simulink.data.dictionary.EnumTypeDefinition',
     'Simulink.AliasType',
   ],
-  config: ['Simulink.ConfigSet', 'Simulink.ConfigSetRef', 'Simulink.VariantConfigurationData'],
+  config: ['Simulink.ConfigSet', 'Simulink.ConfigSetRef', 'Simulink.VariantConfigurationData', 'Simulink.VariantConfigurations'],
   other: ['MatlabVariable', 'Simulink.VariantExpression', 'Simulink.VariantVariable', 'CustomObject'],
 };
 

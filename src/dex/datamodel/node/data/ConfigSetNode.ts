@@ -11,8 +11,10 @@ export default class ConfigSetNode extends DataNode {
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.ConfigName = (props.Name as string) || ''; }
     get icon(): string { return 'settings'; }
     get className(): string { return CLASS_NAME; }
-    get displayValue(): string { return this.ConfigName || '<1x1 ' + CLASS_NAME + '>'; }
-    getProperties(): PropClass[] { return [PropName, PropValue, PropDataType]; }
+    // A ConfigSet has no scalar "value" — the Value column is empty and not editable.
+    get displayValue(): string { return ''; }
+    get valueEditable(): boolean { return false; }
+    getProperties(): PropClass[] { return [PropName, PropDataType]; }
     getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropValue, PropDataType] }]; }
     _getSerializedProperties(): Record<string, unknown> { const props = Object.assign({}, this.serial._properties as Record<string, unknown>); props.Name = this.ConfigName; return props; }
     serializeValue(): unknown { return this._serializeSimulinkObject({ Name: this.ConfigName }); }
