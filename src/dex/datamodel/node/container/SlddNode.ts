@@ -31,10 +31,10 @@ export interface SystemComposerCatalog {
     modeledDataTypes: Record<string, string>;
 }
 
-// Maps a systemcomposer type string to the friendly architectural kind shown to
-// the user. The kind is derived from the type, not the entry name (which is
-// user-chosen), so it stays correct regardless of what an entry is named.
-const SC_TYPE_TO_ARCH_KIND: Record<string, string> = {
+// Maps a systemcomposer type string to the semantic classification token that
+// drives the entry's Kind. The token is derived from the type, not the entry
+// name (which is user-chosen), so it stays correct regardless of the name.
+const SC_TYPE_TO_CLASSIFICATION: Record<string, string> = {
     'systemcomposer.architecture.model.interface.CompositeDataInterface': 'DataInterface',
     'systemcomposer.architecture.model.interface.CompositePhysicalInterface': 'PhysicalInterface',
     'systemcomposer.architecture.model.swarch.ServiceInterface': 'ServiceInterface',
@@ -45,15 +45,15 @@ const SC_TYPE_TO_ARCH_KIND: Record<string, string> = {
     'systemcomposer.property.AliasType': 'AliasType',
 };
 
-// Resolve the architectural kind (e.g. 'DataInterface', 'StructType') for an
+// Resolve the classification token (e.g. 'DataInterface', 'StructType') for an
 // entry name, or null if the catalog doesn't classify it. Interfaces are checked
 // before modeled data types.
-export function archKind(catalog: SystemComposerCatalog | null | undefined, entryName: string): string | null {
+export function classificationOf(catalog: SystemComposerCatalog | null | undefined, entryName: string): string | null {
     if (!catalog) {
         return null;
     }
     const scType = catalog.interfaces[entryName] || catalog.modeledDataTypes[entryName];
-    return (scType && SC_TYPE_TO_ARCH_KIND[scType]) || null;
+    return (scType && SC_TYPE_TO_CLASSIFICATION[scType]) || null;
 }
 
 export default class SlddNode extends ContainerNode {

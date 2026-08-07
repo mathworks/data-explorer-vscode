@@ -32,7 +32,7 @@ function describeEntry(n: any): string {
   }
   let dt = '';
   try {
-    dt = String(n.dataType ?? '');
+    dt = String(n.className ?? '');
   } catch {
     /* ignore */
   }

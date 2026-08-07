@@ -40,7 +40,7 @@ export default class ParameterNode extends DataNode {
         return this.isDerived ? 'typeConstant' : 'wsParameters';
     }
 
-    get dataType(): string {
+    get className(): string {
         return CLASS_NAME;
     }
 

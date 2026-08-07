@@ -29,6 +29,8 @@ export interface RowData {
   Value?: unknown;
   _valueEditable?: boolean;
   DataType?: string | { text: string; linkTarget?: string };
+  Class?: string;
+  Kind?: string;
   Description?: string;
   UsedBy?: string | { text: string; linkTarget?: string } | { links: { text: string; linkTarget: string }[] };
   [key: string]: unknown;
@@ -68,14 +70,23 @@ export default class BaseNode {
     return 'wsDefault';
   }
 
-  get dataType(): string {
+  // The raw class identity (e.g. 'Simulink.Bus', 'double'), shown in the Class
+  // column.
+  get className(): string {
     return '';
   }
 
-  // The value shown in the DataType column; subclasses may override to show a
-  // friendlier type than the class-identity dataType.
-  get displayDataType(): string {
-    return this.dataType;
+  // The user-facing Kind (e.g. 'Bus', 'MATLAB Variable'), shown in the Kind
+  // column. Base nodes with no friendlier name fall back to the class identity.
+  get kind(): string {
+    return this.className;
+  }
+
+  // The value shown in the Data Type column. Base nodes carry no distinct data
+  // type, so this falls back to the class identity; DataNode narrows this to a
+  // real data type only (empty for object types).
+  get dataType(): string {
+    return this.className;
   }
 
   get displayValue(): string {
@@ -251,7 +262,13 @@ export default class BaseNode {
       row._valueEditable = this.valueEditable;
     }
     if (!('DataType' in row)) {
-      row.DataType = this.displayDataType;
+      row.DataType = this.dataType;
+    }
+    if (!('Class' in row)) {
+      row.Class = this.className;
+    }
+    if (!('Kind' in row)) {
+      row.Kind = this.kind;
     }
     if (!('Description' in row)) {
       row.Description = (this as unknown as { Description?: string }).Description || '';

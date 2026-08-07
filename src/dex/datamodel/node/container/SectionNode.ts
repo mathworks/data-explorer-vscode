@@ -6,7 +6,7 @@ import type BaseNode from '../BaseNode';
 import type DataNode from '../DataNode';
 import type { NodeClassMapAPI } from '../NodeRegistry';
 import type { SystemComposerCatalog } from './SlddNode';
-import { archKind as _archKind } from './SlddNode';
+import { classificationOf as _classificationOf } from './SlddNode';
 
 import { NS_DESIGN, NS_CONFIGURATIONS, NS_OTHER, SECTION_NAMESPACE } from '../../SectionConstants.js';
 export { NS_DESIGN, NS_CONFIGURATIONS, NS_OTHER, SECTION_NAMESPACE };
@@ -205,13 +205,13 @@ export default class SectionNode extends ContainerNode {
       dataNode.rawXml = rawEntry.rawXml as string;
     }
 
-    // Classify architectural entries via the systemcomposer catalog. The kind
-    // (e.g. 'DataInterface', 'StructType') is shown in the DataType column and
-    // also distinguishes a StructType from a DataInterface (both Simulink.Bus).
-    const kind = _archKind(systemComposer, entryName);
-    if (kind) {
-      dataNode.archKind = kind;
-      if (kind === 'StructType') {
+    // Classify entries via the systemcomposer catalog. The classification token
+    // (e.g. 'DataInterface', 'StructType') drives the entry's user-facing Kind
+    // and also distinguishes a StructType from a DataInterface (both Simulink.Bus).
+    const classification = _classificationOf(systemComposer, entryName);
+    if (classification) {
+      dataNode.classification = classification;
+      if (classification === 'StructType') {
         (dataNode as unknown as { isStructType?: boolean }).isStructType = true;
       }
     }

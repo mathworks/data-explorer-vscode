@@ -57,6 +57,51 @@ export interface SetPropertyResult {
   validValue: string;
 }
 
+// The user-facing Kind for each object Class. This is the friendly name shown
+// in the Kind column (e.g. Class 'Simulink.Bus' → Kind 'Bus'); it never appears
+// in the Class column (which shows the raw class identity) or the Data Type
+// column (which shows a real data type). A class absent from this map falls back
+// to its raw class name as its Kind.
+const KIND_BY_CLASS: Record<string, string> = {
+  'Simulink.Parameter': 'Simulink Parameter',
+  'Simulink.Signal': 'Simulink Signal',
+  'Simulink.LookupTable': 'Lookup Table',
+  'Simulink.Breakpoint': 'Breakpoint',
+  'Simulink.Bus': 'Bus',
+  'Simulink.BusElement': 'Bus Element',
+  'Simulink.ConnectionBus': 'Connection Bus',
+  'Simulink.ConnectionElement': 'Connection Element',
+  'Simulink.ServiceBus': 'Service Interface',
+  'Simulink.FunctionElement': 'Function Element',
+  'Simulink.ValueType': 'Value Type',
+  'Simulink.AliasType': 'Alias Type',
+  'Simulink.NumericType': 'Numeric Type',
+  'Simulink.data.dictionary.EnumTypeDefinition': 'Enumerated Type',
+  'Simulink.VariantExpression': 'Variant Expression',
+  'Simulink.VariantControl': 'Variant Control',
+  'Simulink.VariantVariable': 'Variant Variable',
+  'Simulink.VariantBank': 'Variant Bank',
+  'Simulink.VariantBankCoderInfo': 'Variant Bank Coder Info',
+  'Simulink.VariantConfigurationData': 'Variant Configuration',
+  'Simulink.ConfigSet': 'Configuration Set',
+  'Simulink.ConfigSetRef': 'Configuration Reference',
+};
+
+// The user-facing Kind for each semantic classification token. Some entries are
+// classified (via the systemcomposer catalog) into a Kind that comes from the
+// classification rather than the Class, so the same Simulink.Bus can be a
+// 'Data Interface' or a 'Struct Type' depending on how the catalog models it.
+const KIND_BY_CLASSIFICATION: Record<string, string> = {
+  DataInterface: 'Data Interface',
+  PhysicalInterface: 'Physical Interface',
+  ServiceInterface: 'Service Interface',
+  ValueType: 'Value Type',
+  StructType: 'Struct Type',
+  NumericType: 'Numeric Type',
+  EnumType: 'Enumerated Type',
+  AliasType: 'Alias Type',
+};
+
 export default class DataNode extends BaseNode {
   metadata: Record<string, unknown> | null;
   serial: Record<string, unknown>;
@@ -64,10 +109,11 @@ export default class DataNode extends BaseNode {
   Description?: string;
   _rawInput?: unknown;
   rawXml?: string;
-  // The architectural kind (e.g. 'DataInterface', 'StructType') from the
-  // systemcomposer catalog, set at parse time for arch entries. Overrides the
-  // class-identity dataType in the DataType column when present.
-  archKind?: string;
+  // A semantic classification token (e.g. 'DataInterface', 'StructType') set at
+  // parse time for entries the source classifies beyond their Class (currently
+  // the systemcomposer catalog). It drives the user-facing Kind (see the `kind`
+  // getter). Unclassified entries derive their Kind from the Class alone.
+  classification?: string;
 
   constructor(name: string, parent: BaseNode | null, serial?: Record<string, unknown>) {
     super(name, parent);
@@ -76,10 +122,31 @@ export default class DataNode extends BaseNode {
     this.status = '';
   }
 
-  // The value shown in the DataType column. Defaults to the class-identity
-  // dataType, but an arch entry surfaces its systemcomposer kind instead.
-  get displayDataType(): string {
-    return this.archKind || this.dataType;
+  // Each data node captures three distinct concepts, one per column:
+  //   • className — the raw class identity (e.g. 'Simulink.Bus', 'double').
+  //   • kind      — the user-facing name (e.g. 'Bus', 'MATLAB Variable').
+  //   • dataType  — a real data type only (e.g. 'double', 'int8'), or empty.
+  // These never mix: the Class column shows className, the Kind column shows
+  // kind, and the Data Type column shows dataType.
+
+  // The user-facing Kind. A classified entry's Kind comes from its classification
+  // token; otherwise it is derived from the Class. Nodes with no known mapping
+  // fall back to their raw class name.
+  get kind(): string {
+    if (this.classification) {
+      return KIND_BY_CLASSIFICATION[this.classification] || this.classification;
+    }
+    const cls = this.className;
+    return KIND_BY_CLASS[cls] || cls;
+  }
+
+  // The value shown in the Data Type column. This column shows a real data type
+  // only; it never surfaces the node's Class (the class identity, e.g.
+  // 'Simulink.Bus') or its Kind. Object-type nodes therefore show nothing here
+  // by default; only nodes that carry a genuine data type (primitive variables,
+  // structs, bus elements, value types) override this.
+  get dataType(): string {
+    return '';
   }
 
   get isEntry(): boolean {

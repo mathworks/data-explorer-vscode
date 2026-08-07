@@ -10,7 +10,7 @@ export default class ConfigSetRefNode extends DataNode {
     SourceName: string;
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.SourceName = (props.SourceName as string) || ''; }
     get icon(): string { return 'configurationReference'; }
-    get dataType(): string { return CLASS_NAME; }
+    get className(): string { return CLASS_NAME; }
     get displayValue(): string { return this.SourceName || '<1x1 ' + CLASS_NAME + '>'; }
     getProperties(): PropClass[] { return [PropName, PropValue, PropDataType]; }
     getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropValue, PropDataType] }]; }

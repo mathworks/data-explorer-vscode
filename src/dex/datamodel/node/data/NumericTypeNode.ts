@@ -11,7 +11,7 @@ export default class NumericTypeNode extends DataNode {
     Description: string;
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.Description = (props.Description as string) || ''; }
     get icon(): string { return this.isDerived ? 'typeNumeric' : 'wsNumeric'; }
-    get dataType(): string { return CLASS_NAME; }
+    get className(): string { return CLASS_NAME; }
     // A NumericType has no scalar "value" — the Value column is empty and not
     // editable (the class name is surfaced in the Data Type column).
     get displayValue(): string { return ''; }

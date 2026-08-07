@@ -71,7 +71,7 @@ export default class ProjectItemNode extends BaseNode {
         return this.location;
     }
 
-    get dataType(): string {
+    get className(): string {
         return this.projectItemType;
     }
 

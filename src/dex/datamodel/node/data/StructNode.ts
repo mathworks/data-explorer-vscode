@@ -17,8 +17,18 @@ export default class StructNode extends DataNode {
         return 'wsTree';
     }
 
-    get dataType(): string {
+    get className(): string {
         return 'struct';
+    }
+
+    // 'struct' is a real data type, so it belongs in the DataType column.
+    get dataType(): string {
+        return this.className;
+    }
+
+    // A struct is a MATLAB variable, like scalars/arrays/cells.
+    get kind(): string {
+        return 'MATLAB Variable';
     }
 
     get displayValue(): string {

@@ -18,10 +18,10 @@ export class FunctionElementNode extends BaseBusElementNode {
     }
 
     get icon(): string { return 'function'; }
-    get dataType(): string { return 'Simulink.FunctionElement'; }
+    get className(): string { return 'Simulink.FunctionElement'; }
     // A function element has no meaningful data type — the DataType column is
     // empty (not applicable).
-    get displayDataType(): string { return ''; }
+    get dataType(): string { return ''; }
     get displayValue(): string { return this.Prototype; }
     getProperties(): PropClass[] { return [PropName, PropDataType, PropDescription]; }
     getPILayout() { return [{ group: 'Element Properties', items: [PropName, PropDataType, PropDescription] }]; }
@@ -30,7 +30,7 @@ export class FunctionElementNode extends BaseBusElementNode {
 export class ServiceBusNode extends BaseBusNode {
     // A derived ServiceBus is an Architectural Data ServiceInterface.
     get icon(): string { return this.isDerived ? 'serviceInterfaces' : 'wsDefault'; }
-    get dataType(): string { return CLASS_NAME; }
+    get className(): string { return CLASS_NAME; }
     // A service interface has no scalar value — the Value column is empty and not
     // editable, matching the other bus-like interface types.
     get displayValue(): string { return ''; }

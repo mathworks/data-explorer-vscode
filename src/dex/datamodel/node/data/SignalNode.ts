@@ -28,7 +28,7 @@ export default class SignalNode extends DataNode {
     }
 
     get icon(): string { return this.isDerived ? 'serviceInterfaces' : 'wsSignal'; }
-    get dataType(): string { return CLASS_NAME; }
+    get className(): string { return CLASS_NAME; }
     get displayValue(): string { return '<1x1 ' + CLASS_NAME + '>'; }
 
     getProperties(): PropClass[] { return [PropName, PropDataType, PropMin, PropMax, PropUnit, PropDescription]; }

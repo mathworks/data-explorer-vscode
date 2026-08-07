@@ -9,8 +9,8 @@ export default class PropType {
     static column: string | null = 'Type';
 
     static readValue(node: BaseNode): string {
-        const n = node as unknown as { projectItemType?: string; dataType?: string };
-        return n.projectItemType || n.dataType || '';
+        const n = node as unknown as { projectItemType?: string; className?: string };
+        return n.projectItemType || n.className || '';
     }
 
     static format(value: unknown): string {

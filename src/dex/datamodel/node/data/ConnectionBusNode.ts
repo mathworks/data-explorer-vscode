@@ -20,7 +20,13 @@ export class ConnectionBusElementNode extends BaseBusElementNode {
         this.Type = (rawType as string) || DEFAULT_CONNECTION_TYPE;
     }
 
-    get icon(): string { return 'typeConnectionElement'; }
+    // A derived PhysicalInterface's elements use the arch connection-element
+    // icon; a plain Design Data ConnectionBus's use the workspace variant.
+    get icon(): string { return (this.parent as { isDerived?: boolean } | null)?.isDerived ? 'typeConnectionElement' : 'wsConnectionElement'; }
+    // The element's Class is its object class (Simulink.ConnectionElement), not
+    // its mapped connection type — that belongs in the Data Type column below.
+    get className(): string { return 'Simulink.ConnectionElement'; }
+    // A connection element's mapped connection type is a real data type — show it.
     get dataType(): string { return this.Type; }
     getProperties(): PropClass[] { return [PropName, PropDataType, PropDescription]; }
     getPILayout() { return [{ group: 'Element Properties', items: [PropName, PropDataType, PropDescription] }]; }
@@ -37,7 +43,7 @@ export class ConnectionBusElementNode extends BaseBusElementNode {
 
 export class ConnectionBusNode extends BaseBusNode {
     get icon(): string { return this.isDerived ? 'typeConnection' : 'wsConnectionBus'; }
-    get dataType(): string { return CLASS_NAME; }
+    get className(): string { return CLASS_NAME; }
     _createElementNode(name: string, props: Record<string, unknown>, serial: Record<string, unknown>): ConnectionBusElementNode { return new ConnectionBusElementNode(name, this, props, serial); }
     static ELEMENT_CLASS_NAME = 'Simulink.ConnectionElement';
     static get defaultName(): string { return 'ConnectionBus'; }

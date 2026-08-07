@@ -12,10 +12,10 @@ export default class ValueTypeNode extends DataNode {
     DataType: string;
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.Description = (props.Description as string) || ''; this.DataType = (props.DataType as string) || 'double'; }
     get icon(): string { return this.isDerived ? 'typeSignalUI' : 'wsValue'; }
-    get dataType(): string { return CLASS_NAME; }
+    get className(): string { return CLASS_NAME; }
     // The DataType column shows the ValueType's underlying DataType property
     // (defaulting to 'double'), not the class name or the arch kind.
-    get displayDataType(): string { return this.DataType; }
+    get dataType(): string { return this.DataType; }
     // A ValueType has no scalar "value" — the Value column is empty and not
     // editable (the DataType is surfaced in the Data Type column).
     get displayValue(): string { return ''; }

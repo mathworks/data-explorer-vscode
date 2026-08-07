@@ -10,7 +10,7 @@ export default class VariantExpressionNode extends DataNode {
     Condition: string;
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.Condition = (props.Condition as string) || ''; }
     get icon(): string { return 'wsVariant'; }
-    get dataType(): string { return CLASS_NAME; }
+    get className(): string { return CLASS_NAME; }
     get displayValue(): string { return PropCondition.format(this.Condition); }
     getProperties(): PropClass[] { return [PropName, PropCondition, PropDataType]; }
     getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropCondition, PropDataType] }]; }

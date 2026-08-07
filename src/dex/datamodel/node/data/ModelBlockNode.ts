@@ -41,7 +41,7 @@ export default class ModelBlockNode extends BaseNode {
     return this.blockType;
   }
 
-  get dataType(): string {
+  get className(): string {
     return this.paramUsages.map((u) => `${u.property}=${u.value}`).join(', ');
   }
 
