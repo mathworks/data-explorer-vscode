@@ -60,6 +60,26 @@ describe('dex-tree-table sorting preserves hierarchy', () => {
     expect(visibleOrder(table)).toEqual(['S', 'S/z', 'S/a']);
   });
 
+  it('does not sort on the trailing click that follows a column resize', () => {
+    // Ending a resize (mouseup) is followed by a click on the <th>. That click
+    // must not toggle the sort. The resize's onUp sets _suppressNextHeaderClick;
+    // _onHeaderClick must consume it and leave the sort state untouched.
+    const table = new DexTreeTable();
+    table.rows = [makeRow('S', null, 'Section')];
+    expect((table as any)._sortState).toEqual([]);
+
+    (table as any)._suppressNextHeaderClick = true;
+    (table as any)._onHeaderClick('Name', { shiftKey: false } as MouseEvent);
+
+    // No sort applied, and the flag is consumed (one click only).
+    expect((table as any)._sortState).toEqual([]);
+    expect((table as any)._suppressNextHeaderClick).toBe(false);
+
+    // The NEXT click (a genuine one) sorts as normal.
+    (table as any)._onHeaderClick('Name', { shiftKey: false } as MouseEvent);
+    expect((table as any)._sortState).toEqual([{ column: 'Name', direction: 'asc' }]);
+  });
+
   it('sorts nested grandchildren within their own subtree only', () => {
     const rows: TreeTableRow[] = [
       makeRow('B', null, 'Beta'),

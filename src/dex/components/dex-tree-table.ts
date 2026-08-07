@@ -580,6 +580,11 @@ export class DexTreeTable extends LitElement {
   private _resizeStartWidth = 0;
   private _resizeNextCol: string | null = null;
   private _resizeNextStartWidth = 0;
+  // A resize ends on mouseup, but the browser then fires a `click` on the <th>,
+  // which would trigger sorting. `_resizingCol` is already cleared by then, so
+  // this flag carries the "just resized" signal to the click handler to swallow
+  // that one click.
+  private _suppressNextHeaderClick = false;
 
   private _dragColId: string | null = null;
   private _dragOverColId: string | null = null;
@@ -760,6 +765,15 @@ export class DexTreeTable extends LitElement {
       document.removeEventListener('mouseup', onUp);
       this._resizingCol = null;
       this._resizeNextCol = null;
+      // Swallow the click the browser fires on the <th> right after this
+      // mouseup, so ending a resize doesn't also toggle the column sort. The
+      // trailing click dispatches synchronously before this timeout, so the
+      // timeout only clears the flag if no click follows (e.g. mouseup landed
+      // outside the header) — preventing a stuck flag from eating a later sort.
+      this._suppressNextHeaderClick = true;
+      setTimeout(() => {
+        this._suppressNextHeaderClick = false;
+      }, 0);
     };
 
     document.addEventListener('mousemove', onMove);
@@ -944,6 +958,12 @@ export class DexTreeTable extends LitElement {
 
   private _onHeaderClick(col: string, e: MouseEvent): void {
     if (this._resizingCol) return;
+    // A resize just ended: this is the trailing click from that drag, not an
+    // intent to sort. Consume the flag and bail.
+    if (this._suppressNextHeaderClick) {
+      this._suppressNextHeaderClick = false;
+      return;
+    }
 
     if (e.shiftKey) {
       const existing = this._sortState.findIndex((s) => s.column === col);
