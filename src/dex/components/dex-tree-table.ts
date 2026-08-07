@@ -603,6 +603,10 @@ export class DexTreeTable extends LitElement {
     this._loadPersistedState();
     this._boundOnDocClick = this._onDocumentClick.bind(this);
     document.addEventListener('click', this._boundOnDocClick);
+    // Close the column menu when the webview loses focus (e.g. switching editor
+    // tabs), so a fixed-position dropdown doesn't linger over an inactive view.
+    this._boundOnWindowBlur = this._onWindowBlur.bind(this);
+    window.addEventListener('blur', this._boundOnWindowBlur);
   }
 
   override disconnectedCallback(): void {
@@ -610,9 +614,19 @@ export class DexTreeTable extends LitElement {
     if (this._boundOnDocClick) {
       document.removeEventListener('click', this._boundOnDocClick);
     }
+    if (this._boundOnWindowBlur) {
+      window.removeEventListener('blur', this._boundOnWindowBlur);
+    }
   }
 
   private _boundOnDocClick: ((e: Event) => void) | null = null;
+  private _boundOnWindowBlur: (() => void) | null = null;
+
+  private _onWindowBlur(): void {
+    if (this._columnMenuOpen) {
+      this._columnMenuOpen = false;
+    }
+  }
 
   private _onDocumentClick(e: Event): void {
     if (this._columnMenuOpen) {

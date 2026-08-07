@@ -127,6 +127,15 @@ describe('reset to default', () => {
   });
 });
 
+describe('the menu closes when the webview loses focus', () => {
+  it('a window blur closes an open column menu', () => {
+    const table = makeTable();
+    (table as any)._columnMenuOpen = true;
+    (table as any)._onWindowBlur();
+    expect((table as any)._columnMenuOpen).toBe(false);
+  });
+});
+
 describe('persisted state is restored', () => {
   it('a saved order + hidden set is applied on load', () => {
     localStorage.setItem('dex-column-order', JSON.stringify(['Name', 'Status', 'Value', 'DataType', 'UsedBy', 'Kind', 'Class']));

@@ -12,8 +12,10 @@ export default class BreakpointNode extends DataNode {
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.Description = (props.Description as string) || ''; }
     get icon(): string { return 'wsSimulinkBreakpoint'; }
     get className(): string { return CLASS_NAME; }
-    get displayValue(): string { return '<1x1 ' + CLASS_NAME + '>'; }
-    getProperties(): PropClass[] { return [PropName, PropValue, PropDataType, PropDescription]; }
+    // A Breakpoint has no scalar "value" — the Value column is empty and not editable.
+    get displayValue(): string { return ''; }
+    get valueEditable(): boolean { return false; }
+    getProperties(): PropClass[] { return [PropName, PropDataType, PropDescription]; }
     getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropValue, PropDataType, PropDescription] }]; }
     _getSerializedProperties(): Record<string, unknown> { const props = Object.assign({}, this.serial._properties as Record<string, unknown>); if ('Description' in (this.serial._properties as Record<string, unknown>) || this.Description) { props.Description = this.Description; } return props; }
     serializeValue(): unknown { const overrides: Record<string, unknown> = {}; if ('Description' in (this.serial._properties as Record<string, unknown>) || this.Description) { overrides.Description = this.Description; } return this._serializeSimulinkObject(overrides); }

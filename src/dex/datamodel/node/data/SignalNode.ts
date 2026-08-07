@@ -29,7 +29,9 @@ export default class SignalNode extends DataNode {
 
     get icon(): string { return this.isDerived ? 'serviceInterfaces' : 'wsSignal'; }
     get className(): string { return CLASS_NAME; }
-    get displayValue(): string { return '<1x1 ' + CLASS_NAME + '>'; }
+    // A Signal has no scalar "value" — the Value column is empty and not editable.
+    get displayValue(): string { return ''; }
+    get valueEditable(): boolean { return false; }
 
     getProperties(): PropClass[] { return [PropName, PropDataType, PropMin, PropMax, PropUnit, PropDescription]; }
     getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropDataType] }, { group: 'Value Properties', items: [PropMin, PropMax, PropUnit, PropDescription] }]; }
