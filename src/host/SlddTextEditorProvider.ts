@@ -49,6 +49,13 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     const distRoot = vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview');
     webview.options = { enableScripts: true, localResourceRoots: [distRoot] };
 
+    // Give the table tab a distinct table glyph instead of VS Code's default
+    // JSON `{}` icon (which the plain-text view of the same .sldd also shows, so
+    // the two tabs would otherwise be indistinguishable). Reuse the built-in
+    // `$(table)` codicon — the same icon as the "View as Table" toolbar button —
+    // so it tracks the theme's icon color automatically.
+    webviewPanel.iconPath = new vscode.ThemeIcon('table');
+
     const uriString = document.uri.toString();
     const name = document.uri.path.split('/').pop() ?? 'document';
 
