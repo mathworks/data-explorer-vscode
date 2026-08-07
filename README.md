@@ -54,32 +54,6 @@ No MATLAB&reg; or Simulink installation is required to view or edit files — Si
 - Reference resolution matches files by name (basename), preferring the referrer's own project or folder. Two `.prj` files in the same directory are not supported.
 - `.m` files are not scanned, so a project whose members are only `.m` files appears as an empty group.
 
-## Release Notes
-
-### 1.0.3
-
-- Present Class, Kind, and Data Type as three distinct, never-mixed columns, and
-  customize the table columns from a "Columns" button: show/hide columns,
-  drag to reorder, and reset to the default arrangement.
-- Search now matches across every visible column.
-- Show an empty, non-editable Value for object entries that have no scalar value
-  (Signal, Breakpoint, LookupTable, VariantConfiguration, ConfigSet, ConfigSetRef).
-
-### 1.0.2
-
-- Refined the presentation of Architectural Data entries: accurate type names
-  (DataInterface, PhysicalInterface, ServiceInterface, ValueType, StructType,
-  NumericType, EnumType) in the Data Type column, dedicated icons for service
-  interfaces and struct types, and correct Value/Data Type mapping for each
-  interface element.
-- Render the Data Type column in italics and understate the section header rows.
-
-### 1.0.1
-
-- Render read-only model and project entries in the normal text color.
-
-For earlier versions, see the [Releases page](https://github.com/mathworks/data-explorer-vscode/releases).
-
 ## License
 
 Distributed under the BSD 3-Clause License. See [LICENSE](LICENSE) for details.
