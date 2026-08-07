@@ -50,6 +50,18 @@ describe('buildContextMenuItems', () => {
     }
   });
 
+  it('Location in Text is enabled for any data row (entry or nested child), off for a section', () => {
+    // Every data row carries _canCopy; a nested child resolves to its owning
+    // entry's span, so it is locatable too.
+    const get = byId(buildContextMenuItems(ENTRY, NO_CLIP, true));
+    expect(get('locateInText').disabled).toBe(false);
+    // Carries a Cmd/Ctrl+L shortcut (wired in table-main.ts).
+    expect(get('locateInText').shortcut).toMatch(/L$/);
+    expect(byId(buildContextMenuItems(LOCKED_CHILD, NO_CLIP, true))('locateInText').disabled).toBe(false);
+    // Section headers (null capability flags) can't be located.
+    expect(byId(buildContextMenuItems(null, NO_CLIP, true))('locateInText').disabled).toBe(true);
+  });
+
   it('a null row (right-click empty area) disables everything mutating', () => {
     const get = byId(buildContextMenuItems(null, NO_CLIP, true));
     expect(get('copy').disabled).toBe(true);
@@ -57,9 +69,9 @@ describe('buildContextMenuItems', () => {
     expect(get('addChild').disabled).toBe(true);
   });
 
-  it('includes two separators between the action groups', () => {
+  it('includes three separators between the action groups', () => {
     const seps = buildContextMenuItems(ENTRY, NO_CLIP, true).filter((i) => i.separator);
-    expect(seps).toHaveLength(2);
+    expect(seps).toHaveLength(3);
   });
 });
 

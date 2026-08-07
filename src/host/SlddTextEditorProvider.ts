@@ -270,6 +270,48 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       await applyStructural(msg.rowId, deleteTransform);
     };
 
+    // --- Location in Text (reveal the row's entry in the plain-text view) -------
+    // Resolve the right-clicked row to its owning top-level entry, locate that
+    // entry's `{...}` span in the live JSON, then open the native text editor and
+    // reveal the span. Nested children (struct fields, bus elements) have no
+    // standalone JSON span, so we fall back to their owning entry's object — the
+    // same entry-scoped granularity every other structural operation uses.
+    const applyLocateInText = async (msg: { rowId: string }): Promise<void> => {
+      try {
+        const currentText = document.getText();
+        invalidate(uriString);
+        getModel(uriString, name, currentText);
+        const node = findNode(uriString, msg.rowId);
+        if (!node) {
+          webview.postMessage({ type: 'error', message: 'Could not locate the item in the model.' });
+          return;
+        }
+        const entry = findOwningEntry(node);
+        if (!entry) {
+          webview.postMessage({ type: 'error', message: 'Could not locate the owning entry in the model.' });
+          return;
+        }
+        const span = findEntrySpan(currentText, entry.name);
+        if (!span) {
+          webview.postMessage({ type: 'error', message: `Could not locate "${entry.name}" in the text.` });
+          return;
+        }
+        const startPos = document.positionAt(span.offset);
+        const endPos = document.positionAt(span.offset + span.length);
+        // showTextDocument opens the native text editor (same view as
+        // "View as Text") beside the table and selects the entry's span,
+        // scrolling it into view. A second tab for the same URI is expected —
+        // table and text coexist (see the viewAsText note in extension.ts).
+        await vscode.window.showTextDocument(document, {
+          selection: new vscode.Range(startPos, endPos),
+          viewColumn: vscode.ViewColumn.Beside,
+          preview: false,
+        });
+      } catch (err) {
+        webview.postMessage({ type: 'error', message: `Failed to locate in text: ${(err as Error).message}` });
+      }
+    };
+
     const applyPaste = (msg: { rowId: string }): Promise<void> =>
       applyStructural(msg.rowId, (text, node) => {
         const clip = getClipboard();
@@ -304,6 +346,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         void applyCut(msg);
       } else if (msg?.type === 'paste') {
         void applyPaste(msg);
+      } else if (msg?.type === 'locateInText') {
+        void applyLocateInText(msg);
       } else if (msg?.type === 'navigate') {
         if (typeof msg.target === 'string') this.onNavigate?.(msg.target);
       } else if (msg?.type === 'undo' || msg?.type === 'redo') {
