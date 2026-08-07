@@ -56,6 +56,15 @@ No MATLAB&reg; or Simulink installation is required to view or edit files — Si
 
 ## Release Notes
 
+### 1.0.3
+
+- Present Class, Kind, and Data Type as three distinct, never-mixed columns, and
+  customize the table columns from a "Columns" button: show/hide columns,
+  drag to reorder, and reset to the default arrangement.
+- Search now matches across every visible column.
+- Show an empty, non-editable Value for object entries that have no scalar value
+  (Signal, Breakpoint, LookupTable, VariantConfiguration, ConfigSet, ConfigSetRef).
+
 ### 1.0.2
 
 - Refined the presentation of Architectural Data entries: accurate type names
