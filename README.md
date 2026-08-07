@@ -21,7 +21,16 @@ It adds a native experience for Simulink file types — a **Simulink Data Explor
 
 ## Getting Started
 
-1. Install the extension.
+1. Install the extension. Download the latest `.vsix` from the
+   [Releases page](https://github.com/mathworks/data-explorer-vscode/releases),
+   then install it either from the command line:
+
+   ```sh
+   code --install-extension data-explorer-vscode-<version>.vsix
+   ```
+
+   or from within VS Code via the Extensions view → **⋯** menu →
+   **Install from VSIX…**.
 2. Open a folder or workspace that contains Simulink files.
 3. Click the **Simulink Data Explorer** icon in the activity bar to see the relationship tree.
 4. Open any supported file (`.slx`, `.sldd`, `.mat`, `.prj`) — it opens in the Data Explorer table by default. Select a row to inspect it in the Properties panel.
