@@ -10,7 +10,9 @@ export default class VariantConfigurationDataNode extends DataNode {
     Value: unknown;
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.Value = props.Value !== undefined ? props.Value : ''; }
     get icon(): string { return 'variantSettings'; }
-    get className(): string { return CLASS_NAME; }
+    // Report the real class identity from the parsed value (e.g. the container
+    // is 'Simulink.VariantConfigurations'), falling back to the data class name.
+    get className(): string { const raw = this.serial._rawVal as Record<string, unknown> | undefined; return (raw && (raw._array_class as string)) || CLASS_NAME; }
     // A VariantConfiguration has no scalar "value" — the Value column is empty and not editable.
     get displayValue(): string { return ''; }
     get valueEditable(): boolean { return false; }

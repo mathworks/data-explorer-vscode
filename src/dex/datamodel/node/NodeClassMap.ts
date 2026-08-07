@@ -51,7 +51,8 @@ const CLASS_MAP: Record<string, NodeClassType> = {
     'CustomObject': CustomObjectNode,
     'Simulink.ConfigSet': ConfigSetNode,
     'Simulink.ConfigSetRef': ConfigSetRefNode,
-    'Simulink.VariantConfigurationData': VariantConfigurationDataNode
+    'Simulink.VariantConfigurationData': VariantConfigurationDataNode,
+    'Simulink.VariantConfigurations': VariantConfigurationDataNode
 };
 
 interface StructuralParser {

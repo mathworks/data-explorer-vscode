@@ -83,6 +83,7 @@ const KIND_BY_CLASS: Record<string, string> = {
   'Simulink.VariantBank': 'Variant Bank',
   'Simulink.VariantBankCoderInfo': 'Variant Bank Coder Info',
   'Simulink.VariantConfigurationData': 'Variant Configuration',
+  'Simulink.VariantConfigurations': 'Variant Configuration',
   'Simulink.ConfigSet': 'Configuration Set',
   'Simulink.ConfigSetRef': 'Configuration Reference',
 };
