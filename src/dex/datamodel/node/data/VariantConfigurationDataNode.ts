@@ -11,8 +11,10 @@ export default class VariantConfigurationDataNode extends DataNode {
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.Value = props.Value !== undefined ? props.Value : ''; }
     get icon(): string { return 'variantSettings'; }
     get className(): string { return CLASS_NAME; }
-    get displayValue(): string { return PropValue.format(this.Value); }
-    getProperties(): PropClass[] { return [PropName, PropValue, PropDataType]; }
+    // A VariantConfiguration has no scalar "value" — the Value column is empty and not editable.
+    get displayValue(): string { return ''; }
+    get valueEditable(): boolean { return false; }
+    getProperties(): PropClass[] { return [PropName, PropDataType]; }
     getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropValue, PropDataType] }]; }
     _getSerializedProperties(): Record<string, unknown> { const props = Object.assign({}, this.serial._properties as Record<string, unknown>); props.Value = this.Value; return props; }
     serializeValue(): unknown { return this._serializeSimulinkObject({ Value: this.Value }); }

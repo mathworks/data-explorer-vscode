@@ -13,6 +13,10 @@ import { BusNode } from '../src/dex/datamodel/node/data/BusNode.js';
 import { ConnectionBusNode } from '../src/dex/datamodel/node/data/ConnectionBusNode.js';
 import { ServiceBusNode } from '../src/dex/datamodel/node/data/ServiceBusNode.js';
 import StructNode from '../src/dex/datamodel/node/data/StructNode.js';
+import SignalNode from '../src/dex/datamodel/node/data/SignalNode.js';
+import BreakpointNode from '../src/dex/datamodel/node/data/BreakpointNode.js';
+import LookupTableNode from '../src/dex/datamodel/node/data/LookupTableNode.js';
+import VariantConfigurationDataNode from '../src/dex/datamodel/node/data/VariantConfigurationDataNode.js';
 // Registers the node class map so StructNode.parse can recurse into field values.
 import '../src/dex/datamodel/node/NodeClassMap.js';
 
@@ -264,6 +268,34 @@ describe('bus element Name is editable (normal color, not grayed)', () => {
     node.metadata = { isderived: '1' };
     const row = node.children[0].toRow()!;
     expect((row.Name as { editable?: boolean }).editable).toBe(true);
+  });
+});
+
+// These object types have no meaningful scalar value: the Value column is left
+// empty (no "<1x1 Simulink.X>" placeholder) and is not editable.
+describe('object nodes with no scalar value: empty, non-editable Value', () => {
+  it('Signal shows an empty, non-editable Value', () => {
+    const row = SignalNode.parse(rawVal('Simulink.Signal', {}), 'sig', null).toRow()!;
+    expect(row.Value).toBe('');
+    expect(row._valueEditable).toBe(false);
+  });
+
+  it('Breakpoint shows an empty, non-editable Value', () => {
+    const row = BreakpointNode.parse(rawVal('Simulink.Breakpoint', {}), 'bp', null).toRow()!;
+    expect(row.Value).toBe('');
+    expect(row._valueEditable).toBe(false);
+  });
+
+  it('LookupTable shows an empty, non-editable Value', () => {
+    const row = LookupTableNode.parse(rawVal('Simulink.LookupTable', {}), 'lut', null).toRow()!;
+    expect(row.Value).toBe('');
+    expect(row._valueEditable).toBe(false);
+  });
+
+  it('VariantConfiguration shows an empty, non-editable Value', () => {
+    const row = VariantConfigurationDataNode.parse(rawVal('Simulink.VariantConfigurationData', { Value: 'foo' }), 'vc', null).toRow()!;
+    expect(row.Value).toBe('');
+    expect(row._valueEditable).toBe(false);
   });
 });
 
