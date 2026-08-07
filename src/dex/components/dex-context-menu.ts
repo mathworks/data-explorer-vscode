@@ -262,6 +262,8 @@ export class DexContextMenu extends LitElement {
         return html`<svg viewBox="0 0 16 16"><path d="M11 1H3a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V4l-3-3zm2 13H3V2h7v3h3v9zM8 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM4 4h5v2H4V4zM12 11l1.5 1.5-3.5 3.5H8.5v-1.5L12 11z"/></svg>`;
       case 'close':
         return html`<svg viewBox="0 0 16 16"><path d="M12.12 4.94L8.06 9l4.06 4.06-1.06 1.06L7 10.06l-4.06 4.06-1.06-1.06L5.94 9 1.88 4.94l1.06-1.06L7 7.94l4.06-4.06 1.06 1.06z"/></svg>`;
+      case 'locate':
+        return html`<svg viewBox="0 0 16 16"><path d="M2 2h12v2H2V2zm0 4h8v2H2V6zm0 4h8v2H2v-2zm10.5-3.5l3 3-3 3-1-1 1.3-1.3H11v-1.4h2.8L12.5 8l1-1.5z"/></svg>`;
       default:
         return nothing;
     }

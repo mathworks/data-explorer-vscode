@@ -70,6 +70,10 @@ export function buildContextMenuItems(
   const canDelete = editable && !!row?._canDelete;
   const canAddChild = editable && !!row?._canAddChild;
   const canPaste = editable && clipboard.canPaste;
+  // Any data row resolves to an owning top-level entry whose JSON span we can
+  // locate; section headers carry no capability flags, so `_canCopy` (set on
+  // every data row) cleanly gates the action off for them.
+  const canLocate = !!row?._canCopy;
 
   return [
     { id: 'copy', label: 'Copy', icon: 'copy', shortcut: `${MOD}C`, disabled: !canCopy },
@@ -79,6 +83,8 @@ export function buildContextMenuItems(
     { id: 'addChild', label: 'Add Child', icon: 'addChild', disabled: !canAddChild },
     { id: 'delete', label: 'Delete', icon: 'delete', shortcut: navigatorIsMac() ? '⌫' : 'Del', disabled: !canDelete },
     { id: '_sep2', label: '', separator: true },
+    { id: 'locateInText', label: 'Location in Text', icon: 'locate', shortcut: `${MOD}L`, disabled: !canLocate },
+    { id: '_sep3', label: '', separator: true },
     { id: 'undo', label: 'Undo', shortcut: `${MOD}Z`, disabled: !editable },
     { id: 'redo', label: 'Redo', shortcut: `${SHIFT}${MOD}Z`, disabled: !editable },
   ];

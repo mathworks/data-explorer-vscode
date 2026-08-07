@@ -139,6 +139,28 @@ table.addEventListener(
   true,
 );
 
+// Cmd/Ctrl+L: jump to the selected row's location in the plain-text view — the
+// keyboard equivalent of the "Location in Text" context-menu action. Gated on
+// editable (read-only formats have no text view). Uses the same host message the
+// menu dispatches, so the resolution path (row → owning entry → span) is shared.
+table.addEventListener(
+  'keydown',
+  (e: Event) => {
+    const ev = e as KeyboardEvent;
+    if ((ev.key === 'l' || ev.key === 'L') && (ev.metaKey || ev.ctrlKey) && !ev.shiftKey && !ev.altKey) {
+      if (!editable) return;
+      const selected = Array.isArray(table.selectedRowIds) ? table.selectedRowIds : [];
+      const rowId = selected[0];
+      // Section rows carry no owning entry; the host would reject them, so skip.
+      if (typeof rowId !== 'string' || rowId.startsWith('section:')) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      vscode.postMessage({ type: 'locateInText', rowId });
+    }
+  },
+  true,
+);
+
 // Right-click: build the menu synchronously from the selected row's flags and
 // the cached clipboard/editable state, then show it. The table component has
 // already selected the row and prevented the native browser menu.
