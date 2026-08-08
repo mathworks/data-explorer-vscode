@@ -4,6 +4,7 @@ import ContainerNode from '../ContainerNode';
 import type { TableColumnConfig } from '../ContainerNode';
 import ModelSectionNode from './ModelSectionNode';
 import MatlabVariableNode from '../data/MatlabVariableNode';
+import { buildTypedNodeFromMcos } from '../data/mcosTypedNode';
 import type { PropClass, PIGroupDef } from '../BaseNode';
 import type { MatVariable } from '../data/MatlabVariableNode';
 import type { BlockParamUsage } from '../../parser/SlxParser';
@@ -187,11 +188,23 @@ export default class ModelNode extends ContainerNode {
     }
 
     for (const entry of wsVars) {
-      if (entry.isOpaque && mcosData) {
-        const decoded = mcosData.get(entry.name);
+      if (entry.isOpaque) {
+        // Unify on CLASS first: any opaque Simulink object whose class the data
+        // model knows (Parameter, Signal, LookupTable, NumericType, Bus, …)
+        // becomes the SAME typed node the SLDD path builds — as an empty shell.
+        // This does NOT depend on the MCOS decoder recovering the object; the
+        // class comes from the variable's own metadata, so it works even for the
+        // objects decodeMcosBlob cannot locate an anchor for.
+        const typed = buildTypedNodeFromMcos(entry.className, entry.name, wsSection);
+        if (typed) {
+          wsSection.addChild(typed);
+          continue;
+        }
+        // No typed node for this class (e.g. Simulink.DataStore): keep the opaque
+        // representation, enriched with decoded properties when available.
+        const decoded = mcosData?.get(entry.name);
         if (decoded) {
-          const child = MatlabVariableNode.createFromMcosDecoded(entry, decoded, wsSection);
-          wsSection.addChild(child);
+          wsSection.addChild(MatlabVariableNode.createFromMcosDecoded(entry, decoded, wsSection));
           continue;
         }
       }

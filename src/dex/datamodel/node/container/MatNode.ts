@@ -2,6 +2,7 @@
 
 import ContainerNode from '../ContainerNode';
 import MatlabVariableNode from '../data/MatlabVariableNode';
+import { buildTypedNodeFromMcos } from '../data/mcosTypedNode';
 import type BaseNode from '../BaseNode';
 import type { PropClass, PIGroupDef } from '../BaseNode';
 import type { MatVariable } from '../data/MatlabVariableNode';
@@ -98,9 +99,15 @@ export default class MatNode extends ContainerNode {
   }
 
   getVariables(): MatVariable[] {
-    const variables: MatVariable[] = this.children.map((child) => {
-      return (child as unknown as { _var: MatVariable })._var;
-    });
+    const variables: MatVariable[] = [];
+    for (const child of this.children) {
+      // Typed Simulink nodes (ParameterNode, SignalNode) have no `_var` — they
+      // come from the read-only MCOS path and are never serialized back.
+      const v = (child as unknown as { _var?: MatVariable })._var;
+      if (v) {
+        variables.push(v);
+      }
+    }
     for (const anon of this._anonymousElements) {
       variables.push(anon);
     }
@@ -128,11 +135,20 @@ export default class MatNode extends ContainerNode {
         node._anonymousElements.push(variable);
         continue;
       }
-      if (variable.isOpaque && mcosData) {
-        const decoded = mcosData.get(variable.name);
+      if (variable.isOpaque) {
+        // Unify on CLASS first: any opaque Simulink object whose class the data
+        // model knows becomes the SAME typed node the SLDD path builds — as an
+        // empty shell — regardless of whether the MCOS decoder recovered it. The
+        // class comes from the variable's own metadata, not the decode.
+        const typed = buildTypedNodeFromMcos(variable.className, variable.name, node);
+        if (typed) {
+          node.addChild(typed);
+          continue;
+        }
+        // No typed node for this class: opaque node, enriched when decoded.
+        const decoded = mcosData?.get(variable.name);
         if (decoded) {
-          const child = MatlabVariableNode.createFromMcosDecoded(variable, decoded, node);
-          node.addChild(child);
+          node.addChild(MatlabVariableNode.createFromMcosDecoded(variable, decoded, node));
           continue;
         }
       }

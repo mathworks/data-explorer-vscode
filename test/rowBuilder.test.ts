@@ -203,7 +203,7 @@ describe('buildRows branch coverage', () => {
 // left untouched so its per-cell name-editor gating stays exact.
 //
 // An entry node whose Name says {disabled:false, editable:false} — as the .slx
-// section nodes (DataSourceNode/ModelReferenceNode/ModelConfigSetNode) and
+// section nodes (DataSourceNode/ModelReferenceNode/ConfigSetNode) and
 // ProjectItemNode all do — is a real entry that must render in the NORMAL color.
 function nameEntry(id: string, disabled: boolean, editable: boolean, nested: any[] = []) {
   return {
