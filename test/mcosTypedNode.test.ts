@@ -15,16 +15,17 @@ import VariantControlNode from '../src/dex/datamodel/node/data/VariantControlNod
 // turns it into the SAME node class the SLDD (JSON) path builds, so class and
 // icon are consistent across formats — one node class per entry type.
 //
-// Deliberately CLASS-ONLY: the MCOS decoder's property extraction is unreliable
-// (verified against a real model.slx — a Signal decoded with Max="Table", a
-// Parameter with an empty Value), so the adapter ignores the decoded property
-// bag entirely and builds an EMPTY SHELL from the class name alone. Correct
-// class + icon, empty columns, no children. Real property extraction is a
-// separate McosParser fix. Because it needs only the class name — which comes
-// from the variable's own metadata — it works even for opaque objects the
-// decoder cannot locate an anchor for.
+// The adapter takes an optional decoded `properties` bag (SLDD-shaped, produced by
+// the McosParser table walk) and feeds it through the SAME NodeRegistry.parseValue
+// the SLDD path uses, so decoded values populate the typed node. When no properties
+// are supplied it falls back to an EMPTY SHELL from the class name alone — correct
+// class + icon, empty columns, no children — which is what happens for objects the
+// decoder could not resolve with confidence (never guess). The class always comes
+// from the variable's own metadata, so class unification holds either way. The
+// end-to-end property-value parity across formats is covered in
+// test/mcosCrossFormat.test.ts.
 
-describe('buildTypedNodeFromMcos — unifies node class across formats (class only)', () => {
+describe('buildTypedNodeFromMcos — unifies node class + values across formats', () => {
   it('routes Parameter/Signal to their typed classes', () => {
     expect(buildTypedNodeFromMcos('Simulink.Parameter', 'K', null)).toBeInstanceOf(ParameterNode);
     expect(buildTypedNodeFromMcos('Simulink.Signal', 's', null)).toBeInstanceOf(SignalNode);
@@ -38,7 +39,7 @@ describe('buildTypedNodeFromMcos — unifies node class across formats (class on
     expect(buildTypedNodeFromMcos('Simulink.Bus', 'Bus', null)).toBeInstanceOf(BusNode);
   });
 
-  it('builds an EMPTY SHELL — never surfaces any decoded property values', () => {
+  it('builds an EMPTY SHELL when no decoded properties are supplied', () => {
     const p = buildTypedNodeFromMcos('Simulink.Parameter', 'K', null) as ParameterNode;
     expect(p.Value).toBeUndefined();
     expect(p.Min).toBeUndefined();
@@ -53,6 +54,23 @@ describe('buildTypedNodeFromMcos — unifies node class across formats (class on
     expect(s.Max).toBeUndefined();
     expect(s.Description).toBe('');
     expect(s.displayValue).toBe('');
+  });
+
+  it('surfaces decoded SLDD-shaped properties when supplied', () => {
+    // The bag the McosParser table walk produces (binary exposes DocUnits; the
+    // typed node maps it to Unit) fed through the same NodeRegistry.parseValue path.
+    const p = buildTypedNodeFromMcos('Simulink.Parameter', 'K', null, {
+      Value: 42,
+      Min: -1,
+      Max: 100,
+      DocUnits: 'm/s',
+      Description: 'hello',
+    }) as ParameterNode;
+    expect(p.displayValue).toBe('42');
+    expect(p.Min).toBe(-1);
+    expect(p.Max).toBe(100);
+    expect(p.Unit).toBe('m/s');
+    expect(p.Description).toBe('hello');
   });
 
   it('builds Bus with no element children (deferred to decoder handle-resolution)', () => {

@@ -95,7 +95,7 @@ highest value, simplest scalar props — then the rest.)
 - [x] Phase 2: reverse-engineer — format CONFIRMED & validated against all fixtures
 - [x] Phase 3: rewrite McosParser — real table walk; validated end-to-end
 - [x] Phase 4: wire into typed nodes — decoded props flow into ParameterNode/etc
-- [ ] Phase 5: cross-format tests (committed harness proves 7/7 parity; add vitest)
+- [x] Phase 5: cross-format tests — vitest suite added; full suite + typecheck green
 
 ### Phase 3/4 result
 
@@ -175,6 +175,39 @@ matrix heap-cell values **row-major** with correct `dimensions`.
 - Research sub-agent to look up scipy/matio format spec was declined by user;
   resolved empirically from raw byte dumps instead (see test/tools/mcos/).
 
+### Phase 5 result — cross-format tests (DONE)
+
+`test/mcosCrossFormat.test.ts` (12 tests) codifies the parity harness as a
+permanent regression guard. It loads the generated fixtures and, for each of the 7
+entry types (Param, ParamMat, Sig, Numeric, Alias, Bp, Lut), asserts the typed-node
+signature (className, displayValue, Min, Max, Unit, Description, childCount) is
+**identical** across three paths:
+- **SLDD (JSON) oracle** — each `entries[].value` walked through `NodeRegistry.parseValue` (mirrors `SectionNode.parseEntry`).
+- **MCOS .mat** — one object per file via `MatNode.fromParsed(parseMat(...))`.
+- **MCOS .slx** — all workspace objects via `ModelNode.fromParsed(parseSlx(...))`.
+
+Plus targeted assertions of the actual decoded values (Param = 42 / -1 / 100 / m/s /
+hello; ParamMat = "[1 2 3; 4 5 6]"; Sig min/max/unit/desc; Numeric/Alias
+descriptions; Bp/Lut class routing).
+
+`test/mcosTypedNode.test.ts` updated: the stale "CLASS-ONLY / ignores the decoded
+bag / EMPTY SHELL" language is replaced; it now documents that the adapter surfaces
+decoded SLDD-shaped properties when supplied (with a test proving Value/Min/Max/
+Unit/Description populate, DocUnits→Unit mapping included) and falls back to an empty
+shell only when none are supplied (test retained).
+
+**Final state:** `npm test` → **433 passed (40 files)**; `npm run typecheck` clean;
+`npm run build` resolves (the drop-check that no needed `src/dex` file was lost);
+leak-check over git-tracked files returns nothing. All five phases complete on
+branch `feat/mcos-property-decode`.
+
 ## Observations / future work
 
-(append out-of-scope findings)
+- **VariantControl fixture deferred:** the MATLAB API
+  `Simulink.VariantControl('Value',1,'ValueType','Numeric')` errored in the sandbox
+  (that class only exposes Value/ActivationTime). No fixture → no cross-format test
+  for it, though `buildTypedNodeFromMcos` routes the class correctly.
+- **Bus/BusElement + enum children:** the parser supports object-handle recursion
+  (nested `{_object_class,_properties}`), but there is no fixture/test exercising a
+  Bus with element children or an enum type's enumerals. The machinery is in place;
+  validation is future work.
