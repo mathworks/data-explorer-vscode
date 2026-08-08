@@ -91,15 +91,53 @@ highest value, simplest scalar props — then the rest.)
 
 - [x] Env verified: branch created, 420 tests pass, typecheck clean, MATLAB works.
 - [x] Confirmed all 4 fixture save paths work (smoke test in /tmp/mcos_fix).
-- [ ] Phase 1: fixture generation
-- [ ] Phase 2: reverse-engineer
-- [ ] Phase 3: rewrite
-- [ ] Phase 4: wire
-- [ ] Phase 5: tests
+- [x] Phase 1: fixture generation (test/fixtures/mcos/, test/tools/mcos/)
+- [x] Phase 2: reverse-engineer — format CONFIRMED & validated against all fixtures
+- [ ] Phase 3: rewrite McosParser
+- [ ] Phase 4: wire into typed nodes
+- [ ] Phase 5: cross-format tests
+
+## CONFIRMED FORMAT (Phase 2 complete — validated against every fixture)
+
+The `cell[0]` metadata blob (little-endian uint32) decodes deterministically:
+
+- **Header:** 10 uint32 words at bytes [0,40). `w[0]`=version, `w[1]`=nStrings,
+  `w[2..]` are segment END offsets.
+- **String table:** null-terminated ASCII from byte **40** to `w[2]`. Index 0 is
+  the empty string (synthetic); real strings are 1-based.
+- **Class table:** `[w[2], w[3])`, **16-byte** records `[pkgStrIdx, clsStrIdx, 0, 0]`.
+  Rows are **0-based** (`classId` in object records indexes this directly).
+- **Object table:** `[w[4], w[5])`, **24-byte** records = 6 words
+  `[classId, 0, 0, 0, objId, depId]`. Only word0 (classId, 0-based) matters for
+  property decode. Row 0 is the synthetic null object. Words 4/5 are a sequential
+  object id and a dependency id — **NOT** block pointers (this was the trap).
+- **Property blocks:** `[w[5], w[6])`. **One block per object, in object order**
+  (including the null object's empty block). Each block = `[nProps,
+  (nameStrIdx, flag, value)×nProps]`, then **padded to an 8-byte boundary**
+  (relative to region start). No indirection — the i-th block belongs to obj[i].
+- **flag semantics:** `1` → `value` is a heap-cell index; the mxArray is
+  `cells[value + 2]` (heap starts after cell[0]=meta and cell[1]=defaults).
+  `0` → `value` is a string-table index (enum/string literal, e.g.
+  StorageClass="Auto"). `2` → `value` is an inline number/bool.
+- **Object-handle** heap cells: `uint32` array, `v[0]==0xDD000000` magic; `v[4]`
+  is the referenced object id (for nested CoderInfo/CustomAttributes and children).
+
+**SLDD↔binary property-name differences** (needed for cross-format unification):
+- Binary exposes **`DocUnits`**; SLDD/typed node property is **`Unit`**.
+- SLDD omits default-valued props; binary includes CoderInfo/Complexity/etc.
 
 ## Failure log
 
-(append as issues arise)
+- **Trap: object word4/word5 as block pointer.** Assumed the object record's
+  +16/+20 field indexed the property block. It's a sequential id + dependency id;
+  coincided with block position only in single-object files. Real rule: blocks are
+  **positional** (i-th block ↔ i-th object).
+- **Trap: 1-based classId.** Off-by-one made classes/props look scrambled in
+  multi-object files. classId is **0-based**.
+- **Trap: no inter-block alignment.** Blocks are **8-byte aligned**; without the
+  pad, block boundaries drifted after the first odd-sized block.
+- Research sub-agent to look up scipy/matio format spec was declined by user;
+  resolved empirically from raw byte dumps instead (see test/tools/mcos/).
 
 ## Observations / future work
 
