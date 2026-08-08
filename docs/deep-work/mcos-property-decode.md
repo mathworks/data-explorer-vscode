@@ -122,6 +122,22 @@ The `cell[0]` metadata blob (little-endian uint32) decodes deterministically:
 - **Object-handle** heap cells: `uint32` array, `v[0]==0xDD000000` magic; `v[4]`
   is the referenced object id (for nested CoderInfo/CustomAttributes and children).
 
+**Named-variable → root object id (multi-object linkage).** Each *named* opaque
+variable (the top-level `.slx`/`.mat` workspace var) retains its own MI element
+raw bytes. Inside, an object handle appears: scan its uint32 words for the magic
+`0xDD000000`; the word at magic **+4** is the variable's **root object id** (index
+into the object table), and magic **+5** is its classId. Validated: in the 7-var
+`mcosfix.slx`, Alias→1, Bp→2, Lut→6, Numeric→11, Param→12, ParamMat→14, Sig→16 —
+each matching the object decoded from that id. Single-object `.mat` files → id 1.
+This is how the same `McosParser` serves both one-object and many-object files.
+
+**Value-shape convergence (for typed-node display parity with SLDD).** Scalars
+stay JS numbers/strings. **Matrices** must be emitted as the SLDD string form
+`{_type:'double', _value:'Matrix(r,c)\n[[a, b]; [c, d]]'}` (row-major, r×c) so the
+node's `displayValue` matches the SLDD twin exactly (e.g. "[1 2 3; 4 5 6]"). A raw
+JS array would display flat ("[1 2 3 4 5 6]") — wrong. MatParser already returns
+matrix heap-cell values **row-major** with correct `dimensions`.
+
 **SLDD↔binary property-name differences** (needed for cross-format unification):
 - Binary exposes **`DocUnits`**; SLDD/typed node property is **`Unit`**.
 - SLDD omits default-valued props; binary includes CoderInfo/Complexity/etc.
