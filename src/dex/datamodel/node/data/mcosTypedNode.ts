@@ -6,58 +6,56 @@ import type DataNode from '../DataNode';
 
 // Bridges the binary (MCOS) decode path to the same typed data-model nodes the
 // SLDD (JSON) path builds, so a Simulink object resolves to the SAME node class
-// regardless of source format — one class per entry type, consistent icon and
-// presentation.
+// with the SAME property values regardless of source format — one class per entry
+// type, one presentation.
 //
-// IMPORTANT — class only, not properties (yet). The MCOS decoder reliably tells
-// us an opaque variable's *class* (e.g. Simulink.LookupTable), but its extraction
-// of the object's scalar properties is currently unreliable: verified against a
-// real model.slx it mis-assigns fields (a Signal came back with Max="Table") and
-// misses others (a Parameter's Value came back empty). Surfacing that bag would
-// show WRONG data. So we deliberately build each typed node as an EMPTY SHELL:
-// correct class, correct icon, empty Value / Data Type / Min / Max / … and no
-// children. That is honest and consistent with the SLDD twin's columns (which are
-// themselves empty for most of these types); real property extraction is a
-// separate, deeper fix to McosParser.
+// The MCOS decoder (McosParser.decodeMcosBlob) now reconstructs each object's
+// `_properties` bag in the exact shape the SLDD path produces (scalars as-is,
+// matrices as Matrix(r,c) value objects, nested objects as { _object_class,
+// _properties }). So both paths converge on a single call to
+// NodeRegistry.parseValue with an identical `_array_class` value object — the
+// binary path is no longer a special case.
 //
-// The gate is simply "does the data model have a typed node for this class?" —
-// any class NodeRegistry knows is unified; anything else (e.g. Simulink.DataStore,
-// which has no typed node) returns null so the caller keeps the opaque fallback.
-//
-// Note the class name comes from the variable's own metadata, NOT from a
-// successful MCOS decode — so this works even for objects the decoder cannot
-// locate an anchor for (verified against model.slx, where the decoder recovered
-// only some of the opaque objects). Class-only unification does not depend on
-// property decoding at all.
+// When no decoded properties are available (the decoder could not confidently
+// resolve the object — e.g. it isn't in the blob, or its class didn't match), we
+// fall back to an EMPTY SHELL: correct class and icon, empty columns, no children.
+// That is honest — a wrong value is worse than an absent one — and still unifies
+// the node class across formats.
 
 // Generic class keys in the registry that are NOT concrete Simulink object
 // classes — an opaque MCOS variable never carries these as its className, and
 // routing to them would be wrong. Excluded from unification.
 const GENERIC_KEYS = new Set(['MatlabVariable', 'MatlabStruct', 'CustomObject']);
 
-// Returns a typed DataNode (empty shell) for any Simulink class the data model
-// knows, or null to signal the caller to fall back to the opaque representation.
-export function buildTypedNodeFromMcos(className: string, name: string, parent: BaseNode | null): DataNode | null {
+// Returns a typed DataNode for any Simulink class the data model knows, populated
+// from `properties` when supplied (SLDD-shaped) or as an empty shell otherwise, or
+// null to signal the caller to fall back to the opaque representation.
+export function buildTypedNodeFromMcos(
+  className: string,
+  name: string,
+  parent: BaseNode | null,
+  properties?: Record<string, unknown> | null,
+): DataNode | null {
   if (!className || GENERIC_KEYS.has(className)) {
     return null;
   }
   if (!NodeRegistry.getClass(className)) {
     return null;
   }
-  // Minimal rawVal: correct class, one element with an empty property bag. Every
-  // typed node's parse() tolerates an empty _properties (no children, defaulted
-  // fields), which is exactly the empty-shell presentation we want here.
+  // The value object mirrors the SLDD `entry.value`: one element whose
+  // _properties is the decoded bag (or empty for the shell). Every typed node's
+  // parse() tolerates an empty _properties (no children, defaulted fields).
   const rawVal = {
     _array_class: className,
     _array_type: 'MATLABArray',
     _dimensions: [1, 1],
     _mw_element_type: 'MATLABArray',
-    _elements: [{ _properties: {} }],
+    _elements: [{ _properties: properties || {} }],
   };
   try {
     return NodeRegistry.parseValue(rawVal, name, parent);
   } catch {
-    // Any class whose parse() unexpectedly rejects an empty shell degrades to the
+    // Any class whose parse() unexpectedly rejects the value degrades to the
     // opaque node rather than breaking the whole file.
     return null;
   }

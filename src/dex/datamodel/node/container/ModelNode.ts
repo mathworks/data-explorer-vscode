@@ -183,19 +183,21 @@ export default class ModelNode extends ContainerNode {
     if (opaqueWsVars.length > 0 && trailingElements && trailingElements.length > 0) {
       mcosData = decodeMcosBlob(
         trailingElements[0],
-        opaqueWsVars.map((v) => ({ name: v.name, className: v.className })),
+        opaqueWsVars.map((v) => ({ name: v.name, className: v.className, rawBytes: v._rawBytes })),
       );
     }
 
     for (const entry of wsVars) {
       if (entry.isOpaque) {
-        // Unify on CLASS first: any opaque Simulink object whose class the data
-        // model knows (Parameter, Signal, LookupTable, NumericType, Bus, …)
-        // becomes the SAME typed node the SLDD path builds — as an empty shell.
-        // This does NOT depend on the MCOS decoder recovering the object; the
-        // class comes from the variable's own metadata, so it works even for the
-        // objects decodeMcosBlob cannot locate an anchor for.
-        const typed = buildTypedNodeFromMcos(entry.className, entry.name, wsSection);
+        // Unify on CLASS: any opaque Simulink object whose class the data model
+        // knows (Parameter, Signal, LookupTable, NumericType, Bus, …) becomes the
+        // SAME typed node the SLDD path builds. When the MCOS decoder resolved the
+        // object's properties, they populate the node with real values (SLDD-
+        // shaped); otherwise it is an empty shell. The class comes from the
+        // variable's own metadata, so it works even for objects the decoder
+        // could not resolve.
+        const decodedProps = mcosData?.get(entry.name)?.properties;
+        const typed = buildTypedNodeFromMcos(entry.className, entry.name, wsSection, decodedProps);
         if (typed) {
           wsSection.addChild(typed);
           continue;

@@ -2,13 +2,46 @@
 
 import { parseMatrix, MatVariable } from './MatParser';
 
+// Decodes the binary MCOS (MATLAB Class Object System) blob embedded in .slx and
+// .mat files into per-variable property bags shaped EXACTLY like the SLDD (JSON)
+// path's `_properties`, so the same Simulink object resolves to the same typed
+// data-model node with the same values regardless of source format.
+//
+// The metadata table (`cell[0]`) layout was reverse-engineered and validated
+// against controlled fixtures (see docs/deep-work/mcos-property-decode.md):
+//   • Header: 10 uint32 words at [0,40); w[2..] are segment END offsets.
+//   • String table: null-terminated ASCII [40, w[2]); index 0 is the empty string.
+//   • Class table: [w[2], w[3]) 16-byte rows [pkgStrIdx, clsStrIdx, 0, 0], 0-based.
+//   • Object table: [w[4], w[5]) 24-byte rows; word0 = classId (0-based). Row 0 is
+//     the synthetic null object.
+//   • Property blocks: [w[5], w[6)); ONE block per object in object order (the
+//     null object included), each [nProps, (nameStrIdx, flag, value)*nProps] then
+//     padded to an 8-byte boundary. The i-th block belongs to obj[i] — positional,
+//     no indirection.
+//   • flag 1 → value is a heap-cell index; the mxArray is cells[value + 2].
+//     flag 0 → value is a string-table index (enum/string literal).
+//     flag 2 → value is an inline boolean (value !== 0).
+//   • Object-handle heap cells are uint32 arrays with v[0] == 0xDD000000; v[4] is
+//     the referenced object id (nested objects / children recurse through this).
+//
+// A named opaque variable's OWN raw bytes carry an object handle whose v[4] is its
+// ROOT object id in the object table — this is how one blob with many objects maps
+// each named variable to its own object graph.
+//
+// Correctness over coverage: anything that cannot be resolved with confidence is
+// left out rather than guessed.
+
 export interface McosObjectData {
   name: string;
   className: string;
   packageName: string;
   shortClassName: string;
+  // Reconstructed `_properties` bag in the same shape the SLDD path produces:
+  // scalars as numbers/strings/booleans, matrices as a Matrix(r,c) value object,
+  // nested objects as { _object_class, _properties }.
   properties: Record<string, unknown>;
   dimensions: number[];
+  // Convenience mirror of properties.Value for the opaque-fallback display path.
   value: unknown;
 }
 
@@ -19,13 +52,31 @@ interface SubElement {
   totalSize: number;
 }
 
-interface ClassInfo {
-  numProperties: number;
-  classNameStringIndex: number;
+interface ClassRow {
+  fullName: string;
+}
+
+interface ObjectRow {
+  classId: number;
+}
+
+type Triple = [nameIdx: number, flag: number, value: number];
+
+interface MetaTable {
+  strings: string[];
+  classes: ClassRow[];
+  objects: ObjectRow[];
+  blocks: Triple[][];
+}
+
+interface DecodeContext {
+  cells: (MatVariable | null)[];
+  meta: MetaTable;
 }
 
 const MI_MATRIX = 14;
 const MCOS_HANDLE_MAGIC = 3707764736; // 0xDD000000
+const MAX_RECURSION_DEPTH = 32;
 
 function align8(n: number): number {
   return n + ((8 - (n % 8)) % 8);
@@ -44,34 +95,13 @@ function readSubelement(view: DataView, offset: number): SubElement {
   return { type, bytes, dataOffset: offset + 8, totalSize: 8 + align8(bytes) };
 }
 
-function parseStringTable(metadata: Uint8Array, endOffset: number): string[] {
-  const strings: string[] = [];
-  let pos = 40;
-  const decoder = new TextDecoder();
-  while (pos < endOffset) {
-    let end = pos;
-    while (end < endOffset && metadata[end] !== 0) end++;
-    if (end > pos) {
-      strings.push(decoder.decode(metadata.slice(pos, end)));
-    } else {
-      strings.push('');
-    }
-    pos = end + 1;
-  }
-  return strings;
+function toUint8(value: unknown): Uint8Array | null {
+  if (value instanceof Uint8Array) return value;
+  if (Array.isArray(value)) return new Uint8Array(value as number[]);
+  return null;
 }
 
-function parseClassInfo(metadata: Uint8Array, startOffset: number, endOffset: number): ClassInfo[] {
-  const view = new DataView(metadata.buffer, metadata.byteOffset, metadata.byteLength);
-  const records: ClassInfo[] = [];
-  for (let pos = startOffset; pos + 16 <= endOffset; pos += 16) {
-    records.push({
-      numProperties: view.getUint32(pos, true),
-      classNameStringIndex: view.getUint32(pos + 4, true),
-    });
-  }
-  return records;
-}
+// ---- Navigation: raw element bytes -> the MCOS cell array (cells[]) -----------
 
 function findCellArrayInOpaque(
   view: DataView,
@@ -94,362 +124,256 @@ function findCellArrayInOpaque(
   return null;
 }
 
+// Walk the anonymous FileWrapper element: outer uint8 matrix -> inner struct with
+// an opaque "MCOS" field -> that field's cell array. Returns cells[] or null.
+function extractCells(anonRawBytes: Uint8Array): (MatVariable | null)[] | null {
+  const outerView = new DataView(anonRawBytes.buffer, anonRawBytes.byteOffset, anonRawBytes.byteLength);
+  if (outerView.getUint32(0, true) !== MI_MATRIX) return null;
+
+  const outerMatrix = parseMatrix(outerView, 8, outerView.getUint32(4, true));
+  const blobBytes = outerMatrix.className === 'uint8' ? toUint8(outerMatrix.value) : null;
+  if (!blobBytes || blobBytes.length < 16) return null;
+
+  const blobView = new DataView(blobBytes.buffer, blobBytes.byteOffset, blobBytes.byteLength);
+  const structSub = readSubelement(blobView, 8);
+  if (structSub.type !== MI_MATRIX) return null;
+
+  const structMatrix = parseMatrix(blobView, structSub.dataOffset, structSub.bytes);
+  const mcosField =
+    structMatrix.fields && structMatrix.fields['MCOS'] ? (structMatrix.fields['MCOS'] as MatVariable) : null;
+  if (!mcosField || !mcosField.isOpaque || !mcosField._rawBytes) return null;
+
+  const opaqueView = new DataView(mcosField._rawBytes.buffer, mcosField._rawBytes.byteOffset, mcosField._rawBytes.byteLength);
+  const opaqueTag = readSubelement(opaqueView, 0);
+  if (opaqueTag.type !== MI_MATRIX) return null;
+
+  const cellLoc = findCellArrayInOpaque(opaqueView, opaqueTag.dataOffset, opaqueTag.bytes);
+  if (!cellLoc) return null;
+
+  const cellArray = parseMatrix(opaqueView, cellLoc.offset, cellLoc.length);
+  if (cellArray.className !== 'cell' || !Array.isArray(cellArray.value)) return null;
+  return cellArray.value as (MatVariable | null)[];
+}
+
+// ---- Metadata table parse -----------------------------------------------------
+
+function parseMetaTable(cells: (MatVariable | null)[]): MetaTable | null {
+  if (cells.length < 1 || !cells[0]) return null;
+  const metadata = cells[0].className === 'uint8' ? toUint8(cells[0].value) : null;
+  if (!metadata || metadata.length < 40) return null;
+
+  const view = new DataView(metadata.buffer, metadata.byteOffset, metadata.byteLength);
+  const u32 = (o: number) => view.getUint32(o, true);
+  const w: number[] = [];
+  for (let i = 0; i < 10; i++) w.push(u32(i * 4));
+
+  // Segment offsets must be monotonic and within bounds to be trustworthy.
+  if (!(40 <= w[2] && w[2] <= w[3] && w[3] <= w[4] && w[4] <= w[5] && w[5] <= w[6] && w[6] <= metadata.length)) {
+    return null;
+  }
+
+  // String table: index 0 is the synthetic empty string; real strings are 1-based.
+  const decoder = new TextDecoder();
+  const strings: string[] = [''];
+  for (let p = 40; p < w[2]; ) {
+    let e = p;
+    while (e < w[2] && metadata[e] !== 0) e++;
+    strings.push(decoder.decode(metadata.slice(p, e)));
+    p = e + 1;
+  }
+
+  // Class table: 0-based rows. fullName = "pkg.cls" (or just "cls" when no package).
+  const classes: ClassRow[] = [];
+  for (let p = w[2]; p + 16 <= w[3]; p += 16) {
+    const pkg = strings[u32(p)] || '';
+    const cls = strings[u32(p + 4)] || '';
+    classes.push({ fullName: pkg ? pkg + '.' + cls : cls });
+  }
+
+  // Object table: 0-based rows; word0 = classId. Row 0 is the null object.
+  const objects: ObjectRow[] = [];
+  for (let p = w[4]; p + 24 <= w[5]; p += 24) {
+    objects.push({ classId: u32(p) });
+  }
+
+  // Property blocks: one per object in order, each 8-byte aligned.
+  const blocks: Triple[][] = [];
+  for (let p = w[5]; p < w[6]; ) {
+    const start = p;
+    const nProps = u32(p);
+    p += 4;
+    // Defensive: a wildly large count means we lost alignment — stop rather than
+    // fabricate. Empty (nProps == 0) blocks are real per-object placeholders.
+    if (nProps > 1000 || p + nProps * 12 > w[6]) break;
+    const triples: Triple[] = [];
+    for (let k = 0; k < nProps; k++) {
+      triples.push([u32(p), u32(p + 4), u32(p + 8)]);
+      p += 12;
+    }
+    blocks.push(triples);
+    p = start + align8(p - start);
+  }
+
+  return { strings, classes, objects, blocks };
+}
+
+// ---- Value resolution ---------------------------------------------------------
+
 function isObjectHandle(cell: MatVariable): boolean {
   if (cell.className !== 'uint32') return false;
+  const v = cell.value;
+  return Array.isArray(v) && v.length >= 5 && v[0] === MCOS_HANDLE_MAGIC;
+}
+
+function buildMatrixValue(dims: number[], elements: number[]): unknown {
+  const rows = dims[0];
+  const cols = dims[1];
+  const rowStrs: string[] = [];
+  for (let r = 0; r < rows; r++) {
+    const vals: string[] = [];
+    for (let c = 0; c < cols; c++) {
+      vals.push(String(elements[r * cols + c]));
+    }
+    rowStrs.push('[' + vals.join(', ') + ']');
+  }
+  // Same shape the SLDD path emits, so displayValue formats identically.
+  return { _type: 'double', _value: 'Matrix(' + rows + ',' + cols + ')\n' + rowStrs.join('\n') };
+}
+
+// Turn a heap cell into a property value. Object handles recurse into nested
+// { _object_class, _properties }. Unresolvable cells return undefined (dropped).
+function resolveCellValue(cell: MatVariable | null, ctx: DecodeContext, path: Set<number>, depth: number): unknown {
+  if (!cell) return undefined;
+
+  if (isObjectHandle(cell)) {
+    const refId = (cell.value as number[])[4];
+    return buildObjectValue(refId, ctx, path, depth + 1);
+  }
+
+  const cls = cell.className;
   const val = cell.value;
-  if (Array.isArray(val) && val.length >= 1 && val[0] === MCOS_HANDLE_MAGIC) return true;
-  if (val === MCOS_HANDLE_MAGIC) return true;
-  return false;
-}
 
-function extractCellValue(cell: MatVariable | null): unknown {
-  if (!cell) return null;
-  return cell.value;
-}
-
-// Known leaf-class property definitions with types.
-// Extras appear in string-table order but may skip default-valued properties.
-const KNOWN_CLASS_PROPERTIES: Record<string, { name: string; type: 'char' | 'numeric' }[]> = {
-  'Simulink.Parameter': [
-    { name: 'Description', type: 'char' },
-    { name: 'DataType', type: 'char' },
-    { name: 'Min', type: 'numeric' },
-    { name: 'Max', type: 'numeric' },
-    { name: 'DocUnits', type: 'char' },
-  ],
-  'Simulink.Signal': [
-    { name: 'Description', type: 'char' },
-    { name: 'DataType', type: 'char' },
-    { name: 'Min', type: 'numeric' },
-    { name: 'Max', type: 'numeric' },
-    { name: 'DocUnits', type: 'char' },
-  ],
-};
-
-function assignPropertyNames(
-  extras: { value: unknown; cellClass: string }[],
-  fullClassName: string,
-  classInfo: ClassInfo | null,
-  strings: string[],
-): Record<string, unknown> {
-  const properties: Record<string, unknown> = {};
-  if (extras.length === 0) return properties;
-
-  const known = KNOWN_CLASS_PROPERTIES[fullClassName];
-  if (known) {
-    // All extras present → 1:1 assignment
-    if (extras.length === known.length) {
-      for (let i = 0; i < extras.length; i++) {
-        properties[known[i].name] = extras[i].value;
-      }
-      return properties;
-    }
-
-    // Type-based assignment: count char/numeric extras and match against candidates
-    const charExtras = extras.filter((e) => e.cellClass === 'char');
-    const numExtras = extras.filter((e) => e.cellClass !== 'char');
-    const charProps = known.filter((p) => p.type === 'char');
-    const numProps = known.filter((p) => p.type === 'numeric');
-
-    // If char count matches exactly, assign 1:1 within type
-    // If numeric count matches exactly, assign 1:1 within type
-    const charAssignable = charExtras.length === charProps.length;
-    const numAssignable = numExtras.length === numProps.length;
-
-    if (charAssignable || numAssignable) {
-      let charIdx = 0;
-      let numIdx = 0;
-      for (const extra of extras) {
-        if (extra.cellClass === 'char') {
-          if (charAssignable && charIdx < charProps.length) {
-            properties[charProps[charIdx].name] = extra.value;
-          } else {
-            properties[charIdx < charProps.length ? charProps[charIdx].name : `charProp${charIdx}`] = extra.value;
-          }
-          charIdx++;
-        } else {
-          if (numAssignable && numIdx < numProps.length) {
-            properties[numProps[numIdx].name] = extra.value;
-          } else {
-            properties[numIdx < numProps.length ? numProps[numIdx].name : `numProp${numIdx}`] = extra.value;
-          }
-          numIdx++;
-        }
-      }
-      return properties;
-    }
-
-    // Fallback: type-based assignment with first-available names
-    let charIdx = 0;
-    let numIdx = 0;
-    for (const extra of extras) {
-      if (extra.cellClass === 'char') {
-        const name = charIdx < charProps.length ? charProps[charIdx].name : `charProp${charIdx}`;
-        properties[name] = extra.value;
-        charIdx++;
-      } else {
-        const name = numIdx < numProps.length ? numProps[numIdx].name : `numProp${numIdx}`;
-        properties[name] = extra.value;
-        numIdx++;
-      }
-    }
-    return properties;
+  if (cls === 'char') {
+    return typeof val === 'string' ? val : '';
   }
-
-  // Unknown class: use string table if available
-  if (classInfo) {
-    const startIdx = classInfo.classNameStringIndex;
-    for (let i = 0; i < extras.length; i++) {
-      const idx = startIdx + i;
-      const propName = idx < strings.length ? strings[idx] : `prop${i}`;
-      properties[propName] = extras[i].value;
+  if (cls === 'logical') {
+    if (Array.isArray(val)) return val.map((x) => !!x);
+    return !!val;
+  }
+  // Numeric classes (double, single, intN, uintN).
+  if (typeof val === 'number') {
+    return val;
+  }
+  if (Array.isArray(val)) {
+    if (val.length === 0) return [];
+    const dims = cell.dimensions || [1, val.length];
+    if (dims.length >= 2 && dims[0] > 1 && dims[1] > 1) {
+      return buildMatrixValue(dims, val as number[]);
     }
-  } else {
-    for (let i = 0; i < extras.length; i++) {
-      properties[`prop${i}`] = extras[i].value;
+    return val;
+  }
+  return undefined;
+}
+
+// Build the _properties bag for an object id, resolving each triple. Nested calls
+// wrap the result as { _object_class, _properties }; the caller for a root object
+// takes .properties directly.
+function buildProperties(objId: number, ctx: DecodeContext, path: Set<number>, depth: number): Record<string, unknown> {
+  const props: Record<string, unknown> = {};
+  if (depth > MAX_RECURSION_DEPTH || path.has(objId)) return props;
+  const obj = ctx.meta.objects[objId];
+  if (!obj) return props;
+
+  path.add(objId);
+  const block = ctx.meta.blocks[objId] || [];
+  for (const [nameIdx, flag, value] of block) {
+    const name = ctx.meta.strings[nameIdx];
+    if (!name) continue;
+    let resolved: unknown;
+    if (flag === 1) {
+      resolved = resolveCellValue(ctx.cells[value + 2] || null, ctx, path, depth);
+    } else if (flag === 0) {
+      resolved = ctx.meta.strings[value] ?? '';
+    } else if (flag === 2) {
+      resolved = value !== 0;
+    } else {
+      continue; // unknown flag — never guess
+    }
+    if (resolved !== undefined) {
+      props[name] = resolved;
     }
   }
-  return properties;
+  path.delete(objId);
+  return props;
 }
 
-function findObjectAnchors(cells: (MatVariable | null)[], packageName: string, shortClassName: string): number[] {
-  const anchors: number[] = [];
-  for (let i = 2; i < cells.length - 2; i++) {
-    const pkgCell = cells[i];
-    const clsCell = cells[i + 1];
-    if (
-      pkgCell &&
-      pkgCell.className === 'char' &&
-      pkgCell.value === packageName &&
-      clsCell &&
-      clsCell.className === 'char' &&
-      clsCell.value === shortClassName
-    ) {
-      anchors.push(i);
-    }
-  }
-  return anchors;
+function buildObjectValue(objId: number, ctx: DecodeContext, path: Set<number>, depth: number): unknown {
+  const obj = ctx.meta.objects[objId];
+  if (!obj) return undefined;
+  const cls = ctx.meta.classes[obj.classId];
+  const properties = buildProperties(objId, ctx, path, depth);
+  return { _object_class: cls ? cls.fullName : '', _properties: properties };
 }
 
-function getAllAnchors(
-  cells: (MatVariable | null)[],
-  varsByClass: Map<string, { name: string; className: string }[]>,
-): number[] {
-  const valuePositions: number[] = [];
-  varsByClass.forEach((_vars, fullClassName) => {
-    const { packageName, shortClassName } = splitClassName(fullClassName);
-    const anchors = findObjectAnchors(cells, packageName, shortClassName);
-    for (const anchor of anchors) {
-      valuePositions.push(anchor - 2);
-    }
-  });
-  valuePositions.sort((a, b) => a - b);
-  return valuePositions;
-}
+// ---- Named-variable -> root object id -----------------------------------------
 
 function splitClassName(fullClassName: string): { packageName: string; shortClassName: string } {
   const lastDot = fullClassName.lastIndexOf('.');
-  if (lastDot === -1) {
-    return { packageName: '', shortClassName: fullClassName };
-  }
-  return {
-    packageName: fullClassName.substring(0, lastDot),
-    shortClassName: fullClassName.substring(lastDot + 1),
-  };
+  if (lastDot === -1) return { packageName: '', shortClassName: fullClassName };
+  return { packageName: fullClassName.substring(0, lastDot), shortClassName: fullClassName.substring(lastDot + 1) };
 }
 
-export function decodeMcosBlob(
-  anonRawBytes: Uint8Array,
-  opaqueVars: { name: string; className: string }[],
-): Map<string, McosObjectData> {
+// A named opaque variable's own element bytes contain an object handle; the word
+// at (magic + 4) is its root object id. Returns 0 (not found) if absent.
+function rootObjectIdFromRaw(rawBytes: Uint8Array | null | undefined): number {
+  if (!rawBytes || rawBytes.length < 4) return 0;
+  const view = new DataView(rawBytes.buffer, rawBytes.byteOffset, rawBytes.byteLength);
+  for (let o = 0; o + 24 <= rawBytes.length; o += 4) {
+    if (view.getUint32(o, true) === MCOS_HANDLE_MAGIC) {
+      return view.getUint32(o + 16, true); // magic is v[0]; v[4] is 16 bytes on
+    }
+  }
+  return 0;
+}
+
+export interface OpaqueVarRef {
+  name: string;
+  className: string;
+  rawBytes?: Uint8Array | null;
+}
+
+export function decodeMcosBlob(anonRawBytes: Uint8Array, opaqueVars: OpaqueVarRef[]): Map<string, McosObjectData> {
   const result = new Map<string, McosObjectData>();
-  if (!anonRawBytes || anonRawBytes.length === 0 || opaqueVars.length === 0) {
-    return result;
-  }
+  if (!anonRawBytes || anonRawBytes.length === 0 || opaqueVars.length === 0) return result;
 
-  const outerView = new DataView(anonRawBytes.buffer, anonRawBytes.byteOffset, anonRawBytes.byteLength);
+  const cells = extractCells(anonRawBytes);
+  if (!cells) return result;
+  const meta = parseMetaTable(cells);
+  if (!meta) return result;
 
-  // Parse the outer MI_MATRIX tag to get the uint8 payload
-  const outerType = outerView.getUint32(0, true);
-  const outerBytes = outerView.getUint32(4, true);
-  if (outerType !== MI_MATRIX) {
-    return result;
-  }
+  const ctx: DecodeContext = { cells, meta };
 
-  const outerMatrix = parseMatrix(outerView, 8, outerBytes);
-  let blobBytes: Uint8Array;
-  if (outerMatrix.className === 'uint8' && outerMatrix.value) {
-    const val = outerMatrix.value;
-    if (val instanceof Uint8Array) {
-      blobBytes = val;
-    } else if (Array.isArray(val)) {
-      blobBytes = new Uint8Array(val as number[]);
-    } else {
-      return result;
-    }
-  } else {
-    return result;
-  }
-
-  // The blob has an 8-byte header: 2-byte version + 2-byte endian + 4 bytes padding
-  if (blobBytes.length < 16) {
-    return result;
-  }
-
-  const blobView = new DataView(blobBytes.buffer, blobBytes.byteOffset, blobBytes.byteLength);
-
-  // Parse the MI_MATRIX at offset 8 within the blob (the struct with field "MCOS")
-  const structSub = readSubelement(blobView, 8);
-  if (structSub.type !== MI_MATRIX) {
-    return result;
-  }
-
-  const structMatrix = parseMatrix(blobView, structSub.dataOffset, structSub.bytes);
-
-  // The struct should have an "MCOS" field which is opaque
-  let mcosField: MatVariable | null = null;
-  if (structMatrix.fields && structMatrix.fields['MCOS']) {
-    mcosField = structMatrix.fields['MCOS'] as MatVariable;
-  }
-
-  if (!mcosField || !mcosField.isOpaque) {
-    return result;
-  }
-
-  // Navigate the opaque MCOS field to find the inner cell array.
-  // The MCOS field's _rawBytes contain its full MI_MATRIX element (tag + content).
-  // We need to find the cell array inside the opaque structure.
-  let cellArray: MatVariable | null = null;
-
-  if (mcosField._rawBytes) {
-    const opaqueBytes = mcosField._rawBytes;
-    const opaqueView = new DataView(opaqueBytes.buffer, opaqueBytes.byteOffset, opaqueBytes.byteLength);
-    const opaqueTag = readSubelement(opaqueView, 0);
-    if (opaqueTag.type === MI_MATRIX) {
-      const cellLoc = findCellArrayInOpaque(opaqueView, opaqueTag.dataOffset, opaqueTag.bytes);
-      if (cellLoc) {
-        cellArray = parseMatrix(opaqueView, cellLoc.offset, cellLoc.length);
-      }
-    }
-  }
-
-  if (!cellArray || cellArray.className !== 'cell' || !Array.isArray(cellArray.value)) {
-    return result;
-  }
-
-  const cells = cellArray.value as (MatVariable | null)[];
-  if (cells.length < 1 || !cells[0]) {
-    return result;
-  }
-
-  // Cell[0] is the metadata (uint8 array)
-  const metadataCell = cells[0];
-  let metadata: Uint8Array;
-  if (metadataCell.className === 'uint8' && metadataCell.value) {
-    const val = metadataCell.value;
-    if (val instanceof Uint8Array) {
-      metadata = val;
-    } else if (Array.isArray(val)) {
-      metadata = new Uint8Array(val as number[]);
-    } else {
-      return result;
-    }
-  } else {
-    return result;
-  }
-
-  if (metadata.length < 40) {
-    return result;
-  }
-
-  // Parse the 10-uint32 header of the metadata
-  const metaView = new DataView(metadata.buffer, metadata.byteOffset, metadata.byteLength);
-  const sectionOffsets: number[] = [];
-  for (let i = 0; i < 10; i++) {
-    sectionOffsets.push(metaView.getUint32(i * 4, true));
-  }
-
-  const section2Start = sectionOffsets[2];
-  const section3Start = sectionOffsets[3];
-
-  // Parse string table (from byte 40 to section2Start)
-  const strings = parseStringTable(metadata, section2Start);
-
-  // Parse class info (section 2 to section 3)
-  const classInfos = parseClassInfo(metadata, section2Start, section3Start);
-
-  // Group opaque vars by className
-  const varsByClass = new Map<string, { name: string; className: string }[]>();
   for (const v of opaqueVars) {
-    const existing = varsByClass.get(v.className) || [];
-    existing.push(v);
-    varsByClass.set(v.className, existing);
+    const rootId = rootObjectIdFromRaw(v.rawBytes);
+    if (rootId <= 0 || rootId >= meta.objects.length) continue;
+
+    // Confidence check: the root object's class must match the variable's declared
+    // class. If it doesn't, we located the wrong object — skip rather than guess.
+    const rootClass = meta.classes[meta.objects[rootId].classId];
+    if (!rootClass || rootClass.fullName !== v.className) continue;
+
+    const properties = buildProperties(rootId, ctx, new Set<number>(), 0);
+    const { packageName, shortClassName } = splitClassName(v.className);
+    result.set(v.name, {
+      name: v.name,
+      className: v.className,
+      packageName,
+      shortClassName,
+      properties,
+      dimensions: [1, 1],
+      value: properties.Value,
+    });
   }
-
-  // For each class, try anchor pattern first, fall back to heap-based
-  varsByClass.forEach((vars, fullClassName) => {
-    const { packageName, shortClassName } = splitClassName(fullClassName);
-    const anchors = findObjectAnchors(cells, packageName, shortClassName);
-
-    // Find the class info record for this class
-    let leafClassInfo: ClassInfo | null = null;
-    for (let i = 0; i < classInfos.length; i++) {
-      const ci = classInfos[i];
-      if (ci.classNameStringIndex < strings.length && strings[ci.classNameStringIndex] === fullClassName) {
-        leafClassInfo = ci;
-        break;
-      }
-    }
-
-    if (anchors.length >= vars.length) {
-      // Anchor pattern found — use for precise extraction
-      const allAnchors = getAllAnchors(cells, varsByClass);
-      const count = Math.min(anchors.length, vars.length);
-      for (let objIdx = 0; objIdx < count; objIdx++) {
-        const anchor = anchors[objIdx];
-        const opaqueVar = vars[objIdx];
-
-        const valueCell = cells[anchor - 2] || null;
-        const dimsCell = cells[anchor - 1] || null;
-        let dimensions: number[] = [1, 1];
-        if (dimsCell && dimsCell.className === 'double') {
-          const dv = dimsCell.value;
-          if (Array.isArray(dv)) {
-            dimensions = dv as number[];
-          } else if (typeof dv === 'number') {
-            dimensions = [dv];
-          }
-        }
-
-        let propStart = anchor + 3;
-        while (propStart < cells.length && cells[propStart] && isObjectHandle(cells[propStart]!)) {
-          propStart++;
-        }
-
-        const nextAnchorIdx = allAnchors.indexOf(anchor - 2) + 1;
-        const cellEnd = nextAnchorIdx < allAnchors.length ? allAnchors[nextAnchorIdx] : cells.length;
-
-        const extras: { value: unknown; cellClass: string }[] = [];
-        for (let cellIdx = propStart; cellIdx < cellEnd; cellIdx++) {
-          const cell = cells[cellIdx];
-          if (!cell) break;
-          if (isObjectHandle(cell)) break;
-          extras.push({ value: extractCellValue(cell), cellClass: cell.className });
-        }
-
-        const properties = assignPropertyNames(extras, fullClassName, leafClassInfo, strings);
-        result.set(opaqueVar.name, {
-          name: opaqueVar.name,
-          className: fullClassName,
-          packageName,
-          shortClassName,
-          properties,
-          dimensions,
-          value: extractCellValue(valueCell),
-        });
-      }
-    }
-  });
 
   return result;
 }

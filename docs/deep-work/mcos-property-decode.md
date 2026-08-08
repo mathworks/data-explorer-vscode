@@ -93,9 +93,29 @@ highest value, simplest scalar props — then the rest.)
 - [x] Confirmed all 4 fixture save paths work (smoke test in /tmp/mcos_fix).
 - [x] Phase 1: fixture generation (test/fixtures/mcos/, test/tools/mcos/)
 - [x] Phase 2: reverse-engineer — format CONFIRMED & validated against all fixtures
-- [ ] Phase 3: rewrite McosParser
-- [ ] Phase 4: wire into typed nodes
-- [ ] Phase 5: cross-format tests
+- [x] Phase 3: rewrite McosParser — real table walk; validated end-to-end
+- [x] Phase 4: wire into typed nodes — decoded props flow into ParameterNode/etc
+- [ ] Phase 5: cross-format tests (committed harness proves 7/7 parity; add vitest)
+
+### Phase 3/4 result
+
+`decodeMcosBlob` rewritten: navigates FileWrapper → cells[], parses the metadata
+table (strings/classes/objects/blocks), maps each named var → root object id (via
+its own handle's v[4]), walks the positional 8-byte-aligned property block,
+resolves heap cells (flag 1), string literals (flag 0), inline bools (flag 2), and
+recurses object handles into nested `{_object_class,_properties}`. Emits SLDD-shaped
+`_properties`; matrices as `Matrix(r,c)` value objects. A confidence gate skips any
+var whose root-object class ≠ declared class (never guess).
+
+`mcosTypedNode.buildTypedNodeFromMcos` now takes optional decoded `properties` and
+feeds them to the SAME `NodeRegistry.parseValue` the SLDD path uses; empty shell
+when absent. MatNode/ModelNode pass decoded props + rawBytes through.
+
+**Cross-format parity VALIDATED (7/7):** a harness runs SLDD-JSON (oracle),
+MCOS(.mat), and MCOS(.slx) through the real node pipeline; Param/ParamMat/Sig/
+Numeric/Alias/Bp/Lut produce byte-identical typed-node signatures (className,
+displayValue, Min, Max, Unit, Description, child count). 420 existing tests green,
+typecheck clean, build resolves.
 
 ## CONFIRMED FORMAT (Phase 2 complete — validated against every fixture)
 
