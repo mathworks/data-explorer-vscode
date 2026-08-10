@@ -10,12 +10,8 @@ It adds a native experience for Simulink file types — a **Simulink Data Explor
 
 - **Read Simulink files without MATLAB or Simulink** — inspect `.slx`, `.sldd`, `.mat`, and `.prj` files anywhere VS Code runs, including on machines and CI agents with no MATLAB install.
 - **See how your project fits together** — a relationship tree maps every model, dictionary, and MAT-file and how they reference each other, with at-a-glance health badges for cycles, orphans, and missing references.
-- **Click through references like hyperlinks** — jump from a model to the models, dictionaries, and MAT-files it depends on in one click (see below).
+- **Click through references like hyperlinks** — jump from a model to the models, dictionaries, and MAT-files it depends on in one click.
 - **Edit textual data dictionaries in place** — change values, add elements, and cut/copy/paste entries in a spreadsheet-style table, with native undo/redo and save.
-
-## Jump-to-Reference Navigation
-
-Open a model and its **Model References** and **External Data** appear as links. Click one and the referenced file — a submodel (`.slx`), a linked data dictionary (`.sldd`), or a MAT-file (`.mat`) — opens right away, resolved from your workspace. It's how you'd expect cross-file navigation to work in an editor: follow the dependency chain without hunting through folders.
 
 ## Features
 
