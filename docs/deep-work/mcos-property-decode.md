@@ -196,7 +196,21 @@ decoded SLDD-shaped properties when supplied (with a test proving Value/Min/Max/
 Unit/Description populate, DocUnits→Unit mapping included) and falls back to an empty
 shell only when none are supplied (test retained).
 
-**Final state:** `npm test` → **433 passed (40 files)**; `npm run typecheck` clean;
+`test/mcosParser.test.ts` (28 tests) locks down the decoder's OWN contract by
+calling `decodeMcosBlob` directly (both callers' input setup reproduced): per-entry
+raw `McosObjectData` for all 7 types × both binary formats (.mat one-object-per-file
+and .slx many-objects-one-blob), the `Matrix(2,3)` row-major string form, the
+`value`↔`properties.Value` mirror, package/short class split, multi-object linkage
+(all 7 named vars resolve from one .slx blob), and the refusal-to-guess paths (empty
+map for no-vars / empty / garbage bytes; **confidence gate** skips a var whose
+declared class disagrees with the located object; a var with no object handle is
+dropped). Finding surfaced while writing it: the two binary encodings represent some
+*default* nested props differently (.slx: `CoderInfo.CustomAttributes = []` +
+`HasCoderInfo:false`; .mat: a default object handle) — so the paths agree on class +
+all known non-default values (asserted) but their full bags are not byte-identical;
+those defaults never reach the typed-node columns, so display parity is unaffected.
+
+**Final state:** `npm test` → **461 passed (41 files)**; `npm run typecheck` clean;
 `npm run build` resolves (the drop-check that no needed `src/dex` file was lost);
 leak-check over git-tracked files returns nothing. All five phases complete on
 branch `feat/mcos-property-decode`.
