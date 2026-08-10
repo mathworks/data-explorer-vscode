@@ -2,7 +2,7 @@
   "name": "simulink-data-explorer",
   "displayName": "Simulink Data Explorer",
   "description": "Explore Simulink models, data dictionaries, MAT-files, and projects as interactive tables and relationship trees.",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "publisher": "mathworks",
   "icon": "media/icon.png",
   "private": true,
@@ -15,7 +15,15 @@
     "vscode": "^1.90.0"
   },
   "categories": [
-    "Visualization"
+    "Visualization",
+    "Data Science"
+  ],
+  "keywords": [
+    "simulink",
+    "slx",
+    "sldd",
+    "matlab",
+    "data dictionary"
   ],
   "main": "./dist/extension.js",
   "browser": "./dist/web/extension.js",
