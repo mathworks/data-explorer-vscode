@@ -2,7 +2,7 @@
   "name": "data-explorer-vscode",
   "displayName": "Simulink Data Explorer",
   "description": "Explore Simulink models, data dictionaries, MAT-files, and projects as interactive tables and relationship trees.",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "publisher": "mathworks",
   "icon": "media/icon.png",
   "private": true,

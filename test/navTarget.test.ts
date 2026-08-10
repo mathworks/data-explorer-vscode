@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 import { describe, it, expect } from 'vitest';
-import { parseNavTarget } from '../src/host/navTarget.js';
+import { parseNavTarget, parseFileTarget } from '../src/host/navTarget.js';
 
 describe('parseNavTarget — Usage-link target grammar', () => {
   it('parses a bare <name>@<basename> (block -> dictionary variable)', () => {
@@ -36,5 +36,24 @@ describe('parseNavTarget — Usage-link target grammar', () => {
     expect(parseNavTarget('@controller.sldd')).toBeNull();
     expect(parseNavTarget('Kp@')).toBeNull();
     expect(parseNavTarget('blocks:@x')).toBeNull();
+  });
+});
+
+describe('parseFileTarget — Model Reference / External Data bare-file links', () => {
+  it('accepts a bare model-reference basename (no @, no prefix)', () => {
+    // ModelReferenceNode / DataSourceNode set linkTarget to the bare filename.
+    expect(parseFileTarget('plant.slx')).toBe('plant.slx');
+    expect(parseFileTarget('signals.mat')).toBe('signals.mat');
+    expect(parseFileTarget('common.sldd')).toBe('common.sldd');
+  });
+
+  it('returns null for a Usage-link target (has @source) so it does not hijack it', () => {
+    expect(parseFileTarget('Kp@controller.sldd')).toBeNull();
+    expect(parseFileTarget('blocks:Gain1@file:///w/plant.slx')).toBeNull();
+    expect(parseFileTarget('workspace:Ts@model.slx')).toBeNull();
+  });
+
+  it('returns null for empty input', () => {
+    expect(parseFileTarget('')).toBeNull();
   });
 });
