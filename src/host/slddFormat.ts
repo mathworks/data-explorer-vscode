@@ -15,12 +15,29 @@ export function isZipBytes(bytes: Uint8Array): boolean {
   );
 }
 
+// V8 refuses to create a string longer than 0x1fffffe8 (~512 MB) code units, so
+// `new TextDecoder().decode(bytes)` THROWS above that — we can neither validate
+// nor JSON.parse the content, so no table can be built. (JSON .sldd is ~ASCII,
+// so UTF-16 code-unit count ≈ byte length; gating on byte length is safe and
+// only conservative for the multibyte case, which .sldd never hits.) Such files
+// are routed to the plain text editor instead. Distinct from and larger than
+// TEXT_SYNC_LIMIT: 50 MB–512 MB JSON .sldd still renders as a read-only table.
+export const STRING_DECODE_LIMIT = 0x1fffffe8;
+
+/** True if `bytes` is too large to decode into a single JS string (V8 limit). */
+export function exceedsStringDecodeLimit(bytes: Uint8Array): boolean {
+  return bytes.length > STRING_DECODE_LIMIT;
+}
+
 /**
  * True if the bytes are an editable JSON .sldd: not a zip archive AND valid
  * JSON. Binary/zip .sldd and non-JSON content return false (→ read-only view).
+ * Content too large to decode also returns false (→ handled upstream), so this
+ * never attempts a decode that would throw.
  */
 export function isEditableJsonSlddBytes(bytes: Uint8Array): boolean {
   if (isZipBytes(bytes)) return false;
+  if (exceedsStringDecodeLimit(bytes)) return false;
   try {
     JSON.parse(new TextDecoder().decode(bytes));
     return true;

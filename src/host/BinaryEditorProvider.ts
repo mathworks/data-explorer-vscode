@@ -11,7 +11,7 @@ import {
 } from './rowBuilder.js';
 import { buildMatRows } from './matRowBuilder.js';
 import { readProjectStore } from './projectStore.js';
-import { isEditableJsonSlddBytes, exceedsTextSyncLimit } from './slddFormat.js';
+import { isEditableJsonSlddBytes, exceedsTextSyncLimit, exceedsStringDecodeLimit, isZipBytes } from './slddFormat.js';
 import { annotateDataRows, annotateModelRows } from './usageGraph.js';
 import { onNavigateSelect, consumePendingSelect } from './navigate.js';
 
@@ -80,6 +80,18 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     if (name.endsWith('.sldd')) {
       try {
         const bytes = await vscode.workspace.fs.readFile(document.uri);
+        // A JSON .sldd larger than V8's string limit (~512 MB) can't be decoded
+        // into a string at all — so neither the editable table nor the read-only
+        // table can parse it, and it would open as a silent empty table. Hand
+        // such a file to VS Code's built-in text editor (it streams large files
+        // without materializing one giant string). A zip .sldd this large still
+        // falls through to the read-only binary view — it parses the archive
+        // without decoding the whole thing to a string.
+        if (exceedsStringDecodeLimit(bytes) && !isZipBytes(bytes)) {
+          await vscode.commands.executeCommand('vscode.openWith', document.uri, 'default');
+          webviewPanel.dispose();
+          return;
+        }
         // Editable JSON .sldd redirects to the text-backed table view — BUT only
         // when VS Code can actually mirror it as a TextDocument. Over the sync
         // limit, the tableView provider can't resolve (the ext host throws
@@ -266,9 +278,14 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     return renderWebviewHtml(webview, distRoot, {
       scriptFile: 'table.js',
       title: 'Data Explorer',
-      body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
+      body: `    <style>@keyframes dex-spin { to { transform: rotate(360deg); } }</style>
+    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
     <div id="dex-notice" role="status" style="display:none;position:absolute;top:0;left:0;right:0;z-index:2;box-sizing:border-box;padding:6px 10px;font-family:var(--vscode-font-family,sans-serif);font-size:12px;color:var(--vscode-inputValidation-infoForeground,var(--vscode-foreground));background:var(--vscode-inputValidation-infoBackground,rgba(100,148,237,0.12));border-bottom:1px solid var(--vscode-inputValidation-infoBorder,#4084d0);"></div>
     <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>
+    <div id="dex-loading" role="status" aria-label="Loading" style="position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-family:var(--vscode-font-family,sans-serif);font-size:12px;color:var(--vscode-descriptionForeground,var(--vscode-foreground));background:var(--vscode-editor-background,transparent);">
+      <div style="width:28px;height:28px;border:3px solid var(--vscode-progressBar-background,#0e70c0);border-top-color:transparent;border-radius:50%;animation:dex-spin 0.8s linear infinite;"></div>
+      <div>Loading…</div>
+    </div>
     <dex-context-menu></dex-context-menu>`,
     });
   }

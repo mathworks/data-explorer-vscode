@@ -8,7 +8,9 @@ import {
   isZipBytes,
   isEditableJsonSlddBytes,
   exceedsTextSyncLimit,
+  exceedsStringDecodeLimit,
   TEXT_SYNC_LIMIT,
+  STRING_DECODE_LIMIT,
 } from '../src/host/slddFormat.js';
 
 function bytesOf(relPath: string): Uint8Array {
@@ -58,5 +60,29 @@ describe('exceedsTextSyncLimit (large-file routing guard)', () => {
     // If VS Code ever changes this constant, this test flags that our routing
     // threshold has drifted from it. See slddFormat.ts for why they must agree.
     expect(TEXT_SYNC_LIMIT).toBe(50 * 1024 * 1024);
+  });
+});
+
+describe('exceedsStringDecodeLimit (undecodable-file routing guard)', () => {
+  it('is false for a small file', () => {
+    expect(exceedsStringDecodeLimit(new TextEncoder().encode('{}'))).toBe(false);
+  });
+
+  it('is false exactly at the limit (boundary: <= limit is still decodable)', () => {
+    expect(exceedsStringDecodeLimit({ length: STRING_DECODE_LIMIT } as Uint8Array)).toBe(false);
+  });
+
+  it('is true one byte past the limit (routes to the plain text editor)', () => {
+    expect(exceedsStringDecodeLimit({ length: STRING_DECODE_LIMIT + 1 } as Uint8Array)).toBe(true);
+  });
+
+  it('matches V8 max string length (0x1fffffe8)', () => {
+    expect(STRING_DECODE_LIMIT).toBe(0x1fffffe8);
+  });
+
+  it('treats content above the decode limit as NOT editable JSON (no decode attempt)', () => {
+    // Above V8's limit, a real decode would throw; isEditableJsonSlddBytes must
+    // short-circuit to false instead of throwing. Fake the length cheaply.
+    expect(isEditableJsonSlddBytes({ length: STRING_DECODE_LIMIT + 1 } as Uint8Array)).toBe(false);
   });
 });
