@@ -62,10 +62,37 @@ function clearError(): void {
   if (el) { el.textContent = ''; el.style.display = 'none'; }
 }
 
+// Persistent, informational read-only banner (e.g. a JSON .sldd too large to
+// edit). Distinct from the transient red #dex-error. The table fills the panel
+// (position:absolute;inset:0), so when the banner is shown we offset the table's
+// top by the banner's measured height — measured, not hardcoded, so it stays
+// correct when the message wraps at narrow widths. Only the read-only binary
+// view renders #dex-notice; in the editable table view it's absent and this
+// no-ops.
+function setNotice(message: string | undefined): void {
+  const el = document.getElementById('dex-notice');
+  if (!el) return;
+  if (message) {
+    el.textContent = message;
+    el.style.display = 'block';
+    // Offset after layout so offsetHeight reflects the (possibly wrapped) banner.
+    requestAnimationFrame(() => {
+      table.style.top = el.offsetHeight + 'px';
+    });
+  } else {
+    el.textContent = '';
+    el.style.display = 'none';
+    table.style.top = '';
+  }
+}
+
 window.addEventListener('message', (event: MessageEvent) => {
   const msg = event.data;
   if (msg.type === 'setRows') {
     clearError();
+    // Persistent read-only notice (size-limited JSON .sldd). Undefined for the
+    // editable table view and for expected-read-only binary .sldd, so it hides.
+    setNotice(typeof msg.notice === 'string' ? msg.notice : undefined);
     const rows = msg.rows ?? [];
     editable = !!msg.editable;
     table.columns = msg.columns ?? null;

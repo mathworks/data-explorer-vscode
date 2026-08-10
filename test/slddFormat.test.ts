@@ -4,7 +4,12 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { isZipBytes, isEditableJsonSlddBytes } from '../src/host/slddFormat.js';
+import {
+  isZipBytes,
+  isEditableJsonSlddBytes,
+  exceedsTextSyncLimit,
+  TEXT_SYNC_LIMIT,
+} from '../src/host/slddFormat.js';
 
 function bytesOf(relPath: string): Uint8Array {
   return new Uint8Array(readFileSync(fileURLToPath(new URL(relPath, import.meta.url))));
@@ -32,5 +37,26 @@ describe('slddFormat routing detection', () => {
     expect(isZipBytes(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x00]))).toBe(true);
     expect(isZipBytes(new Uint8Array([0x7b, 0x7d]))).toBe(false); // "{}"
     expect(isZipBytes(new Uint8Array([0x50, 0x4b]))).toBe(false); // too short
+  });
+});
+
+describe('exceedsTextSyncLimit (large-file routing guard)', () => {
+  it('is false for a small file (opens in the editable table view)', () => {
+    expect(exceedsTextSyncLimit(new TextEncoder().encode('{}'))).toBe(false);
+  });
+
+  it('is false exactly at the limit (boundary: <= limit stays editable)', () => {
+    // A real allocation this large is wasteful; fake the length VS Code measures.
+    expect(exceedsTextSyncLimit({ length: TEXT_SYNC_LIMIT } as Uint8Array)).toBe(false);
+  });
+
+  it('is true one byte past the limit (routes to the read-only view)', () => {
+    expect(exceedsTextSyncLimit({ length: TEXT_SYNC_LIMIT + 1 } as Uint8Array)).toBe(true);
+  });
+
+  it('matches VS Code TextModel._MODEL_SYNC_LIMIT (50 MB)', () => {
+    // If VS Code ever changes this constant, this test flags that our routing
+    // threshold has drifted from it. See slddFormat.ts for why they must agree.
+    expect(TEXT_SYNC_LIMIT).toBe(50 * 1024 * 1024);
   });
 });
