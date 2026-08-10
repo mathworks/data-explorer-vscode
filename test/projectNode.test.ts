@@ -77,20 +77,20 @@ describe('ProjectNode.fromParsed', () => {
     }
   });
 
-  // ProjectItemNode reports nameEditable:false but is a real entry (disabled:false).
-  // The .prj view is read-only, so buildRows(..., true) must render its items in
-  // the normal color. Regression guard for the "grayed-out entries" bug via the
-  // real node type (not a synthetic stand-in).
-  it('renders project items in normal color under read-only coloring', () => {
+  // ProjectItemNode reports nameEditable:false but is a real entry, not a
+  // positional array element. Its Name must therefore render in the normal color
+  // (element === false) even though the .prj view is read-only — coloring is
+  // structural, never derived from read-only-ness. Regression guard for the
+  // "grayed-out entries" bug via the real node type (not a synthetic stand-in).
+  it('renders project items in normal color (element === false)', () => {
     const node = ProjectNode.fromParsed(makeParsed(), 'MyProj.prj');
-    const rows = buildRows(node as any, undefined, true);
+    const rows = buildRows(node as any);
     const itemRows = rows.filter(
       (r: any) => !String(r.ID).startsWith('section:') && r.Name && typeof r.Name === 'object',
     );
     expect(itemRows.length).toBeGreaterThan(0);
     for (const r of itemRows as any[]) {
-      expect(r.Name.disabled).toBe(false); // real entries, not derived
-      expect(r.Name.editable).toBe(true);  // therefore NOT grayed
+      expect(r.Name.element).toBe(false); // real entries → NOT grayed
     }
   });
 });

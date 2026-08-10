@@ -154,12 +154,9 @@ export default class DataNode extends BaseNode {
     return !!(this.parent && (this.parent as unknown as { isContainer?: boolean }).isContainer);
   }
 
-  get isIndexedName(): boolean {
-    return !!(
-      this.parent &&
-      (this.parent._kind === 'cell' || this.parent._kind === 'array' || this.parent._kind === 'string')
-    );
-  }
+  // isIndexedName is inherited from BaseNode (structural: parent is array/cell/
+  // string). DataNode keeps its own nameEditable because a _displayName alias also
+  // fixes the name here.
 
   get isDerived(): boolean {
     return !!(this.metadata && this.metadata.isderived === '1');
