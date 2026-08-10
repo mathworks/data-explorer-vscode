@@ -28,3 +28,22 @@ export function isEditableJsonSlddBytes(bytes: Uint8Array): boolean {
     return false;
   }
 }
+
+// VS Code refuses to mirror a TextDocument larger than TextModel._MODEL_SYNC_LIMIT
+// (50 MB) into the extension host. Our editable JSON .sldd table is a
+// CustomTextEditorProvider, which depends on that mirror — so past this size,
+// resolving it throws "Unable to retrieve document from URI" in the ext host
+// before our provider code ever runs, and the table fails to open. Such files
+// are routed to the read-only byte-backed view instead (it reads bytes directly
+// via workspace.fs, so it isn't subject to the sync limit). Editing is
+// impossible above the limit regardless, since VS Code won't sync the document.
+//
+// VS Code measures the model in UTF-16 code units; we gate on byte length, which
+// is always >= the UTF-16 length for UTF-8. So any file kept on the editable path
+// (byte length <= limit) is guaranteed to sync — no false downgrades.
+export const TEXT_SYNC_LIMIT = 50 * 1024 * 1024;
+
+/** True if `bytes` is too large for VS Code to sync as an editable TextDocument. */
+export function exceedsTextSyncLimit(bytes: Uint8Array): boolean {
+  return bytes.length > TEXT_SYNC_LIMIT;
+}

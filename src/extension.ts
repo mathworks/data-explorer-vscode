@@ -6,7 +6,7 @@ import { BinaryEditorProvider } from './host/BinaryEditorProvider.js';
 import { SlddTextEditorProvider } from './host/SlddTextEditorProvider.js';
 import { HealthDecorationProvider } from './host/HealthDecorationProvider.js';
 import { invalidate, findNode } from './host/SlddModel.js';
-import { isEditableJsonSlddBytes } from './host/slddFormat.js';
+import { isEditableJsonSlddBytes, exceedsTextSyncLimit } from './host/slddFormat.js';
 import { handleNavigate } from './host/navigate.js';
 import { invalidateUsageGraph } from './host/usageGraph.js';
 
@@ -19,10 +19,17 @@ function isSlddUri(uri: vscode.Uri | undefined): boolean {
 // True if the .sldd at `uri` is editable JSON (not zip/binary). Editable JSON
 // opens in the CustomTextEditorProvider (native undo/redo); binary/zip .sldd and
 // all other formats open in the read-only BinaryEditorProvider.
+//
+// A JSON .sldd larger than VS Code's TextDocument sync limit is NOT treated as
+// editable: the CustomTextEditorProvider can't resolve it (the ext host can't
+// mirror an over-limit document — it throws "Unable to retrieve document from
+// URI"), so it falls through to the read-only byte-backed view, which opens it
+// fine. See exceedsTextSyncLimit in slddFormat.ts.
 async function isEditableJsonSldd(uri: vscode.Uri): Promise<boolean> {
   if (!uri.path.endsWith('.sldd')) return false;
   try {
-    return isEditableJsonSlddBytes(await vscode.workspace.fs.readFile(uri));
+    const bytes = await vscode.workspace.fs.readFile(uri);
+    return isEditableJsonSlddBytes(bytes) && !exceedsTextSyncLimit(bytes);
   } catch {
     return false;
   }

@@ -11,7 +11,7 @@ import {
 } from './rowBuilder.js';
 import { buildMatRows } from './matRowBuilder.js';
 import { readProjectStore } from './projectStore.js';
-import { isEditableJsonSlddBytes } from './slddFormat.js';
+import { isEditableJsonSlddBytes, exceedsTextSyncLimit } from './slddFormat.js';
 import { annotateDataRows, annotateModelRows } from './usageGraph.js';
 import { onNavigateSelect, consumePendingSelect } from './navigate.js';
 
@@ -65,6 +65,12 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     const uriString = document.uri.toString();
     const name = document.uri.path.split('/').pop() ?? 'document';
 
+    // A read-only banner shown above the table. Set only for the surprising case:
+    // a JSON .sldd that WOULD be editable but is over VS Code's TextDocument sync
+    // limit (see below). Binary/zip .sldd — expected read-only — leave this unset
+    // so no banner appears. Passed to the webview in the setRows payload.
+    let notice: string | undefined;
+
     // This byte-backed editor is the DEFAULT for *.sldd because it can open any
     // bytes (binary/zip .sldd fail to load as a TextDocument, so the text-backed
     // tableView can't be the default). But editable JSON .sldd should open in the
@@ -74,7 +80,12 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     if (name.endsWith('.sldd')) {
       try {
         const bytes = await vscode.workspace.fs.readFile(document.uri);
-        if (isEditableJsonSlddBytes(bytes)) {
+        // Editable JSON .sldd redirects to the text-backed table view — BUT only
+        // when VS Code can actually mirror it as a TextDocument. Over the sync
+        // limit, the tableView provider can't resolve (the ext host throws
+        // "Unable to retrieve document from URI"), so keep such files here and
+        // render them read-only. See exceedsTextSyncLimit in slddFormat.ts.
+        if (isEditableJsonSlddBytes(bytes) && !exceedsTextSyncLimit(bytes)) {
           // Carry the incoming tab's preview state through the redirect: an
           // Explorer single-click opens this binary tab as a PREVIEW tab, and the
           // table it redirects to should stay a preview tab too (not pin). VS
@@ -91,6 +102,17 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           // racy) so only the redundant binary tab goes away.
           webviewPanel.dispose();
           return;
+        }
+        // A JSON .sldd that stayed here (not redirected) did so ONLY because it's
+        // over the sync limit — otherwise it would be editable. That's surprising
+        // (a JSON dictionary the user expects to edit), so explain the read-only
+        // downgrade. Binary/zip .sldd skips this (isEditableJsonSlddBytes false).
+        if (isEditableJsonSlddBytes(bytes)) {
+          const mb = Math.round(bytes.byteLength / (1024 * 1024));
+          notice =
+            `Read-only: this dictionary is ${mb} MB, above VS Code's 50 MB editing limit. ` +
+            `To edit the JSON directly, use "Reopen Editor With… → Text Editor"; ` +
+            `this view refreshes when you save.`;
         }
       } catch {
         // Unreadable → fall through and let the read-only render report the error.
@@ -161,6 +183,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           columns: COLUMNS,
           columnLabels: COLUMN_LABELS,
           editable: false,
+          notice,
         });
         drainNavSelect();
       } catch (err) {
@@ -194,19 +217,32 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       webview.postMessage({ type: 'selectByName', name: e.name });
     });
 
-    // Live-sync when the underlying document changes: covers external /
-    // text-view edits to the file. Re-parse and repaint the read-only view.
-    const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
-      if (e.document.uri.toString() === uriString) {
-        invalidate(uriString);
-        void post();
-      }
-    });
+    // Live-sync when the file on disk changes: covers external edits AND edits
+    // made in the plain-text view once saved. We watch the DISK, not the
+    // TextDocument, on purpose: a JSON .sldd routed here is over VS Code's 50 MB
+    // sync limit, so the ext host holds no mirror of it and
+    // onDidChangeTextDocument NEVER fires for it (the same limit that forced the
+    // read-only downgrade — see slddFormat.ts). A FileSystemWatcher observes the
+    // disk directly, independent of document syncing, so it fires on save at any
+    // size. Because this view always reads bytes from disk, unsaved edits can't
+    // be reflected anyway — refresh-on-save is the achievable contract, and the
+    // banner tells the user so.
+    const watcher = vscode.workspace.createFileSystemWatcher(
+      new vscode.RelativePattern(vscode.Uri.joinPath(document.uri, '..'), name),
+    );
+    const onDiskChange = () => {
+      invalidate(uriString);
+      void post();
+    };
+    const changeSub = watcher.onDidChange(onDiskChange);
+    const createSub = watcher.onDidCreate(onDiskChange);
 
     webview.html = this.getHtml(webview, distRoot);
     webviewPanel.onDidDispose(() => {
       sub.dispose();
+      watcher.dispose();
       changeSub.dispose();
+      createSub.dispose();
       navSub.dispose();
     });
   }
@@ -231,6 +267,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       scriptFile: 'table.js',
       title: 'Data Explorer',
       body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
+    <div id="dex-notice" role="status" style="display:none;position:absolute;top:0;left:0;right:0;z-index:2;box-sizing:border-box;padding:6px 10px;font-family:var(--vscode-font-family,sans-serif);font-size:12px;color:var(--vscode-inputValidation-infoForeground,var(--vscode-foreground));background:var(--vscode-inputValidation-infoBackground,rgba(100,148,237,0.12));border-bottom:1px solid var(--vscode-inputValidation-infoBorder,#4084d0);"></div>
     <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>
     <dex-context-menu></dex-context-menu>`,
     });
