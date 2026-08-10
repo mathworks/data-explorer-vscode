@@ -6,16 +6,36 @@ It adds a native experience for Simulink file types — a **Simulink Data Explor
 
 ![Simulink Data Explorer in action: the relationship-tree sidebar and the table editor browsing a model, data dictionary, and MAT-file](media/screenshots/demo.gif)
 
+## Why Simulink Data Explorer?
+
+- **Read Simulink files without MATLAB or Simulink** — inspect `.slx`, `.sldd`, `.mat`, and `.prj` files anywhere VS Code runs, including on machines and CI agents with no MATLAB install.
+- **See how your project fits together** — a relationship tree maps every model, dictionary, and MAT-file and how they reference each other, with at-a-glance health badges for cycles, orphans, and missing references.
+- **Click through references like hyperlinks** — jump from a model to the models, dictionaries, and MAT-files it depends on in one click (see below).
+- **Edit textual data dictionaries in place** — change values, add elements, and cut/copy/paste entries in a spreadsheet-style table, with native undo/redo and save.
+
+## Jump-to-Reference Navigation
+
+Open a model and its **Model References** and **External Data** appear as links. Click one and the referenced file — a submodel (`.slx`), a linked data dictionary (`.sldd`), or a MAT-file (`.mat`) — opens right away, resolved from your workspace. It's how you'd expect cross-file navigation to work in an editor: follow the dependency chain without hunting through folders.
+
 ## Features
 
+### Navigate & understand your models
+
 - **Relationship tree** — a dedicated activity-bar view that scans the workspace and renders how files relate: models referencing other models, models linked to data dictionaries (`.sldd`) and MAT-files (`.mat`), and dictionaries referencing other dictionaries. Entries expand lazily as you drill in.
+- **Jump-to-reference links** — a model's Model References and External Data render as clickable links; selecting one opens the referenced model, dictionary, or MAT-file, resolved from your workspace.
 - **Project & folder grouping** — the tree groups top-level entries by MATLAB Project (`.prj`) or by containing folder, so files with the same name in different folders stay distinct. References resolve within a group first.
 - **Health decorations** — tree rows are badged for at-a-glance status: circular references, orphaned dictionaries/MAT-files (nothing links to them), unsaved modifications, and unresolved (missing) references.
+
+### Browse & edit file contents
+
 - **Table editor** — open a model, dictionary, MAT-file, or project in a spreadsheet-style, tree-structured table. Sections are always shown (e.g. a dictionary's Design Data, Architectural Data, Configurations, Other Data), even when empty.
 - **Editing for textual `.sldd`** — edit a textual (JSON) data dictionary directly in the table: change entry values and names, add child elements, and cut/copy/paste/delete entries via the right-click context menu. Edits write back to the JSON file, so **undo/redo, the dirty indicator, and save are all native** and stay in sync with the built-in text view. Binary `.sldd`, `.slx`, `.mat`, and `.prj` open read-only.
 - **Live two-way sync** — because a textual `.sldd` is backed by its JSON text document, edits in the table and edits in the JSON text editor update each other instantly, and there is a single shared undo history across both views.
 - **Properties panel** — a selection-following webview that shows the full properties of the entry selected in the table. It lives in its own view container and can be docked in the secondary sidebar.
 - **Search** — filter entries by name using the table's built-in filter bar as you type.
+
+### Fits your editor
+
 - **Dual view for textual `.sldd`** — because a textual `.sldd` is JSON, you can switch to Visual Studio Code's built-in JSON text editor at any time via **Reopen Editor With…**.
 - **Theme-aware** — every pane follows your active Visual Studio Code color theme (light, dark, or high-contrast).
 
@@ -63,6 +83,35 @@ No MATLAB&reg; or Simulink installation is required to view or edit files — Si
 - Paste creates a new top-level entry in the target section; pasting as a child of a struct/bus is not yet supported.
 - Reference resolution matches files by name (basename), preferring the referrer's own project or folder. Two `.prj` files in the same directory are not supported.
 - `.m` files are not scanned, so a project whose members are only `.m` files appears as an empty group.
+
+## Questions & Answers
+
+**Do I need MATLAB or Simulink installed?**
+No. Simulink Data Explorer reads (and, for textual `.sldd`, writes) the files directly, so it works anywhere VS Code runs — including machines and CI agents with no MATLAB or Simulink installation.
+
+**Which file types can I open?**
+`.slx` (Simulink models), `.sldd` (data dictionaries), `.mat` (MAT-files), and `.prj` (MATLAB Projects). Textual (JSON) `.sldd` files are editable; the rest open read-only.
+
+**Can I edit files, or is this view-only?**
+You can edit **textual (JSON) `.sldd`** dictionaries directly in the table — values, names, child elements, and cut/copy/paste/delete — with native undo/redo and save. Binary `.sldd`, `.slx`, `.mat`, and `.prj` are read-only.
+
+**A reference link doesn't open anything — why?**
+Links resolve by file name against your open workspace. Make sure the referenced file is inside the folder or workspace you have open in VS Code; a reference to a file that isn't present shows as unresolved (and is badged in the relationship tree).
+
+**How are references matched across folders?**
+By basename, preferring the referrer's own MATLAB Project or containing folder first. If two files share a name in different folders, the one in the referrer's group wins.
+
+**Why did my large `.sldd` open read-only, or as plain text?**
+Above **50 MB**, a textual `.sldd` opens as a **read-only** table (VS Code cannot mirror a document that large for editing). Above **512 MB**, it opens in VS Code's built-in **text editor** instead of a table.
+
+**Does editing in the table stay in sync with the JSON text editor?**
+Yes. A textual `.sldd` is backed by its JSON document, so table edits and text-editor edits update each other instantly and share one undo history. You can switch views anytime via **Reopen Editor With…**.
+
+**Is my theme respected?**
+Yes — every pane follows your active VS Code color theme (light, dark, or high-contrast).
+
+**How do I report a bug or request a feature?**
+Please open an issue on the [GitHub repository](https://github.com/mathworks/data-explorer-vscode). If the extension is useful to you, a rating or review on the Marketplace helps others find it.
 
 ## License
 
