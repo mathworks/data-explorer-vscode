@@ -2,6 +2,7 @@
 
 import ContainerNode from '../ContainerNode';
 import MatlabVariableNode from '../data/MatlabVariableNode';
+import { buildTypedNodeFromMcos } from '../data/mcosTypedNode';
 import type BaseNode from '../BaseNode';
 import type { PropClass, PIGroupDef } from '../BaseNode';
 import type { MatVariable } from '../data/MatlabVariableNode';
@@ -98,9 +99,15 @@ export default class MatNode extends ContainerNode {
   }
 
   getVariables(): MatVariable[] {
-    const variables: MatVariable[] = this.children.map((child) => {
-      return (child as unknown as { _var: MatVariable })._var;
-    });
+    const variables: MatVariable[] = [];
+    for (const child of this.children) {
+      // Typed Simulink nodes (ParameterNode, SignalNode) have no `_var` — they
+      // come from the read-only MCOS path and are never serialized back.
+      const v = (child as unknown as { _var?: MatVariable })._var;
+      if (v) {
+        variables.push(v);
+      }
+    }
     for (const anon of this._anonymousElements) {
       variables.push(anon);
     }
@@ -119,7 +126,7 @@ export default class MatNode extends ContainerNode {
     if (opaqueVars.length > 0 && anonElement?._rawBytes) {
       mcosData = decodeMcosBlob(
         anonElement._rawBytes,
-        opaqueVars.map((v) => ({ name: v.name, className: v.className })),
+        opaqueVars.map((v) => ({ name: v.name, className: v.className, rawBytes: v._rawBytes })),
       );
     }
 
@@ -128,11 +135,23 @@ export default class MatNode extends ContainerNode {
         node._anonymousElements.push(variable);
         continue;
       }
-      if (variable.isOpaque && mcosData) {
-        const decoded = mcosData.get(variable.name);
+      if (variable.isOpaque) {
+        // Unify on CLASS: any opaque Simulink object whose class the data model
+        // knows becomes the SAME typed node the SLDD path builds. When the MCOS
+        // decoder resolved the object's properties, they populate the node with
+        // real values (SLDD-shaped); otherwise it is an empty shell. The class
+        // comes from the variable's own metadata, so this works even for objects
+        // the decoder could not resolve.
+        const decodedProps = mcosData?.get(variable.name)?.properties;
+        const typed = buildTypedNodeFromMcos(variable.className, variable.name, node, decodedProps);
+        if (typed) {
+          node.addChild(typed);
+          continue;
+        }
+        // No typed node for this class: opaque node, enriched when decoded.
+        const decoded = mcosData?.get(variable.name);
         if (decoded) {
-          const child = MatlabVariableNode.createFromMcosDecoded(variable, decoded, node);
-          node.addChild(child);
+          node.addChild(MatlabVariableNode.createFromMcosDecoded(variable, decoded, node));
           continue;
         }
       }

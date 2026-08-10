@@ -61,7 +61,7 @@ export default class ModelBlockNode extends BaseNode {
       ID: this.id,
       parent: null,
       Status: '',
-      Name: { label: this.name, iconId: this.icon, disabled: false, editable: false },
+      Name: { label: this.name, iconId: this.icon, disabled: false, editable: false, element: false },
       Value: this.blockType,
       DataType: paramLink ? { text: paramText, linkTarget: paramLink } : paramText,
       _valueEditable: false,

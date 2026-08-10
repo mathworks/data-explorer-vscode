@@ -8,8 +8,10 @@ import PropDataType from '../../prop/PropDataType';
 const CLASS_NAME = 'Simulink.ConfigSetRef';
 export default class ConfigSetRefNode extends DataNode {
     SourceName: string;
+    // See ConfigSetNode.active — set by the SLX parser only.
+    active?: boolean;
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.SourceName = (props.SourceName as string) || ''; }
-    get icon(): string { return 'configurationReference'; }
+    get icon(): string { return this.active ? 'check_configurationReference' : 'configurationReference'; }
     get className(): string { return CLASS_NAME; }
     // A ConfigSetRef has no scalar "value" — the Value column is empty and not editable.
     get displayValue(): string { return ''; }

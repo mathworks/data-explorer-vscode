@@ -4,6 +4,7 @@ import ContainerNode from '../ContainerNode';
 import type { TableColumnConfig } from '../ContainerNode';
 import ModelSectionNode from './ModelSectionNode';
 import MatlabVariableNode from '../data/MatlabVariableNode';
+import { buildTypedNodeFromMcos } from '../data/mcosTypedNode';
 import type { PropClass, PIGroupDef } from '../BaseNode';
 import type { MatVariable } from '../data/MatlabVariableNode';
 import type { BlockParamUsage } from '../../parser/SlxParser';
@@ -182,16 +183,30 @@ export default class ModelNode extends ContainerNode {
     if (opaqueWsVars.length > 0 && trailingElements && trailingElements.length > 0) {
       mcosData = decodeMcosBlob(
         trailingElements[0],
-        opaqueWsVars.map((v) => ({ name: v.name, className: v.className })),
+        opaqueWsVars.map((v) => ({ name: v.name, className: v.className, rawBytes: v._rawBytes })),
       );
     }
 
     for (const entry of wsVars) {
-      if (entry.isOpaque && mcosData) {
-        const decoded = mcosData.get(entry.name);
+      if (entry.isOpaque) {
+        // Unify on CLASS: any opaque Simulink object whose class the data model
+        // knows (Parameter, Signal, LookupTable, NumericType, Bus, …) becomes the
+        // SAME typed node the SLDD path builds. When the MCOS decoder resolved the
+        // object's properties, they populate the node with real values (SLDD-
+        // shaped); otherwise it is an empty shell. The class comes from the
+        // variable's own metadata, so it works even for objects the decoder
+        // could not resolve.
+        const decodedProps = mcosData?.get(entry.name)?.properties;
+        const typed = buildTypedNodeFromMcos(entry.className, entry.name, wsSection, decodedProps);
+        if (typed) {
+          wsSection.addChild(typed);
+          continue;
+        }
+        // No typed node for this class (e.g. Simulink.DataStore): keep the opaque
+        // representation, enriched with decoded properties when available.
+        const decoded = mcosData?.get(entry.name);
         if (decoded) {
-          const child = MatlabVariableNode.createFromMcosDecoded(entry, decoded, wsSection);
-          wsSection.addChild(child);
+          wsSection.addChild(MatlabVariableNode.createFromMcosDecoded(entry, decoded, wsSection));
           continue;
         }
       }

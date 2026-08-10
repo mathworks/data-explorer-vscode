@@ -8,7 +8,7 @@ import './dex-icon.js';
 export interface TreeTableRow {
   ID: string;
   parent: string | null;
-  Name: { label: string; iconId?: string; editable?: boolean; clipboardMode?: string };
+  Name: { label: string; iconId?: string; editable?: boolean; element?: boolean; clipboardMode?: string };
   Value:
     | { text: string; editable?: boolean; clipboardMode?: string; linkTarget?: string; editor?: string; options?: string[] }
     | string;
@@ -1793,7 +1793,10 @@ export class DexTreeTable extends LitElement {
       const hasChildren = this._childrenCache.has(row.ID);
       const expanded = this._expandedIds.has(row.ID);
       const depth = this._depthCache.get(row.ID) || 0;
-      const editable = row.Name?.editable ?? false;
+      // Gray ONLY positional array/cell/string elements (synthetic index names).
+      // This is structural and independent of file format / document readonly —
+      // entries and struct fields always render in normal color.
+      const isElement = row.Name?.element ?? false;
       const label = row.Name?.label || '';
 
       if (isEditing) {
@@ -1820,7 +1823,7 @@ export class DexTreeTable extends LitElement {
             ${hasChildren ? (expanded ? '▼' : '▶') : ''}
           </span>
           ${iconId ? html`<dex-icon class="name-icon" .iconId=${iconId} .size=${16}></dex-icon>` : ''}
-          <span class="label ${editable ? '' : 'readonly'}">${this._highlight(label)}</span>
+          <span class="label ${isElement ? 'readonly' : ''}">${this._highlight(label)}</span>
         </div>
       `;
     }

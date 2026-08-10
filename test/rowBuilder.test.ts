@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel } from '../src/host/SlddModel.js';
+import { getModel, getModelFromBytes } from '../src/host/SlddModel.js';
 import { buildRows, buildEntryRows } from '../src/host/rowBuilder.js';
 
 function fixturePath(name: string): string {
@@ -194,79 +194,63 @@ describe('buildRows branch coverage', () => {
   });
 });
 
-// The vendored table grays a Name cell purely from Name.editable === false. That
-// flag is meant to mark DERIVED names (indexed array children, enum values, bus
-// elements — which also carry disabled: true), NOT read-only-ness. For read-only
-// documents (.slx/.mat/.prj, binary .sldd) editing is blocked document-wide in
-// the webview, so there Name.editable is cosmetic only and buildRows recolors it
-// to follow the true derived signal: editable = !disabled. Editable JSON .sldd is
-// left untouched so its per-cell name-editor gating stays exact.
-//
-// An entry node whose Name says {disabled:false, editable:false} — as the .slx
-// section nodes (DataSourceNode/ModelReferenceNode/ModelConfigSetNode) and
-// ProjectItemNode all do — is a real entry that must render in the NORMAL color.
-function nameEntry(id: string, disabled: boolean, editable: boolean, nested: any[] = []) {
-  return {
-    id,
-    flatten() { return [this, ...nested]; },
-    toRow() {
-      return { ID: id, parent: null, Name: { label: id, iconId: 'x', disabled, editable } };
-    },
-  };
-}
+// Name-cell graying is driven SOLELY by the structural `Name.element` flag: true
+// only for positional array/cell/string indices (and struct-array elements),
+// which carry a synthetic subscript for a name rather than a real identifier.
+// It is format-independent — buildRows does NOT recolor based on read-only-ness,
+// so a binary .sldd and an editable JSON .sldd produce identical `element` flags.
+// `Name.editable` (whether the inline name-editor may open) is a separate concern
+// and must never affect coloring. Real entries and struct FIELDS are never
+// elements: they render in the normal color regardless of file format.
+describe('Name.element coloring is structural and format-independent', () => {
+  // The vendored table grays a Name only when Name.element === true.
+  function allDataRows(rows: any[]) {
+    return rows.filter((r) => r.Name && typeof r.Name === 'object' && !String(r.ID).startsWith('section:'));
+  }
 
-describe('buildRows read-only Name coloring', () => {
-  it('un-grays a real entry (disabled:false) that reports editable:false', () => {
-    // Mirrors a .slx section node: real entry, nameEditable false.
-    const rows = buildRows({ children: [section('references', [nameEntry('m_ref', false, false)])] }, undefined, true);
-    const row = rows.find((r) => r.ID === 'm_ref');
-    expect(row.Name.editable).toBe(true); // normal color
-    expect(row.Name.disabled).toBe(false);
+  it('never grays a section row', () => {
+    const rows = buildRows({ children: [section('references', [entry('m_ref')])] });
+    const sec = rows.find((r) => r.ID === 'section:references');
+    expect(sec.Name.element).toBe(false);
   });
 
-  it('keeps a derived child (disabled:true) grayed in read-only mode', () => {
-    // Mirrors an indexed array child / enum value / bus element.
-    const rows = buildRows({ children: [section('design', [nameEntry('Var(1)', true, false)])] }, undefined, true);
-    const row = rows.find((r) => r.ID === 'Var(1)');
-    expect(row.Name.editable).toBe(false); // stays grayed
-    expect(row.Name.disabled).toBe(true);
-  });
+  it('grays only positional element children, not entries or struct fields', () => {
+    // Array/CellArray entries in the fixture expand into positional index
+    // children; the entries themselves and any struct fields must stay normal.
+    const path = fixturePath('numeric_json.sldd');
+    const text = readFileSync(path, 'utf8');
+    const sldd = getModel('test://numeric_json.sldd', 'numeric_json.sldd', text);
+    const rows = buildRows(sldd);
 
-  it('recolors every read-only row so editable === !disabled', () => {
-    const entryRow = nameEntry('entry', false, false, [
-      { toRow: () => ({ ID: 'entry.child', parent: 'entry', Name: { label: 'child', iconId: 'x', disabled: true, editable: false } }) },
-    ]);
-    const rows = buildRows({ children: [section('design', [entryRow])] }, undefined, true);
-    const dataRows = rows.filter((r) => r.Name && typeof r.Name === 'object' && !String(r.ID).startsWith('section:'));
-    expect(dataRows.length).toBe(2);
-    for (const r of dataRows) {
-      expect(r.Name.editable).toBe(!r.Name.disabled);
+    const entryRows = rows.filter((r) => r.parent && String(r.parent).startsWith('section:'));
+    // Every top-level entry renders normally.
+    for (const r of entryRows) {
+      expect(r.Name.element).toBe(false);
+    }
+
+    // The Array entry's index children are positional elements → grayed.
+    const arrayRow = entryRows.find((r) => r.Name.label === 'Array');
+    expect(arrayRow).toBeDefined();
+    const arrayChildren = rows.filter((r) => r.parent === arrayRow.ID);
+    expect(arrayChildren.length).toBeGreaterThan(0);
+    for (const c of arrayChildren) {
+      expect(c.Name.element).toBe(true); // positional index → grayed
     }
   });
 
-  it('leaves the section row untouched in read-only mode', () => {
-    const rows = buildRows({ children: [section('references', [nameEntry('m_ref', false, false)])] }, undefined, true);
-    const sec = rows.find((r) => r.ID === 'section:references');
-    // Section rows are non-editable, non-derived containers: always disabled:false, editable:false.
-    expect(sec.Name.editable).toBe(false);
-    expect(sec.Name.disabled).toBe(false);
-  });
+  it('produces identical element flags for a binary .sldd and its text form', () => {
+    // The bug: binary/zip .sldd grayed entry names that the text path left
+    // normal. Both forms must now agree entry-for-entry on the element flag.
+    const bytes = readFileSync(fixturePath('compressed.sldd'));
+    const ab = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+    const bin = getModelFromBytes('test://compressed.sldd', 'compressed.sldd', ab);
+    const binRows = allDataRows(buildRows(bin));
 
-  it('does NOT recolor when readOnly is false (editable JSON .sldd path)', () => {
-    // Default (editable) path must preserve the node-reported flag verbatim so
-    // the per-cell name editor stays gated exactly as the node intends.
-    const rows = buildRows({ children: [section('design', [nameEntry('locked', false, false)])] });
-    const row = rows.find((r) => r.ID === 'locked');
-    expect(row.Name.editable).toBe(false); // untouched
-    expect(row.Name.disabled).toBe(false);
-  });
-
-  it('buildEntryRows honors the readOnly flag directly', () => {
-    const [normal] = buildEntryRows(nameEntry('e', false, false), 'references', undefined, true);
-    expect(normal.Name.editable).toBe(true);
-    const [derived] = buildEntryRows(nameEntry('e2', true, false), 'design', undefined, true);
-    expect(derived.Name.editable).toBe(false);
-    const [untouched] = buildEntryRows(nameEntry('e3', false, false), 'design');
-    expect(untouched.Name.editable).toBe(false);
+    // compressed.sldd holds a single plain entry (Kp) — a real identifier that
+    // must NOT be grayed, exactly as the text path would render it.
+    expect(binRows.length).toBeGreaterThan(0);
+    for (const r of binRows) {
+      expect(r.Name.element).toBe(false);
+    }
   });
 });

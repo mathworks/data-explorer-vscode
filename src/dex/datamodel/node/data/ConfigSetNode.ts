@@ -8,8 +8,12 @@ import PropDataType from '../../prop/PropDataType';
 const CLASS_NAME = 'Simulink.ConfigSet';
 export default class ConfigSetNode extends DataNode {
     ConfigName: string;
+    // Whether this is the model's active configuration. Set only by the SLX
+    // parser (which knows the active state); undefined on the SLDD path, where
+    // it is treated as inactive — the SLDD icon is unchanged.
+    active?: boolean;
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) { super(name, parent, serial); this.ConfigName = (props.Name as string) || ''; }
-    get icon(): string { return 'settings'; }
+    get icon(): string { return this.active ? 'check_settings' : 'settings'; }
     get className(): string { return CLASS_NAME; }
     // A ConfigSet has no scalar "value" — the Value column is empty and not editable.
     get displayValue(): string { return ''; }

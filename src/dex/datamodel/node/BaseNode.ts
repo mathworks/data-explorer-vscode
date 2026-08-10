@@ -25,7 +25,12 @@ export interface RowData {
   ID: string;
   parent: string | null;
   Status: string;
-  Name?: { label: string; iconId: string; disabled: boolean; editable: boolean };
+  // `element` marks a positional array/cell/string element (its name is a
+  // synthetic index, not a real identifier) — the ONLY signal that grays a Name.
+  // It is structural and format-independent. `editable` (whether the name can be
+  // typed into) is separate and, together with document-level readonly, gates the
+  // inline editor — it must never drive coloring.
+  Name?: { label: string; iconId: string; disabled: boolean; editable: boolean; element: boolean };
   Value?: unknown;
   _valueEditable?: boolean;
   DataType?: string | { text: string; linkTarget?: string };
@@ -97,11 +102,26 @@ export default class BaseNode {
     return false;
   }
 
-  get nameEditable(): boolean {
-    if (
+  // A positional element of a container whose parent is a bare array/cell/string:
+  // its name is a synthetic index (1, 2, …), not a real identifier.
+  get isIndexedName(): boolean {
+    return !!(
       this.parent &&
       (this.parent._kind === 'cell' || this.parent._kind === 'array' || this.parent._kind === 'string')
-    ) {
+    );
+  }
+
+  // The sole signal for graying a Name cell: this node's displayed name is a
+  // synthetic positional subscript, not a user-assigned identifier. Covers bare
+  // array/cell/string indices (isIndexedName) and struct-array elements (which
+  // carry a `Name(i)` alias in `_displayName`). Structural and independent of file
+  // format — entries and struct FIELDS are never elements, so they render normally.
+  get isElementName(): boolean {
+    return this.isIndexedName || !!this._displayName;
+  }
+
+  get nameEditable(): boolean {
+    if (this.isIndexedName) {
       return false;
     }
     if (this._displayName) {
@@ -239,7 +259,7 @@ export default class BaseNode {
       const colKey = column || info.key;
 
       if (colKey === 'Name') {
-        row.Name = { label: info.displayValue, iconId: this.icon, disabled: this.disabled, editable: info.editable };
+        row.Name = { label: info.displayValue, iconId: this.icon, disabled: this.disabled, editable: info.editable, element: this.isElementName };
       } else if (colKey === 'Value') {
         // A 'select' editor carries its dropdown options on the cell so the
         // webview can render a combobox instead of a text input.
@@ -255,7 +275,7 @@ export default class BaseNode {
     }
 
     if (!row.Name) {
-      row.Name = { label: this.displayName, iconId: this.icon, disabled: this.disabled, editable: this.nameEditable };
+      row.Name = { label: this.displayName, iconId: this.icon, disabled: this.disabled, editable: this.nameEditable, element: this.isElementName };
     }
     if (!('Value' in row)) {
       row.Value = this.displayValue;
