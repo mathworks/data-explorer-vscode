@@ -87,7 +87,7 @@ async function waitForActiveTextEditor(
 suite('Data Explorer .sldd editor toggle', () => {
   suiteSetup(async () => {
     // Give the extension host a moment to activate on the .sldd language.
-    const ext = vscode.extensions.getExtension('mathworks.data-explorer-vscode');
+    const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
     await ext?.activate();
   });
 

@@ -82,7 +82,7 @@ async function waitForActiveViewType(expected: string, timeoutMs = 5000): Promis
 
 suite('Data Explorer .sldd live edit', () => {
   suiteSetup(async () => {
-    await vscode.extensions.getExtension('mathworks.data-explorer-vscode')?.activate();
+    await vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.activate();
   });
 
   teardown(async () => {
@@ -111,7 +111,7 @@ suite('Data Explorer .sldd live edit', () => {
     // The extension is still healthy and the same URI is shared by both views.
     assert.strictEqual(doc.uri.toString(), uri.toString());
     assert.ok(
-      vscode.extensions.getExtension('mathworks.data-explorer-vscode')?.isActive,
+      vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
       'extension remains active after the edit',
     );
   });
@@ -165,7 +165,7 @@ suite('Data Explorer .sldd live edit', () => {
 
     // The extension survives its own onDidChangeTextDocument re-parse.
     assert.ok(
-      vscode.extensions.getExtension('mathworks.data-explorer-vscode')?.isActive,
+      vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
       'extension remains active after the write-back edit',
     );
   });
@@ -237,7 +237,7 @@ suite('Data Explorer .sldd live edit', () => {
       'the table tab is still present after the edit',
     );
     assert.ok(
-      vscode.extensions.getExtension('mathworks.data-explorer-vscode')?.isActive,
+      vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
       'extension remains active after the table->text sync edit',
     );
   });
@@ -280,7 +280,7 @@ suite('Data Explorer .sldd live edit', () => {
     // observe.
     assert.ok(doc0.isDirty, 'the shared document is dirty after a text-view edit');
     assert.ok(
-      vscode.extensions.getExtension('mathworks.data-explorer-vscode')?.isActive,
+      vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
       'extension remains active',
     );
   });
@@ -298,7 +298,7 @@ suite('Data Explorer .sldd live edit', () => {
     });
     assert.strictEqual(applied, true);
     assert.ok(
-      vscode.extensions.getExtension('mathworks.data-explorer-vscode')?.isActive,
+      vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
       'extension survives an invalid-JSON edit',
     );
   });
@@ -319,7 +319,7 @@ suite('Data Explorer .sldd live edit', () => {
     );
     assert.strictEqual(tab!.isDirty, false, 'a freshly opened table tab is not dirty');
     assert.ok(
-      vscode.extensions.getExtension('mathworks.data-explorer-vscode')?.isActive,
+      vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
       'extension is active after opening the table',
     );
   });
@@ -341,7 +341,7 @@ suite('Data Explorer .sldd live edit', () => {
     assert.ok(tab, 'an .slx tab is active');
     assert.strictEqual(tab!.isDirty, false, 'a read-only binary tab is not dirty');
     assert.ok(
-      vscode.extensions.getExtension('mathworks.data-explorer-vscode')?.isActive,
+      vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
       'extension is active after opening the binary .slx',
     );
   });
@@ -356,7 +356,7 @@ suite('Data Explorer .sldd live edit', () => {
     assert.ok(tab, 'a read-only tab is active for the binary .sldd');
     assert.strictEqual((tab!.input as {viewType?:string})?.viewType, BINARY_VIEW);
     assert.strictEqual(tab!.isDirty, false, 'a read-only binary .sldd tab is not dirty');
-    assert.ok(vscode.extensions.getExtension('mathworks.data-explorer-vscode')?.isActive,
+    assert.ok(vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
       'extension stays active after opening a binary .sldd');
   });
 });
