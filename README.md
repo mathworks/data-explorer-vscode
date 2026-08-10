@@ -59,6 +59,7 @@ No MATLAB&reg; or Simulink installation is required to view or edit files — Si
 ## Known Limitations
 
 - Editing is supported only for **textual (JSON) `.sldd`**. Binary `.sldd`, `.slx`, `.mat`, and `.prj` are read-only.
+- Large textual `.sldd` files are limited by size. Above **50 MB**, the file opens as a **read-only** table (VS Code cannot mirror a document that large for editing). Above **512 MB**, it cannot be rendered as a table at all and opens in VS Code's built-in **text editor** instead.
 - Paste creates a new top-level entry in the target section; pasting as a child of a struct/bus is not yet supported.
 - Reference resolution matches files by name (basename), preferring the referrer's own project or folder. Two `.prj` files in the same directory are not supported.
 - `.m` files are not scanned, so a project whose members are only `.m` files appears as an empty group.

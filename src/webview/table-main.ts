@@ -53,6 +53,15 @@ function applyPendingNameSelection(): void {
   pendingSelectName = null;
 }
 
+// Hide the initial loading spinner. The host runs a synchronous parse (and, on
+// first open, a whole-workspace usage-graph scan) before it can post the first
+// message, so this covers the several-second gap between 'ready' and 'setRows'.
+// Called on the first payload (setRows) or on error — either ends the wait.
+function hideLoading(): void {
+  const el = document.getElementById('dex-loading');
+  if (el) el.style.display = 'none';
+}
+
 function showError(message: string): void {
   const el = document.getElementById('dex-error');
   if (el) { el.textContent = message; el.style.display = 'block'; }
@@ -89,6 +98,7 @@ function setNotice(message: string | undefined): void {
 window.addEventListener('message', (event: MessageEvent) => {
   const msg = event.data;
   if (msg.type === 'setRows') {
+    hideLoading();
     clearError();
     // Persistent read-only notice (size-limited JSON .sldd). Undefined for the
     // editable table view and for expected-read-only binary .sldd, so it hides.
@@ -129,6 +139,7 @@ window.addEventListener('message', (event: MessageEvent) => {
   } else if (msg.type === 'clipboardState') {
     clipboardState = { canPaste: !!msg.canPaste, mode: msg.mode ?? null };
   } else if (msg.type === 'error') {
+    hideLoading();
     showError(msg.message);
   } else if (msg.type === 'validationError') {
     // Invalid cell edit: modal scoped to this webview (not the whole window).
