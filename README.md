@@ -9,7 +9,7 @@ It adds a native experience for Simulink file types — a **Simulink Data Explor
 ## Features
 
 - **Relationship tree** — a dedicated activity-bar view that scans the workspace and renders how files relate: models referencing other models, models linked to data dictionaries (`.sldd`) and MAT-files (`.mat`), and dictionaries referencing other dictionaries. Entries expand lazily as you drill in.
-- **Project & folder grouping** — the tree groups top-level entries by Simulink Project (`.prj`) or by containing folder, so files with the same name in different folders stay distinct. References resolve within a group first.
+- **Project & folder grouping** — the tree groups top-level entries by MATLAB Project (`.prj`) or by containing folder, so files with the same name in different folders stay distinct. References resolve within a group first.
 - **Health decorations** — tree rows are badged for at-a-glance status: circular references, orphaned dictionaries/MAT-files (nothing links to them), unsaved modifications, and unresolved (missing) references.
 - **Table editor** — open a model, dictionary, MAT-file, or project in a spreadsheet-style, tree-structured table. Sections are always shown (e.g. a dictionary's Design Data, Architectural Data, Configurations, Other Data), even when empty.
 - **Editing for textual `.sldd`** — edit a textual (JSON) data dictionary directly in the table: change entry values and names, add child elements, and cut/copy/paste/delete entries via the right-click context menu. Edits write back to the JSON file, so **undo/redo, the dirty indicator, and save are all native** and stay in sync with the built-in text view. Binary `.sldd`, `.slx`, `.mat`, and `.prj` open read-only.
@@ -48,7 +48,7 @@ For a textual `.sldd`, you can switch to the raw JSON via **View: Reopen Editor 
 - **Simulink models** — `.slx`
 - **Simulink Data Dictionaries (binary)** — compressed `.sldd`
 - **MAT-files** — `.mat`
-- **Simulink Projects** — `.prj`
+- **MATLAB Projects** — `.prj`
 
 ## Requirements
 
