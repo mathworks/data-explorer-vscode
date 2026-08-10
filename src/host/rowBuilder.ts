@@ -16,7 +16,7 @@ export const PROJECT_COLUMN_LABELS: Record<string, string> = {
   Name: 'Name', Type: 'Type', Location: 'Location', Labels: 'Labels',
 };
 
-export function buildRows(sldd: any, modifiedNames?: Set<string>, readOnly = false): any[] {
+export function buildRows(sldd: any, modifiedNames?: Set<string>): any[] {
   const rows: any[] = [];
   const sections = (sldd.children || []) as any[];
   for (const section of sections) {
@@ -26,31 +26,15 @@ export function buildRows(sldd: any, modifiedNames?: Set<string>, readOnly = fal
     rows.push({
       ID: `section:${section.name}`,
       parent: null,
-      Name: { label: section.displayName || section.name, iconId: section.icon, editable: false, disabled: false },
+      Name: { label: section.displayName || section.name, iconId: section.icon, editable: false, disabled: false, element: false },
       Value: '', Class: '', Kind: '', DataType: '', Status: '', UsedBy: '',
     });
     // Entry rows (flatten each entry subtree so nested struct/bus children appear)
     for (const entry of entries) {
-      rows.push(...buildEntryRows(entry, section.name, modifiedNames, readOnly));
+      rows.push(...buildEntryRows(entry, section.name, modifiedNames));
     }
   }
   return rows;
-}
-
-// The vendored table grays a Name cell (the `.readonly` class) purely from the
-// row-level `Name.editable` flag, which is meant to mark DERIVED names (indexed
-// array children like `Var(1)`) — those also carry `disabled: true`. Real
-// entries in read-only models (.slx section nodes report `nameEditable: false`
-// yet `disabled: false`) would otherwise be grayed as if derived. For read-only
-// documents `Name.editable` is cosmetic only — editing is already blocked
-// document-wide in the webview — so recolor by the true "derived" signal
-// (`!disabled`). Editable JSON .sldd rows are left untouched: there the flag
-// still gates the per-cell name editor.
-function applyReadOnlyColoring(row: any): any {
-  if (row.Name && typeof row.Name === 'object') {
-    row.Name = { ...row.Name, editable: !row.Name.disabled };
-  }
-  return row;
 }
 
 // Context-menu capability flags for a node, computed host-side so the webview
@@ -78,7 +62,7 @@ function capabilityFlags(n: any): {
 // nested children), reparented under its section. Used both by buildRows for
 // the full tree and by the incremental edit write-back, which repaints only
 // the edited entry's rows instead of rebuilding the whole table.
-export function buildEntryRows(entry: any, sectionName: string, modifiedNames?: Set<string>, readOnly = false): any[] {
+export function buildEntryRows(entry: any, sectionName: string, modifiedNames?: Set<string>): any[] {
   const out: any[] = [];
   const flat = entry.flatten ? entry.flatten() : [entry];
   for (const n of flat) {
@@ -103,8 +87,7 @@ export function buildEntryRows(entry: any, sectionName: string, modifiedNames?: 
       row = { ...row, Status: 'Modified' };
     }
     // Context-menu capability flags (consumed by the webview menu builder).
-    const built = { ...row, ...capabilityFlags(n) };
-    out.push(readOnly ? applyReadOnlyColoring(built) : built);
+    out.push({ ...row, ...capabilityFlags(n) });
   }
   return out;
 }
