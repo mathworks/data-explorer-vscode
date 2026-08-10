@@ -95,6 +95,10 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       } catch {
         // Unreadable → fall through and let the read-only render report the error.
       }
+      // Binary/zip .sldd renders read-only here (editable JSON was redirected and
+      // disposed above). Give its tab the same 'table' icon the editable-JSON .sldd
+      // tab uses (SlddTextEditorProvider), so both .sldd forms look consistent.
+      webviewPanel.iconPath = new vscode.ThemeIcon('table');
     }
 
     // Source bytes for the file, always read from disk (read-only view).
@@ -123,7 +127,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           // relative POSIX relpath map for the parser.
           const files = await readProjectStore(document.uri);
           const node = getProjectModel(uriString, name, files);
-          const rows = buildRows(node, undefined, true);
+          const rows = buildRows(node);
           webview.postMessage({
             type: 'setRows',
             rows,
@@ -141,7 +145,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
 
         const ab = await readBytes();
         const node = getModelFromBytes(uriString, name, ab);
-        const rows = name.endsWith('.mat') ? buildMatRows(node) : buildRows(node, undefined, true);
+        const rows = name.endsWith('.mat') ? buildMatRows(node) : buildRows(node);
         // Fill the Usage column from the shared workspace usage graph (lazy +
         // cached). A model (.slx) resolves its blocks' params to source files
         // and its workspace vars to the blocks that use them; a .mat/.sldd data
