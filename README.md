@@ -26,7 +26,7 @@ It adds a native experience for Simulink file types — a **Simulink Data Explor
    then install it either from the command line:
 
    ```sh
-   code --install-extension data-explorer-vscode-<version>.vsix
+   code --install-extension simulink-data-explorer-<version>.vsix
    ```
 
    or from within VS Code via the Extensions view → **⋯** menu →

@@ -13,7 +13,7 @@ import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
 const TABLE_VIEW = 'dataExplorer.tableView';
 
 function ctx(): vscode.ExtensionContext {
-  const ext = vscode.extensions.getExtension('mathworks.data-explorer-vscode');
+  const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
   assert.ok(ext, 'the extension must be present');
   // The provider only reads context.extensionUri; a minimal stand-in suffices.
   return { extensionUri: ext!.extensionUri } as unknown as vscode.ExtensionContext;
@@ -37,7 +37,7 @@ suite('BinaryEditorProvider', () => {
   let provider: BinaryEditorProvider;
 
   suiteSetup(async () => {
-    await vscode.extensions.getExtension('mathworks.data-explorer-vscode')?.activate();
+    await vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.activate();
   });
 
   setup(() => (provider = new BinaryEditorProvider(ctx())));

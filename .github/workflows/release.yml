@@ -43,10 +43,10 @@ jobs:
             echo "Tag $GITHUB_REF_NAME (=$VERSION) does not match package.json version $PKG_VERSION" >&2
             exit 1
           fi
-          npx vsce package --out "data-explorer-vscode-${VERSION}.vsix"
+          npx vsce package --out "simulink-data-explorer-${VERSION}.vsix"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: data-explorer-vscode-*.vsix
+          files: simulink-data-explorer-*.vsix
           generate_release_notes: true

@@ -13,7 +13,7 @@ import { SectionsTreeProvider } from '../../src/host/SectionsTreeProvider';
 import { HEALTH_QUERY } from '../../src/host/health';
 
 function extensionUri(): vscode.Uri {
-  const ext = vscode.extensions.getExtension('mathworks.data-explorer-vscode');
+  const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
   assert.ok(ext, 'the extension must be present');
   return ext!.extensionUri;
 }
@@ -27,7 +27,7 @@ suite('SectionsTreeProvider', () => {
   let provider: SectionsTreeProvider;
 
   suiteSetup(async () => {
-    await vscode.extensions.getExtension('mathworks.data-explorer-vscode')?.activate();
+    await vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.activate();
   });
 
   setup(() => {

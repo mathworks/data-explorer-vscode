@@ -78,7 +78,7 @@ function fakeView(extensionUri: vscode.Uri): Recorded {
 }
 
 function extensionUri(): vscode.Uri {
-  const ext = vscode.extensions.getExtension('mathworks.data-explorer-vscode');
+  const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
   assert.ok(ext, 'the extension must be present');
   return ext!.extensionUri;
 }
