@@ -14,9 +14,9 @@
 // component (block->param links carry only the dictionary name); the latter is
 // resolved against the workspace.
 import * as vscode from 'vscode';
-import { parseNavTarget } from './navTarget.js';
+import { parseNavTarget, parseFileTarget } from './navTarget.js';
 
-export { parseNavTarget };
+export { parseNavTarget, parseFileTarget };
 
 // Pending selection per target uri, consumed by that editor's next paint. This
 // covers the just-opened case: the click fires requestSelect BEFORE the new
@@ -54,9 +54,19 @@ async function resolveSource(source: string): Promise<vscode.Uri | undefined> {
   return matches[0];
 }
 
-// Handle a Usage-cell link click: open the target file (via `open`, the host's
-// content-aware editor router) and request selection of the referenced row.
+// Handle a link click. Two grammars land here:
+//  - Usage-cell links carry `name@source`: open the source file (via `open`, the
+//    host's content-aware editor router) and select the referenced row there.
+//  - Model Reference / External Data links carry a bare filename: just open that
+//    file, resolved by basename against the workspace. There is no row to select.
 export async function handleNavigate(target: string, open: (uri: vscode.Uri) => Promise<void>): Promise<void> {
+  const fileTarget = parseFileTarget(target);
+  if (fileTarget) {
+    const uri = await resolveSource(fileTarget);
+    if (!uri) return;
+    await open(uri);
+    return;
+  }
   const parsed = parseNavTarget(target);
   if (!parsed) return;
   const uri = await resolveSource(parsed.source);

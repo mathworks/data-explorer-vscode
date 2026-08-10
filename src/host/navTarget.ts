@@ -22,3 +22,14 @@ export function parseNavTarget(target: string): { name: string; source: string }
   if (!name || !source) return null;
   return { name, source };
 }
+
+// Model Reference / External Data links use a different, simpler grammar than
+// Usage links: their target is a bare filename (e.g. "plant.slx", "signals.mat",
+// "common.sldd") that just means "open this file" — there is no row inside it to
+// select. These carry NO '@source' suffix, so parseNavTarget rejects them.
+// Return the basename to open, or null when the target is a Usage-link (has an
+// '@') that parseNavTarget should handle instead.
+export function parseFileTarget(target: string): string | null {
+  if (!target || target.includes('@')) return null;
+  return target;
+}
