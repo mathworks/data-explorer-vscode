@@ -153,6 +153,57 @@ describe('pasteEntry', () => {
     expect(configEntries).toContain('Number');
   });
 
+  it('gives the pasted copy a fresh unique uuid, not the source uuid', () => {
+    const uri = 'test://paste-uuid.sldd';
+    const model = freshModel(uri);
+    const src = findNode(uri, buildRows(model).find((r: any) => r.Name?.label === 'Number').ID);
+    const payload = src.serialize() as Record<string, unknown>;
+    const sourceUuid = (payload.metadata as any).uuid as string;
+    const section = src.parent;
+
+    const { newText } = pasteEntry(fixtureText, section, payload, undefined);
+    invalidate(uri);
+    const reparsed = getModel(uri, 'data.sldd', newText);
+    const copy = buildRows(reparsed)
+      .filter((r: any) => !String(r.ID).startsWith('section:'))
+      .map((r: any) => findNode(uri, r.ID))
+      .find((n: any) => n && n.name === 'Number1');
+    expect(copy).toBeTruthy();
+    const copyUuid = (copy.metadata as any).uuid as string;
+
+    // A new uuid was generated — it must differ from the source's.
+    expect(copyUuid).not.toBe(sourceUuid);
+    // ...and follow the current uuid pattern (8-4-4-4-12 lowercase hex).
+    expect(copyUuid).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    // The source entry keeps its own uuid.
+    expect(payload.metadata).toBeTruthy();
+  });
+
+  it('delete + undo restores the original uuid (parse never regenerates it)', () => {
+    // Undo is native text-level undo: it restores the pre-delete bytes verbatim,
+    // and reparsing reads the uuid straight from the text. This guards that
+    // invariant — deleting an entry and restoring the original text must yield
+    // the original uuid, and parsing the same text is stable w.r.t. uuid.
+    const uri = 'test://delete-undo.sldd';
+    const model = freshModel(uri);
+    const src = findNode(uri, buildRows(model).find((r: any) => r.Name?.label === 'Number').ID);
+    const originalUuid = (src.serialize() as any).metadata.uuid as string;
+
+    const entry = findNode(uri, buildRows(model).find((r: any) => r.Name?.label === 'Number').ID);
+    const { newText } = deleteEntry(fixtureText, entry);
+    // The entry is gone from the deleted text...
+    expect(rowNames(uri, newText)).not.toContain('Number');
+
+    // ...and "undo" (restoring the original bytes) brings back the original uuid.
+    invalidate(uri);
+    const restored = getModel(uri, 'data.sldd', fixtureText);
+    const back = buildRows(restored)
+      .filter((r: any) => !String(r.ID).startsWith('section:'))
+      .map((r: any) => findNode(uri, r.ID))
+      .find((n: any) => n && n.name === 'Number');
+    expect((back.serialize() as any).metadata.uuid).toBe(originalUuid);
+  });
+
   it('cloneForPaste produces an independent copy', () => {
     const original = { name: 'X', metadata: { uuid: '1' }, value: { a: 1 } };
     const clone = cloneForPaste(original);

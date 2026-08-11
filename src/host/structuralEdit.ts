@@ -19,6 +19,7 @@ import {
   findEntriesArrayInsertion,
   detectIndent,
 } from './entrySplice.js';
+import { generateUuid } from '../dex/datamodel/node/container/SectionNode.js';
 
 export interface StructuralResult {
   newText: string;
@@ -108,9 +109,11 @@ export function cloneForPaste(payload: Record<string, unknown>): Record<string, 
 
 /**
  * Paste a serialized entry as a NEW top-level entry in `section`. The name is
- * made unique within the section, and the metadata namespace is rewritten to
- * the target section's so a cross-section paste survives the reparse. Inserts
- * the element into the entries array, preserving sibling bytes.
+ * made unique within the section, the entry gets a freshly generated uuid so it
+ * is a distinct object (never a duplicate of the source's), and the metadata
+ * namespace is rewritten to the target section's so a cross-section paste
+ * survives the reparse. Inserts the element into the entries array, preserving
+ * sibling bytes.
  */
 export function pasteEntry(
   text: string,
@@ -121,8 +124,13 @@ export function pasteEntry(
   const raw = cloneForPaste(payload);
   const baseName = typeof raw.name === 'string' ? raw.name : 'Entry';
   raw.name = section._uniqueName(baseName);
-  if (sectionNamespace && raw.metadata && typeof raw.metadata === 'object') {
-    (raw.metadata as Record<string, unknown>).namespace = sectionNamespace;
+  if (raw.metadata && typeof raw.metadata === 'object') {
+    // A pasted entry is a new object: give it its own uuid rather than
+    // duplicating the source's, matching the add-entry path (SectionNode).
+    (raw.metadata as Record<string, unknown>).uuid = generateUuid();
+    if (sectionNamespace) {
+      (raw.metadata as Record<string, unknown>).namespace = sectionNamespace;
+    }
   }
 
   const newNode = section.parseEntry(raw);

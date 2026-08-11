@@ -45,7 +45,7 @@ const ALLOWED_TYPES: Record<string, string[]> = {
   other: ['MatlabVariable', 'Simulink.VariantExpression', 'Simulink.VariantVariable', 'CustomObject'],
 };
 
-function generateUuid(): string {
+export function generateUuid(): string {
   const hex = '0123456789abcdef';
   const segments = [8, 4, 4, 4, 12];
   return segments
