@@ -88,6 +88,19 @@ const KIND_BY_CLASS: Record<string, string> = {
   'Simulink.ConfigSetRef': 'Configuration Reference',
 };
 
+// The default user-facing Kind for a DERIVED (architectural) entry when the
+// SystemComposer catalog doesn't classify it — e.g. a freshly pasted entry,
+// whose new name isn't in the catalog. Architectural data stores interfaces as
+// ordinary Simulink objects, so the same Class means a different Kind there: a
+// derived Simulink.Bus is a Data Interface, a derived Simulink.ConnectionBus a
+// Physical Interface. Classes whose Kind is identical in both sections (e.g.
+// Simulink.ServiceBus -> 'Service Interface', value/numeric/alias types) are
+// omitted — KIND_BY_CLASS already yields the right label for them.
+const DERIVED_KIND_BY_CLASS: Record<string, string> = {
+  'Simulink.Bus': 'Data Interface',
+  'Simulink.ConnectionBus': 'Physical Interface',
+};
+
 // The user-facing Kind for each semantic classification token. Some entries are
 // classified (via the systemcomposer catalog) into a Kind that comes from the
 // classification rather than the Class, so the same Simulink.Bus can be a
@@ -138,6 +151,12 @@ export default class DataNode extends BaseNode {
       return KIND_BY_CLASSIFICATION[this.classification] || this.classification;
     }
     const cls = this.className;
+    // A derived (architectural) entry the catalog didn't classify — e.g. a freshly
+    // pasted one, whose new name isn't in the SystemComposer catalog — takes the
+    // arch default Kind for its Class (a derived Simulink.Bus is a Data Interface).
+    if (this.isDerived && DERIVED_KIND_BY_CLASS[cls]) {
+      return DERIVED_KIND_BY_CLASS[cls];
+    }
     return KIND_BY_CLASS[cls] || cls;
   }
 
@@ -191,11 +210,20 @@ export default class DataNode extends BaseNode {
         return { error: true, reason: error, invalidValue: stringValue, validValue: this.name };
       }
       if (this.parent && this.parent.children) {
-        const duplicate = this.parent.children.some((sibling) => sibling !== this && sibling.name === stringValue);
+        // For a top-level entry the parent is a section, which exposes the names
+        // across its WHOLE namespace — Design and Architectural Data share one,
+        // so a rename must be unique across both, not just the entry's own
+        // section. Nested children (bus elements, struct fields) have no such
+        // method and fall back to the local sibling check.
+        const nsNames = (this.parent as unknown as { _namespaceEntryNames?: () => string[] })._namespaceEntryNames;
+        const duplicate =
+          typeof nsNames === 'function'
+            ? nsNames.call(this.parent).some((n: string) => n !== this.name && n === stringValue)
+            : this.parent.children.some((sibling) => sibling !== this && sibling.name === stringValue);
         if (duplicate) {
           return {
             error: true,
-            reason: "'" + stringValue + "' already exists in this section",
+            reason: "'" + stringValue + "' already exists in Design or Architectural Data",
             invalidValue: stringValue,
             validValue: this.name,
           };

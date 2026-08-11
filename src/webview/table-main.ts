@@ -5,7 +5,7 @@ import '../dex/components/dex-tree-table.js';
 import '../dex/components/dex-context-menu.js';
 import '../dex/components/dex-error-dialog.js';
 import { nextExpandedIds } from './rowUpdates.js';
-import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, type ClipboardState, type MenuRow } from './menuItems.js';
+import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from './menuItems.js';
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -195,6 +195,53 @@ table.addEventListener(
       ev.stopPropagation();
       vscode.postMessage({ type: 'locateInText', rowId });
     }
+  },
+  true,
+);
+
+// Cut/Copy/Paste/Delete keyboard shortcuts — the keyboard equivalents of the
+// context-menu actions (whose labels advertise these chords). Enablement mirrors
+// buildContextMenuItems exactly (same editable / clipboard / per-row-flag gates),
+// so a shortcut can never do something the menu wouldn't. Capture phase, so it
+// runs before the table component's own key handling; skipped while a cell
+// editor or the filter input is focused (there the chord is text editing). The
+// selected row is the target — copy/cut/delete/addChild carry its id; paste
+// targets its owning section (host resolves that from the row id).
+table.addEventListener(
+  'keydown',
+  (e: Event) => {
+    if (!editable) return;
+    const ev = e as KeyboardEvent;
+    const action = resolveShortcutAction(ev);
+    if (!action) return;
+
+    // While typing in the inline cell editor or the column filter, C/X/V and
+    // Delete/Backspace are text editing — let the field handle them natively.
+    const active = (ev.composedPath?.()[0] as HTMLElement) ?? (ev.target as HTMLElement);
+    const tag = active?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || active?.isContentEditable) {
+      return;
+    }
+
+    const rowId = (Array.isArray(table.selectedRowIds) ? table.selectedRowIds : [])[0];
+    // Every action needs a selected row. Paste accepts a section header (it
+    // targets that section); the rest need a data row, since section headers
+    // carry no capability flags.
+    if (typeof rowId !== 'string') return;
+    if (action !== 'paste' && rowId.startsWith('section:')) return;
+    const row = (table.rows ?? []).find((r: MenuRow) => r.ID === rowId) ?? null;
+    // Gate on the same capability the menu uses, so shortcuts match the menu.
+    const enabled =
+      action === 'copy'
+        ? !!row?._canCopy
+        : action === 'cut' || action === 'delete'
+          ? !!row?._canDelete
+          : /* paste */ clipboardState.canPaste;
+    if (!enabled) return;
+
+    ev.preventDefault();
+    ev.stopPropagation();
+    vscode.postMessage({ type: action, rowId });
   },
   true,
 );

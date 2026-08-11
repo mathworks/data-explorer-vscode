@@ -33,13 +33,16 @@ const ALLOWED_TYPES: Record<string, string[]> = {
     'CustomObject',
   ],
   arch: [
-    'Simulink.Parameter',
     'Simulink.Signal',
     'Simulink.Bus',
     'Simulink.ConnectionBus',
     'Simulink.ServiceBus',
     'Simulink.data.dictionary.EnumTypeDefinition',
     'Simulink.AliasType',
+    // Architectural data models value types and numeric types too (a ValueType
+    // interface and a modeled NumericType both live in arch — see the fixture).
+    'Simulink.ValueType',
+    'Simulink.NumericType',
   ],
   config: ['Simulink.ConfigSet', 'Simulink.ConfigSetRef', 'Simulink.VariantConfigurationData', 'Simulink.VariantConfigurations'],
   other: ['MatlabVariable', 'Simulink.VariantExpression', 'Simulink.VariantVariable', 'CustomObject'],
@@ -100,6 +103,35 @@ export default class SectionNode extends ContainerNode {
 
   getAllowedTypes(): string[] {
     return ALLOWED_TYPES[this.name] || [];
+  }
+
+  // Whether an entry of `className` may live in this section. An empty allow-list
+  // means "no restriction" (matching addEntry's semantics).
+  allowsType(className: string): boolean {
+    const allowed = this.getAllowedTypes();
+    return allowed.length === 0 || allowed.indexOf(className) !== -1;
+  }
+
+  // Every entry name that shares this section's namespace, across all sibling
+  // sections. Design and Architectural Data both live in NS_DESIGN, so they
+  // share one flat name space — a paste into either must avoid colliding with
+  // names in the other. Falls back to this section's own children when the
+  // section is detached or its namespace is unknown.
+  _namespaceEntryNames(): string[] {
+    const myNs = SECTION_NAMESPACE[this.name];
+    const siblings = (this.parent?.children ?? null) as BaseNode[] | null;
+    if (!myNs || !siblings) {
+      return this.children.map((c) => c.name);
+    }
+    const names: string[] = [];
+    for (const s of siblings) {
+      if (SECTION_NAMESPACE[(s as SectionNode).name] === myNs) {
+        for (const c of s.children) {
+          names.push(c.name);
+        }
+      }
+    }
+    return names;
   }
 
   addEntry(className: string, entryName?: string): DataNode | null {
@@ -183,7 +215,7 @@ export default class SectionNode extends ContainerNode {
   }
 
   _uniqueName(baseName: string): string {
-    const existing = new Set(this.children.map((c) => c.name));
+    const existing = new Set(this._namespaceEntryNames());
     if (!existing.has(baseName)) {
       return baseName;
     }

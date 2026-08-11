@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 import { describe, it, expect } from 'vitest';
-import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, type MenuRow, type ClipboardState } from '../src/webview/menuItems.js';
+import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type MenuRow, type ClipboardState } from '../src/webview/menuItems.js';
 
 const NO_CLIP: ClipboardState = { canPaste: false, mode: null };
 const HAS_CLIP: ClipboardState = { canPaste: true, mode: 'copy' };
@@ -72,6 +72,39 @@ describe('buildContextMenuItems', () => {
   it('includes three separators between the action groups', () => {
     const seps = buildContextMenuItems(ENTRY, NO_CLIP, true).filter((i) => i.separator);
     expect(seps).toHaveLength(3);
+  });
+});
+
+// The context menu advertises shortcuts (⌘C/⌘X/⌘V/⌫); resolveShortcutAction maps
+// a keydown to the matching action id so the webview can dispatch it — the labels
+// would be dead UI otherwise.
+describe('resolveShortcutAction', () => {
+  const key = (o: Partial<KeyboardEvent>): KeyboardEvent => o as KeyboardEvent;
+
+  it('maps Cmd/Ctrl+C/X/V to copy/cut/paste', () => {
+    expect(resolveShortcutAction(key({ key: 'c', metaKey: true }))).toBe('copy');
+    expect(resolveShortcutAction(key({ key: 'x', ctrlKey: true }))).toBe('cut');
+    expect(resolveShortcutAction(key({ key: 'v', metaKey: true }))).toBe('paste');
+    // Uppercase (caps lock / shift-less report) still resolves.
+    expect(resolveShortcutAction(key({ key: 'C', metaKey: true }))).toBe('copy');
+  });
+
+  it('maps Delete and Backspace to delete (no modifier)', () => {
+    expect(resolveShortcutAction(key({ key: 'Delete' }))).toBe('delete');
+    expect(resolveShortcutAction(key({ key: 'Backspace' }))).toBe('delete');
+  });
+
+  it('ignores plain letters and modified Delete', () => {
+    expect(resolveShortcutAction(key({ key: 'c' }))).toBeNull();
+    expect(resolveShortcutAction(key({ key: 'v' }))).toBeNull();
+    // A modified Delete/Backspace is a text-editing gesture, not a row delete.
+    expect(resolveShortcutAction(key({ key: 'Delete', metaKey: true }))).toBeNull();
+    expect(resolveShortcutAction(key({ key: 'Backspace', ctrlKey: true }))).toBeNull();
+  });
+
+  it('ignores clipboard chords with extra modifiers (Shift/Alt)', () => {
+    expect(resolveShortcutAction(key({ key: 'c', metaKey: true, shiftKey: true }))).toBeNull();
+    expect(resolveShortcutAction(key({ key: 'v', ctrlKey: true, altKey: true }))).toBeNull();
   });
 });
 
