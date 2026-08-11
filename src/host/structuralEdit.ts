@@ -20,6 +20,7 @@ import {
   detectIndent,
 } from './entrySplice.js';
 import { generateUuid } from '../dex/datamodel/node/container/SectionNode.js';
+import { getSectionMetadata } from '../dex/datamodel/SectionConstants.js';
 
 export interface StructuralResult {
   newText: string;
@@ -33,6 +34,26 @@ export function findOwningEntry(node: any): any {
   let entry: any = node;
   while (entry && !entry.isEntry) entry = entry.parent;
   return entry ?? null;
+}
+
+// Resolve the section a paste should target, given the right-clicked row's
+// model node (may be null) and its row id. Two cases:
+//  - The row is an entry or nested child → its owning entry's parent section.
+//  - The row is a SECTION HEADER (`section:<name>`) → that section directly.
+//    findNode can't resolve a `section:*` id (a real node id is a name-path,
+//    not prefixed), and an empty section can ONLY be pasted into via its header,
+//    so we look the section up on the model by name. Returns null if neither
+//    path yields a section (e.g. an unknown header, or a detached node).
+const SECTION_ROW_PREFIX = 'section:';
+export function resolveSectionForPaste(model: any, node: any, rowId: string): any {
+  const owning = node ? findOwningEntry(node) : null;
+  if (owning?.parent) return owning.parent;
+  if (typeof rowId === 'string' && rowId.startsWith(SECTION_ROW_PREFIX)) {
+    const sectionName = rowId.slice(SECTION_ROW_PREFIX.length);
+    const section = (model?.children ?? []).find((s: any) => s.name === sectionName);
+    if (section) return section;
+  }
+  return null;
 }
 
 // Reserialize one entry to text, indented to its array depth (5 levels), the
@@ -107,30 +128,52 @@ export function cloneForPaste(payload: Record<string, unknown>): Record<string, 
   return JSON.parse(JSON.stringify(payload));
 }
 
+/** The Simulink class name of a serialized entry payload, or '' if none. */
+function payloadClassName(payload: Record<string, unknown>): string {
+  const value = payload.value as Record<string, unknown> | undefined;
+  return (value && typeof value === 'object' && (value._array_class as string)) || '';
+}
+
 /**
  * Paste a serialized entry as a NEW top-level entry in `section`. The name is
- * made unique within the section, the entry gets a freshly generated uuid so it
- * is a distinct object (never a duplicate of the source's), and the metadata
- * namespace is rewritten to the target section's so a cross-section paste
- * survives the reparse. Inserts the element into the entries array, preserving
- * sibling bytes.
+ * made unique across the section's whole namespace (Design and Architectural
+ * Data share one), the entry gets a freshly generated uuid so it is a distinct
+ * object (never a duplicate of the source's), and its metadata namespace AND
+ * isderived flag are rewritten to the target section's — so an Arch entry
+ * pasted into Design becomes a genuine, editable Design entry (the section split
+ * is purely `isderived`). Rejects a payload whose class has no home in the
+ * target section (e.g. a Simulink.ServiceBus into Design). Inserts the element
+ * into the entries array, preserving sibling bytes.
+ *
+ * Pasting into Architectural Data is allowed: the new entry gets a fresh uuid
+ * the ArchitecturePart / SystemComposer mapping simply does not reference yet,
+ * which leaves every existing (referenced) entry intact - the same benign
+ * desync already accepted for add-child. It never corrupts existing references.
  */
 export function pasteEntry(
   text: string,
   section: any,
   payload: Record<string, unknown>,
-  sectionNamespace: string | undefined,
 ): StructuralResult {
+  const className = payloadClassName(payload);
+  if (className && typeof section.allowsType === 'function' && !section.allowsType(className)) {
+    throw new Error(`A "${className}" entry is not allowed in ${section.displayName ?? section.name}.`);
+  }
+
   const raw = cloneForPaste(payload);
   const baseName = typeof raw.name === 'string' ? raw.name : 'Entry';
   raw.name = section._uniqueName(baseName);
   if (raw.metadata && typeof raw.metadata === 'object') {
+    const md = raw.metadata as Record<string, unknown>;
     // A pasted entry is a new object: give it its own uuid rather than
     // duplicating the source's, matching the add-entry path (SectionNode).
-    (raw.metadata as Record<string, unknown>).uuid = generateUuid();
-    if (sectionNamespace) {
-      (raw.metadata as Record<string, unknown>).namespace = sectionNamespace;
-    }
+    md.uuid = generateUuid();
+    // Rebind the entry to the target section. Both fields matter: namespace
+    // routes it, and isderived is what actually distinguishes Arch from Design
+    // (they share NS_DESIGN), so this is what declassifies an arch paste.
+    const sectionMeta = getSectionMetadata(section.name);
+    md.namespace = sectionMeta.namespace;
+    md.isderived = sectionMeta.isderived;
   }
 
   const newNode = section.parseEntry(raw);

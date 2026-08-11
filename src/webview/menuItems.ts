@@ -26,6 +26,32 @@ function navigatorIsMac(): boolean {
   return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
 }
 
+// Map a keydown to the context-menu action it should trigger, or null if the
+// chord isn't a recognized shortcut. Mirrors the shortcuts the menu advertises:
+//   Cmd/Ctrl+C -> copy, Cmd/Ctrl+X -> cut, Cmd/Ctrl+V -> paste (no Shift/Alt),
+//   Delete / Backspace -> delete (no modifier). Enablement (editable, clipboard
+//   state, per-row flags) is enforced by the caller before dispatch — this only
+//   classifies the gesture. Pure, so it's unit-testable without a DOM.
+export type ShortcutAction = 'copy' | 'cut' | 'paste' | 'delete';
+export function resolveShortcutAction(e: KeyboardEvent): ShortcutAction | null {
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && !e.shiftKey && !e.altKey) {
+    switch (e.key.toLowerCase()) {
+      case 'c':
+        return 'copy';
+      case 'x':
+        return 'cut';
+      case 'v':
+        return 'paste';
+    }
+  }
+  // A bare Delete/Backspace deletes the row; a modified one is a text gesture.
+  if ((e.key === 'Delete' || e.key === 'Backspace') && !mod && !e.shiftKey && !e.altKey) {
+    return 'delete';
+  }
+  return null;
+}
+
 // Document-level (table) readonly controls the editor and the context menu.
 // It is DISTINCT from the row-level `Name.editable` flag, which only controls
 // cell text color (gray for derived array-child names like `Var(1)`, normal

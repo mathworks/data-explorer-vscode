@@ -274,10 +274,16 @@ export default class MatlabVariableNode extends DataNode {
     return this._isOpaque ? '' : this.className;
   }
 
-  // Every plain MATLAB variable (scalar, array, cell, struct-like, or opaque
-  // MCOS object) is a "MATLAB Variable" regardless of its underlying class.
+  // A plain MATLAB variable (scalar, array, cell, struct-like, or opaque MCOS
+  // object) is a "MATLAB Variable" in Design Data. In Architectural Data the same
+  // variable is a Constant (a derived entry with no other catalog classification),
+  // so its Kind follows the section. A catalog classification, if present, still
+  // wins (mirrors DataNode.kind).
   get kind(): string {
-    return 'MATLAB Variable';
+    if (this.classification) {
+      return super.kind;
+    }
+    return this.isDerived ? 'Constant' : 'MATLAB Variable';
   }
 
   get nameEditable(): boolean {

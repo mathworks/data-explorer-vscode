@@ -12,10 +12,10 @@ import {
   addChild as addChildEdit,
   pasteEntry,
   findOwningEntry,
+  resolveSectionForPaste,
   reserializeEntry,
   type StructuralResult,
 } from './structuralEdit.js';
-import { SECTION_NAMESPACE } from '../dex/datamodel/node/container/SectionNode.js';
 import { annotateDataRows } from './usageGraph.js';
 import { onNavigateSelect, consumePendingSelect } from './navigate.js';
 
@@ -30,6 +30,20 @@ import { onNavigateSelect, consumePendingSelect } from './navigate.js';
 // BinaryEditorProvider instead (they can't be opened as text documents).
 export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
   public static readonly viewType = 'dataExplorer.tableView';
+
+  // Every live table webview, so a copy/cut/clear in ONE editor can push the new
+  // clipboard state to ALL of them. The host clipboard is a single shared
+  // singleton (clipboard.ts), but each webview caches its own `canPaste` flag to
+  // build the menu synchronously — without this broadcast, a second already-open
+  // .sldd would never learn the clipboard now has content, so its Paste stays
+  // disabled and pasting across files silently does nothing.
+  private static readonly liveWebviews = new Set<vscode.Webview>();
+
+  private static broadcastClipboardState(): void {
+    for (const wv of SlddTextEditorProvider.liveWebviews) {
+      wv.postMessage({ type: 'clipboardState', ...clipboardState() });
+    }
+  }
 
   // Relay selection to the Property Inspector (wired in extension.ts).
   public onSelect?: (uriString: string, rowIds: string[]) => void;
@@ -48,6 +62,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     const webview = webviewPanel.webview;
     const distRoot = vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview');
     webview.options = { enableScripts: true, localResourceRoots: [distRoot] };
+
+    // Track this webview so clipboard-state changes from any editor reach it.
+    SlddTextEditorProvider.liveWebviews.add(webview);
 
     // Give the table tab a distinct table glyph instead of VS Code's default
     // JSON `{}` icon (which the plain-text view of the same .sldd also shows, so
@@ -220,7 +237,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         const payload = entry.serialize() as Record<string, unknown>;
         const sectionName: string = entry.parent?.name ?? '';
         setClipboard(payload, mode, sectionName);
-        webview.postMessage({ type: 'clipboardState', ...clipboardState() });
+        // Broadcast so every open table (not just this one) enables Paste.
+        SlddTextEditorProvider.broadcastClipboardState();
         return true;
       } catch {
         return false;
@@ -319,21 +337,40 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       }
     };
 
-    const applyPaste = (msg: { rowId: string }): Promise<void> =>
-      applyStructural(msg.rowId, (text, node) => {
+    // Paste resolves its TARGET SECTION from the right-clicked row, which may be
+    // a section HEADER (`section:<name>`) — the only clickable target when the
+    // section is empty. findNode can't resolve a header id, so paste does its own
+    // section resolution (resolveSectionForPaste) instead of going through
+    // applyStructural's node-lookup, which would bail on a header row.
+    const applyPaste = async (msg: { rowId: string }): Promise<void> => {
+      try {
+        if (!ensureValidJson()) return;
+        const currentText = document.getText();
+
+        invalidate(uriString);
+        const model = getModel(uriString, name, currentText);
+        const node = findNode(uriString, msg.rowId);
+        const section = resolveSectionForPaste(model, node, msg.rowId);
+        if (!section) {
+          webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
+          return;
+        }
         const clip = getClipboard();
-        if (!clip) throw new Error('the clipboard is empty');
-        const entry = findOwningEntry(node);
-        const section = entry?.parent;
-        if (!section) throw new Error('Could not resolve the target section.');
-        const namespace: string | undefined = SECTION_NAMESPACE[section.name];
-        const result = pasteEntry(text, section, clip.payload, namespace);
+        if (!clip) {
+          webview.postMessage({ type: 'error', message: 'Nothing to paste — the clipboard is empty.' });
+          return;
+        }
+        const { newText, selectId } = pasteEntry(currentText, section, clip.payload);
+        await replaceAll(newText);
+        if (selectId) webview.postMessage({ type: 'selectRow', rowId: selectId });
         if (clip.mode === 'cut') {
           clearClipboard();
-          webview.postMessage({ type: 'clipboardState', ...clipboardState() });
+          SlddTextEditorProvider.broadcastClipboardState();
         }
-        return result;
-      });
+      } catch (err) {
+        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+      }
+    };
 
     // --- Message wiring ---------------------------------------------------------
     const sub = webview.onDidReceiveMessage((msg) => {
@@ -401,6 +438,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
     webview.html = this.getHtml(webview, distRoot);
     webviewPanel.onDidDispose(() => {
+      SlddTextEditorProvider.liveWebviews.delete(webview);
       sub.dispose();
       changeSub.dispose();
       saveSub.dispose();
