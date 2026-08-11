@@ -1,0 +1,1712 @@
+{
+	"__MW_TEXT_COREPROPERTIES__": {
+		"release": "R2027a"
+	},
+	"__MW_TEXT_PARTS__": {
+		"__MW_TEXT_PART__/data/chunk0": {
+			"__MW_TEXT_content": {
+				"entries": [
+					{
+						"name": "AliasType",
+						"metadata": {
+							"uuid": "6dc45e4a-6096-4aff-917f-d5e64111346e",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20260806T125950.754835",
+							"modifiedby": "user",
+							"isderived": "1"
+						},
+						"value": {
+							"_array_class": "Simulink.AliasType",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"BaseType": "double",
+										"DataScope": "Auto",
+										"Description": "",
+										"HeaderFile": ""
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "Constant",
+						"metadata": {
+							"uuid": "c30db8d5-04a6-4668-8794-03949f116236",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20260806T130005.486185",
+							"modifiedby": "user",
+							"isderived": "1"
+						},
+						"value": 0
+					},
+					{
+						"name": "DataInterface",
+						"metadata": {
+							"uuid": "287f5dd2-a9f4-4992-a068-ef8cc14ce0e3",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20260806T150415.350284",
+							"modifiedby": "user",
+							"isderived": "1"
+						},
+						"value": {
+							"_array_class": "Simulink.Bus",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"DataScope": "Auto",
+										"Description": "",
+										"Elements_internal": {
+											"_array_class": "Simulink.BusElement",
+											"_dimensions": [
+												3,
+												1
+											],
+											"_elements": [
+												{
+													"_id": "2",
+													"_properties": {
+														"Complexity": "real",
+														"Dimensions": "1",
+														"DimensionsMode": "Fixed",
+														"DocUnits": "",
+														"Name": "Element"
+													}
+												},
+												{
+													"_id": "3",
+													"_properties": {
+														"Complexity": "complex",
+														"DataType_internal": "int8",
+														"Dimensions": "1",
+														"DimensionsMode": "Variable",
+														"DocUnits": "",
+														"Name": "Element1"
+													}
+												},
+												{
+													"_id": "4",
+													"_properties": {
+														"Name": "a"
+													}
+												}
+											]
+										},
+										"HeaderFile": "",
+										"PreserveElementDimensions": false
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "EnumType",
+						"metadata": {
+							"uuid": "fecf8504-a7c4-42c2-aa7d-c72777f74267",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20260806T150452.373530",
+							"modifiedby": "user",
+							"isderived": "1"
+						},
+						"value": {
+							"_array_class": "Simulink.data.dictionary.EnumTypeDefinition",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"Enumerals": {
+											"_array_type": "Struct",
+											"_dimensions": [
+												1,
+												3
+											],
+											"_elements": [
+												{
+													"Description": "",
+													"Name": "enum1",
+													"Value": "0"
+												},
+												{
+													"Description": "",
+													"Name": "enum2",
+													"Value": "1"
+												},
+												{
+													"Name": "enum3",
+													"Value": "2",
+													"Description": ""
+												}
+											],
+											"_fields": [
+												"Name",
+												"Value",
+												"Description"
+											]
+										},
+										"StorageType": "int32",
+										"DefaultValue": "enum2"
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "NumericType",
+						"metadata": {
+							"uuid": "630fe342-234d-4a0e-aee2-7589ceeb1d8e",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20260806T125948.414574",
+							"modifiedby": "user",
+							"isderived": "1"
+						},
+						"value": {
+							"_array_class": "Simulink.NumericType",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"Bias": 0,
+										"DataScope": "Auto",
+										"DataTypeMode": "Double",
+										"DataTypeOverride": "Inherit",
+										"Description": "",
+										"FixedExponent": 0,
+										"HeaderFile": "",
+										"IsAlias": false,
+										"SignednessBool": true,
+										"SlopeAdjustmentFactor": 1,
+										"WordLength": 64
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "PhysicalInterface",
+						"metadata": {
+							"uuid": "0e0ba8c3-7ef1-467a-b5b3-2c28cf8f047b",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20260806T150908.047515",
+							"modifiedby": "user",
+							"isderived": "1"
+						},
+						"value": {
+							"_array_class": "Simulink.ConnectionBus",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"Description": "",
+										"Elements_internal": {
+											"_array_class": "Simulink.ConnectionElement",
+											"_dimensions": [
+												3,
+												1
+											],
+											"_elements": [
+												{
+													"_id": "2",
+													"_properties": {
+														"Description": "",
+														"Name": "Element",
+														"Type_internal": "Connection: <domain name>"
+													}
+												},
+												{
+													"_id": "3",
+													"_properties": {
+														"Description": "",
+														"Name": "Element1",
+														"Type_internal": "Connection: foundation.electrical.electrical"
+													}
+												},
+												{
+													"_id": "4",
+													"_properties": {
+														"Name": "a"
+													}
+												}
+											]
+										}
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "ServiceInterface",
+						"metadata": {
+							"uuid": "36ffeec7-d6d1-4627-97ce-1a6925be4c90",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20260806T125935.992797",
+							"modifiedby": "user",
+							"isderived": "1"
+						},
+						"value": {
+							"_array_class": "Simulink.ServiceBus",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"Description": "",
+										"Elements_internal": {
+											"_array_class": "Simulink.FunctionElement",
+											"_dimensions": [
+												3,
+												1
+											],
+											"_elements": [
+												{
+													"_id": "2",
+													"_properties": {
+														"Arguments": {
+															"_array_class": "Simulink.BusElement",
+															"_dimensions": [
+																3,
+																1
+															],
+															"_elements": [
+																{
+																	"_id": "3",
+																	"_properties": {
+																		"Complexity": "real",
+																		"Dimensions": 1,
+																		"DimensionsMode": "Fixed",
+																		"DocUnits": "",
+																		"Name": "u"
+																	}
+																},
+																{
+																	"_id": "4",
+																	"_properties": {
+																		"Complexity": "real",
+																		"Dimensions": 1,
+																		"DimensionsMode": "Fixed",
+																		"DocUnits": "",
+																		"Name": "v"
+																	}
+																},
+																{
+																	"_id": "5",
+																	"_properties": {
+																		"Complexity": "real",
+																		"Dimensions": 1,
+																		"DimensionsMode": "Fixed",
+																		"DocUnits": "",
+																		"Name": "y"
+																	}
+																}
+															]
+														},
+														"Asynchronous": false,
+														"Name": "f",
+														"Prototype": "y = f(u,v)"
+													}
+												},
+												{
+													"_id": "6",
+													"_properties": {
+														"Arguments": {
+															"_array_class": "Simulink.BusElement",
+															"_dimensions": [
+																4,
+																1
+															],
+															"_elements": [
+																{
+																	"_id": "7",
+																	"_properties": {
+																		"Complexity": "real",
+																		"Dimensions": 1,
+																		"DimensionsMode": "Fixed",
+																		"DocUnits": "",
+																		"Name": "u"
+																	}
+																},
+																{
+																	"_id": "8",
+																	"_properties": {
+																		"Complexity": "real",
+																		"Dimensions": 1,
+																		"DimensionsMode": "Fixed",
+																		"DocUnits": "",
+																		"Name": "v"
+																	}
+																},
+																{
+																	"_id": "9",
+																	"_properties": {
+																		"Complexity": "real",
+																		"Dimensions": 1,
+																		"DimensionsMode": "Fixed",
+																		"DocUnits": "",
+																		"Name": "w"
+																	}
+																},
+																{
+																	"_id": "10",
+																	"_properties": {
+																		"Complexity": "real",
+																		"Dimensions": 1,
+																		"DimensionsMode": "Fixed",
+																		"DocUnits": "",
+																		"Name": "y"
+																	}
+																}
+															]
+														},
+														"Asynchronous": false,
+														"Name": "f1",
+														"Prototype": "y = f1(u,v,w,y)"
+													}
+												},
+												{
+													"_id": "11",
+													"_properties": {
+														"Arguments": {
+															"_array_class": "Simulink.BusElement",
+															"_dimensions": [
+																3,
+																1
+															],
+															"_elements": [
+																{
+																	"_id": "12",
+																	"_properties": {
+																		"Complexity": "real",
+																		"Dimensions": 1,
+																		"DimensionsMode": "Fixed",
+																		"DocUnits": "",
+																		"Name": "u"
+																	}
+																},
+																{
+																	"_id": "13",
+																	"_properties": {
+																		"Complexity": "real",
+																		"Dimensions": 1,
+																		"DimensionsMode": "Fixed",
+																		"DocUnits": "",
+																		"Name": "v"
+																	}
+																},
+																{
+																	"_id": "14",
+																	"_properties": {
+																		"Complexity": "real",
+																		"Dimensions": 1,
+																		"DimensionsMode": "Fixed",
+																		"DocUnits": "",
+																		"Name": "y"
+																	}
+																}
+															]
+														},
+														"Asynchronous": false,
+														"Name": "f2",
+														"Prototype": "y = f2(u,v)"
+													}
+												}
+											]
+										}
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "StructType",
+						"metadata": {
+							"uuid": "35295363-c32f-46ee-be90-558c6ac74ee0",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20260806T151506.676643",
+							"modifiedby": "user",
+							"isderived": "1"
+						},
+						"value": {
+							"_array_class": "Simulink.Bus",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"DataScope": "Auto",
+										"Description": "",
+										"Elements_internal": {
+											"_array_class": "Simulink.BusElement",
+											"_dimensions": [
+												2,
+												1
+											],
+											"_elements": [
+												{
+													"_id": "2",
+													"_properties": {
+														"Complexity": "real",
+														"Dimensions": 1,
+														"DimensionsMode": "Fixed",
+														"DocUnits": "",
+														"Name": "Element"
+													}
+												},
+												{
+													"_id": "3",
+													"_properties": {
+														"Complexity": "real",
+														"DataType_internal": "half",
+														"Dimensions": 1,
+														"DimensionsMode": "Fixed",
+														"DocUnits": "",
+														"Name": "Element1"
+													}
+												}
+											]
+										},
+										"HeaderFile": "",
+										"PreserveElementDimensions": false
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "ValueType",
+						"metadata": {
+							"uuid": "eff4f621-407e-4a3c-9cba-54bf03d1e5fb",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20260806T125952.565168",
+							"modifiedby": "user",
+							"isderived": "1"
+						},
+						"value": {
+							"_array_class": "Simulink.ValueType",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "ValueType1",
+						"metadata": {
+							"uuid": "983b3c61-2083-4d93-9713-80ec47e48c7a",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20260806T151621.702149",
+							"modifiedby": "user",
+							"isderived": "1"
+						},
+						"value": {
+							"_array_class": "Simulink.ValueType",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"DataType": "uint32"
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					}
+				],
+				"Dictionary References": [],
+				"AllowAccessBWS": false
+			}
+		},
+		"__MW_TEXT_PART__/simulink/ArchitecturePart": {
+			"__MW_TEXT_content": {
+				"entries": [
+					{
+						"content": {
+							"DictionaryCatalog": {
+								"content": {
+									"Constants": [
+										{
+											"content": {
+												"DDEntryUUID": "c30db8d5-04a6-4668-8794-03949f116236"
+											},
+											"type": "sl.interface.dict.catalog.ConstantEntry",
+											"uuid": "5d62fca0-d274-4b5f-b59b-aafa0d93c142"
+										}
+									],
+									"DataTypes": [
+										{
+											"content": {
+												"DDEntryUUID": "35295363-c32f-46ee-be90-558c6ac74ee0"
+											},
+											"type": "sl.interface.dict.catalog.DataTypeEntry",
+											"uuid": "c0c6ebe5-1c34-405c-9e6f-00a9b4ebd291"
+										},
+										{
+											"content": {
+												"DDEntryUUID": "630fe342-234d-4a0e-aee2-7589ceeb1d8e"
+											},
+											"type": "sl.interface.dict.catalog.DataTypeEntry",
+											"uuid": "215fba3e-f532-419d-9290-1fe66616e751"
+										},
+										{
+											"content": {
+												"DDEntryUUID": "6dc45e4a-6096-4aff-917f-d5e64111346e"
+											},
+											"type": "sl.interface.dict.catalog.DataTypeEntry",
+											"uuid": "1576b981-df6a-473f-9b2f-a2f7a06414c3"
+										},
+										{
+											"content": {
+												"DDEntryUUID": "983b3c61-2083-4d93-9713-80ec47e48c7a"
+											},
+											"type": "sl.interface.dict.catalog.DataTypeEntry",
+											"uuid": "a936e758-ad1b-4c11-8154-e9d5a9d9fa35"
+										},
+										{
+											"content": {
+												"DDEntryUUID": "eff4f621-407e-4a3c-9cba-54bf03d1e5fb"
+											},
+											"type": "sl.interface.dict.catalog.DataTypeEntry",
+											"uuid": "116d144b-e82f-42c1-95e1-ed91f4b87f4e"
+										},
+										{
+											"content": {
+												"DDEntryUUID": "fecf8504-a7c4-42c2-aa7d-c72777f74267"
+											},
+											"type": "sl.interface.dict.catalog.DataTypeEntry",
+											"uuid": "dd09f5e5-dc71-4593-a3ac-74fffbb0c317"
+										}
+									],
+									"Interfaces": [
+										{
+											"content": {
+												"DDEntryUUID": "0e0ba8c3-7ef1-467a-b5b3-2c28cf8f047b"
+											},
+											"type": "sl.interface.dict.catalog.InterfaceEntry",
+											"uuid": "2b242e77-cb00-4317-a406-846030561c6f"
+										},
+										{
+											"content": {
+												"DDEntryUUID": "287f5dd2-a9f4-4992-a068-ef8cc14ce0e3"
+											},
+											"type": "sl.interface.dict.catalog.InterfaceEntry",
+											"uuid": "54877230-0be6-4046-9011-66b2a22aeda6"
+										},
+										{
+											"content": {
+												"DDEntryUUID": "36ffeec7-d6d1-4627-97ce-1a6925be4c90"
+											},
+											"type": "sl.interface.dict.catalog.InterfaceEntry",
+											"uuid": "75928313-685f-4cc1-abee-dfe6bd9c90eb"
+										}
+									]
+								},
+								"type": "sl.interface.dict.catalog.DictionaryCatalog",
+								"uuid": "e7804c36-bf1a-447f-98a2-5fd1d3d8f28e"
+							},
+							"MappingManager": {
+								"content": {
+									"DictionaryMappings": [
+										{
+											"content": {
+												"ConstantMappings": [
+													{
+														"content": {
+															"CodeGenCustomization": {
+																"content": {},
+																"type": "sl.interface.dict.mapping.native.ConstantCodeGenCustomization",
+																"uuid": "2d08b1b9-20e8-416c-bc7e-af01412b5559"
+															},
+															"DDEntryUUID": "c30db8d5-04a6-4668-8794-03949f116236"
+														},
+														"type": "sl.interface.dict.mapping.native.ConstantMapping",
+														"uuid": "5bb7ea6f-d4c4-44ac-abbd-d7584742edd7"
+													}
+												],
+												"DataTypeMappings": [
+													{
+														"content": {
+															"DDEntryUUID": "35295363-c32f-46ee-be90-558c6ac74ee0",
+															"DataTypeCodeCustomization": {
+																"content": {},
+																"type": "sl.interface.dict.mapping.native.DataTypeCodeGenCustomization",
+																"uuid": "40071401-e0a6-4265-bfd1-4e579884de8c"
+															}
+														},
+														"type": "sl.interface.dict.mapping.native.DataTypeMapping",
+														"uuid": "be8ffec5-3f94-4a27-abf7-ab3ea8401dc9"
+													},
+													{
+														"content": {
+															"DDEntryUUID": "630fe342-234d-4a0e-aee2-7589ceeb1d8e",
+															"DataTypeCodeCustomization": {
+																"content": {},
+																"type": "sl.interface.dict.mapping.native.DataTypeCodeGenCustomization",
+																"uuid": "c5cfea22-99c2-4d14-bb65-d28dc6be3a71"
+															}
+														},
+														"type": "sl.interface.dict.mapping.native.DataTypeMapping",
+														"uuid": "e00c2a93-155d-4531-a50a-b3fc2ed3a6b9"
+													},
+													{
+														"content": {
+															"DDEntryUUID": "6dc45e4a-6096-4aff-917f-d5e64111346e",
+															"DataTypeCodeCustomization": {
+																"content": {},
+																"type": "sl.interface.dict.mapping.native.DataTypeCodeGenCustomization",
+																"uuid": "14e97fd3-6ecc-44d8-b511-4421b836242f"
+															}
+														},
+														"type": "sl.interface.dict.mapping.native.DataTypeMapping",
+														"uuid": "ab8dc13a-c93f-4d8d-87ed-52e41a99c606"
+													},
+													{
+														"content": {
+															"DDEntryUUID": "983b3c61-2083-4d93-9713-80ec47e48c7a",
+															"DataTypeCodeCustomization": {
+																"content": {},
+																"type": "sl.interface.dict.mapping.native.DataTypeCodeGenCustomization",
+																"uuid": "10737983-cd03-4655-91c7-ae795a84a773"
+															}
+														},
+														"type": "sl.interface.dict.mapping.native.DataTypeMapping",
+														"uuid": "7296fd70-838e-459d-a61b-a20c0962cae9"
+													},
+													{
+														"content": {
+															"DDEntryUUID": "eff4f621-407e-4a3c-9cba-54bf03d1e5fb",
+															"DataTypeCodeCustomization": {
+																"content": {},
+																"type": "sl.interface.dict.mapping.native.DataTypeCodeGenCustomization",
+																"uuid": "7021cdf4-0149-446f-904a-be565b541bf3"
+															}
+														},
+														"type": "sl.interface.dict.mapping.native.DataTypeMapping",
+														"uuid": "24b8108f-c8b6-422d-aa96-5d54808042b9"
+													},
+													{
+														"content": {
+															"DDEntryUUID": "fecf8504-a7c4-42c2-aa7d-c72777f74267",
+															"DataTypeCodeCustomization": {
+																"content": {},
+																"type": "sl.interface.dict.mapping.native.DataTypeCodeGenCustomization",
+																"uuid": "aab91f49-559e-4f36-b071-795f470d42ca"
+															}
+														},
+														"type": "sl.interface.dict.mapping.native.DataTypeMapping",
+														"uuid": "6bdc15c5-0f9f-4982-ae65-3f49f834944f"
+													}
+												],
+												"InterfaceMappings": [
+													{
+														"content": {
+															"DDEntryUUID": "0e0ba8c3-7ef1-467a-b5b3-2c28cf8f047b",
+															"InterfaceCodeCustomization": {
+																"content": {},
+																"type": "sl.interface.dict.mapping.native.InterfaceCodeGenCustomization",
+																"uuid": "5d7e342f-b3c9-4999-ac6e-db0f68cd8474"
+															}
+														},
+														"type": "sl.interface.dict.mapping.native.InterfaceMapping",
+														"uuid": "914a28c3-767b-4f9e-b291-27f29867de29"
+													},
+													{
+														"content": {
+															"DDEntryUUID": "287f5dd2-a9f4-4992-a068-ef8cc14ce0e3",
+															"InterfaceCodeCustomization": {
+																"content": {},
+																"type": "sl.interface.dict.mapping.native.InterfaceCodeGenCustomization",
+																"uuid": "41c2943c-bb3b-4913-aa63-2c6354d084a8"
+															}
+														},
+														"type": "sl.interface.dict.mapping.native.InterfaceMapping",
+														"uuid": "a62cb058-3abc-4a6f-b92d-45f3d9af7516"
+													},
+													{
+														"content": {
+															"DDEntryUUID": "36ffeec7-d6d1-4627-97ce-1a6925be4c90",
+															"InterfaceCodeCustomization": {
+																"content": {},
+																"type": "sl.interface.dict.mapping.native.InterfaceCodeGenCustomization",
+																"uuid": "a0a3ff1e-acc4-471f-a70e-9ff88d7b7b80"
+															}
+														},
+														"type": "sl.interface.dict.mapping.native.InterfaceMapping",
+														"uuid": "26a97e8d-950d-4816-8591-3c76b37caca9"
+													}
+												]
+											},
+											"type": "sl.interface.dict.mapping.native.NativeMapping",
+											"uuid": "733b3048-0ae8-4983-849a-a038a5706d3e"
+										}
+									]
+								},
+								"type": "sl.interface.dict.mapping.MappingManager",
+								"uuid": "cd107d15-b8b8-440f-8388-c7c157c05bc2"
+							}
+						},
+						"type": "sl.interface.dict.InterfaceDictionary",
+						"uuid": "c115797a-0d3f-4707-8f6b-015f0bb47ed4"
+					}
+				],
+				"packageUris": [
+					"http://schema.mathworks.com/mf0/sl_interface_dict_datamodel/1.4",
+					"http://schema.mathworks.com/mf0/sl_data_registry/R2021a"
+				],
+				"version": "1.0"
+			}
+		},
+		"__MW_TEXT_PART__/simulink/systemcomposer/interfaceDictionary": {
+			"__MW_TEXT_content": {
+				"entries": [
+					{
+						"content": {},
+						"type": "systemcomposer.property.UnitQueryClientWrapper",
+						"uuid": "398f5b73-d3b9-43cb-a2a8-99ec65c79483"
+					},
+					{
+						"content": {
+							"p_Constants": [
+								{
+									"content": {
+										"elemProxy": {
+											"content": {},
+											"type": "systemcomposer.services.proxy.ProxyTarget",
+											"uuid": "eabdd1ab-c9b3-4b57-befd-d5384de0fd82"
+										},
+										"p_ExposedParameters": null,
+										"p_Name": "Constant",
+										"p_Value": "AAFJTQAAAAAOAAAAOAAAAAYAAAAIAAAABgAAAAAAAAAFAAAACAAAAAEAAAABAAAAAQAAAAAAAAAJAAAACAAAAAAAAAAAAAAA"
+									},
+									"type": "systemcomposer.property.Constant",
+									"uuid": "5d4df282-0d49-4036-baec-7fc8a3979944"
+								}
+							],
+							"p_Name": "base"
+						},
+						"type": "systemcomposer.property.ConstantGroup",
+						"uuid": "709d52a4-e313-4a68-93fd-96b42ff45564"
+					},
+					{
+						"content": {
+							"elemProxy": null,
+							"p_Name": "arch",
+							"p_PortInterfaceCatalog": {
+								"content": {
+									"p_Interfaces": [
+										{
+											"content": {
+												"elemProxy": {
+													"content": {},
+													"type": "systemcomposer.services.proxy.ProxyTarget",
+													"uuid": "9b8b4cf5-3c8b-4ea3-9965-63307bae2715"
+												},
+												"p_DataElements": [
+													{
+														"content": {
+															"elemProxy": null,
+															"p_ExposedParameters": null,
+															"p_Index": "1",
+															"p_Name": "Element",
+															"p_OwnedDataInterface": {
+																"content": {
+																	"elemProxy": null,
+																	"p_DefaultValueType": {
+																		"type": "systemcomposer.property.ValueTypeDescriptor",
+																		"uuid": "f3a69c79-5cce-4f73-9483-d21aed5466a3"
+																	},
+																	"p_ExposedParameters": null,
+																	"p_SpecializesProxy": null,
+																	"p_UnitChecker": {
+																		"type": "systemcomposer.property.UnitQueryClientWrapper",
+																		"uuid": "398f5b73-d3b9-43cb-a2a8-99ec65c79483"
+																	},
+																	"p_ValueType": null
+																},
+																"type": "systemcomposer.architecture.model.interface.ValueTypeInterface",
+																"uuid": "d4407bbb-45c0-48d7-84b1-dd0fbe455100"
+															},
+															"p_ReferencedDataInterfaceProxy": null,
+															"p_SpecializesProxy": null
+														},
+														"type": "systemcomposer.architecture.model.interface.DataElement",
+														"uuid": "20f5ab32-49a2-409d-82a8-b47f8df68025"
+													},
+													{
+														"content": {
+															"elemProxy": null,
+															"p_ExposedParameters": null,
+															"p_Index": "2",
+															"p_Name": "Element1",
+															"p_OwnedDataInterface": {
+																"content": {
+																	"elemProxy": null,
+																	"p_ExposedParameters": null,
+																	"p_SpecializesProxy": null,
+																	"p_UnitChecker": {
+																		"type": "systemcomposer.property.UnitQueryClientWrapper",
+																		"uuid": "398f5b73-d3b9-43cb-a2a8-99ec65c79483"
+																	},
+																	"p_ValueType": {
+																		"content": {
+																			"elemProxy": null,
+																			"p_BuiltInDataType": "int8",
+																			"p_Complexity": "complex",
+																			"p_ExposedParameters": null
+																		},
+																		"type": "systemcomposer.property.ValueTypeDescriptor",
+																		"uuid": "bfea45c2-3030-40db-adad-59c3b53e1ec8"
+																	}
+																},
+																"type": "systemcomposer.architecture.model.interface.ValueTypeInterface",
+																"uuid": "5bf2e006-70c7-46ec-89ae-b90ab0aab396"
+															},
+															"p_ReferencedDataInterfaceProxy": null,
+															"p_SpecializesProxy": null
+														},
+														"type": "systemcomposer.architecture.model.interface.DataElement",
+														"uuid": "9f2bc4e2-c263-4b4b-bdf0-b04de4763aff"
+													}
+												],
+												"p_ExposedParameters": null,
+												"p_Name": "DataInterface",
+												"p_SpecializesProxy": null,
+												"p_UnitChecker": {
+													"type": "systemcomposer.property.UnitQueryClientWrapper",
+													"uuid": "398f5b73-d3b9-43cb-a2a8-99ec65c79483"
+												}
+											},
+											"type": "systemcomposer.architecture.model.interface.CompositeDataInterface",
+											"uuid": "358b4fdc-47c7-4126-a5de-e668f74db96f"
+										},
+										{
+											"content": {
+												"elemProxy": {
+													"content": {},
+													"type": "systemcomposer.services.proxy.ProxyTarget",
+													"uuid": "2b851f5a-b1fe-4037-aa65-576e54f253b9"
+												},
+												"p_ExposedParameters": null,
+												"p_Name": "PhysicalInterface",
+												"p_PhysicalElements": [
+													{
+														"content": {
+															"elemProxy": null,
+															"p_ExposedParameters": null,
+															"p_Index": "1",
+															"p_Name": "Element",
+															"p_ParentPhysicalType": {
+																"content": {
+																	"elemProxy": null,
+																	"p_ExposedParameters": null,
+																	"p_SpecializesProxy": null,
+																	"p_Type": "Connection: <domain name>"
+																},
+																"type": "systemcomposer.architecture.model.interface.AtomicPhysicalInterface",
+																"uuid": "82ffcacc-ec82-42f4-a4e9-addf3f8f9ece"
+															},
+															"p_ReferencedPhysicalTypeProxy": null,
+															"p_SpecializesProxy": null
+														},
+														"type": "systemcomposer.architecture.model.interface.PhysicalElement",
+														"uuid": "b132b8a9-3310-4cc0-a53c-d39a8d2f59b9"
+													},
+													{
+														"content": {
+															"elemProxy": null,
+															"p_ExposedParameters": null,
+															"p_Index": "2",
+															"p_Name": "Element1",
+															"p_ParentPhysicalType": {
+																"content": {
+																	"elemProxy": null,
+																	"p_ExposedParameters": null,
+																	"p_SpecializesProxy": null,
+																	"p_Type": "Connection: foundation.electrical.electrical"
+																},
+																"type": "systemcomposer.architecture.model.interface.AtomicPhysicalInterface",
+																"uuid": "52f72278-b05d-4299-9736-e5200c56ef91"
+															},
+															"p_ReferencedPhysicalTypeProxy": null,
+															"p_SpecializesProxy": null
+														},
+														"type": "systemcomposer.architecture.model.interface.PhysicalElement",
+														"uuid": "8e6dcbd5-6391-4efb-a88b-85b44410b2ec"
+													}
+												],
+												"p_SpecializesProxy": null,
+												"p_UnitChecker": {
+													"type": "systemcomposer.property.UnitQueryClientWrapper",
+													"uuid": "398f5b73-d3b9-43cb-a2a8-99ec65c79483"
+												}
+											},
+											"type": "systemcomposer.architecture.model.interface.CompositePhysicalInterface",
+											"uuid": "7829d757-9213-4a24-ad9a-53994bfd0fc4"
+										},
+										{
+											"content": {
+												"elemProxy": {
+													"content": {},
+													"type": "systemcomposer.services.proxy.ProxyTarget",
+													"uuid": "231b37e0-6f2c-4e47-8cd7-b6c6dd343c36"
+												},
+												"p_ExposedParameters": null,
+												"p_FunctionElements": [
+													{
+														"content": {
+															"elemProxy": null,
+															"p_ExposedParameters": null,
+															"p_FunctionArguments": [
+																{
+																	"content": {
+																		"elemProxy": null,
+																		"p_Name": "u",
+																		"p_OwnedArgumentType": {
+																			"content": {
+																				"elemProxy": null,
+																				"p_DefaultValueType": {
+																					"type": "systemcomposer.property.ValueTypeDescriptor",
+																					"uuid": "f3a69c79-5cce-4f73-9483-d21aed5466a3"
+																				},
+																				"p_ExposedParameters": null,
+																				"p_SpecializesProxy": null,
+																				"p_UnitChecker": {
+																					"type": "systemcomposer.property.UnitQueryClientWrapper",
+																					"uuid": "398f5b73-d3b9-43cb-a2a8-99ec65c79483"
+																				},
+																				"p_ValueType": null
+																			},
+																			"type": "systemcomposer.architecture.model.interface.ValueTypeInterface",
+																			"uuid": "4bc49d13-f8c5-4b58-846c-fcdadd19abc4"
+																		},
+																		"p_ReferencedDataInterfaceProxy": null
+																	},
+																	"type": "systemcomposer.architecture.model.swarch.FunctionArgument",
+																	"uuid": "e900399f-0371-405c-8df3-3185da6d4244"
+																},
+																{
+																	"content": {
+																		"elemProxy": null,
+																		"p_Name": "v",
+																		"p_OwnedArgumentType": {
+																			"content": {
+																				"elemProxy": null,
+																				"p_DefaultValueType": {
+																					"type": "systemcomposer.property.ValueTypeDescriptor",
+																					"uuid": "f3a69c79-5cce-4f73-9483-d21aed5466a3"
+																				},
+																				"p_ExposedParameters": null,
+																				"p_SpecializesProxy": null,
+																				"p_UnitChecker": {
+																					"type": "systemcomposer.property.UnitQueryClientWrapper",
+																					"uuid": "398f5b73-d3b9-43cb-a2a8-99ec65c79483"
+																				},
+																				"p_ValueType": null
+																			},
+																			"type": "systemcomposer.architecture.model.interface.ValueTypeInterface",
+																			"uuid": "192f76b2-8864-44c5-b0f5-482192234c3e"
+																		},
+																		"p_ReferencedDataInterfaceProxy": null
+																	},
+																	"type": "systemcomposer.architecture.model.swarch.FunctionArgument",
+																	"uuid": "c8894e3f-c7a8-4f0d-9468-5136048a68f8"
+																},
+																{
+																	"content": {
+																		"elemProxy": null,
+																		"p_Name": "y",
+																		"p_OwnedArgumentType": {
+																			"content": {
+																				"elemProxy": null,
+																				"p_DefaultValueType": {
+																					"type": "systemcomposer.property.ValueTypeDescriptor",
+																					"uuid": "f3a69c79-5cce-4f73-9483-d21aed5466a3"
+																				},
+																				"p_ExposedParameters": null,
+																				"p_SpecializesProxy": null,
+																				"p_UnitChecker": {
+																					"type": "systemcomposer.property.UnitQueryClientWrapper",
+																					"uuid": "398f5b73-d3b9-43cb-a2a8-99ec65c79483"
+																				},
+																				"p_ValueType": null
+																			},
+																			"type": "systemcomposer.architecture.model.interface.ValueTypeInterface",
+																			"uuid": "7a64c50e-6947-404d-8e09-6f534c93fa5b"
+																		},
+																		"p_ReferencedDataInterfaceProxy": null
+																	},
+																	"type": "systemcomposer.architecture.model.swarch.FunctionArgument",
+																	"uuid": "d32a9032-cfcd-45e9-bcd1-a0b86a0a2ad5"
+																}
+															],
+															"p_FunctionPrototype": "y = f(u,v)",
+															"p_Index": "1",
+															"p_Name": "f",
+															"p_SpecializesProxy": null
+														},
+														"type": "systemcomposer.architecture.model.swarch.FunctionElement",
+														"uuid": "8cd59c9e-1ceb-48a9-9b9c-99513d05668b"
+													},
+													{
+														"content": {
+															"elemProxy": null,
+															"p_ExposedParameters": null,
+															"p_FunctionArguments": [
+																{
+																	"content": {
+																		"elemProxy": null,
+																		"p_Name": "u",
+																		"p_OwnedArgumentType": {
+																			"content": {
+																				"elemProxy": null,
+																				"p_DefaultValueType": {
+																					"type": "systemcomposer.property.ValueTypeDescriptor",
+																					"uuid": "f3a69c79-5cce-4f73-9483-d21aed5466a3"
+																				},
+																				"p_ExposedParameters": null,
+																				"p_SpecializesProxy": null,
+																				"p_UnitChecker": {
+																					"type": "systemcomposer.property.UnitQueryClientWrapper",
+																					"uuid": "398f5b73-d3b9-43cb-a2a8-99ec65c79483"
+																				},
+																				"p_ValueType": null
+																			},
+																			"type": "systemcomposer.architecture.model.interface.ValueTypeInterface",
+																			"uuid": "f36c8649-319f-447c-a973-1c1322baa471"
+																		},
+																		"p_ReferencedDataInterfaceProxy": null
+																	},
+																	"type": "systemcomposer.architecture.model.swarch.FunctionArgument",
+																	"uuid": "daf44359-cebb-4a1d-b15e-fbe8ed91430b"
+																},
+																{
+																	"content": {
+																		"elemProxy": null,
+																		"p_Name": "v",
+																		"p_OwnedArgumentType": {
+																			"content": {
+																				"elemProxy": null,
+																				"p_DefaultValueType": {
+																					"type": "systemcomposer.property.ValueTypeDescriptor",
+																					"uuid": "f3a69c79-5cce-4f73-9483-d21aed5466a3"
+																				},
+																				"p_ExposedParameters": null,
+																				"p_SpecializesProxy": null,
+																				"p_UnitChecker": {
+																					"type": "systemcomposer.property.UnitQueryClientWrapper",
+																					"uuid": "398f5b73-d3b9-43cb-a2a8-99ec65c79483"
+																				},
+																				"p_ValueType": null
+																			},
+																			"type": "systemcomposer.architecture.model.interface.ValueTypeInterface",
+																			"uuid": "d62734f2-9a13-465f-a2b1-fb747cffe423"
+																		},
+																		"p_ReferencedDataInterfaceProxy": null
+																	},
+																	"type": "systemcomposer.architecture.model.swarch.FunctionArgument",
+																	"uuid": "a57b6583-a334-4111-93cc-5b53edda4eca"
+																},
+																{
+																	"content": {
+																		"elemProxy": null,
+																		"p_Name": "w",
+																		"p_OwnedArgumentType": {
+																			"content": {
+																				"elemProxy": null,
+																				"p_DefaultValueType": {
+																					"type": "systemcomposer.property.ValueTypeDescriptor",
+																					"uuid": "f3a69c79-5cce-4f73-9483-d21aed5466a3"
+																				},
+																				"p_ExposedParameters": null,
+																				"p_SpecializesProxy": null,
+																				"p_UnitChecker": {
+																					"type": "systemcomposer.property.UnitQueryClientWrapper",
+																					"uuid": "398f5b73-d3b9-43cb-a2a8-99ec65c79483"
+																				},
+																				"p_ValueType": null
+																			},
+																			"type": "systemcomposer.architecture.model.interface.ValueTypeInterface",
+																			"uuid": "2ba8c2a5-c49f-46fa-9b90-fc814fa36758"
+																		},
+																		"p_ReferencedDataInterfaceProxy": null
+																	},
+																	"type": "systemcomposer.architecture.model.swarch.FunctionArgument",
+																	"uuid": "6b092f88-8808-429f-be71-58e28ac21547"
+																},
+																{
+																	"content": {
+																		"elemProxy": null,
+																		"p_Name": "y",
+																		"p_OwnedArgumentType": {
+																			"content": {
+																				"elemProxy": null,
+																				"p_DefaultValueType": {
+																					"type": "systemcomposer.property.ValueTypeDescriptor",
+																					"uuid": "f3a69c79-5cce-4f73-9483-d21aed5466a3"
+																				},
+																				"p_ExposedParameters": null,
+																				"p_SpecializesProxy": null,
+																				"p_UnitChecker": {
+																					"type": "systemcomposer.property.UnitQueryClientWrapper",
+																					"uuid": "398f5b73-d3b9-43cb-a2a8-99ec65c79483"
+																				},
+																				"p_ValueType": null
+																			},
+																			"type": "systemcomposer.architecture.model.interface.ValueTypeInterface",
+																			"uuid": "5e105069-6f87-4f41-931b-d27876389351"
+																		},
+																		"p_ReferencedDataInterfaceProxy": null
+																	},
+																	"type": "systemcomposer.architecture.model.swarch.FunctionArgument",
+																	"uuid": "b2887d16-7468-443f-bf5e-74667bff9310"
+																}
+															],
+															"p_FunctionPrototype": "y = f1(u,v,w,y)",
+															"p_Index": "2",
+															"p_Name": "f1",
+															"p_SpecializesProxy": null
+														},
+														"type": "systemcomposer.architecture.model.swarch.FunctionElement",
+														"uuid": "6e7ccad5-88d8-4fcc-ac0b-f2b15289a23d"
+													}
+												],
+												"p_Name": "ServiceInterface",
+												"p_SpecializesProxy": null,
+												"p_UnitChecker": {
+													"type": "systemcomposer.property.UnitQueryClientWrapper",
+													"uuid": "398f5b73-d3b9-43cb-a2a8-99ec65c79483"
+												}
+											},
+											"type": "systemcomposer.architecture.model.swarch.ServiceInterface",
+											"uuid": "56ea6d8b-cc8f-4478-86c3-15d1c0718f43"
+										},
+										{
+											"content": {
+												"elemProxy": {
+													"content": {},
+													"type": "systemcomposer.services.proxy.ProxyTarget",
+													"uuid": "4953e27a-da39-4016-a5ca-e1ccf958795c"
+												},
+												"p_DefaultValueType": {
+													"type": "systemcomposer.property.ValueTypeDescriptor",
+													"uuid": "f3a69c79-5cce-4f73-9483-d21aed5466a3"
+												},
+												"p_ExposedParameters": null,
+												"p_Name": "ValueType",
+												"p_SpecializesProxy": null,
+												"p_UnitChecker": {
+													"type": "systemcomposer.property.UnitQueryClientWrapper",
+													"uuid": "398f5b73-d3b9-43cb-a2a8-99ec65c79483"
+												},
+												"p_ValueType": null
+											},
+											"type": "systemcomposer.architecture.model.interface.ValueTypeInterface",
+											"uuid": "a16433f6-4889-4e82-a00c-0a4fab6ec0ec"
+										},
+										{
+											"content": {
+												"elemProxy": {
+													"content": {},
+													"type": "systemcomposer.services.proxy.ProxyTarget",
+													"uuid": "1c5d6aaf-fb97-4d79-ae04-acd777d8981e"
+												},
+												"p_DefaultValueType": {
+													"type": "systemcomposer.property.ValueTypeDescriptor",
+													"uuid": "eff09991-46d7-4802-aab1-6efd59180b8b"
+												},
+												"p_ExposedParameters": null,
+												"p_Name": "ValueType1",
+												"p_SpecializesProxy": null,
+												"p_UnitChecker": {
+													"type": "systemcomposer.property.UnitQueryClientWrapper",
+													"uuid": "398f5b73-d3b9-43cb-a2a8-99ec65c79483"
+												},
+												"p_ValueType": null
+											},
+											"type": "systemcomposer.architecture.model.interface.ValueTypeInterface",
+											"uuid": "56edae3c-1a78-49c0-8bc1-231d372a0a05"
+										}
+									],
+									"p_ProfileNamespace": null,
+									"p_StorageContext": "DICTIONARY"
+								},
+								"type": "systemcomposer.architecture.model.interface.InterfaceCatalog",
+								"uuid": "e7f82e89-fac3-499a-ba07-753607ab868d"
+							},
+							"p_RootArchitecture": {
+								"content": {
+									"elemProxy": null,
+									"p_ExposedParameters": null,
+									"p_InheritsFromProxy": null,
+									"p_Name": "arch",
+									"p_ProfileNamespace": {
+										"content": {
+											"p_PrototypeToPrototypableCache": {
+												"content": {},
+												"type": "systemcomposer.profile.PrototypeToPrototypableCache",
+												"uuid": "f3b4c354-f65b-43bf-8c23-92c137572339"
+											}
+										},
+										"type": "systemcomposer.profile.ProfileNamespace",
+										"uuid": "95084fa9-dd7e-4776-90ed-862ce5fe9ba1"
+									}
+								},
+								"type": "systemcomposer.architecture.model.design.Architecture",
+								"uuid": "b640a83f-0aba-4180-829f-e548f4525144"
+							},
+							"p_TypeCatalog": {
+								"type": "systemcomposer.property.TypeCatalog",
+								"uuid": "f8dccb62-c4b7-4a2b-a079-39c72895f9af"
+							},
+							"p_ViewCatalogProxy": null
+						},
+						"type": "systemcomposer.architecture.model.SystemComposerModel",
+						"uuid": "955358d7-d47a-421e-8500-29eb5e62209e"
+					},
+					{
+						"content": {
+							"URI": "arch",
+							"modelType": "DICTIONARY_MODEL"
+						},
+						"type": "systemcomposer.services.proxy.ModelIdentifier",
+						"uuid": "b7701290-816f-4fad-a413-43d6bc465a35"
+					},
+					{
+						"content": {
+							"p_BuiltInValueTypes": [
+								{
+									"content": {
+										"elemProxy": null,
+										"p_BuiltInDataType": "boolean",
+										"p_ExposedParameters": null,
+										"p_Name": "boolean"
+									},
+									"type": "systemcomposer.property.ValueTypeDescriptor",
+									"uuid": "0fdee14b-54b1-404f-b728-51f0e395da54"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"p_ExposedParameters": null,
+										"p_Name": "double"
+									},
+									"type": "systemcomposer.property.ValueTypeDescriptor",
+									"uuid": "f3a69c79-5cce-4f73-9483-d21aed5466a3"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"p_BuiltInDataType": "int16",
+										"p_ExposedParameters": null,
+										"p_Name": "int16"
+									},
+									"type": "systemcomposer.property.ValueTypeDescriptor",
+									"uuid": "67beac64-69c0-45cb-8e63-ee3e74c32e39"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"p_BuiltInDataType": "int32",
+										"p_ExposedParameters": null,
+										"p_Name": "int32"
+									},
+									"type": "systemcomposer.property.ValueTypeDescriptor",
+									"uuid": "899b915d-7d5e-42b2-9f6d-f5024f6f0fac"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"p_BuiltInDataType": "int64",
+										"p_ExposedParameters": null,
+										"p_Name": "int64"
+									},
+									"type": "systemcomposer.property.ValueTypeDescriptor",
+									"uuid": "ce11e856-8540-4166-b681-11a200e64758"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"p_BuiltInDataType": "int8",
+										"p_ExposedParameters": null,
+										"p_Name": "int8"
+									},
+									"type": "systemcomposer.property.ValueTypeDescriptor",
+									"uuid": "570d0db7-231c-4487-bfea-b0862c1b7401"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"p_BuiltInDataType": "single",
+										"p_ExposedParameters": null,
+										"p_Name": "single"
+									},
+									"type": "systemcomposer.property.ValueTypeDescriptor",
+									"uuid": "7d01f8f2-2678-4c4a-b966-033adb45a4f3"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"p_BuiltInDataType": "string",
+										"p_ExposedParameters": null,
+										"p_Name": "string"
+									},
+									"type": "systemcomposer.property.ValueTypeDescriptor",
+									"uuid": "8c2bf68d-68e0-4055-8c86-8d3f0991ceae"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"p_BuiltInDataType": "uint16",
+										"p_ExposedParameters": null,
+										"p_Name": "uint16"
+									},
+									"type": "systemcomposer.property.ValueTypeDescriptor",
+									"uuid": "38268734-a654-44f0-81bd-ebb48a17bc3c"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"p_BuiltInDataType": "uint32",
+										"p_ExposedParameters": null,
+										"p_Name": "uint32"
+									},
+									"type": "systemcomposer.property.ValueTypeDescriptor",
+									"uuid": "eff09991-46d7-4802-aab1-6efd59180b8b"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"p_BuiltInDataType": "uint64",
+										"p_ExposedParameters": null,
+										"p_Name": "uint64"
+									},
+									"type": "systemcomposer.property.ValueTypeDescriptor",
+									"uuid": "39705eb3-dbce-43e3-ba53-cd818b2fb91f"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"p_BuiltInDataType": "uint8",
+										"p_ExposedParameters": null,
+										"p_Name": "uint8"
+									},
+									"type": "systemcomposer.property.ValueTypeDescriptor",
+									"uuid": "2bb195b4-02d4-400d-8d07-c6eeb47413c9"
+								}
+							],
+							"p_ModeledDataTypes": [
+								{
+									"content": {
+										"elemProxy": {
+											"content": {},
+											"type": "systemcomposer.services.proxy.ProxyTarget",
+											"uuid": "bf6caad5-dc95-4a80-a7ce-1678cfb436ae"
+										},
+										"p_BuiltInDataType": "double",
+										"p_ExposedParameters": null,
+										"p_Name": "AliasType"
+									},
+									"type": "systemcomposer.property.AliasType",
+									"uuid": "7eeb873a-d1c1-4f24-b89e-fff55edd094e"
+								},
+								{
+									"content": {
+										"elemProxy": {
+											"content": {},
+											"type": "systemcomposer.services.proxy.ProxyTarget",
+											"uuid": "0498249f-937a-4eda-b3e6-7221ba4cff85"
+										},
+										"p_ExposedParameters": null,
+										"p_Literals": [
+											{
+												"content": {
+													"elemProxy": null,
+													"p_Name": "enum1",
+													"p_Value": "0"
+												},
+												"type": "systemcomposer.property.EnumDataLiteral",
+												"uuid": "55e9c998-10c9-40cb-bfe0-e9d0990b96b2"
+											},
+											{
+												"content": {
+													"elemProxy": null,
+													"p_LiteralIndex": "1.0",
+													"p_Name": "enum2",
+													"p_Value": "1"
+												},
+												"type": "systemcomposer.property.EnumDataLiteral",
+												"uuid": "103961f6-b14e-4d2b-9527-0efff909a5ba"
+											}
+										],
+										"p_Name": "EnumType",
+										"p_StorageType": "int32"
+									},
+									"type": "systemcomposer.property.EnumDataType",
+									"uuid": "f564a176-b489-42b7-94e9-04d4531aa049"
+								},
+								{
+									"content": {
+										"elemProxy": {
+											"content": {},
+											"type": "systemcomposer.services.proxy.ProxyTarget",
+											"uuid": "8bbda2db-7aba-4058-98ab-e7049afe7438"
+										},
+										"p_ExposedParameters": null,
+										"p_Name": "NumericType",
+										"p_Slope": "1.0",
+										"p_WordLength": "64"
+									},
+									"type": "systemcomposer.property.NumericType",
+									"uuid": "ac8c1b34-e43d-4eef-b1e0-56fd8ef78928"
+								},
+								{
+									"content": {
+										"elemProxy": {
+											"content": {},
+											"type": "systemcomposer.services.proxy.ProxyTarget",
+											"uuid": "3ad89828-88cd-4c04-9758-e3f1d24d48f1"
+										},
+										"p_ExposedParameters": null,
+										"p_Name": "StructType",
+										"p_StructElements": [
+											{
+												"content": {
+													"elemProxy": null,
+													"p_Descriptor": {
+														"content": {
+															"elemProxy": null,
+															"p_ExposedParameters": null
+														},
+														"type": "systemcomposer.property.ValueTypeDescriptor",
+														"uuid": "6bc4a743-cd34-4ed6-b5e5-b510ba531389"
+													},
+													"p_ExposedParameters": null,
+													"p_Index": "1",
+													"p_Name": "Element"
+												},
+												"type": "systemcomposer.property.StructElement",
+												"uuid": "37453b4c-60be-4a11-a657-ccd189cc5e4a"
+											},
+											{
+												"content": {
+													"elemProxy": null,
+													"p_Descriptor": {
+														"content": {
+															"elemProxy": null,
+															"p_BuiltInDataType": "half",
+															"p_ExposedParameters": null
+														},
+														"type": "systemcomposer.property.ValueTypeDescriptor",
+														"uuid": "20cdfa3d-b386-4e28-a18c-8642acc8fd50"
+													},
+													"p_ExposedParameters": null,
+													"p_Index": "2",
+													"p_Name": "Element1"
+												},
+												"type": "systemcomposer.property.StructElement",
+												"uuid": "10d3ce70-371d-4e55-b565-112d76f6a300"
+											}
+										]
+									},
+									"type": "systemcomposer.property.StructDataType",
+									"uuid": "beac7d1c-c596-438c-af7a-d94d268e9b11"
+								}
+							],
+							"p_valueType": [
+								{
+									"content": {
+										"elemProxy": null,
+										"p_Name": "boolean",
+										"typeProxy": null
+									},
+									"type": "systemcomposer.property.BooleanType",
+									"uuid": "0831f5f1-5f76-4c99-a3d8-256db7eb7617"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"max": "1.7976931348623157e+308",
+										"min": "-1.7976931348623157e+308",
+										"p_Name": "double",
+										"typeProxy": null
+									},
+									"type": "systemcomposer.property.FloatType",
+									"uuid": "114cb0d3-30db-428b-ac6c-8f5e1a19a4bb"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"max": "32767",
+										"min": "-32768",
+										"p_Name": "int16",
+										"typeProxy": null
+									},
+									"type": "systemcomposer.property.IntegerType",
+									"uuid": "9916eb86-db4d-44c9-b78f-c3d65b93dde0"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"max": "2147483647",
+										"min": "-2147483648",
+										"p_Name": "int32",
+										"typeProxy": null
+									},
+									"type": "systemcomposer.property.IntegerType",
+									"uuid": "e9ec86c2-10e7-455a-b890-ed6479eb9422"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"max": "9223372036854775807",
+										"min": "-9223372036854775808",
+										"p_Name": "int64",
+										"typeProxy": null
+									},
+									"type": "systemcomposer.property.IntegerType",
+									"uuid": "eb6b520f-c008-4e51-96f7-cd7987fcdb03"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"max": "127",
+										"min": "-128",
+										"p_Name": "int8",
+										"typeProxy": null
+									},
+									"type": "systemcomposer.property.IntegerType",
+									"uuid": "0f566a1b-ba21-47ef-9791-e7907fd52bbe"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"max": "3.4028234663852886e+38",
+										"min": "-3.4028234663852886e+38",
+										"p_Name": "single",
+										"typeProxy": null
+									},
+									"type": "systemcomposer.property.FloatType",
+									"uuid": "6aaba742-d39b-4372-a465-6f84155f60bd"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"p_Name": "string",
+										"typeProxy": null
+									},
+									"type": "systemcomposer.property.StringType",
+									"uuid": "115e5f2c-f496-4f4b-8021-c5f0e15f0960"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"p_Name": "stringArray",
+										"typeProxy": null
+									},
+									"type": "systemcomposer.property.StringArrayType",
+									"uuid": "4586eed6-de12-4928-bd89-11d8a7a22ab8"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"max": "65535",
+										"min": "0",
+										"p_Name": "uint16",
+										"typeProxy": null
+									},
+									"type": "systemcomposer.property.IntegerType",
+									"uuid": "3150c7f2-9c57-4ac8-879d-efe017b9dd24"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"max": "4294967295",
+										"min": "0",
+										"p_Name": "uint32",
+										"typeProxy": null
+									},
+									"type": "systemcomposer.property.IntegerType",
+									"uuid": "e891336f-9600-474c-b282-2a27a41a4235"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"max": "9223372036854775807",
+										"min": "0",
+										"p_Name": "uint64",
+										"typeProxy": null
+									},
+									"type": "systemcomposer.property.IntegerType",
+									"uuid": "0d185588-e40b-4f95-9a9b-eaadba213a5c"
+								},
+								{
+									"content": {
+										"elemProxy": null,
+										"max": "255",
+										"min": "0",
+										"p_Name": "uint8",
+										"typeProxy": null
+									},
+									"type": "systemcomposer.property.IntegerType",
+									"uuid": "9368d01e-abcf-46d7-afd2-67dd8a982ac7"
+								}
+							]
+						},
+						"type": "systemcomposer.property.TypeCatalog",
+						"uuid": "f8dccb62-c4b7-4a2b-a079-39c72895f9af"
+					}
+				],
+				"packageUris": [
+					"http://schema.mathworks.com/mf0/systemcomposer_services_proxy/1.2",
+					"http://schema.mathworks.com/mf0/systemcomposer_architecture_model/3.21",
+					"http://schema.mathworks.com/mf0/systemcomposer_property/2.13",
+					"http://schema.mathworks.com/mf0/shared_slswarch_dm/1.16"
+				],
+				"version": ""
+			}
+		}
+	}
+}
