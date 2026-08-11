@@ -8,14 +8,12 @@
 // id, so the paste target must be resolved from the row id + model directly.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
 import { buildRows } from '../src/host/rowBuilder.js';
 import { resolveSectionForPaste } from '../src/host/structuralEdit.js';
 
-const archText = readFileSync(
-  '/System/Volumes/Data/mathworks/devel/sandbox/weiwang/work/dex/data/arch.sldd',
-  'utf8',
-);
+const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');
 
 function model(uri: string) {
   invalidate(uri);
