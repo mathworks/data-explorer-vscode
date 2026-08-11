@@ -567,15 +567,16 @@ export default class MatlabVariableNode extends DataNode {
     if (this._kind === 'scalar') {
       return false;
     }
-    if (this._kind === 'array' && this._dims[0] > 1 && this._dims[1] > 1) {
+    // A 2-D (or higher) matrix cannot take an appended element and stay
+    // rectangular, so Add Child is disabled for cell/string/numeric matrices.
+    // Row and column vectors (one dimension is 1) remain addable.
+    if ((this._kind === 'array' || this._kind === 'cell' || this._kind === 'string') && this._dims[0] > 1 && this._dims[1] > 1) {
       return false;
     }
-    if (
-      this._kind === 'string' &&
-      this.parent &&
-      this.parent instanceof MatlabVariableNode &&
-      this.parent._kind === 'string'
-    ) {
+    // A scalar (1x1) string is a leaf value, not a string array, so it has no
+    // element to add — whether it stands alone or is an element of a parent
+    // string array.
+    if (this._kind === 'string' && this._dims[0] === 1 && this._dims[1] === 1) {
       return false;
     }
     return true;
@@ -651,7 +652,15 @@ export default class MatlabVariableNode extends DataNode {
   }
 
   _addStringChild(): MatlabVariableNode {
-    const child = MatlabVariableNode._createScalar('', 'string', String(this.children.length + 1), this);
+    // Build the element as a string-kind node (matching _buildStringChildren) so
+    // it serializes as a bare "" element, not a nested [""] array — the latter is
+    // what _createScalar('string') would produce via _serializeScalar.
+    const child = new MatlabVariableNode(String(this.children.length + 1), this, { _dimensions: [1, 1] });
+    child._kind = 'string';
+    child._elements = [''];
+    child._dims = [1, 1];
+    child._scalarValue = '';
+    child._scalarType = 'string';
     this.addChild(child);
     this._elements.push('');
     this._updateDimsForCount(this._elements.length);
@@ -663,10 +672,10 @@ export default class MatlabVariableNode extends DataNode {
     if (this._kind === 'scalar') {
       return false;
     }
-    if (this._kind === 'array' && this._dims[0] > 1 && this._dims[1] > 1) {
-      return false;
-    }
-    if (this._kind === 'cell' && this._dims[0] > 1 && this._dims[1] > 1) {
+    // Removing an element from a 2-D (or higher) matrix would break its
+    // rectangular shape, so it is disabled for numeric/cell/string matrices.
+    // Row and column vectors (one dimension is 1) remain removable.
+    if ((this._kind === 'array' || this._kind === 'cell' || this._kind === 'string') && this._dims[0] > 1 && this._dims[1] > 1) {
       return false;
     }
     return this.children.length > 0;

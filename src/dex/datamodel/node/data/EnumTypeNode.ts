@@ -77,6 +77,9 @@ export class EnumTypeNode extends DataNode {
         const enumWrapper: Record<string, unknown> = {};
         Object.keys(rawEnumerals).forEach(function (k) { if (k === '_elements') { enumWrapper._elements = enumerals; } else { enumWrapper[k] = rawEnumerals[k]; } });
         if (!('_elements' in rawEnumerals)) { enumWrapper._elements = enumerals; }
+        // Keep _dimensions in sync with the enumeral count so adding or removing
+        // one stays consistent. Enumerals are stored as a row-vector struct array.
+        enumWrapper._dimensions = [1, enumerals.length];
         props.Enumerals = enumWrapper;
         return props;
     }
@@ -97,7 +100,9 @@ export class EnumTypeNode extends DataNode {
         const existing = new Set(this.children.map(function (c) { return c.name; }));
         let i = 1; let uniqueName = 'enum' + i;
         while (existing.has(uniqueName)) { i++; uniqueName = 'enum' + i; }
-        const nextVal = this.children.length;
+        // Enumeral values are stored as strings (e.g. "0", "1") to match the
+        // source format, so the new value is stringified.
+        const nextVal = String(this.children.length);
         const props = { Name: uniqueName, Value: nextVal, Description: '' };
         const childNode = new EnumValueNode(uniqueName, this, props);
         this.addChild(childNode); this._markModified();
