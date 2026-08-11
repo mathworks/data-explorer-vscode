@@ -51,7 +51,10 @@ export class BaseBusNode extends DataNode {
         const props = Object.assign({}, this.serial._properties as Record<string, unknown>);
         const rawEI = (this.serial._properties as Record<string, unknown>).Elements_internal;
         if (rawEI && typeof rawEI === 'object' && !Array.isArray(rawEI)) {
-            props.Elements_internal = Object.assign({}, rawEI as Record<string, unknown>, { _elements: elementsInternal });
+            // Preserve the source's Elements_internal metadata but re-derive both
+            // _elements and _dimensions from the live children, so adding or
+            // removing an element keeps the column-vector dimension in sync.
+            props.Elements_internal = Object.assign({}, rawEI as Record<string, unknown>, { _elements: elementsInternal, _dimensions: [elementsInternal.length, 1] });
         } else if (elementsInternal.length > 0) {
             props.Elements_internal = { _array_class: (this.constructor as typeof BaseBusNode).ELEMENT_CLASS_NAME, _dimensions: [elementsInternal.length, 1], _elements: elementsInternal, _mw_element_type: 'MATLABArray' };
         }
@@ -78,10 +81,29 @@ export class BaseBusNode extends DataNode {
         let i = 1;
         while (existing.has(uniqueName)) { uniqueName = baseName + i; i++; }
         const props = { Name: uniqueName };
-        const childSerial = { _rawElem: { _properties: props }, _properties: props };
+        const childSerial = { _rawElem: { _id: this._nextElementId(), _properties: props }, _properties: props };
         const childNode = this._createElementNode(uniqueName, props as Record<string, unknown>, childSerial as Record<string, unknown>);
         if (childNode) { this.addChild(childNode); this._markModified(); }
         return childNode;
+    }
+
+    // Allocate a unique element _id within this bus's id namespace. Elements and
+    // the bus wrapper share one entry-scoped numbering (bus="1", elements "2",
+    // "3", ...); pick one past the highest existing id so a new element never
+    // collides with the wrapper or a sibling.
+    _nextElementId(): string {
+        let max = 0;
+        const consider = function (id: unknown): void {
+            const n = typeof id === 'string' ? parseInt(id, 10) : typeof id === 'number' ? id : NaN;
+            if (Number.isFinite(n) && n > max) { max = n; }
+        };
+        const wrapper = ((this.serial._rawVal as Record<string, unknown> | undefined)?._elements as Record<string, unknown>[] | undefined)?.[0];
+        if (wrapper) { consider(wrapper._id); }
+        this.children.forEach(function (c) {
+            const rawElem = (c as BaseBusElementNode).serial._rawElem as Record<string, unknown> | undefined;
+            if (rawElem) { consider(rawElem._id); }
+        });
+        return String(max + 1);
     }
 
     execAddChild(): unknown {
