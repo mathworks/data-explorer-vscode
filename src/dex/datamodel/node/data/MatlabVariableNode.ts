@@ -2,6 +2,7 @@
 
 import DataNode from '../DataNode';
 import type { SetPropertyResult } from '../DataNode';
+import { matlabVariableKind } from '../../kindMap';
 import type { PropClass } from '../BaseNode';
 import type BaseNode from '../BaseNode';
 import * as NodeRegistry from '../NodeRegistry';
@@ -283,7 +284,7 @@ export default class MatlabVariableNode extends DataNode {
     if (this.classification) {
       return super.kind;
     }
-    return this.isDerived ? 'Constant' : 'MATLAB Variable';
+    return matlabVariableKind(this.isDerived);
   }
 
   get nameEditable(): boolean {
