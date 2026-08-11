@@ -376,6 +376,39 @@ export class DexTreeTable extends LitElement {
         border-radius: 2px;
       }
 
+      tr.data-row.drop-target-forbidden {
+        box-shadow: inset 0 0 0 2px var(--vscode-errorForeground, #f14c4c);
+        border-radius: 2px;
+        cursor: no-drop;
+      }
+
+      /* Floating drag tooltip that trails the cursor; fixed so it can overhang
+         the scroll container. Non-interactive so it never eats drag events. */
+      .drop-tooltip {
+        position: fixed;
+        z-index: 1000;
+        pointer-events: none;
+        padding: 3px 8px;
+        font-size: 12px;
+        font-family: var(--vscode-font-family, system-ui, sans-serif);
+        color: var(--vscode-editorHoverWidget-foreground, #fff);
+        background: var(--vscode-editorHoverWidget-background, #252526);
+        border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
+        border-radius: 3px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        white-space: nowrap;
+        max-width: 360px;
+      }
+
+      .drop-tooltip.forbidden {
+        color: var(--vscode-errorForeground, #f14c4c);
+      }
+
+      .drop-tooltip-icon {
+        margin-right: 5px;
+        font-weight: bold;
+      }
+
       td {
         padding: 3px 8px;
         border-right: 1px solid var(--dex-border-color-light, #e0e0e0);
@@ -563,6 +596,25 @@ export class DexTreeTable extends LitElement {
   @state() private _dragSourceId: string | null = null;
   @state() private _dropTargetId: string | null = null;
   @state() private _dropPosition: 'above' | 'on' | null = null;
+  // Live drop feedback driven by the injected dropPredictor: whether the row
+  // under the cursor rejects the drop, plus the hover tooltip ("Convert Bus to
+  // Data Interface" / "Simulink Parameter cannot be in Architectural Data") and
+  // its screen position. Empty tooltip renders nothing.
+  @state() private _dropForbidden = false;
+  @state() private _dropTooltip = '';
+  @state() private _dropTooltipX = 0;
+  @state() private _dropTooltipY = 0;
+
+  // Predicts a drop for the row under the cursor, injected by the host-side glue
+  // (table-main) and backed by the pure dropDecision. Returns null when there is
+  // no active drag or the target can't be resolved, in which case the table
+  // falls back to its built-in permissive drag behavior.
+  @property({ attribute: false }) dropPredictor:
+    | ((
+        targetRowId: string,
+        mode: 'copy' | 'move',
+      ) => { canDrop: boolean; cursor: string; tooltip: string; noop: boolean } | null)
+    | null = null;
 
   @state() private _columnWidths: Map<string, number> = new Map();
   @state() private _columnOrder: string[] = [...DEFAULT_COLUMN_ORDER];
@@ -1426,27 +1478,29 @@ export class DexTreeTable extends LitElement {
   // --- Row Drag and Drop ---
 
   private _onRowDragStart(rowId: string, e: DragEvent): void {
-    this._dragSourceId = rowId;
-    const rowIds =
-      this.selectedRowIds.length > 1 && this.selectedRowIds.includes(rowId) ? this.selectedRowIds : [rowId];
-
-    const classNames: string[] = [];
-    for (const id of rowIds) {
-      const row = this.rows.find((r) => r.ID === id);
-      if (row) {
-        const dt = typeof row.DataType === 'object' ? row.DataType.text : String(row.DataType || '');
-        if (dt) classNames.push(dt);
-      }
+    // Section headers aren't draggable entries. If the grabbed row is a header,
+    // there's nothing to drag; otherwise drag the multi-selection (when the
+    // grabbed row is part of it) or just the grabbed row, minus any headers.
+    if (rowId.indexOf('section:') === 0) {
+      e.preventDefault();
+      return;
     }
+    this._dragSourceId = rowId;
+    const rowIds = (
+      this.selectedRowIds.length > 1 && this.selectedRowIds.includes(rowId) ? this.selectedRowIds : [rowId]
+    ).filter((id) => id.indexOf('section:') !== 0);
 
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'copyMove';
-      e.dataTransfer.setData('application/dex-rows', JSON.stringify({ rowIds, classNames }));
+      // A payload is still set so the browser treats this as a real drag across
+      // the webview boundary, but the authoritative source lives in the host
+      // drag register (dataTransfer doesn't reliably survive the boundary).
+      e.dataTransfer.setData('application/dex-rows', JSON.stringify({ rowIds }));
       this._setDragImage(e, rowId, rowIds.length);
     }
     this.dispatchEvent(
       new CustomEvent('dex-row-drag-start', {
-        detail: { rowIds, classNames },
+        detail: { rowIds },
         bubbles: true,
         composed: true,
       }),
@@ -1479,44 +1533,79 @@ export class DexTreeTable extends LitElement {
     this._dragSourceId = null;
     this._dropTargetId = null;
     this._dropPosition = null;
+    this._dropForbidden = false;
+    this._dropTooltip = '';
+    // Tell the host the drag is over so it can clear the register + broadcast.
+    this.dispatchEvent(new CustomEvent('dex-row-drag-end', { bubbles: true, composed: true }));
   }
 
   private _onRowDragOver(rowId: string, e: DragEvent): void {
     if (rowId === this._dragSourceId) return;
+    const mode: 'copy' | 'move' = e.ctrlKey || e.metaKey ? 'copy' : 'move';
+
+    // Ask the injected predictor whether this drop is allowed and what to show.
+    // With no predictor (or no active drag it recognizes), fall back to the
+    // built-in permissive behavior so drag still works without the host glue.
+    const decision = this.dropPredictor ? this.dropPredictor(rowId, mode) : null;
+    if (decision) {
+      this._dropTargetId = rowId;
+      this._dropPosition = 'on';
+      this._dropForbidden = !decision.canDrop;
+      this._dropTooltip = decision.tooltip;
+      this._dropTooltipX = e.clientX;
+      this._dropTooltipY = e.clientY;
+      if (decision.canDrop) {
+        // A droppable target must preventDefault so the browser fires `drop`.
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = decision.cursor === 'copy' ? 'copy' : 'move';
+      } else if (e.dataTransfer) {
+        // Not droppable: leave the drop un-accepted (no preventDefault) and show
+        // the no-drop cursor. A no-op (same-section move) reads as "none" too.
+        e.dataTransfer.dropEffect = 'none';
+      }
+      return;
+    }
+
     e.preventDefault();
     if (e.dataTransfer) {
-      e.dataTransfer.dropEffect = e.ctrlKey || e.metaKey ? 'copy' : 'move';
+      e.dataTransfer.dropEffect = mode;
     }
     this._dropTargetId = rowId;
     this._dropPosition = 'on';
+    this._dropForbidden = false;
+    this._dropTooltip = '';
   }
 
   private _onRowDragLeave(_e: DragEvent): void {
     this._dropTargetId = null;
     this._dropPosition = null;
+    this._dropForbidden = false;
+    this._dropTooltip = '';
   }
 
   private _onRowDrop(targetRowId: string, e: DragEvent): void {
     e.preventDefault();
     e.stopPropagation();
 
-    const data = e.dataTransfer?.getData('application/dex-rows');
-    if (!data) return;
+    const mode: 'copy' | 'move' = e.ctrlKey || e.metaKey ? 'copy' : 'move';
 
-    const { rowIds } = JSON.parse(data);
-    const isCopy = e.ctrlKey || e.metaKey;
+    // Respect the predictor: never complete a rejected or no-op drop. The drag
+    // may have started in ANOTHER webview, so the source rows come from the host
+    // drag register, not local dataTransfer (which doesn't cross the boundary) —
+    // the drop event only needs to carry the target + mode.
+    const decision = this.dropPredictor ? this.dropPredictor(targetRowId, mode) : null;
 
     this._dragSourceId = null;
     this._dropTargetId = null;
     this._dropPosition = null;
+    this._dropForbidden = false;
+    this._dropTooltip = '';
+
+    if (decision && !decision.canDrop) return;
 
     this.dispatchEvent(
       new CustomEvent('dex-row-drop', {
-        detail: {
-          sourceRowIds: rowIds,
-          targetRowId,
-          mode: isCopy ? 'copy' : 'move',
-        },
+        detail: { targetRowId, mode },
         bubbles: true,
         composed: true,
       }),
@@ -2143,7 +2232,9 @@ export class DexTreeTable extends LitElement {
                     'copy'
                       ? 'copied'
                       : ''} ${isDragSource ? 'drag-source' : ''} ${isDropTarget && this._dropPosition === 'on'
-                      ? 'drop-target-on'
+                      ? this._dropForbidden
+                        ? 'drop-target-forbidden'
+                        : 'drop-target-on'
                       : ''} ${isDropTarget && this._dropPosition === 'above' ? 'drop-target-above' : ''}"
                     data-row-id="${row.ID}"
                     draggable="true"
@@ -2173,8 +2264,22 @@ export class DexTreeTable extends LitElement {
           </table>
         </div>
       </div>
-      ${this._renderColumnMenu()}
+      ${this._renderColumnMenu()} ${this._renderDropTooltip()}
     `;
+  }
+
+  // The floating drag tooltip that follows the cursor while dragging, describing
+  // what the drop will do ("Convert Bus to Data Interface") or why it can't
+  // ("Simulink Parameter cannot be in Architectural Data"). Rendered only while a
+  // predictor has produced a tooltip; the forbidden variant is styled distinctly.
+  private _renderDropTooltip() {
+    if (!this._dropTooltip) return html``;
+    return html`<div
+      class="drop-tooltip ${this._dropForbidden ? 'forbidden' : ''}"
+      style="left:${this._dropTooltipX + 14}px; top:${this._dropTooltipY + 16}px"
+    >
+      ${this._dropForbidden ? html`<span class="drop-tooltip-icon">⊘</span>` : ''}${this._dropTooltip}
+    </div>`;
   }
 
   private _renderColumnsButton() {
