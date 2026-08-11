@@ -6,11 +6,15 @@ import { findEntrySpan, detectIndent } from './entrySplice.js';
 import { buildRows, COLUMNS, COLUMN_LABELS } from './rowBuilder.js';
 import { captureBaseline, computeModified, clearBaseline } from './slddBaseline.js';
 import { setClipboard, getClipboard, clearClipboard, clipboardState } from './clipboard.js';
+import { setDrag, getDrag, clearDrag, dragDescriptor, type DragRegisterItem } from './dragState.js';
+import { sectionRules } from './sectionRules.js';
 import {
   deleteEntry,
   deleteChild,
   addChild as addChildEdit,
   pasteEntry,
+  pasteEntries,
+  deleteEntriesByName,
   findOwningEntry,
   resolveSectionForPaste,
   reserializeEntry,
@@ -42,6 +46,18 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
   private static broadcastClipboardState(): void {
     for (const wv of SlddTextEditorProvider.liveWebviews) {
       wv.postMessage({ type: 'clipboardState', ...clipboardState() });
+    }
+  }
+
+  // Broadcast the current drag descriptor (or null when a drag ends) to every
+  // live webview, mirroring the clipboard broadcast. Because HTML5 dataTransfer
+  // does not survive the webview iframe boundary, the dragged rows live in the
+  // host drag register; each webview learns of the in-flight drag through this
+  // descriptor and predicts the drop locally (dropDecision) on dragover.
+  private static broadcastDragState(): void {
+    const descriptor = dragDescriptor();
+    for (const wv of SlddTextEditorProvider.liveWebviews) {
+      wv.postMessage({ type: 'dragState', descriptor });
     }
   }
 
@@ -107,6 +123,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
               columnLabels: COLUMN_LABELS,
               editable: true,
             });
+            // Ship this document's section drop-rules so the webview can predict
+            // a drop (dropDecision) live on dragover without a host round-trip.
+            webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
             webview.postMessage({ type: 'clipboardState', ...clipboardState() });
             // If a cross-tab navigation targeted this file (e.g. it was just
             // opened by a Usage-link click), select the requested row now.
@@ -372,6 +391,132 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       }
     };
 
+    // --- Drag start: snapshot the dragged rows into the host drag register ------
+    // Mirrors applyCopy but for possibly-many rows: each row's owning entry is
+    // serialized (the payload the eventual paste uses) alongside the display
+    // facts (class/kind) the webview needs to predict the drop. Then broadcast
+    // the payload-free descriptor so every open table can render live feedback.
+    const applyDragStart = (msg: { rowIds: string[] }): void => {
+      try {
+        const currentText = document.getText();
+        invalidate(uriString);
+        getModel(uriString, name, currentText);
+        const rowIds = Array.isArray(msg.rowIds) ? msg.rowIds : [];
+        const items: DragRegisterItem[] = [];
+        let sourceSection = '';
+        let sourceSectionLabel = '';
+        let sourceIsDerived = false;
+        for (const rowId of rowIds) {
+          const node = findNode(uriString, rowId);
+          if (!node) continue;
+          const entry = findOwningEntry(node);
+          if (!entry || !entry.isEntry) continue;
+          const payload = entry.serialize() as Record<string, unknown>;
+          const value = payload.value as Record<string, unknown> | undefined;
+          const arrayClass = (value && typeof value === 'object' && (value._array_class as string)) || '';
+          items.push({
+            payload,
+            className: entry.className ?? '',
+            arrayClass,
+            kind: entry.kind ?? '',
+            isMatlabVariable: !arrayClass,
+          });
+          const section = entry.parent;
+          if (section) {
+            sourceSection = section.name ?? '';
+            sourceSectionLabel = section.displayName ?? section.name ?? '';
+            sourceIsDerived = !!entry.isDerived;
+          }
+        }
+        if (items.length === 0) {
+          clearDrag();
+        } else {
+          setDrag(uriString, sourceSection, sourceSectionLabel, sourceIsDerived, items);
+        }
+        SlddTextEditorProvider.broadcastDragState();
+      } catch {
+        clearDrag();
+        SlddTextEditorProvider.broadcastDragState();
+      }
+    };
+
+    // --- Drag end: clear the register and tell every webview the drag is over ---
+    const applyDragEnd = (): void => {
+      clearDrag();
+      SlddTextEditorProvider.broadcastDragState();
+    };
+
+    // --- Drop: complete the drag as copy/cut + paste ----------------------------
+    // A drop is exactly the cut/copy-paste it mirrors: paste the dragged payloads
+    // into the target section; for a MOVE, first remove the sources (so names are
+    // preserved, just as cut-then-paste does). Same-document moves delete + paste
+    // in one text; a cross-document move deletes from the source document via its
+    // own edit. The target section is resolved from the dropped-on row, which may
+    // be a section header (an empty section's only drop target).
+    const applyDrop = async (msg: { rowId: string; mode: 'copy' | 'move' }): Promise<void> => {
+      try {
+        if (!ensureValidJson()) return;
+        const drag = getDrag();
+        if (!drag || drag.items.length === 0) {
+          webview.postMessage({ type: 'error', message: 'Nothing to drop.' });
+          return;
+        }
+        const payloads = drag.items.map((it) => it.payload);
+        const isMove = msg.mode === 'move';
+        const sameDoc = drag.sourceDocUri === uriString;
+        const sourceNames = drag.items
+          .map((it) => (it.payload.name as string) || '')
+          .filter((n) => n.length > 0);
+
+        let currentText = document.getText();
+        // A same-document move removes the originals first so the pasted copies
+        // keep their names (mirrors cut-then-paste). A copy, or a cross-document
+        // move, leaves this document's originals untouched here.
+        if (isMove && sameDoc) {
+          currentText = deleteEntriesByName(currentText, sourceNames);
+        }
+
+        invalidate(uriString);
+        const model = getModel(uriString, name, currentText);
+        const node = findNode(uriString, msg.rowId);
+        const section = resolveSectionForPaste(model, node, msg.rowId);
+        if (!section) {
+          webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
+          return;
+        }
+
+        const { newText, selectIds } = pasteEntries(currentText, section, payloads);
+        await replaceAll(newText);
+        if (selectIds.length) webview.postMessage({ type: 'selectRow', rowId: selectIds[selectIds.length - 1] });
+
+        // Cross-document move: remove the originals from the SOURCE document via
+        // its own WorkspaceEdit (a second native undo step, exactly like a
+        // cut in one file + paste in another).
+        if (isMove && !sameDoc) {
+          await deleteFromSourceDocument(drag.sourceDocUri, sourceNames);
+        }
+
+        clearDrag();
+        SlddTextEditorProvider.broadcastDragState();
+      } catch (err) {
+        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+      }
+    };
+
+    // Remove named entries from a document that is NOT this webview's, for a
+    // cross-file move. Opens the target document (whether or not its table is
+    // open) and applies a full-text replace as one WorkspaceEdit.
+    const deleteFromSourceDocument = async (sourceUri: string, names: string[]): Promise<void> => {
+      const uri = vscode.Uri.parse(sourceUri);
+      const srcDoc = await vscode.workspace.openTextDocument(uri);
+      const srcText = srcDoc.getText();
+      const trimmed = deleteEntriesByName(srcText, names);
+      if (trimmed === srcText) return;
+      const edit = new vscode.WorkspaceEdit();
+      edit.replace(uri, new vscode.Range(srcDoc.positionAt(0), srcDoc.positionAt(srcText.length)), trimmed);
+      await vscode.workspace.applyEdit(edit);
+    };
+
     // --- Message wiring ---------------------------------------------------------
     const sub = webview.onDidReceiveMessage((msg) => {
       if (msg?.type === 'ready') {
@@ -390,6 +535,12 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         void applyCut(msg);
       } else if (msg?.type === 'paste') {
         void applyPaste(msg);
+      } else if (msg?.type === 'dragStart') {
+        applyDragStart(msg);
+      } else if (msg?.type === 'dragEnd') {
+        applyDragEnd();
+      } else if (msg?.type === 'drop') {
+        void applyDrop(msg);
       } else if (msg?.type === 'locateInText') {
         void applyLocateInText(msg);
       } else if (msg?.type === 'navigate') {
@@ -439,6 +590,12 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     webview.html = this.getHtml(webview, distRoot);
     webviewPanel.onDidDispose(() => {
       SlddTextEditorProvider.liveWebviews.delete(webview);
+      // If a drag originated from this now-closing view, drop it so a stale
+      // register can't complete against another document.
+      if (getDrag()?.sourceDocUri === uriString) {
+        clearDrag();
+        SlddTextEditorProvider.broadcastDragState();
+      }
       sub.dispose();
       changeSub.dispose();
       saveSub.dispose();

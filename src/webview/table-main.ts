@@ -6,6 +6,9 @@ import '../dex/components/dex-context-menu.js';
 import '../dex/components/dex-error-dialog.js';
 import { nextExpandedIds } from './rowUpdates.js';
 import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from './menuItems.js';
+import { dropDecision, type DragMode, type DropTarget, type DragSource } from './dropDecision.js';
+import type { SectionRule } from '../host/sectionRules.js';
+import type { DragDescriptor } from '../host/dragState.js';
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -20,6 +23,62 @@ let editable = false;
 let clipboardState: ClipboardState = { canPaste: false, mode: null };
 // The row id under the last right-click, relayed with the chosen action.
 let lastContextRowId: string | null = null;
+
+// This document's uri + its section drop-rules, shipped by the host with each
+// setRows. Together with the broadcast drag descriptor they let the predictor
+// run dropDecision entirely client-side on dragover (no host round-trip).
+let docUri = '';
+let sectionRulesList: SectionRule[] = [];
+// The in-flight drag broadcast from the host (null when no drag is active).
+// Because a drag can originate in another webview, this — not local
+// dataTransfer — is the authoritative source of what is being dragged.
+let dragDescriptor: DragDescriptor | null = null;
+
+// Resolve the section a row belongs to: a section header (`section:<name>`) is
+// that section; a data row carries its section via its `parent` (also a header
+// id). Returns the matching SectionRule, or null if it can't be resolved.
+function sectionRuleForRow(rowId: string): SectionRule | null {
+  let sectionName: string | null = null;
+  if (rowId.indexOf('section:') === 0) {
+    sectionName = rowId.slice('section:'.length);
+  } else {
+    const row = (table.rows ?? []).find((r: { ID: string; parent?: string | null }) => r.ID === rowId);
+    const parent = row?.parent;
+    if (typeof parent === 'string' && parent.indexOf('section:') === 0) {
+      sectionName = parent.slice('section:'.length);
+    }
+  }
+  if (sectionName == null) return null;
+  return sectionRulesList.find((r) => r.sectionName === sectionName) ?? null;
+}
+
+// The predictor injected into the table: given the row under the cursor and the
+// drag mode, run the pure dropDecision against the broadcast drag descriptor and
+// this document's section rules. Returns null when there's no active drag or the
+// target section can't be resolved, so the table falls back to default behavior.
+function predictDrop(
+  targetRowId: string,
+  mode: DragMode,
+): { canDrop: boolean; cursor: string; tooltip: string; noop: boolean } | null {
+  if (!dragDescriptor) return null;
+  const rule = sectionRuleForRow(targetRowId);
+  if (!rule) return null;
+  const source: DragSource = {
+    docUri: dragDescriptor.docUri,
+    sectionName: dragDescriptor.sectionName,
+    sectionLabel: dragDescriptor.sectionLabel,
+    isDerived: dragDescriptor.isDerived,
+    items: dragDescriptor.items,
+  };
+  const target: DropTarget = {
+    docUri,
+    sectionName: rule.sectionName,
+    sectionLabel: rule.sectionLabel,
+    isDerived: rule.isDerived,
+    allowedTypes: rule.allowedTypes,
+  };
+  return dropDecision(source, target, mode);
+}
 
 // A row id the host asked us to select once it exists in the table. Set on a
 // rename (the row's id changes, so the old selection is stale); applied as soon
@@ -138,6 +197,13 @@ window.addEventListener('message', (event: MessageEvent) => {
     applyPendingSelection();
   } else if (msg.type === 'clipboardState') {
     clipboardState = { canPaste: !!msg.canPaste, mode: msg.mode ?? null };
+  } else if (msg.type === 'sectionRules') {
+    docUri = typeof msg.docUri === 'string' ? msg.docUri : docUri;
+    sectionRulesList = Array.isArray(msg.rules) ? msg.rules : [];
+  } else if (msg.type === 'dragState') {
+    // The host broadcasts the in-flight drag (or null when it ends) to every
+    // webview, so a drag started in another tab predicts correctly here.
+    dragDescriptor = msg.descriptor ?? null;
   } else if (msg.type === 'error') {
     hideLoading();
     showError(msg.message);
@@ -270,6 +336,28 @@ contextMenu.addEventListener('dex-action', (e: Event) => {
   }
   if (!lastContextRowId) return;
   vscode.postMessage({ type: actionId, rowId: lastContextRowId });
+});
+
+// Inject the drop predictor so the table can render live cursor + tooltip
+// feedback on dragover (backed by the pure dropDecision + host-shipped rules).
+table.dropPredictor = predictDrop;
+
+// Drag lifecycle → host. On drag start the host snapshots the dragged rows into
+// its drag register and broadcasts the descriptor; on end it clears + rebroad-
+// casts; on drop it completes the move/copy as paste (+ source delete). All
+// gated on editable so read-only views never initiate a structural drag.
+table.addEventListener('dex-row-drag-start', (e: Event) => {
+  if (!editable) return;
+  const rowIds = (e as CustomEvent).detail?.rowIds ?? [];
+  vscode.postMessage({ type: 'dragStart', rowIds });
+});
+table.addEventListener('dex-row-drag-end', () => {
+  vscode.postMessage({ type: 'dragEnd' });
+});
+table.addEventListener('dex-row-drop', (e: Event) => {
+  if (!editable) return;
+  const detail = (e as CustomEvent).detail;
+  vscode.postMessage({ type: 'drop', rowId: detail.targetRowId, mode: detail.mode });
 });
 
 // Relay row selection to the host (for PI + tree sync in later phases).
