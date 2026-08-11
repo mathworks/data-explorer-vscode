@@ -36,6 +36,37 @@ export class ServiceBusNode extends BaseBusNode {
     get displayValue(): string { return ''; }
     get valueEditable(): boolean { return false; }
     _createElementNode(name: string, props: Record<string, unknown>, serial: Record<string, unknown>): FunctionElementNode { return new FunctionElementNode(name, this, props, serial); }
+
+    // Add a new service function. Unlike a plain bus element, a
+    // Simulink.FunctionElement carries a Prototype ("y = fn(u,v)") and an
+    // Arguments BusElement array [u, v, y]. The function name fn uses an
+    // increasing number so it stays unique, and the element plus each argument
+    // get fresh entry-scoped _ids (past every id already in use, including the
+    // nested argument ids of sibling functions).
+    addChildNode(): FunctionElementNode {
+        const existing = new Set(this.children.map(function (c) { return c.name; }));
+        let n = this.children.length; let fnName = 'f' + n;
+        while (existing.has(fnName)) { n++; fnName = 'f' + n; }
+        const prototype = 'y = ' + fnName + '(u,v)';
+        let id = this._maxElementId();
+        const elemId = String(++id);
+        const argNames = ['u', 'v', 'y'];
+        const argElements = argNames.map(function (argName) {
+            return { _id: String(++id), _properties: { Complexity: 'real', Dimensions: 1, DimensionsMode: 'Fixed', DocUnits: '', Name: argName } };
+        });
+        const props: Record<string, unknown> = {
+            Arguments: { _array_class: 'Simulink.BusElement', _dimensions: [argElements.length, 1], _elements: argElements },
+            Asynchronous: false,
+            Name: fnName,
+            Prototype: prototype,
+        };
+        const childSerial = { _rawElem: { _id: elemId, _properties: props }, _properties: props };
+        const childNode = new FunctionElementNode(fnName, this, props, childSerial as Record<string, unknown>);
+        this.addChild(childNode);
+        this._markModified();
+        return childNode;
+    }
+
     static ELEMENT_CLASS_NAME = 'Simulink.FunctionElement';
     static get defaultName(): string { return 'ServiceInterface'; }
     static createDefault(name: string, parent: BaseNode | null): ServiceBusNode { return BaseBusNode._createDefaultBus(name, parent, ServiceBusNode, CLASS_NAME) as ServiceBusNode; }

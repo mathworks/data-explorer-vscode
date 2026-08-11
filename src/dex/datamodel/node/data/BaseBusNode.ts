@@ -87,24 +87,34 @@ export class BaseBusNode extends DataNode {
         return childNode;
     }
 
-    // Allocate a unique element _id within this bus's id namespace. Elements and
-    // the bus wrapper share one entry-scoped numbering (bus="1", elements "2",
-    // "3", ...); pick one past the highest existing id so a new element never
-    // collides with the wrapper or a sibling.
-    _nextElementId(): string {
+    // The highest element _id currently in use within this bus's id namespace.
+    // Elements and the bus wrapper share one entry-scoped numbering (bus="1",
+    // elements "2", "3", ...). Each child's raw element is walked recursively so
+    // nested ids (e.g. a ServiceBus function element's Arguments) are counted too
+    // — a new id must clear every id already present, not just the top-level ones.
+    _maxElementId(): number {
         let max = 0;
         const consider = function (id: unknown): void {
             const n = typeof id === 'string' ? parseInt(id, 10) : typeof id === 'number' ? id : NaN;
             if (Number.isFinite(n) && n > max) { max = n; }
         };
+        const walk = function (o: unknown): void {
+            if (o && typeof o === 'object') {
+                const rec = o as Record<string, unknown>;
+                if ('_id' in rec) { consider(rec._id); }
+                Object.keys(rec).forEach(function (k) { walk(rec[k]); });
+            }
+        };
         const wrapper = ((this.serial._rawVal as Record<string, unknown> | undefined)?._elements as Record<string, unknown>[] | undefined)?.[0];
         if (wrapper) { consider(wrapper._id); }
-        this.children.forEach(function (c) {
-            const rawElem = (c as BaseBusElementNode).serial._rawElem as Record<string, unknown> | undefined;
-            if (rawElem) { consider(rawElem._id); }
-        });
-        return String(max + 1);
+        this.children.forEach(function (c) { walk((c as BaseBusElementNode).serial._rawElem); });
+        return max;
     }
+
+    // Allocate a unique element _id: one past the highest existing id so a new
+    // element never collides with the wrapper or a sibling (or a sibling's
+    // nested arguments).
+    _nextElementId(): string { return String(this._maxElementId() + 1); }
 
     execAddChild(): unknown {
         if (!this.canAddChild()) { return null; }
