@@ -3,6 +3,7 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { highContrastStyles } from '../styles/high-contrast.styles.js';
+import { dragModeFromModifiers, type DragMode } from '../../webview/dragMode.js';
 import './dex-icon.js';
 
 export interface TreeTableRow {
@@ -1507,17 +1508,12 @@ export class DexTreeTable extends LitElement {
 
   // --- Row Drag and Drop ---
 
-  // The copy-vs-move modifier for a drag follows the PLATFORM convention, because
-  // the browser derives the native dropEffect from the OS modifier: on macOS a
-  // plain drag is a move and Option (⌥, altKey) requests a copy (Cmd means move,
-  // per Finder); elsewhere Ctrl requests the copy. Reading the wrong key made the
-  // browser force dropEffect='none' (Cmd+drag on macOS), cancelling the drop
-  // before it fired. Matching the platform key keeps the browser and our feedback
-  // in agreement.
-  private _dragModeFrom(e: DragEvent | MouseEvent): 'copy' | 'move' {
-    const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
-    const wantsCopy = isMac ? e.altKey : e.ctrlKey;
-    return wantsCopy ? 'copy' : 'move';
+  // The copy-vs-move modifier follows the platform convention (Option on macOS,
+  // Ctrl elsewhere); see dragMode.ts for why matching the OS key is required. The
+  // mapping lives there as a pure, unit-tested function; this just supplies the
+  // live platform + modifier state.
+  private _dragModeFrom(e: DragEvent | MouseEvent): DragMode {
+    return dragModeFromModifiers(navigator.platform, { altKey: e.altKey, ctrlKey: e.ctrlKey });
   }
 
   private _onRowDragStart(rowId: string, e: DragEvent): void {
