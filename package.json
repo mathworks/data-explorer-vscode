@@ -57,6 +57,16 @@
           }
         ],
         "priority": "option"
+      },
+      {
+        "viewType": "dataExplorer.binarySlddView",
+        "displayName": "Data Explorer (editable)",
+        "selector": [
+          {
+            "filenamePattern": "*.sldd"
+          }
+        ],
+        "priority": "option"
       }
     ],
     "languages": [

@@ -101,7 +101,14 @@ suite('Data Explorer .sldd lazy-cut move — one edit, one undo', () => {
       'the .sldd text editor is active so undo targets its stack',
     );
     await vscode.commands.executeCommand('default:undo');
-    await new Promise((r) => setTimeout(r, 300));
+    // Undo is async in the Electron host: the command returns before the model
+    // mutation settles. Poll for the document to return to its original (clean)
+    // state instead of a fixed sleep, which raced and made this test flaky.
+    const undoStart = Date.now();
+    while (Date.now() - undoStart < 3000) {
+      if (!doc.isDirty && doc.getText() === originalText) break;
+      await new Promise((r) => setTimeout(r, 25));
+    }
 
     assert.strictEqual(doc.getText(), originalText, 'one undo restored the original text exactly');
     assert.strictEqual(doc.isDirty, false, 'and the document is clean again (a full single-step undo)');

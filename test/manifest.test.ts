@@ -17,6 +17,7 @@ const commandIds: string[] = contributes.commands.map((c: { command: string }) =
 
 const BINARY_VIEW = 'dataExplorer.binaryView';
 const TABLE_VIEW = 'dataExplorer.tableView';
+const BINARY_SLDD_VIEW = 'dataExplorer.binarySlddView';
 
 describe('customEditors: text-backed table for JSON .sldd + byte-backed binary editor', () => {
   const editors = contributes.customEditors as Array<{
@@ -25,9 +26,18 @@ describe('customEditors: text-backed table for JSON .sldd + byte-backed binary e
     priority: string;
   }>;
 
-  it('registers exactly two custom editors: the table view and the binary view', () => {
+  it('registers exactly three custom editors: table view, binary view, binary sldd view', () => {
     const viewTypes = editors.map((e) => e.viewType).sort();
-    expect(viewTypes).toEqual([BINARY_VIEW, TABLE_VIEW].sort());
+    expect(viewTypes).toEqual([BINARY_VIEW, TABLE_VIEW, BINARY_SLDD_VIEW].sort());
+  });
+
+  it('the writable binary-sldd table view owns *.sldd at priority option (reached via redirect)', () => {
+    const view = editors.find((e) => e.viewType === BINARY_SLDD_VIEW)!;
+    expect(view, 'the binarySlddView editor must be declared').toBeTruthy();
+    expect(view.selector.map((s) => s.filenamePattern)).toEqual(['*.sldd']);
+    // 'option' (not 'default') so it never auto-opens; the binary editor is the
+    // default and redirects compressed-binary .sldd here.
+    expect(view.priority).toBe('option');
   });
 
   it('the byte-backed binary editor is DEFAULT for all four formats incl *.sldd', () => {

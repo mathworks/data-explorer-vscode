@@ -16,7 +16,7 @@ const LOCKED_CHILD: MenuRow = { ID: 'section:design/S/f', _canCopy: true, _canDe
 
 describe('buildContextMenuItems', () => {
   it('enables Copy/Cut/Delete for an editable entry, Add Child off for a scalar', () => {
-    const get = byId(buildContextMenuItems(ENTRY, NO_CLIP, true));
+    const get = byId(buildContextMenuItems(ENTRY, NO_CLIP, true, true));
     expect(get('copy').disabled).toBe(false);
     expect(get('cut').disabled).toBe(false);
     expect(get('delete').disabled).toBe(false);
@@ -25,25 +25,25 @@ describe('buildContextMenuItems', () => {
   });
 
   it('enables Add Child for a struct/bus entry', () => {
-    const get = byId(buildContextMenuItems(STRUCT, NO_CLIP, true));
+    const get = byId(buildContextMenuItems(STRUCT, NO_CLIP, true, true));
     expect(get('addChild').disabled).toBe(false);
   });
 
   it('Paste tracks clipboard state (and requires editable)', () => {
-    expect(byId(buildContextMenuItems(ENTRY, HAS_CLIP, true))('paste').disabled).toBe(false);
-    expect(byId(buildContextMenuItems(ENTRY, HAS_CLIP, false))('paste').disabled).toBe(true);
-    expect(byId(buildContextMenuItems(ENTRY, NO_CLIP, true))('paste').disabled).toBe(true);
+    expect(byId(buildContextMenuItems(ENTRY, HAS_CLIP, true, true))('paste').disabled).toBe(false);
+    expect(byId(buildContextMenuItems(ENTRY, HAS_CLIP, false, true))('paste').disabled).toBe(true);
+    expect(byId(buildContextMenuItems(ENTRY, NO_CLIP, true, true))('paste').disabled).toBe(true);
   });
 
   it('a locked nested child cannot be cut or deleted, but can be copied', () => {
-    const get = byId(buildContextMenuItems(LOCKED_CHILD, HAS_CLIP, true));
+    const get = byId(buildContextMenuItems(LOCKED_CHILD, HAS_CLIP, true, true));
     expect(get('copy').disabled).toBe(false);
     expect(get('cut').disabled).toBe(true);
     expect(get('delete').disabled).toBe(true);
   });
 
   it('read-only doc: only Copy enabled, all mutating + undo/redo disabled', () => {
-    const get = byId(buildContextMenuItems(ENTRY, HAS_CLIP, false));
+    const get = byId(buildContextMenuItems(ENTRY, HAS_CLIP, false, true));
     expect(get('copy').disabled).toBe(false);
     for (const id of ['cut', 'paste', 'addChild', 'delete', 'undo', 'redo']) {
       expect(get(id).disabled).toBe(true);
@@ -53,24 +53,37 @@ describe('buildContextMenuItems', () => {
   it('Location in Text is enabled for any data row (entry or nested child), off for a section', () => {
     // Every data row carries _canCopy; a nested child resolves to its owning
     // entry's span, so it is locatable too.
-    const get = byId(buildContextMenuItems(ENTRY, NO_CLIP, true));
+    const get = byId(buildContextMenuItems(ENTRY, NO_CLIP, true, true));
     expect(get('locateInText').disabled).toBe(false);
     // Carries a Cmd/Ctrl+L shortcut (wired in table-main.ts).
     expect(get('locateInText').shortcut).toMatch(/L$/);
-    expect(byId(buildContextMenuItems(LOCKED_CHILD, NO_CLIP, true))('locateInText').disabled).toBe(false);
+    expect(byId(buildContextMenuItems(LOCKED_CHILD, NO_CLIP, true, true))('locateInText').disabled).toBe(false);
     // Section headers (null capability flags) can't be located.
-    expect(byId(buildContextMenuItems(null, NO_CLIP, true))('locateInText').disabled).toBe(true);
+    expect(byId(buildContextMenuItems(null, NO_CLIP, true, true))('locateInText').disabled).toBe(true);
+  });
+
+  it('omits Location in Text entirely when the document has no text view (binary .sldd)', () => {
+    // A compressed-binary .sldd has no plain-text view, so the action is dropped
+    // rather than shown disabled — and its trailing separator goes with it.
+    const items = buildContextMenuItems(ENTRY, HAS_CLIP, true, false);
+    expect(items.find((i) => i.id === 'locateInText')).toBeUndefined();
+    expect(items.filter((i) => i.separator)).toHaveLength(2);
+    // The rest of the editable menu is unaffected.
+    const get = byId(items);
+    expect(get('copy').disabled).toBe(false);
+    expect(get('paste').disabled).toBe(false);
+    expect(get('undo').disabled).toBe(false);
   });
 
   it('a null row (right-click empty area) disables everything mutating', () => {
-    const get = byId(buildContextMenuItems(null, NO_CLIP, true));
+    const get = byId(buildContextMenuItems(null, NO_CLIP, true, true));
     expect(get('copy').disabled).toBe(true);
     expect(get('delete').disabled).toBe(true);
     expect(get('addChild').disabled).toBe(true);
   });
 
   it('includes three separators between the action groups', () => {
-    const seps = buildContextMenuItems(ENTRY, NO_CLIP, true).filter((i) => i.separator);
+    const seps = buildContextMenuItems(ENTRY, NO_CLIP, true, true).filter((i) => i.separator);
     expect(seps).toHaveLength(3);
   });
 });

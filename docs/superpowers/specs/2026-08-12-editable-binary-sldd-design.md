@@ -144,28 +144,39 @@ has no cross-part checksum). Blast radius per edit:
   `<Object Class="DD.Dictionary">` where new entries are inserted.
 
 **`xmlStructuralEdit.ts`** — pure text transforms, parallel to `structuralEdit.ts`:
-- `reserializeEntryXml(entryNode)` (fresh `LastMod` on structural change; preserved
-  `_rawLastMod` otherwise).
+- `reserializeEntryXml(entryNode)` — preserves the entry's `_rawLastMod` (no forced
+  date bump), matching the JSON path (which never re-stamps `LastMod`) and keeping
+  serializer output deterministic for tests. MATLAB re-stamps `LastMod` itself the
+  next time the entry is edited there.
 - `deleteEntryXml`, `addEntryXml`, `pasteEntryXml`, `addChildXml`/`deleteChildXml`
   (these regenerate the **owning entry** — the Bus/Dimension case), and
   `deleteEntriesByNameXml` for multi/move.
 - Non-entry `<Object>` handling for `AllowAccessBWS` and sub-dictionary references
   at their own granularity.
 
-### 3.4 Ported code (from the upstream data explorer product, genericized)
+### 3.4 Serializer reuse (mostly already vendored)
 
-Reuse the upstream product's proven per-node model→XML serializer; our only change
-is **blast radius** (per touched entry, not whole tree):
-- The binary-sldd serializer (`serializeBinarySldd` / `buildDataChunkXml` /
-  `serializeEntryToXml`) — adapted to per-entry use.
-- `DataNode.serializeXml` + the `_serialize*Xml` statics.
-- The ~22 node `serializeXml` / `_getSerializedProperties` overrides
-  (Parameter, Signal, Struct, Bus, Enum, Alias, Numeric/Value types, ConfigSet,
-  Variant*, LookupTable, Breakpoint, CustomObject, MatlabVariable, …).
-- `XmlUtils` (`escapeXml`, `formatDoubleXml`, `formatNumericXml`, `formatComplexXml`,
-  `transposeToColumnMajor`, `pad`).
+The per-node model→XML serializer is **already present in `src/dex/`** and needs no
+porting: `DataNode.serializeXml`, the `_serialize*Xml` statics, every node
+`_getSerializedProperties`/`serializeXml` override (Parameter, Signal, Struct, Bus,
+Enum, Alias, Numeric/Value types, ConfigSet, Variant*, LookupTable, Breakpoint,
+CustomObject, MatlabVariable, …), and `XmlUtils`. `SlddNode` already carries the
+`_zipMetadata`, `_dataSourceAttrs`, and `allowAccessBWS` fields the serializer reads.
 
-All ported comments/codenames genericized per the repo curation rules before commit.
+Only the **top-level entry point** is missing and must be added to `src/dex/` (from
+the upstream product, genericized):
+- `serializeBinarySldd(slddNode)` / `buildDataChunkXml` — whole-file serialize +
+  re-zip. We use `buildDataChunkXml` for the save-gate re-parse comparison, not for
+  routine per-edit writes.
+- `serializeEntryToXml(entryNode)` — the per-entry fragment builder, which is the
+  reuse target for entry-level splice. Our only difference from upstream is **blast
+  radius**: we call `serializeEntryToXml` for the touched entry and splice it, rather
+  than rebuilding all entries.
+
+Additionally, `BinarySlddParser` gains an exported `parseBinarySlddParts(chunkXml,
+zipMetadata)` so the editor can rebuild the model from the live `chunkXml` without a
+re-zip/re-unzip round-trip on every edit. All added comments/codenames are
+genericized per the repo curation rules before commit.
 
 ## 4. Data flow
 
@@ -224,7 +235,16 @@ leaves the on-disk `.sldd` untouched.**
 3. **Serializer unit tests** per type: `double`/`single`/typed-int scalars, vectors,
    matrices (column-major transpose), complex, `char`, `string`, `logical`, struct,
    cell, enum, and objects (Parameter, Signal, Bus + BusElement incl. the
-   Dimension-update case). Assert exact XML text.
+   Dimension-update case). Assert exact XML text. Includes the **nested-object case**
+   — a struct field / cell element holding a `Simulink.Parameter` — which is the
+   splice boundary's worst case.
+   - **Confirmed invariant (verified in MATLAB R2027a):** an object nested inside a
+     struct field or cell element serializes as `<Element Class="Simulink.Parameter">`,
+     NOT as a nested `<Object>`. `<Object>` appears only at top level (`DD.ENTRY`,
+     `DD.Dictionary`, `DD.DICTIONARYREFERENCE`). Therefore an entry's
+     `<Object Class="DD.ENTRY">…</Object>` fragment never contains a nested `<Object>`,
+     and the string-scan span location (the same scan `extractEntryFragments` already
+     uses) is safe. `xmlEntrySplice` tests assert this on the nested fixture.
 4. **Structural transforms**: `deleteEntryXml`, `addEntryXml`, `pasteEntryXml`,
    `add/deleteChildXml`, `deleteEntriesByNameXml`; assert spliced XML and
    insertion-before-`DD.Dictionary` placement.

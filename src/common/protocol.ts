@@ -31,6 +31,13 @@ export interface SetRowsMessage {
   editable: boolean;
   /** Persistent read-only banner text (e.g. size-limited JSON .sldd). */
   notice?: string;
+  /**
+   * Whether this document is backed by a plain-text view the "Location in Text"
+   * action can reveal a row in. True for JSON .sldd (a TextDocument); false/absent
+   * for compressed-binary .sldd, whose only text payload is internal XML with no
+   * user-facing text editor — so the action is omitted there rather than dead.
+   */
+  hasTextView?: boolean;
 }
 
 /** This document's section drop-rules, for client-side drop prediction. */

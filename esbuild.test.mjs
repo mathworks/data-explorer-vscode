@@ -15,6 +15,12 @@ await esbuild.build({
   platform: 'node',
   format: 'cjs',
   target: 'node18',
+  // Prefer packages' ESM entry — matches the production host build. Without
+  // this, jsonc-parser (pulled in transitively via entrySplice) resolves to its
+  // UMD `main`, whose runtime require('./impl/*') calls are left unresolved
+  // after bundling and throw "Cannot find module './impl/format'" when the test
+  // loads inside the Electron host.
+  mainFields: ['module', 'main'],
   // `vscode` is injected by the Electron host; `mocha` is resolved from
   // node_modules by the test runner. Neither should be bundled.
   external: ['vscode', 'mocha'],
