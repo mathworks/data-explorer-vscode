@@ -1,16 +1,19 @@
 // Copyright 2026 The MathWorks, Inc.
 // Integration tests for BinaryEditorProvider — the read-only, byte-backed custom
-// editor for .slx/.mat/.prj and binary (zip) .sldd. Run inside a real VS Code so
-// the webview, Uri, and workspace.fs APIs are genuine. We drive the provider
-// directly (openCustomDocument + resolveCustomEditor against a real WebviewPanel)
-// to cover the vscode glue the vitest suite cannot: the read-only render shell
-// (CSP/nonce/webview HTML) and the editable-JSON .sldd → tableView redirect. The
-// row-building itself is covered by the rowBuilder/matRowBuilder unit suites.
+// editor for .slx/.mat/.prj. It is the DEFAULT for *.sldd too, but redirects both
+// editable-JSON .sldd (→ tableView) and compressed-binary .sldd (→ binarySlddView)
+// to their writable editors. Run inside a real VS Code so the webview, Uri, and
+// workspace.fs APIs are genuine. We drive the provider directly
+// (openCustomDocument + resolveCustomEditor against a real WebviewPanel) to cover
+// the vscode glue the vitest suite cannot: the read-only render shell
+// (CSP/nonce/webview HTML) and both .sldd redirects. The row-building itself is
+// covered by the rowBuilder/matRowBuilder unit suites.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
 
 const TABLE_VIEW = 'dataExplorer.tableView';
+const BINARY_SLDD_VIEW = 'dataExplorer.binarySlddView';
 
 function ctx(): vscode.ExtensionContext {
   const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
@@ -78,22 +81,36 @@ suite('BinaryEditorProvider', () => {
     }
   });
 
-  test('resolving a binary (zip) .sldd renders read-only without redirecting', async () => {
+  test('resolving a binary (zip) .sldd redirects to the writable binary-sldd view and disposes the binary panel', async () => {
     const uri = wsUri('binary.sldd');
     const token = new vscode.CancellationTokenSource().token;
     const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token);
     const panel = makePanel();
     let disposed = false;
     panel.onDidDispose(() => (disposed = true));
-    try {
-      await provider.resolveCustomEditor(doc, panel, token);
-      // A zip .sldd is genuinely binary → it stays in the read-only view (no
-      // redirect, panel not disposed) and gets the render shell.
-      assert.strictEqual(disposed, false, 'the binary .sldd panel is not disposed');
-      assert.ok(panel.webview.html.includes('<dex-tree-table'), 'renders the read-only shell');
-    } finally {
-      if (!disposed) panel.dispose();
+
+    await provider.resolveCustomEditor(doc, panel, token);
+
+    // A compressed-binary .sldd is now editable → the read-only view calls
+    // openWith(binarySlddView) and disposes THIS panel, mirroring the JSON
+    // redirect above.
+    assert.ok(disposed, 'the redundant binary panel disposes itself after redirect');
+
+    // Poll for the binarySlddView tab the redirect opened.
+    const start = Date.now();
+    let found = false;
+    while (Date.now() - start < 5000) {
+      found = vscode.window.tabGroups.all
+        .flatMap((g) => g.tabs)
+        .some(
+          (t) =>
+            (t.input as { viewType?: string; uri?: vscode.Uri })?.viewType === BINARY_SLDD_VIEW &&
+            (t.input as { uri?: vscode.Uri })?.uri?.toString() === uri.toString(),
+        );
+      if (found) break;
+      await new Promise((r) => setTimeout(r, 50));
     }
+    assert.ok(found, 'the binary (zip) .sldd was redirected into the writable view');
   });
 
   test('resolving an editable JSON .sldd redirects to the table view and disposes the binary panel', async () => {

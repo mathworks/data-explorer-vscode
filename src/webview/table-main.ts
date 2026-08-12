@@ -22,6 +22,9 @@ const errorDialog = document.querySelector('dex-error-dialog') as any;
 // Menu state cached from host messages so the menu builds synchronously on
 // right-click (no round-trip): whether the doc is editable, and clipboard state.
 let editable = false;
+// Whether the document has a plain-text view "Location in Text" can reveal a row
+// in (JSON .sldd yes, compressed-binary .sldd no). Gates that menu item + Cmd+L.
+let hasTextView = false;
 let clipboardState: ClipboardState = { canPaste: false, mode: null };
 // The row id under the last right-click, relayed with the chosen action.
 let lastContextRowId: string | null = null;
@@ -162,6 +165,7 @@ window.addEventListener('message', (event: MessageEvent) => {
     setNotice(typeof msg.notice === 'string' ? msg.notice : undefined);
     const rows = msg.rows ?? [];
     editable = !!msg.editable;
+    hasTextView = !!msg.hasTextView;
     table.columns = msg.columns ?? null;
     table.columnLabels = msg.columnLabels ?? null;
     // Preserve the current selection across the rebuild if the row still exists.
@@ -250,7 +254,8 @@ table.addEventListener(
   (e: Event) => {
     const ev = e as KeyboardEvent;
     if ((ev.key === 'l' || ev.key === 'L') && (ev.metaKey || ev.ctrlKey) && !ev.shiftKey && !ev.altKey) {
-      if (!editable) return;
+      // No text view (compressed-binary .sldd) → no "Location in Text" target.
+      if (!editable || !hasTextView) return;
       const selected = Array.isArray(table.selectedRowIds) ? table.selectedRowIds : [];
       const rowId = selected[0];
       // Section rows carry no owning entry; the host would reject them, so skip.
@@ -320,7 +325,7 @@ table.addEventListener('dex-table-context-menu', (e: Event) => {
   const detail = (e as CustomEvent).detail;
   lastContextRowId = detail.rowId ?? null;
   const row = (table.rows ?? []).find((r: MenuRow) => r.ID === detail.rowId) ?? null;
-  const items = buildContextMenuItems(row, clipboardState, editable);
+  const items = buildContextMenuItems(row, clipboardState, editable, hasTextView);
   contextMenu.show(detail.x, detail.y, items);
 });
 

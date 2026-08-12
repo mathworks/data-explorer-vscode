@@ -21,6 +21,7 @@ import type { TableToHostMessage } from '../common/protocol.js';
 // viewType of the editable text-backed table (SlddTextEditorProvider). Declared
 // here as a constant to avoid importing the provider (which would be circular).
 const TABLE_VIEW_TYPE = 'dataExplorer.tableView';
+const BINARY_SLDD_VIEW_TYPE = 'dataExplorer.binarySlddView';
 
 // Custom document. Read-only for all binary formats (.slx, .mat, .prj, zipped
 // .sldd). There is NO in-memory working-copy string: the file on disk is the
@@ -115,6 +116,18 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           });
           // Dispose THIS panel specifically (not closeActiveEditor, which is
           // racy) so only the redundant binary tab goes away.
+          webviewPanel.dispose();
+          return;
+        }
+        // A compressed-binary (zip/OPC) .sldd is now editable in its own writable
+        // custom editor — redirect there, mirroring the editable-JSON redirect.
+        // A too-large-to-decode zip stays here (read-only) via the guard above.
+        if (isZipBytes(bytes) && !exceedsStringDecodeLimit(bytes)) {
+          const preview = this.isPanelPreview(document.uri);
+          await vscode.commands.executeCommand('vscode.openWith', document.uri, BINARY_SLDD_VIEW_TYPE, {
+            preview,
+            pinned: !preview,
+          });
           webviewPanel.dispose();
           return;
         }

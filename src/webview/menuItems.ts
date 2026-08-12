@@ -91,6 +91,7 @@ export function buildContextMenuItems(
   row: MenuRow | null,
   clipboard: ClipboardState,
   editable: boolean,
+  hasTextView: boolean,
 ): ContextMenuItem[] {
   const canCopy = !!row?._canCopy;
   const canDelete = editable && !!row?._canDelete;
@@ -108,8 +109,15 @@ export function buildContextMenuItems(
     { id: '_sep1', label: '', separator: true },
     { id: 'addChild', label: 'Add Child', icon: 'addChild', disabled: !canAddChild },
     { id: 'delete', label: 'Delete', icon: 'delete', shortcut: navigatorIsMac() ? '⌫' : 'Del', disabled: !canDelete },
-    { id: '_sep2', label: '', separator: true },
-    { id: 'locateInText', label: 'Location in Text', icon: 'locate', shortcut: `${MOD}L`, disabled: !canLocate },
+    // "Location in Text" reveals the row in the plain-text view. A compressed-
+    // binary .sldd has no such view, so the action is omitted there (with its
+    // trailing separator) rather than shown as permanently dead UI.
+    ...(hasTextView
+      ? ([
+          { id: '_sep2', label: '', separator: true },
+          { id: 'locateInText', label: 'Location in Text', icon: 'locate', shortcut: `${MOD}L`, disabled: !canLocate },
+        ] as ContextMenuItem[])
+      : []),
     { id: '_sep3', label: '', separator: true },
     { id: 'undo', label: 'Undo', shortcut: `${MOD}Z`, disabled: !editable },
     { id: 'redo', label: 'Redo', shortcut: `${SHIFT}${MOD}Z`, disabled: !editable },

@@ -4,9 +4,10 @@ import { SectionsTreeProvider } from './host/SectionsTreeProvider.js';
 import { PropertiesViewProvider } from './host/PropertiesViewProvider.js';
 import { BinaryEditorProvider } from './host/BinaryEditorProvider.js';
 import { SlddTextEditorProvider } from './host/SlddTextEditorProvider.js';
+import { BinarySlddEditorProvider } from './host/BinarySlddEditorProvider.js';
 import { HealthDecorationProvider } from './host/HealthDecorationProvider.js';
 import { invalidate, findNode } from './host/SlddModel.js';
-import { isEditableJsonSlddBytes, exceedsTextSyncLimit } from './host/slddFormat.js';
+import { isEditableJsonSlddBytes, exceedsTextSyncLimit, isZipBytes } from './host/slddFormat.js';
 import { handleNavigate } from './host/navigate.js';
 import { invalidateUsageGraph } from './host/usageGraph.js';
 import { isSectionRowId } from './common/sectionRowId.js';
@@ -36,12 +37,28 @@ async function isEditableJsonSldd(uri: vscode.Uri): Promise<boolean> {
   }
 }
 
+// True if the .sldd at `uri` is a compressed-binary (zip/OPC) dictionary. These
+// open in the writable BinarySlddEditorProvider (table editing + re-zip on save).
+async function isZipSldd(uri: vscode.Uri): Promise<boolean> {
+  if (!uri.path.endsWith('.sldd')) return false;
+  try {
+    const bytes = await vscode.workspace.fs.readFile(uri);
+    return isZipBytes(bytes);
+  } catch {
+    return false;
+  }
+}
+
 // Route a URI to the right editor by content: editable JSON .sldd → table view
-// (native undo/redo); everything else → binary read-only view.
+// (native undo/redo); compressed-binary .sldd → writable binary table view;
+// everything else → binary read-only view.
 async function openInBestEditor(uri: vscode.Uri, options?: { preview?: boolean }): Promise<void> {
-  const viewType = (await isEditableJsonSldd(uri))
-    ? SlddTextEditorProvider.viewType
-    : BinaryEditorProvider.viewType;
+  let viewType = BinaryEditorProvider.viewType;
+  if (await isEditableJsonSldd(uri)) {
+    viewType = SlddTextEditorProvider.viewType;
+  } else if (await isZipSldd(uri)) {
+    viewType = BinarySlddEditorProvider.viewType;
+  }
   // VS Code's `vscode.openWith` hardcodes `pinned: true` before spreading the
   // caller's options, so `{ preview: true }` alone is ignored — the tab opens
   // pinned, not as a reused preview tab (microsoft/vscode#235535, fix PR #255247
@@ -87,6 +104,12 @@ export function activate(context: vscode.ExtensionContext): void {
   textProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
   textProvider.onNavigate = navigate;
 
+  // Compressed-binary .sldd opens in this writable provider (table editing +
+  // re-zip on save). Shares the selection→PI and navigate wiring.
+  const binarySlddProvider = new BinarySlddEditorProvider(context);
+  binarySlddProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
+  binarySlddProvider.onNavigate = navigate;
+
   // Health badges/colors on tree rows (missing/cycle/modified). The tree
   // encodes each row's state into its resourceUri; this provider renders it.
   const healthProvider = new HealthDecorationProvider();
@@ -120,6 +143,13 @@ export function activate(context: vscode.ExtensionContext): void {
       // resolveCustomEditor call is self-contained; the shared model cache is
       // keyed by URI and read-only, so concurrent instances are safe.
       { webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: true },
+    ),
+    vscode.window.registerCustomEditorProvider(
+      BinarySlddEditorProvider.viewType,
+      binarySlddProvider,
+      // A writable custom editor owns its own edit stack; a single instance per
+      // document keeps that stack unambiguous.
+      { webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: false },
     ),
     vscode.window.registerTreeDataProvider('dataExplorer.sections', provider),
     vscode.window.registerFileDecorationProvider(healthProvider),

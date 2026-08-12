@@ -31,21 +31,40 @@ export function parseBinarySldd(arrayBuffer: ArrayBuffer): Record<string, unknow
   const entries = unzipSync(uint8);
   const decoder = new TextDecoder();
 
+  const dataXml = entries['data/chunk0.xml'];
+  if (!dataXml) {
+    throw new Error('Missing data/chunk0.xml in binary SLDD');
+  }
+  const xmlString = decoder.decode(dataXml);
+
+  const zipMetadata: Record<string, Uint8Array> = {};
+  for (const [name, data] of Object.entries(entries)) {
+    if (name !== 'data/chunk0.xml') {
+      zipMetadata[name] = data;
+    }
+  }
+
+  return parseBinarySlddParts(xmlString, zipMetadata);
+}
+
+// Build the model content from a live data/chunk0.xml string plus the pass-through
+// zip parts, without a zip/unzip round-trip. Used by the writable binary editor to
+// rebuild the model after each in-memory edit, and by the save gate to re-validate.
+export function parseBinarySlddParts(
+  xmlString: string,
+  zipMetadata: Record<string, Uint8Array>,
+): Record<string, unknown> {
+  const decoder = new TextDecoder();
+
   let release = '';
-  if (entries['metadata/mwcoreProperties.xml']) {
-    const xml = decoder.decode(entries['metadata/mwcoreProperties.xml']);
+  if (zipMetadata['metadata/mwcoreProperties.xml']) {
+    const xml = decoder.decode(zipMetadata['metadata/mwcoreProperties.xml']);
     const match = xml.match(/<matlabRelease>([^<]+)<\/matlabRelease>/);
     if (match) {
       release = match[1];
     }
   }
 
-  const dataXml = entries['data/chunk0.xml'];
-  if (!dataXml) {
-    throw new Error('Missing data/chunk0.xml in binary SLDD');
-  }
-
-  const xmlString = decoder.decode(dataXml);
   const doc = xmlParser.parse(xmlString);
   const dataSource = doc.DataSource as XmlNode;
   const dataSourceAttrs = {
@@ -83,13 +102,6 @@ export function parseBinarySldd(arrayBuffer: ArrayBuffer): Record<string, unknow
       if (sub) {
         dictionaryReferences.push(sub);
       }
-    }
-  }
-
-  const zipMetadata: Record<string, Uint8Array> = {};
-  for (const [name, data] of Object.entries(entries)) {
-    if (name !== 'data/chunk0.xml') {
-      zipMetadata[name] = data;
     }
   }
 

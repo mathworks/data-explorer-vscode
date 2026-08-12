@@ -6,7 +6,16 @@ import { findEntrySpan, detectIndent } from './entrySplice.js';
 import { buildRows, COLUMNS, COLUMN_LABELS, type ClipMark } from './rowBuilder.js';
 import { captureBaseline, computeModified, clearBaseline } from './slddBaseline.js';
 import { setClipboard, getClipboard, clearClipboard, clipboardState } from './clipboard.js';
-import { setDrag, getDrag, clearDrag, dragDescriptor, type DragRegisterItem } from './dragState.js';
+import { setDrag, getDrag, clearDrag, type DragRegisterItem } from './dragState.js';
+import {
+  registerWebview,
+  unregisterWebview,
+  registerSourceDeleter,
+  unregisterSourceDeleter,
+  broadcastClipboardState,
+  broadcastDragState,
+  deleteFromSource,
+} from './editorHub.js';
 import { sectionRules } from './sectionRules.js';
 import {
   deleteEntry,
@@ -37,36 +46,12 @@ import type { TableToHostMessage } from '../common/protocol.js';
 export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
   public static readonly viewType = 'dataExplorer.tableView';
 
-  // Every live table webview mapped to its repaint callback, so a copy/cut/
-  // clear/paste in ONE editor can update ALL of them. The host clipboard is a
-  // single shared singleton (clipboard.ts), but each webview caches its own
-  // `canPaste` flag to build the menu synchronously — without this broadcast, a
-  // second already-open .sldd would never learn the clipboard now has content,
-  // so its Paste stays disabled and pasting across files silently does nothing.
-  // A repaint (not just a state post) is needed because a lazy cut makes NO
-  // text edit, yet its source row must gain the dimmed affordance, and the
-  // owning document must repaint to show it (and to clear it after paste).
-  private static readonly liveWebviews = new Map<vscode.Webview, () => void>();
-
-  private static broadcastClipboardState(): void {
-    for (const [wv, repaint] of SlddTextEditorProvider.liveWebviews) {
-      wv.postMessage({ type: 'clipboardState', ...clipboardState() });
-      // Repaint so the cut/copied source row shows (or clears) its affordance.
-      repaint();
-    }
-  }
-
-  // Broadcast the current drag descriptor (or null when a drag ends) to every
-  // live webview, mirroring the clipboard broadcast. Because HTML5 dataTransfer
-  // does not survive the webview iframe boundary, the dragged rows live in the
-  // host drag register; each webview learns of the in-flight drag through this
-  // descriptor and predicts the drop locally (dropDecision) on dragover.
-  private static broadcastDragState(): void {
-    const descriptor = dragDescriptor();
-    for (const wv of SlddTextEditorProvider.liveWebviews.keys()) {
-      wv.postMessage({ type: 'dragState', descriptor });
-    }
-  }
+  // Clipboard and drag state are shared across BOTH the JSON and binary table
+  // editors (they back the same webview + the same singletons), so the live-
+  // webview registry and its broadcasts live in editorHub.ts. Without the
+  // broadcast, a second already-open .sldd would never learn the clipboard now
+  // has content (Paste stays disabled), and a drag begun in one .sldd would not
+  // reach another to predict its drop. See editorHub.js.
 
   // Relay selection to the Property Inspector (wired in extension.ts).
   public onSelect?: (uriString: string, rowIds: string[]) => void;
@@ -134,6 +119,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
               columns: COLUMNS,
               columnLabels: COLUMN_LABELS,
               editable: true,
+              // Backed by a TextDocument, so "Location in Text" has a target.
+              hasTextView: true,
             });
             // Ship this document's section drop-rules so the webview can predict
             // a drop (dropDecision) live on dragover without a host round-trip.
@@ -156,7 +143,11 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // Track this webview (mapped to its repaint) so clipboard-state changes from
     // any editor reach it — including a lazy cut, which only marks the clipboard
     // and needs a repaint to show the source row's affordance.
-    SlddTextEditorProvider.liveWebviews.set(webview, post);
+    registerWebview(webview, post);
+    // Register how to delete named entries from THIS document, so a cross-
+    // document move whose SOURCE is this .sldd can complete its source-delete
+    // via a format-appropriate edit (here: a full-text WorkspaceEdit).
+    registerSourceDeleter(uriString, (names) => deleteFromSourceDocument(uriString, names));
 
     // Apply new full text to the TextDocument via a WorkspaceEdit. This feeds
     // VS Code's native undo stack (so undo/redo + dirty are automatic) and fires
@@ -277,7 +268,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         setClipboard(payload, mode, sectionName, uriString);
         // Broadcast so every open table (not just this one) enables Paste and
         // repaints — the cut/copied source row shows its affordance.
-        SlddTextEditorProvider.broadcastClipboardState();
+        broadcastClipboardState();
         return true;
       } catch {
         return false;
@@ -410,7 +401,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // deleting then re-adding the same entry would just churn the document.
         if (isCut && sameDoc && clip.sourceSection === section.name) {
           clearClipboard();
-          SlddTextEditorProvider.broadcastClipboardState();
+          broadcastClipboardState();
           return;
         }
 
@@ -435,16 +426,17 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         if (selectId) webview.postMessage({ type: 'selectRow', rowId: selectId });
 
         // A cross-document cut removes the source from ITS document via that
-        // document's own WorkspaceEdit (a second, native undo step — exactly a
-        // cut in one file + paste in another).
+        // document's own format-appropriate deleter (the source may be a binary
+        // .sldd), a second native undo step — exactly a cut in one file + paste
+        // in another. The hub dispatches to whichever provider owns the source.
         if (isCut && !sameDoc && clip.sourceDocUri && srcName) {
-          await deleteFromSourceDocument(clip.sourceDocUri, [srcName]);
+          await deleteFromSource(clip.sourceDocUri, [srcName]);
         }
 
         // The cut is now consumed; a copy stays on the clipboard for re-paste.
         if (isCut) {
           clearClipboard();
-          SlddTextEditorProvider.broadcastClipboardState();
+          broadcastClipboardState();
         }
       } catch (err) {
         webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
@@ -493,17 +485,17 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         } else {
           setDrag(uriString, sourceSection, sourceSectionLabel, sourceIsDerived, items);
         }
-        SlddTextEditorProvider.broadcastDragState();
+        broadcastDragState();
       } catch {
         clearDrag();
-        SlddTextEditorProvider.broadcastDragState();
+        broadcastDragState();
       }
     };
 
     // --- Drag end: clear the register and tell every webview the drag is over ---
     const applyDragEnd = (): void => {
       clearDrag();
-      SlddTextEditorProvider.broadcastDragState();
+      broadcastDragState();
     };
 
     // --- Drop: complete the drag as copy/cut + paste ----------------------------
@@ -550,14 +542,15 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         if (selectIds.length) webview.postMessage({ type: 'selectRow', rowId: selectIds[selectIds.length - 1] });
 
         // Cross-document move: remove the originals from the SOURCE document via
-        // its own WorkspaceEdit (a second native undo step, exactly like a
-        // cut in one file + paste in another).
+        // ITS OWN format-appropriate deleter (the source may be a binary .sldd),
+        // a second native undo step — exactly like a cut in one file + paste in
+        // another. The hub dispatches to whichever provider owns the source.
         if (isMove && !sameDoc) {
-          await deleteFromSourceDocument(drag.sourceDocUri, sourceNames);
+          await deleteFromSource(drag.sourceDocUri, sourceNames);
         }
 
         clearDrag();
-        SlddTextEditorProvider.broadcastDragState();
+        broadcastDragState();
       } catch (err) {
         webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
       }
@@ -644,12 +637,13 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
     webview.html = this.getHtml(webview, distRoot);
     webviewPanel.onDidDispose(() => {
-      SlddTextEditorProvider.liveWebviews.delete(webview);
+      unregisterWebview(webview);
+      unregisterSourceDeleter(uriString);
       // If a drag originated from this now-closing view, drop it so a stale
       // register can't complete against another document.
       if (getDrag()?.sourceDocUri === uriString) {
         clearDrag();
-        SlddTextEditorProvider.broadcastDragState();
+        broadcastDragState();
       }
       sub.dispose();
       changeSub.dispose();

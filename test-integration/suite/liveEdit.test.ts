@@ -13,8 +13,11 @@ import * as vscode from 'vscode';
 // the table is a view of the native TextDocument, so there is ONE document and
 // one native undo stack shared by the table and any text view of the same URI.
 const TABLE_VIEW = 'dataExplorer.tableView';
-// Binary/zip .sldd and .slx/.mat/.prj remain in the read-only binaryView.
+// .slx/.mat/.prj remain in the read-only binaryView.
 const BINARY_VIEW = 'dataExplorer.binaryView';
+// A compressed-binary (zip/OPC) .sldd is editable in its own writable view; the
+// read-only binaryView redirects such a file here (mirroring the JSON redirect).
+const BINARY_SLDD_VIEW = 'dataExplorer.binarySlddView';
 
 // Locate the `{...}` span of the entries[] element whose "name" equals the given
 // name. Kept local (not imported from src/host/entrySplice) so this integration
@@ -346,16 +349,18 @@ suite('Data Explorer .sldd live edit', () => {
     );
   });
 
-  test('a binary (zip) .sldd opens read-only without error', async () => {
+  test('a binary (zip) .sldd opens in the writable binary-sldd view without error', async () => {
     const ws = vscode.workspace.workspaceFolders![0];
     const uri = vscode.Uri.joinPath(ws.uri, 'binary.sldd');
     await vscode.workspace.fs.stat(uri); // fixture must exist
+    // Opening via the DEFAULT binaryView redirects a zip .sldd to the writable
+    // binarySlddView, so the active tab settles on that view type.
     await vscode.commands.executeCommand('vscode.openWith', uri, BINARY_VIEW);
-    await waitForActiveViewType(BINARY_VIEW);
+    await waitForActiveViewType(BINARY_SLDD_VIEW);
     const tab = activeTab();
-    assert.ok(tab, 'a read-only tab is active for the binary .sldd');
-    assert.strictEqual((tab!.input as {viewType?:string})?.viewType, BINARY_VIEW);
-    assert.strictEqual(tab!.isDirty, false, 'a read-only binary .sldd tab is not dirty');
+    assert.ok(tab, 'a tab is active for the binary .sldd');
+    assert.strictEqual((tab!.input as {viewType?:string})?.viewType, BINARY_SLDD_VIEW);
+    assert.strictEqual(tab!.isDirty, false, 'a freshly-opened binary .sldd tab is not dirty');
     assert.ok(vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
       'extension stays active after opening a binary .sldd');
   });
