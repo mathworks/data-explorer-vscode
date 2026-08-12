@@ -628,6 +628,12 @@ export class DexTreeTable extends LitElement {
   @state() private _dragIconId = '';
   @state() private _dragLabel = '';
   @state() private _dragCount = 0;
+  // The copy/move mode observed on the LAST dragover. The `drop` event's modifier
+  // state (ctrlKey/metaKey) is unreliable on Chromium/macOS — it can read false
+  // even while Cmd is held — but dragover, which fires continuously, reports it
+  // correctly. So we stash it here on dragover and use it at drop time, keeping
+  // the completed action in sync with the "Move"/"Copy" the tooltip showed.
+  private _lastDragMode: 'copy' | 'move' = 'move';
 
   // Predicts a drop for the row under the cursor, injected by the host-side glue
   // (table-main) and backed by the pure dropDecision. Returns null when there is
@@ -1510,6 +1516,7 @@ export class DexTreeTable extends LitElement {
       return;
     }
     this._dragSourceId = rowId;
+    this._lastDragMode = 'move';
     const rowIds = (
       this.selectedRowIds.length > 1 && this.selectedRowIds.includes(rowId) ? this.selectedRowIds : [rowId]
     ).filter((id) => id.indexOf('section:') !== 0);
@@ -1576,6 +1583,8 @@ export class DexTreeTable extends LitElement {
       return;
     }
     const mode: 'copy' | 'move' = e.ctrlKey || e.metaKey ? 'copy' : 'move';
+    // Remember the mode from this dragover; the drop event can't read it reliably.
+    this._lastDragMode = mode;
 
     // Ask the injected predictor whether this drop is allowed and what to show.
     // With no predictor (or no active drag it recognizes), fall back to the
@@ -1621,7 +1630,10 @@ export class DexTreeTable extends LitElement {
     e.preventDefault();
     e.stopPropagation();
 
-    const mode: 'copy' | 'move' = e.ctrlKey || e.metaKey ? 'copy' : 'move';
+    // Use the mode from the last dragover, not the drop event: Chromium/macOS
+    // often reports the modifier as released on `drop`, which would silently
+    // downgrade a Cmd-drag Copy to a Move. dragover tracked it correctly.
+    const mode = this._lastDragMode;
 
     // Respect the predictor: never complete a rejected or no-op drop. The drag
     // may have started in ANOTHER webview, so the source rows come from the host
