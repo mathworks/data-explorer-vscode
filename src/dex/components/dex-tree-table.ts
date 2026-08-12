@@ -1507,6 +1507,19 @@ export class DexTreeTable extends LitElement {
 
   // --- Row Drag and Drop ---
 
+  // The copy-vs-move modifier for a drag follows the PLATFORM convention, because
+  // the browser derives the native dropEffect from the OS modifier: on macOS a
+  // plain drag is a move and Option (⌥, altKey) requests a copy (Cmd means move,
+  // per Finder); elsewhere Ctrl requests the copy. Reading the wrong key made the
+  // browser force dropEffect='none' (Cmd+drag on macOS), cancelling the drop
+  // before it fired. Matching the platform key keeps the browser and our feedback
+  // in agreement.
+  private _dragModeFrom(e: DragEvent | MouseEvent): 'copy' | 'move' {
+    const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+    const wantsCopy = isMac ? e.altKey : e.ctrlKey;
+    return wantsCopy ? 'copy' : 'move';
+  }
+
   private _onRowDragStart(rowId: string, e: DragEvent): void {
     // Section headers aren't draggable entries. If the grabbed row is a header,
     // there's nothing to drag; otherwise drag the multi-selection (when the
@@ -1582,7 +1595,7 @@ export class DexTreeTable extends LitElement {
       this._dropForbidden = false;
       return;
     }
-    const mode: 'copy' | 'move' = e.ctrlKey || e.metaKey ? 'copy' : 'move';
+    const mode = this._dragModeFrom(e);
     // Remember the mode from this dragover; the drop event can't read it reliably.
     this._lastDragMode = mode;
 
