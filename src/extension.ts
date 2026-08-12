@@ -9,6 +9,7 @@ import { invalidate, findNode } from './host/SlddModel.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit } from './host/slddFormat.js';
 import { handleNavigate } from './host/navigate.js';
 import { invalidateUsageGraph } from './host/usageGraph.js';
+import { isSectionRowId } from './common/sectionRowId.js';
 
 const SUPPORTED_RE = /\.(sldd|mat|slx|prj)$/;
 
@@ -60,7 +61,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // Section rows (id `section:<key>`) have no properties, so clear the PI.
   const showSelection = (uriString: string, rowIds: string[]): void => {
     const first = rowIds && rowIds.length > 0 ? rowIds[0] : undefined;
-    if (!first || first.startsWith('section:')) {
+    if (!first || isSectionRowId(first)) {
       piProvider.clear();
       return;
     }

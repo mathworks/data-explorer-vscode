@@ -3,6 +3,7 @@
 // it can be unit-tested. The top level groups files by Simulink Project (.prj)
 // or containing folder; within a group the existing relationship model applies.
 import { refBasename } from './slddRefs.js';
+import { basename, dirname } from '../common/pathUtil.js';
 
 export type SourceType = 'model' | 'sldd' | 'mat' | 'project';
 export type NodeKind = SourceType | 'missing' | 'group';
@@ -33,15 +34,6 @@ export interface GraphNode {
 }
 
 const SYNTHETIC_EXTERNAL_DATA = 'External Data';
-
-function basenameOf(path: string): string {
-  return path.split('/').pop() ?? path;
-}
-
-function dirnameOf(path: string): string {
-  const i = path.lastIndexOf('/');
-  return i <= 0 ? '' : path.slice(0, i);
-}
 
 interface Group {
   key: string;                 // directory path (prefix)
@@ -77,8 +69,8 @@ export class RelGraph {
     const projectRoots = sources
       .filter((s) => s.type === 'project')
       .map((s) => ({
-        dir: dirnameOf(s.path),
-        label: basenameOf(s.path).replace(/\.prj$/i, ''),
+        dir: dirname(s.path),
+        label: basename(s.path).replace(/\.prj$/i, ''),
         uriString: s.uriString,
       }))
       .sort((a, b) => b.dir.length - a.dir.length);
@@ -97,13 +89,13 @@ export class RelGraph {
 
     for (const s of sources) {
       if (s.type === 'project') continue; // .prj is a header, not a member
-      const dir = dirnameOf(s.path);
+      const dir = dirname(s.path);
       const proj = projectRoots.find((pr) =>
         dir === pr.dir || (pr.dir !== '' && dir.startsWith(pr.dir + '/'))
       );
       const key = proj ? proj.dir : dir;
       if (!this.groups.has(key)) {
-        this.groups.set(key, { key, kind: 'folder', label: basenameOf(dir) || '/', members: [] });
+        this.groups.set(key, { key, kind: 'folder', label: basename(dir) || '/', members: [] });
       }
       this.groupOf.set(s.uriString, key);
       this.groups.get(key)!.members.push(s.uriString);
@@ -269,7 +261,7 @@ export class RelGraph {
     return {
       kind: src.type,
       uriString: src.uriString,
-      label: basenameOf(src.path),
+      label: basename(src.path),
       ancestors,
       cycle,
       hasChildren,

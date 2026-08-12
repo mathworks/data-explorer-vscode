@@ -8,6 +8,7 @@
 //
 // A reference is stored either as a bare string ("common.sldd") or as an object
 // carrying a `file` field ({ "file": "common.sldd", ... }).
+export { refBasename } from '../common/pathUtil.js';
 
 /** Extract the referenced dictionary names from raw .sldd text. */
 export function extractReferences(text: string): string[] {
@@ -33,8 +34,3 @@ export function extractReferences(text: string): string[] {
   return names;
 }
 
-/** The basename of a reference path, lower-cased, for workspace matching. */
-export function refBasename(ref: string): string {
-  const base = ref.split(/[\\/]/).pop() ?? ref;
-  return base.toLowerCase();
-}

@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 import { buildPropertyGroups } from './piBuilder.js';
 import { renderWebviewHtml } from './webviewHtml.js';
+import type { PropsToHostMessage } from '../common/protocol.js';
 
 export class PropertiesViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'dataExplorer.properties';
@@ -15,7 +16,7 @@ export class PropertiesViewProvider implements vscode.WebviewViewProvider {
     this.view = view;
     const distRoot = vscode.Uri.joinPath(this.extensionUri, 'dist', 'webview');
     view.webview.options = { enableScripts: true, localResourceRoots: [distRoot] };
-    view.webview.onDidReceiveMessage((msg) => {
+    view.webview.onDidReceiveMessage((msg: PropsToHostMessage) => {
       if (msg?.type === 'ready') {
         this.ready = true;
         if (this.pending) {

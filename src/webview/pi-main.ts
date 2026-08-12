@@ -2,6 +2,7 @@
 import '../dex/styles/global.css';
 import './vscode-theme.css';
 import '../dex/components/dex-property-inspector.js';
+import type { HostToPropsMessage } from '../common/protocol.js';
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -15,7 +16,7 @@ function setEmpty(show: boolean): void {
 }
 
 window.addEventListener('message', (event: MessageEvent) => {
-  const msg = event.data;
+  const msg = event.data as HostToPropsMessage;
   if (msg.type === 'showProps') {
     const groups = msg.groups ?? [];
     pi.groups = groups;

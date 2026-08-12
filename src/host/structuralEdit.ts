@@ -21,6 +21,7 @@ import {
 } from './entrySplice.js';
 import { generateUuid } from '../dex/datamodel/node/container/SectionNode.js';
 import { getSectionMetadata } from '../dex/datamodel/SectionConstants.js';
+import { buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
 
 export interface StructuralResult {
   newText: string;
@@ -44,12 +45,11 @@ export function findOwningEntry(node: any): any {
 //    not prefixed), and an empty section can ONLY be pasted into via its header,
 //    so we look the section up on the model by name. Returns null if neither
 //    path yields a section (e.g. an unknown header, or a detached node).
-const SECTION_ROW_PREFIX = 'section:';
 export function resolveSectionForPaste(model: any, node: any, rowId: string): any {
   const owning = node ? findOwningEntry(node) : null;
   if (owning?.parent) return owning.parent;
-  if (typeof rowId === 'string' && rowId.startsWith(SECTION_ROW_PREFIX)) {
-    const sectionName = rowId.slice(SECTION_ROW_PREFIX.length);
+  if (typeof rowId === 'string' && isSectionRowId(rowId)) {
+    const sectionName = sectionNameFromRowId(rowId)!;
     const section = (model?.children ?? []).find((s: any) => s.name === sectionName);
     if (section) return section;
   }
@@ -77,7 +77,7 @@ function reselectAfterRemoval(siblings: any[], node: any, fallbackId: string): s
 export function deleteEntry(text: string, entry: any): StructuralResult {
   const section = entry.parent;
   const siblings = (section?.children ?? []) as any[];
-  const selectId = reselectAfterRemoval(siblings, entry, `section:${section?.name ?? ''}`);
+  const selectId = reselectAfterRemoval(siblings, entry, buildSectionRowId(section?.name ?? ''));
   const span = findEntryElementSpan(text, entry.name);
   if (!span) throw new Error(`Could not locate entry "${entry.name}" to delete.`);
   const newText = text.slice(0, span.offset) + text.slice(span.offset + span.length);

@@ -2,6 +2,9 @@
 // Pure (vscode-free) core of the usage graph: parameter-source resolution and
 // edge construction. Split from usageGraph.ts (which does the file I/O) so the
 // shadowing rule and workspace->sldd->mat ordering are unit-testable.
+import { basename, uriBasename } from '../common/pathUtil.js';
+
+export { basename } from '../common/pathUtil.js';
 
 export type SourceKind = 'workspace' | 'sldd' | 'mat';
 
@@ -40,10 +43,6 @@ export interface ResolvedGraph {
   forward: Map<string, ParamLink[]>;
 }
 
-export function basename(p: string): string {
-  return p.split(/[\\/]/).pop() ?? p;
-}
-
 // Identifiers a param expression references (so `2*Kp` yields ['Kp']). Numeric
 // literals and operators fall out naturally.
 export function identifiers(expr: string): string[] {
@@ -78,12 +77,6 @@ export function resolveParam(
     if (mat?.varNames.has(token)) return { kind: 'mat', uri: mat.uri };
   }
   return null;
-}
-
-function uriBasename(uriString: string): string {
-  // Works for uriStrings (file:///a/b.sldd) and plain paths alike.
-  const noQuery = uriString.split(/[?#]/)[0];
-  return basename(noQuery);
 }
 
 // Build the forward + reverse edge maps from parsed model/data summaries.

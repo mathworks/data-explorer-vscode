@@ -13,7 +13,10 @@ import { buildMatRows } from './matRowBuilder.js';
 import { readProjectStore } from './projectStore.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, exceedsStringDecodeLimit, isZipBytes } from './slddFormat.js';
 import { annotateDataRows, annotateModelRows } from './usageGraph.js';
-import { onNavigateSelect, consumePendingSelect } from './navigate.js';
+import { wireNavigateSelect, consumePendingSelect } from './navigate.js';
+import { basename } from '../common/pathUtil.js';
+import { toArrayBuffer } from '../common/bytes.js';
+import type { TableToHostMessage } from '../common/protocol.js';
 
 // viewType of the editable text-backed table (SlddTextEditorProvider). Declared
 // here as a constant to avoid importing the provider (which would be circular).
@@ -63,7 +66,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     webview.options = { enableScripts: true, localResourceRoots: [distRoot] };
 
     const uriString = document.uri.toString();
-    const name = document.uri.path.split('/').pop() ?? 'document';
+    const name = basename(document.uri.path) || 'document';
 
     // A read-only banner shown above the table. Set only for the surprising case:
     // a JSON .sldd that WOULD be editable but is over VS Code's TextDocument sync
@@ -137,11 +140,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
 
     // Source bytes for the file, always read from disk (read-only view).
     const readBytes = async (): Promise<ArrayBuffer> => {
-      const bytes = await vscode.workspace.fs.readFile(document.uri);
-      return bytes.buffer.slice(
-        bytes.byteOffset,
-        bytes.byteOffset + bytes.byteLength,
-      ) as ArrayBuffer;
+      return toArrayBuffer(await vscode.workspace.fs.readFile(document.uri));
     };
 
     // If a cross-tab navigation targeted this file (e.g. it was just opened by a
@@ -209,7 +208,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
 
     // Register listeners BEFORE assigning webview.html, so a fast-booting
     // webview cannot post 'ready' before we are subscribed to receive it.
-    const sub = webview.onDidReceiveMessage((msg) => {
+    const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
       if (msg?.type === 'ready') {
         void post();
       } else if (msg?.type === 'select') {
@@ -222,12 +221,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
 
     // Live cross-tab selection: if a navigation targets THIS already-open file,
     // select the row immediately (the just-opened case is drained in post()).
-    // Consume the pending entry too, so it can't re-fire on a later repaint.
-    const navSub = onNavigateSelect((e) => {
-      if (e.uri !== uriString) return;
-      consumePendingSelect(uriString);
-      webview.postMessage({ type: 'selectByName', name: e.name });
-    });
+    const navSub = wireNavigateSelect(webview, uriString);
 
     // Live-sync when the file on disk changes: covers external edits AND edits
     // made in the plain-text view once saved. We watch the DISK, not the

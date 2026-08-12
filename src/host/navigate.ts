@@ -40,6 +40,23 @@ export function consumePendingSelect(uriString: string): string | undefined {
   return name;
 }
 
+// Wire live cross-tab selection for an already-open editor: when a navigation
+// targets THIS file, consume its pending entry (so it can't re-fire on a later
+// repaint) and ask the webview to select the named row. The just-opened case is
+// drained separately in each provider's first paint via consumePendingSelect.
+// Returns the subscription for the caller to dispose on panel teardown. Shared
+// verbatim by both providers (SlddTextEditorProvider, BinaryEditorProvider).
+export function wireNavigateSelect(
+  webview: Pick<vscode.Webview, 'postMessage'>,
+  uriString: string,
+): vscode.Disposable {
+  return onNavigateSelect((e) => {
+    if (e.uri !== uriString) return;
+    consumePendingSelect(uriString);
+    void webview.postMessage({ type: 'selectByName', name: e.name });
+  });
+}
+
 // A full uriString parses directly; a bare basename is looked up in the
 // workspace (first match wins).
 async function resolveSource(source: string): Promise<vscode.Uri | undefined> {

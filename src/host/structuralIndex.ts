@@ -8,6 +8,7 @@ import { extractSlxStructure } from './slxStructure.js';
 import { isZipBytes } from './slddFormat.js';
 import { parseBinarySldd } from '../dex/datamodel/parser/BinarySlddParser.js';
 import { parseProject } from '../dex/datamodel/parser/ProjectParser.js';
+import { basename } from '../common/pathUtil.js';
 
 export interface RawFile {
   uriString: string;
@@ -28,10 +29,6 @@ function typeOf(path: string): SourceType {
 
 function empty(uriString: string, path: string, type: SourceType): GraphSource {
   return { uriString, path, type, slddRefs: [], modelRefs: [], dataSources: [], dataDictionary: null };
-}
-
-function basename(p: string): string {
-  return p.split(/[\\/]/).pop() ?? p;
 }
 
 export function buildGraphSource(file: RawFile): GraphSource {
