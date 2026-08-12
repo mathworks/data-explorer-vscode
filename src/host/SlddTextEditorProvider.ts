@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { renderWebviewHtml } from './webviewHtml.js';
 import { getModel, invalidate, findNode } from './SlddModel.js';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
-import { buildRows, COLUMNS, COLUMN_LABELS } from './rowBuilder.js';
+import { buildRows, COLUMNS, COLUMN_LABELS, type ClipMark } from './rowBuilder.js';
 import { captureBaseline, computeModified, clearBaseline } from './slddBaseline.js';
 import { setClipboard, getClipboard, clearClipboard, clipboardState } from './clipboard.js';
 import { setDrag, getDrag, clearDrag, dragDescriptor, type DragRegisterItem } from './dragState.js';
@@ -35,17 +35,22 @@ import { onNavigateSelect, consumePendingSelect } from './navigate.js';
 export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
   public static readonly viewType = 'dataExplorer.tableView';
 
-  // Every live table webview, so a copy/cut/clear in ONE editor can push the new
-  // clipboard state to ALL of them. The host clipboard is a single shared
-  // singleton (clipboard.ts), but each webview caches its own `canPaste` flag to
-  // build the menu synchronously — without this broadcast, a second already-open
-  // .sldd would never learn the clipboard now has content, so its Paste stays
-  // disabled and pasting across files silently does nothing.
-  private static readonly liveWebviews = new Set<vscode.Webview>();
+  // Every live table webview mapped to its repaint callback, so a copy/cut/
+  // clear/paste in ONE editor can update ALL of them. The host clipboard is a
+  // single shared singleton (clipboard.ts), but each webview caches its own
+  // `canPaste` flag to build the menu synchronously — without this broadcast, a
+  // second already-open .sldd would never learn the clipboard now has content,
+  // so its Paste stays disabled and pasting across files silently does nothing.
+  // A repaint (not just a state post) is needed because a lazy cut makes NO
+  // text edit, yet its source row must gain the dimmed affordance, and the
+  // owning document must repaint to show it (and to clear it after paste).
+  private static readonly liveWebviews = new Map<vscode.Webview, () => void>();
 
   private static broadcastClipboardState(): void {
-    for (const wv of SlddTextEditorProvider.liveWebviews) {
+    for (const [wv, repaint] of SlddTextEditorProvider.liveWebviews) {
       wv.postMessage({ type: 'clipboardState', ...clipboardState() });
+      // Repaint so the cut/copied source row shows (or clears) its affordance.
+      repaint();
     }
   }
 
@@ -56,7 +61,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
   // descriptor and predicts the drop locally (dropDecision) on dragover.
   private static broadcastDragState(): void {
     const descriptor = dragDescriptor();
-    for (const wv of SlddTextEditorProvider.liveWebviews) {
+    for (const wv of SlddTextEditorProvider.liveWebviews.keys()) {
       wv.postMessage({ type: 'dragState', descriptor });
     }
   }
@@ -78,9 +83,6 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     const webview = webviewPanel.webview;
     const distRoot = vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview');
     webview.options = { enableScripts: true, localResourceRoots: [distRoot] };
-
-    // Track this webview so clipboard-state changes from any editor reach it.
-    SlddTextEditorProvider.liveWebviews.add(webview);
 
     // Give the table tab a distinct table glyph instead of VS Code's default
     // JSON `{}` icon (which the plain-text view of the same .sldd also shows, so
@@ -109,7 +111,15 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           initialized = true;
         }
         const modified = computeModified(uriString, node);
-        const rows = buildRows(node, modified);
+        // If the clipboard's cut/copied entry lives in THIS document, stamp its
+        // source row so the table can render the cut (dimmed) / copied (dashed)
+        // affordance. Cleared automatically once the clipboard empties on paste.
+        const clip = getClipboard();
+        const clipMark: ClipMark | undefined =
+          clip && clip.sourceDocUri === uriString && clip.payload.name
+            ? { name: clip.payload.name as string, section: clip.sourceSection, mode: clip.mode }
+            : undefined;
+        const rows = buildRows(node, modified, clipMark);
         // Fill the Usage column from the shared usage graph, then post. The graph
         // builds lazily on first use and is cached, so only the very first open in
         // a session pays the scan cost; subsequent posts resolve near-instantly.
@@ -140,6 +150,11 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         });
       }
     };
+
+    // Track this webview (mapped to its repaint) so clipboard-state changes from
+    // any editor reach it — including a lazy cut, which only marks the clipboard
+    // and needs a repaint to show the source row's affordance.
+    SlddTextEditorProvider.liveWebviews.set(webview, post);
 
     // Apply new full text to the TextDocument via a WorkspaceEdit. This feeds
     // VS Code's native undo stack (so undo/redo + dirty are automatic) and fires
@@ -255,8 +270,11 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         if (!entry) return false;
         const payload = entry.serialize() as Record<string, unknown>;
         const sectionName: string = entry.parent?.name ?? '';
-        setClipboard(payload, mode, sectionName);
-        // Broadcast so every open table (not just this one) enables Paste.
+        // Record which document this came from: a lazy cut defers the source
+        // delete to paste time, and the paste may land in another .sldd tab.
+        setClipboard(payload, mode, sectionName, uriString);
+        // Broadcast so every open table (not just this one) enables Paste and
+        // repaints — the cut/copied source row shows its affordance.
         SlddTextEditorProvider.broadcastClipboardState();
         return true;
       } catch {
@@ -303,15 +321,15 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     const applyAddChild = (msg: { rowId: string }): Promise<void> =>
       applyStructural(msg.rowId, (text, node) => addChildEdit(text, node));
 
-    // Cut = copy the node, then delete it. Native undo coalesces? No — two
-    // WorkspaceEdits would be two undo steps; here copy makes no text change, so
-    // cut is exactly one text edit (the delete) = one undo step.
-    const applyCut = async (msg: { rowId: string }): Promise<void> => {
+    // Cut is LAZY: it only marks the entry on the clipboard (in cut mode) and
+    // makes no text edit yet. The source is removed at PASTE time — so a
+    // same-document move becomes a single combined WorkspaceEdit (one undo step)
+    // and the cut source row can show its dimmed affordance until pasted. This
+    // mirrors data explorer's ClipboardService, whose cut() marks only.
+    const applyCut = (msg: { rowId: string }): void => {
       if (!applyCopy(msg, 'cut')) {
         webview.postMessage({ type: 'error', message: 'Could not cut the selected item.' });
-        return;
       }
-      await applyStructural(msg.rowId, deleteTransform);
     };
 
     // --- Location in Text (reveal the row's entry in the plain-text view) -------
@@ -364,25 +382,65 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     const applyPaste = async (msg: { rowId: string }): Promise<void> => {
       try {
         if (!ensureValidJson()) return;
-        const currentText = document.getText();
-
-        invalidate(uriString);
-        const model = getModel(uriString, name, currentText);
-        const node = findNode(uriString, msg.rowId);
-        const section = resolveSectionForPaste(model, node, msg.rowId);
-        if (!section) {
-          webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
-          return;
-        }
         const clip = getClipboard();
         if (!clip) {
           webview.postMessage({ type: 'error', message: 'Nothing to paste — the clipboard is empty.' });
           return;
         }
+
+        // Resolve the target section first, so we can detect a same-section cut
+        // (a no-op the same-document drag path also refuses) before any edit.
+        let currentText = document.getText();
+        invalidate(uriString);
+        let model = getModel(uriString, name, currentText);
+        let node = findNode(uriString, msg.rowId);
+        let section = resolveSectionForPaste(model, node, msg.rowId);
+        if (!section) {
+          webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
+          return;
+        }
+
+        const isCut = clip.mode === 'cut';
+        const sameDoc = clip.sourceDocUri === uriString;
+        const srcName = (clip.payload.name as string) || '';
+
+        // A cut pasted back into the very section it came from is a no-op:
+        // deleting then re-adding the same entry would just churn the document.
+        if (isCut && sameDoc && clip.sourceSection === section.name) {
+          clearClipboard();
+          SlddTextEditorProvider.broadcastClipboardState();
+          return;
+        }
+
+        // A same-document cut is a MOVE: remove the source first (in the same
+        // text) so the paste keeps the original name, then re-resolve against
+        // the trimmed model. This makes the whole move ONE WorkspaceEdit = one
+        // undo step (mirrors the same-document drag-move).
+        if (isCut && sameDoc && srcName) {
+          currentText = deleteEntriesByName(currentText, [srcName]);
+          invalidate(uriString);
+          model = getModel(uriString, name, currentText);
+          node = findNode(uriString, msg.rowId);
+          section = resolveSectionForPaste(model, node, msg.rowId);
+          if (!section) {
+            webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
+            return;
+          }
+        }
+
         const { newText, selectId } = pasteEntry(currentText, section, clip.payload);
         await replaceAll(newText);
         if (selectId) webview.postMessage({ type: 'selectRow', rowId: selectId });
-        if (clip.mode === 'cut') {
+
+        // A cross-document cut removes the source from ITS document via that
+        // document's own WorkspaceEdit (a second, native undo step — exactly a
+        // cut in one file + paste in another).
+        if (isCut && !sameDoc && clip.sourceDocUri && srcName) {
+          await deleteFromSourceDocument(clip.sourceDocUri, [srcName]);
+        }
+
+        // The cut is now consumed; a copy stays on the clipboard for re-paste.
+        if (isCut) {
           clearClipboard();
           SlddTextEditorProvider.broadcastClipboardState();
         }
@@ -532,7 +590,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       } else if (msg?.type === 'addChild') {
         void applyAddChild(msg);
       } else if (msg?.type === 'cut') {
-        void applyCut(msg);
+        applyCut(msg);
       } else if (msg?.type === 'paste') {
         void applyPaste(msg);
       } else if (msg?.type === 'dragStart') {

@@ -16,11 +16,23 @@ export const PROJECT_COLUMN_LABELS: Record<string, string> = {
   Name: 'Name', Type: 'Type', Location: 'Location', Labels: 'Labels',
 };
 
-export function buildRows(sldd: any, modifiedNames?: Set<string>): any[] {
+// Identifies the single entry currently marked on the host clipboard, so its
+// source row can render the cut (dimmed) / copied (dashed) affordance. Matched
+// by name AND section because entry names are only unique within a section.
+export interface ClipMark {
+  name: string;
+  section: string;
+  mode: 'cut' | 'copy';
+}
+
+export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: ClipMark): any[] {
   const rows: any[] = [];
   const sections = (sldd.children || []) as any[];
   for (const section of sections) {
     const entries = (section.children || []) as any[];
+    // Only the section the clipboard entry lives in can carry the mark, so pass
+    // the mode down solely for that section (name uniqueness is per-section).
+    const sectionMark = clipMark && clipMark.section === section.name ? clipMark : undefined;
     // Always emit the section row, even when it has no entries.
     // Parent row for the section
     rows.push({
@@ -31,7 +43,7 @@ export function buildRows(sldd: any, modifiedNames?: Set<string>): any[] {
     });
     // Entry rows (flatten each entry subtree so nested struct/bus children appear)
     for (const entry of entries) {
-      rows.push(...buildEntryRows(entry, section.name, modifiedNames));
+      rows.push(...buildEntryRows(entry, section.name, modifiedNames, sectionMark));
     }
   }
   return rows;
@@ -62,7 +74,7 @@ function capabilityFlags(n: any): {
 // nested children), reparented under its section. Used both by buildRows for
 // the full tree and by the incremental edit write-back, which repaints only
 // the edited entry's rows instead of rebuilding the whole table.
-export function buildEntryRows(entry: any, sectionName: string, modifiedNames?: Set<string>): any[] {
+export function buildEntryRows(entry: any, sectionName: string, modifiedNames?: Set<string>, clipMark?: ClipMark): any[] {
   const out: any[] = [];
   const flat = entry.flatten ? entry.flatten() : [entry];
   for (const n of flat) {
@@ -85,6 +97,12 @@ export function buildEntryRows(entry: any, sectionName: string, modifiedNames?: 
     // Mark only the top-level entry row as Modified (not nested children).
     if (row.ID === entry.id && modifiedNames?.has(entry.name)) {
       row = { ...row, Status: 'Modified' };
+    }
+    // Stamp the clipboard affordance on the cut/copied entry's own row (the
+    // section is pre-matched by the caller, so here just match the name). The
+    // table reads Name.clipboardMode to dim (cut) or dash-outline (copied).
+    if (row.ID === entry.id && clipMark && clipMark.name === entry.name && row.Name && typeof row.Name === 'object') {
+      row = { ...row, Name: { ...row.Name, clipboardMode: clipMark.mode } };
     }
     // Context-menu capability flags (consumed by the webview menu builder).
     out.push({ ...row, ...capabilityFlags(n) });
