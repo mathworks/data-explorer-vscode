@@ -189,3 +189,61 @@ export function pasteEntry(
   const newText = text.slice(0, insertion.offset) + inserted + text.slice(insertion.offset);
   return { newText, selectId: newNode.id };
 }
+
+/**
+ * Source-side of a MOVE drop: remove the dragged entries from the SOURCE text by
+ * name. Works purely on text so it applies to any document (the move source may
+ * differ from the paste target). Each named top-level entry's array element is
+ * spliced out; spans are removed high-offset-first so earlier removals don't
+ * shift the offsets of later ones. Names not present are silently skipped, so an
+ * already-absent entry never throws (and an all-absent list returns the text
+ * unchanged, byte-identical).
+ */
+export function deleteEntriesByName(text: string, names: string[]): string {
+  const spans: { offset: number; length: number }[] = [];
+  for (const name of names) {
+    const span = findEntryElementSpan(text, name);
+    if (span) spans.push(span);
+  }
+  // Remove from the end so each splice leaves earlier offsets valid.
+  spans.sort((a, b) => b.offset - a.offset);
+  let out = text;
+  for (const span of spans) {
+    out = out.slice(0, span.offset) + out.slice(span.offset + span.length);
+  }
+  return out;
+}
+
+/**
+ * Drop-completion transform: paste MANY payloads into `section` in one edit —
+ * exactly what a multi-select drop needs. It is a fold over pasteEntry: each
+ * paste re-inserts into the text produced by the previous one AND adds the new
+ * node to the live `section`, so `_uniqueName` sees the growing namespace and
+ * every dropped entry gets a distinct name (a first Bus becomes Bus1, a second
+ * Bus2). The allow-check is all-or-nothing: any disallowed payload throws before
+ * any text changes, so a rejected multi-drop leaves the document untouched. A
+ * move deletes the sources separately (the host, via deleteEntry) — this side
+ * is purely the paste, identical to how drop mirrors copy/cut + paste.
+ */
+export function pasteEntries(
+  text: string,
+  section: any,
+  payloads: Record<string, unknown>[],
+): { newText: string; selectIds: string[] } {
+  // All-or-nothing allow-check up front: reject the whole drop before mutating
+  // any text or the section, so a bad item can't leave a half-applied paste.
+  for (const payload of payloads) {
+    const className = payloadClassName(payload);
+    if (className && typeof section.allowsType === 'function' && !section.allowsType(className)) {
+      throw new Error(`A "${className}" entry is not allowed in ${section.displayName ?? section.name}.`);
+    }
+  }
+  let currentText = text;
+  const selectIds: string[] = [];
+  for (const payload of payloads) {
+    const { newText, selectId } = pasteEntry(currentText, section, payload);
+    currentText = newText;
+    if (selectId) selectIds.push(selectId);
+  }
+  return { newText: currentText, selectIds };
+}

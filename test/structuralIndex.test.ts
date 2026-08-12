@@ -102,3 +102,108 @@ describe('buildGraphSource', () => {
     expect(s.type).toBe('sldd');
   });
 });
+
+// A minimal but REAL project store (resources/project/**/*.xml), mirroring the
+// hash-linked layout parseProject expects. Kept local so this test drives the
+// buildGraphSource -> parseProject integration end-to-end with genuine input,
+// not a stub: two member files under two folders, plus a project->project
+// reference, so we can assert basenames, folder filtering, and refs.
+function projectStore(): Record<string, string> {
+  const DECL = '<?xml version="1.0" encoding="UTF-8"?>';
+  const info = (body: string): string => `${DECL}\n${body}`;
+  const p = (rel: string): string => `resources/project/${rel}`;
+  const store: Record<string, string> = {};
+
+  // root/ entry pointers.
+  store[p('root/AAAAAAAAAAAAAAAAAAAAAAAAAAAAp.xml')] = info('<Info location="ProjectData" type="Info"/>');
+  store[p('root/AAAAAAAAAAAAAAAAAAAAAAAAAAAAd.xml')] = info('<Info Name="Widget"/>');
+  store[p('root/BBBBBBBBBBBBBBBBBBBBBBBBBBBBp.xml')] = info('<Info location="Root" type="Files"/>');
+  // A genuine project->project reference living directly in root.
+  store[p('root/GGGGGGGGGGGGGGGGGGGGGGGGGGGGp.xml')] = info('<Info location="ref-uuid" type="Reference"/>');
+  store[p('root/GGGGGGGGGGGGGGGGGGGGGGGGGGGGd.xml')] = info('<Info Ref="SharedLib" Type="Relative"/>');
+  // A reference whose def carries no Ref → its name is null, so buildGraphSource
+  // falls back to the id (the pointer location). Exercises `r.name ?? r.id`.
+  store[p('root/HHHHHHHHHHHHHHHHHHHHHHHHHHHHp.xml')] = info('<Info location="nameless-uuid" type="Reference"/>');
+  store[p('root/HHHHHHHHHHHHHHHHHHHHHHHHHHHHd.xml')] = info('<Info Type="Relative"/>');
+
+  // Files collection (hash BBB...): one File 'models', one File 'helper.m'.
+  const files = 'BBBBBBBBBBBBBBBBBBBBBBBBBBBB';
+  store[p(`${files}/DDDDDDDDDDDDDDDDDDDDDDDDDDDDp.xml`)] = info('<Info location="models" type="File"/>');
+  store[p(`${files}/DDDDDDDDDDDDDDDDDDDDDDDDDDDDd.xml`)] = info('<Info/>');
+  store[p(`${files}/EEEEEEEEEEEEEEEEEEEEEEEEEEEEp.xml`)] = info('<Info location="helper.m" type="File"/>');
+  store[p(`${files}/EEEEEEEEEEEEEEEEEEEEEEEEEEEEd.xml`)] = info('<Info/>');
+
+  // 'models' File entity's own dir (hash DDD...) carries a DIR_SIGNIFIER → folder.
+  const models = 'DDDDDDDDDDDDDDDDDDDDDDDDDDDD';
+  store[p(`${models}/FFFFFFFFFFFFFFFFFFFFFFFFFFFFp.xml`)] = info('<Info location="1" type="DIR_SIGNIFIER"/>');
+  store[p(`${models}/FFFFFFFFFFFFFFFFFFFFFFFFFFFFd.xml`)] = info('<Info/>');
+
+  return store;
+}
+
+describe('buildGraphSource — .prj project branch', () => {
+  it('maps a project to member basenames (files only, folders excluded) and its references', () => {
+    const s = buildGraphSource({
+      uriString: 'file:///proj/Widget.prj',
+      path: '/proj/Widget.prj',
+      projectFiles: projectStore(),
+    });
+
+    expect(s.type).toBe('project');
+    // helper.m is a File (basename); 'models' is a folder and must be excluded.
+    expect(s.projectFiles).toContain('helper.m');
+    expect(s.projectFiles).not.toContain('models');
+    // The project->project reference name is surfaced.
+    expect(s.projectRefs).toContain('SharedLib');
+    // A reference with no resolvable name falls back to its id (location).
+    expect(s.projectRefs).toContain('nameless-uuid');
+    // Base GraphSource fields stay intact.
+    expect(s.slddRefs).toEqual([]);
+    expect(s.modelRefs).toEqual([]);
+  });
+
+  it('returns an empty project node when a .prj has no projectFiles map', () => {
+    // Without projectFiles the project branch is skipped and the base node
+    // (no members/refs) is returned — never a throw.
+    const s = buildGraphSource({ uriString: 'file:///p.prj', path: '/p.prj' });
+    expect(s.type).toBe('project');
+    expect(s.projectFiles).toBeUndefined();
+    expect(s.projectRefs).toBeUndefined();
+    expect(s.dataDictionary).toBeNull();
+  });
+
+  it('tolerates an empty project store, yielding no members and no refs', () => {
+    const s = buildGraphSource({
+      uriString: 'file:///empty/Empty.prj',
+      path: '/empty/Empty.prj',
+      projectFiles: {},
+    });
+    expect(s.type).toBe('project');
+    expect(s.projectFiles).toEqual([]);
+    expect(s.projectRefs).toEqual([]);
+  });
+});
+
+describe('buildGraphSource — error path returns the base node', () => {
+  it('returns the base node (no throw) when a JSON .sldd getter throws mid-extract', () => {
+    // Force an exception inside the try: a text property whose getter throws.
+    // buildGraphSource must catch it and return the empty base node for the URI.
+    const file = {
+      uriString: 'file:///boom.sldd',
+      path: '/boom.sldd',
+    } as RawFile;
+    Object.defineProperty(file, 'text', {
+      get() {
+        throw new Error('boom');
+      },
+      enumerable: true,
+    });
+
+    const s = buildGraphSource(file);
+    expect(s.type).toBe('sldd');
+    expect(s.uriString).toBe('file:///boom.sldd');
+    expect(s.slddRefs).toEqual([]);
+    expect(s.modelRefs).toEqual([]);
+    expect(s.dataDictionary).toBeNull();
+  });
+});

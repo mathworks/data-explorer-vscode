@@ -22,24 +22,39 @@ describe('clipboard', () => {
     expect(clipboardState()).toEqual({ canPaste: false, mode: null });
   });
 
-  it('stores a copied payload with its mode and source section', () => {
+  it('stores a copied payload with its mode, source section, and source document', () => {
     const payload = { name: 'Kp', value: 1 };
-    setClipboard(payload, 'copy', 'Design Data');
-    expect(getClipboard()).toEqual({ payload, mode: 'copy', sourceSection: 'Design Data' });
+    setClipboard(payload, 'copy', 'Design Data', 'file:///a.sldd');
+    expect(getClipboard()).toEqual({
+      payload,
+      mode: 'copy',
+      sourceSection: 'Design Data',
+      sourceDocUri: 'file:///a.sldd',
+    });
     expect(canPaste()).toBe(true);
     expect(clipboardState()).toEqual({ canPaste: true, mode: 'copy' });
   });
 
   it('records cut mode distinctly from copy', () => {
-    setClipboard({ name: 'X' }, 'cut', 'Design Data');
+    setClipboard({ name: 'X' }, 'cut', 'Design Data', 'file:///a.sldd');
     expect(getClipboard()?.mode).toBe('cut');
     expect(clipboardState()).toEqual({ canPaste: true, mode: 'cut' });
   });
 
+  it('remembers which document a cut came from (for the lazy source delete on paste)', () => {
+    setClipboard({ name: 'X' }, 'cut', 'Design Data', 'file:///source.sldd');
+    expect(getClipboard()?.sourceDocUri).toBe('file:///source.sldd');
+  });
+
   it('overwrites the previous entry on a second set', () => {
-    setClipboard({ name: 'first' }, 'copy', 'A');
-    setClipboard({ name: 'second' }, 'cut', 'B');
-    expect(getClipboard()).toEqual({ payload: { name: 'second' }, mode: 'cut', sourceSection: 'B' });
+    setClipboard({ name: 'first' }, 'copy', 'A', 'file:///a.sldd');
+    setClipboard({ name: 'second' }, 'cut', 'B', 'file:///b.sldd');
+    expect(getClipboard()).toEqual({
+      payload: { name: 'second' },
+      mode: 'cut',
+      sourceSection: 'B',
+      sourceDocUri: 'file:///b.sldd',
+    });
   });
 
   it('clears back to the empty state', () => {

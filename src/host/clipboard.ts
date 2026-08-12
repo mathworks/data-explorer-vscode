@@ -11,12 +11,21 @@ interface ClipboardEntry {
   payload: Record<string, unknown>;
   mode: ClipboardMode;
   sourceSection: string;
+  // The document the entry was cut/copied from. A lazy cut defers the source
+  // delete until paste, so it must remember WHICH document to delete from —
+  // the paste may land in a different .sldd tab (a cross-document move).
+  sourceDocUri?: string;
 }
 
 let current: ClipboardEntry | null = null;
 
-export function setClipboard(payload: Record<string, unknown>, mode: ClipboardMode, sourceSection: string): void {
-  current = { payload, mode, sourceSection };
+export function setClipboard(
+  payload: Record<string, unknown>,
+  mode: ClipboardMode,
+  sourceSection: string,
+  sourceDocUri?: string,
+): void {
+  current = { payload, mode, sourceSection, sourceDocUri };
 }
 
 export function getClipboard(): ClipboardEntry | null {
