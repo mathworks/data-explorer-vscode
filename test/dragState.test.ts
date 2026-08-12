@@ -21,6 +21,7 @@ const item = (name: string, className: string, arrayClass: string, kind: string)
   arrayClass,
   kind,
   isMatlabVariable: !arrayClass,
+  isScalarNumeric: !arrayClass,
 });
 
 describe('drag register', () => {
@@ -58,6 +59,7 @@ describe('drag register', () => {
           arrayClass: 'Simulink.Bus',
           kind: 'Data Interface',
           isMatlabVariable: false,
+          isScalarNumeric: false,
         },
       ],
     });

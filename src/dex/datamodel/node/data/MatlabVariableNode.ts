@@ -304,6 +304,22 @@ export default class MatlabVariableNode extends DataNode {
     return true;
   }
 
+  // True when this variable currently holds a SCALAR NUMERIC value — the shape a
+  // Constant requires. A live-node counterpart to parsedIsScalarNumeric: it is a
+  // 1x1 non-opaque scalar whose type is numeric (double/logical/complex, plus the
+  // typed int/single scalars loaded from a file, which also carry _kind 'scalar').
+  // Arrays, matrices, cells, structs, char, and string are rejected. Used by the
+  // Constant value gate and the Variable→Constant paste/drop gate.
+  get isScalarNumeric(): boolean {
+    if (this._isOpaque) {
+      return false;
+    }
+    if (this._kind !== 'scalar') {
+      return false;
+    }
+    return this._scalarType !== 'struct' && this._scalarType !== 'char' && this._scalarType !== 'string';
+  }
+
   get displayValue(): string {
     if (this._isOpaque) {
       if (this._mcosValue !== undefined && this._mcosValue !== null) {

@@ -7,6 +7,11 @@ export interface NodeClassMapAPI {
     parseValue(rawVal: unknown, name: string, parent: BaseNode | null): DataNode;
     getClass(className: string): NodeClassType | null;
     getRegisteredClasses(): string[];
+    // Reclass a just-parsed plain MATLAB variable as a Constant. SectionNode calls
+    // this when an entry is derived (Architectural Data), so a Constant is modeled
+    // by its own class without SectionNode importing it (avoids a cycle). Returns
+    // the node unchanged if it isn't a plain MATLAB variable.
+    wrapDerivedVariable(node: DataNode): DataNode;
 }
 
 export interface NodeClassType {

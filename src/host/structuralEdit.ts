@@ -135,6 +135,27 @@ function payloadClassName(payload: Record<string, unknown>): string {
 }
 
 /**
+ * The authoritative Variable→Constant gate, shared by the JSON and XML paste
+ * paths. A plain MATLAB variable pasted into a DERIVED section (Architectural
+ * Data) becomes a Constant, which must be scalar-numeric. `newNode` is the node
+ * section.parseEntry already built — a derived plain variable is reclassed to a
+ * ConstantNode, so we test its `isScalarNumeric`. Throws if it isn't, so both
+ * keyboard/menu Paste and drop are gated (drop feedback alone is only advisory).
+ * Non-variable entries (Bus, Signal, …) have no such flag and are unaffected.
+ */
+export function assertConstantValueAllowed(section: any, newNode: any): void {
+  // Only MATLAB-variable / Constant nodes expose `isScalarNumeric`, so the typeof
+  // guard also restricts this to the variable path — object entries are exempt.
+  if (
+    getSectionMetadata(section.name).isderived === '1' &&
+    typeof newNode?.isScalarNumeric === 'boolean' &&
+    !newNode.isScalarNumeric
+  ) {
+    throw new Error(`The value for constant '${newNode.name}' must be scalar and numeric.`);
+  }
+}
+
+/**
  * Paste a serialized entry as a NEW top-level entry in `section`. The name is
  * made unique across the section's whole namespace (Design and Architectural
  * Data share one), the entry gets a freshly generated uuid so it is a distinct
@@ -178,6 +199,7 @@ export function pasteEntry(
 
   const newNode = section.parseEntry(raw);
   if (!newNode) throw new Error('Failed to paste the entry.');
+  assertConstantValueAllowed(section, newNode);
 
   const indent = detectIndent(text);
   const entryText = reserializeEntry(newNode, indent);

@@ -290,4 +290,21 @@ function findMatchingBracket(str: string, start: number, open: string, close: st
     return -1;
 }
 
-export default { parse, parseArray, parseCell };
+// True when a freshly-parsed value is a SCALAR NUMERIC value — the rule a
+// Constant's Value must satisfy. Admits a plain number, a logical (true/false),
+// a complex scalar, and a 1-element numeric array (the parser yields a bare
+// number for `5`, but `[5]` parses to a 1-length double array — both are 1x1).
+// Rejects multi-element arrays/matrices, cells, char, and string. Kept next to
+// the parser so both the model (edit-time validation) and the paste/drop gate
+// can share one definition. `null` (unparseable) is never scalar-numeric.
+function parsedIsScalarNumeric(parsed: ParsedValue | null): boolean {
+    if (!parsed) { return false; }
+    if (parsed.type === 'double') {
+        if (Array.isArray(parsed.value)) { return parsed.value.length === 1; }
+        return true;
+    }
+    return parsed.type === 'logical' || parsed.type === 'complex';
+}
+
+export { parsedIsScalarNumeric };
+export default { parse, parseArray, parseCell, parsedIsScalarNumeric };

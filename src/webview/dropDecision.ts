@@ -29,6 +29,10 @@ export interface DragItem {
   arrayClass: string;
   kind: string;
   isMatlabVariable: boolean;
+  // Whether the variable's value is scalar-numeric. Gates conversion into a
+  // Constant: a MATLAB variable may only become a Constant (drop into derived/
+  // Architectural Data) when its value is scalar and numeric.
+  isScalarNumeric: boolean;
 }
 
 export interface DragSource {
@@ -54,13 +58,22 @@ export interface DropDecision {
   noop: boolean;
 }
 
-// Mirror SectionNode.allowsType: an empty array-class (MATLAB variable) is
-// always accepted; otherwise the class must be in the allow-list. An empty
-// allow-list means "no restriction".
-function targetAllows(target: DropTarget, item: DragItem): boolean {
-  if (!item.arrayClass) return true;
-  if (target.allowedTypes.length === 0) return true;
-  return target.allowedTypes.indexOf(item.arrayClass) !== -1;
+// Why an item can't drop into a target, or null if it can. Mirrors the host:
+//   • a MATLAB variable (empty array-class) is allowed by class — BUT converting
+//     it into a Constant (a drop into derived/Architectural Data) requires a
+//     scalar-numeric value, so a non-scalar variable is rejected there;
+//   • an object entry's class must be in the target's allow-list (empty list =
+//     no restriction).
+function rejectReason(target: DropTarget, item: DragItem): string | null {
+  if (item.isMatlabVariable) {
+    if (target.isDerived && !item.isScalarNumeric) {
+      return `${item.kind} must be scalar and numeric to be a Constant`;
+    }
+    return null;
+  }
+  if (target.allowedTypes.length === 0) return null;
+  if (target.allowedTypes.indexOf(item.arrayClass) !== -1) return null;
+  return `${item.kind} cannot be in ${target.sectionLabel}`;
 }
 
 // The Kind an item WILL show once dropped into `target`: class + the target's
@@ -91,9 +104,9 @@ export function dropDecision(source: DragSource, target: DropTarget, mode: DragM
 
   // Any single rejected item rejects the whole drop (mirrors a multi-select
   // paste, which is all-or-nothing).
-  const rejected = items.find((it) => !targetAllows(target, it));
-  if (rejected) {
-    return reject(`${rejected.kind} cannot be in ${target.sectionLabel}`);
+  for (const it of items) {
+    const reason = rejectReason(target, it);
+    if (reason) return reject(reason);
   }
 
   const cursor: DropCursor = mode === 'copy' ? 'copy' : 'move';
