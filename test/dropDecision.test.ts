@@ -97,10 +97,16 @@ describe('dropDecision — accept/reject mirrors pasteEntry allow-check', () => 
 });
 
 describe('dropDecision — dynamic can-drop tooltip mirrors the post-paste Kind', () => {
-  it('design Bus -> another design section reads "Copy/Move Bus"', () => {
+  it('design Bus -> another design section in COPY mode reads "Copy Bus"', () => {
     const d = dropDecision(designSource([bus()], 'b.sldd'), designTarget('a.sldd'), 'copy');
     expect(d.canDrop).toBe(true);
-    expect(d.tooltip).toBe('Copy/Move Bus');
+    expect(d.tooltip).toBe('Copy Bus');
+  });
+
+  it('design Bus -> another design section in MOVE mode reads "Move Bus"', () => {
+    const d = dropDecision(designSource([bus()], 'b.sldd'), designTarget('a.sldd'), 'move');
+    expect(d.canDrop).toBe(true);
+    expect(d.tooltip).toBe('Move Bus');
   });
 
   it('design Bus -> arch reads "Convert Bus to Data Interface"', () => {
@@ -142,7 +148,7 @@ describe('dropDecision — same-section move is a no-op', () => {
     const d = dropDecision(designSource([bus()], 'a.sldd'), designTarget('a.sldd'), 'copy');
     expect(d.noop).toBe(false);
     expect(d.canDrop).toBe(true);
-    expect(d.tooltip).toBe('Copy/Move Bus');
+    expect(d.tooltip).toBe('Copy Bus');
   });
 
   it('cross-doc same-section-name move is NOT a no-op', () => {
@@ -165,10 +171,16 @@ describe('dropDecision — multi-select: any rejected rejects all', () => {
     expect(d.tooltip).toBe('Convert 2 items to Architectural Data');
   });
 
-  it('multiple allowed same-shape items use a count label', () => {
+  it('multiple allowed same-shape items in COPY mode use a count label', () => {
     const d = dropDecision(designSource([bus(), bus()], 'b.sldd'), designTarget('a.sldd'), 'copy');
     expect(d.canDrop).toBe(true);
-    expect(d.tooltip).toBe('Copy/Move 2 items');
+    expect(d.tooltip).toBe('Copy 2 items');
+  });
+
+  it('multiple allowed same-shape items in MOVE mode use a count label', () => {
+    const d = dropDecision(designSource([bus(), bus()], 'b.sldd'), designTarget('a.sldd'), 'move');
+    expect(d.canDrop).toBe(true);
+    expect(d.tooltip).toBe('Move 2 items');
   });
 });
 

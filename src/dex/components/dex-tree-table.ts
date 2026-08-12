@@ -388,6 +388,9 @@ export class DexTreeTable extends LitElement {
         position: fixed;
         z-index: 1000;
         pointer-events: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
         padding: 3px 8px;
         font-size: 12px;
         font-family: var(--vscode-font-family, system-ui, sans-serif);
@@ -405,8 +408,22 @@ export class DexTreeTable extends LitElement {
       }
 
       .drop-tooltip-icon {
-        margin-right: 5px;
         font-weight: bold;
+      }
+
+      /* The dragged row's name; the action text is dimmed and separated so the
+         box reads "[icon] Name — Move Bus" as one affordance. */
+      .drop-tooltip-name {
+        font-weight: 600;
+      }
+
+      .drop-tooltip-action {
+        opacity: 0.85;
+      }
+      /* Separator between the name and the action, only when a name precedes it. */
+      .drop-tooltip-name + .drop-tooltip-action::before {
+        content: '— ';
+        opacity: 0.6;
       }
 
       td {
@@ -604,6 +621,13 @@ export class DexTreeTable extends LitElement {
   @state() private _dropTooltip = '';
   @state() private _dropTooltipX = 0;
   @state() private _dropTooltipY = 0;
+  // The dragged row's icon + name, captured at drag start. They ride in the same
+  // floating box as the action text so there is ONE cursor affordance (icon +
+  // name + "Move/Copy…"), not a separate native ghost. For a multi-drag the
+  // count drives a "(+N)" suffix. Empty label = no active local drag.
+  @state() private _dragIconId = '';
+  @state() private _dragLabel = '';
+  @state() private _dragCount = 0;
 
   // Predicts a drop for the row under the cursor, injected by the host-side glue
   // (table-main) and backed by the pure dropDecision. Returns null when there is
@@ -1507,26 +1531,23 @@ export class DexTreeTable extends LitElement {
     );
   }
 
+  // Capture the dragged row's icon + name into state (so the single floating box
+  // in _renderDropTooltip can show them alongside the action text) and SUPPRESS
+  // the browser's native drag image, so there is exactly one affordance at the
+  // cursor rather than two overlapping boxes. The native image is replaced with a
+  // 1x1 transparent pixel positioned off the cursor.
   private _setDragImage(e: DragEvent, rowId: string, count: number): void {
     const row = this.rows.find((r) => r.ID === rowId);
     if (!row || !e.dataTransfer) return;
+    this._dragIconId = row.Name?.iconId || '';
+    this._dragLabel = row.Name?.label || rowId;
+    this._dragCount = count;
 
-    const ghost = document.createElement('div');
-    ghost.style.cssText =
-      'position:absolute;top:-1000px;left:-1000px;display:flex;align-items:center;gap:6px;padding:4px 10px;background:#fff;border:1px solid #d0d0d0;border-radius:4px;font-size:12px;font-family:system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.15);white-space:nowrap;';
-    const iconId = row.Name?.iconId;
-    if (iconId) {
-      const icon = document.createElement('dex-icon') as HTMLElement;
-      (icon as unknown as { iconId: string }).iconId = iconId;
-      (icon as unknown as { size: number }).size = 16;
-      ghost.appendChild(icon);
-    }
-    const label = document.createElement('span');
-    label.textContent = count > 1 ? `${row.Name?.label || rowId} (+${count - 1})` : row.Name?.label || rowId;
-    ghost.appendChild(label);
-    document.body.appendChild(ghost);
-    e.dataTransfer.setDragImage(ghost, 0, 0);
-    requestAnimationFrame(() => document.body.removeChild(ghost));
+    // A 1x1 transparent image hides the native ghost without cancelling the drag.
+    const blank = new Image();
+    blank.src =
+      'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+    e.dataTransfer.setDragImage(blank, -10, -10);
   }
 
   private _onRowDragEnd(_e: DragEvent): void {
@@ -1535,12 +1556,25 @@ export class DexTreeTable extends LitElement {
     this._dropPosition = null;
     this._dropForbidden = false;
     this._dropTooltip = '';
+    this._dragIconId = '';
+    this._dragLabel = '';
+    this._dragCount = 0;
     // Tell the host the drag is over so it can clear the register + broadcast.
     this.dispatchEvent(new CustomEvent('dex-row-drag-end', { bubbles: true, composed: true }));
   }
 
   private _onRowDragOver(rowId: string, e: DragEvent): void {
-    if (rowId === this._dragSourceId) return;
+    // Keep the floating affordance trailing the cursor even over the source row
+    // (where the drop itself is a no-op) so the icon + name box never freezes.
+    this._dropTooltipX = e.clientX;
+    this._dropTooltipY = e.clientY;
+    if (rowId === this._dragSourceId) {
+      // Over the drag origin the drop is a no-op; show just the icon + name (no
+      // action verb) and don't accept a drop here.
+      this._dropTooltip = '';
+      this._dropForbidden = false;
+      return;
+    }
     const mode: 'copy' | 'move' = e.ctrlKey || e.metaKey ? 'copy' : 'move';
 
     // Ask the injected predictor whether this drop is allowed and what to show.
@@ -2273,12 +2307,25 @@ export class DexTreeTable extends LitElement {
   // ("Simulink Parameter cannot be in Architectural Data"). Rendered only while a
   // predictor has produced a tooltip; the forbidden variant is styled distinctly.
   private _renderDropTooltip() {
-    if (!this._dropTooltip) return html``;
+    // One floating affordance at the cursor: the dragged row's icon + name (from
+    // drag start) plus the live action text ("Move Bus", "Convert …", or the
+    // forbidden reason). Shown whenever a local drag carries a label, so the box
+    // is visible even before the cursor reaches a droppable row. A cross-tab drag
+    // has no local label here, so it only appears once over this table (with the
+    // action text and no icon), which is the expected behavior.
+    const hasLabel = !!this._dragLabel;
+    if (!hasLabel && !this._dropTooltip) return html``;
+    const countSuffix = this._dragCount > 1 ? ` (+${this._dragCount - 1})` : '';
     return html`<div
       class="drop-tooltip ${this._dropForbidden ? 'forbidden' : ''}"
       style="left:${this._dropTooltipX + 14}px; top:${this._dropTooltipY + 16}px"
     >
-      ${this._dropForbidden ? html`<span class="drop-tooltip-icon">⊘</span>` : ''}${this._dropTooltip}
+      ${this._dropForbidden ? html`<span class="drop-tooltip-icon">⊘</span>` : ''}${this._dragIconId
+        ? html`<dex-icon class="drop-tooltip-row-icon" .iconId=${this._dragIconId} .size=${14}></dex-icon>`
+        : ''}${hasLabel ? html`<span class="drop-tooltip-name">${this._dragLabel}${countSuffix}</span>` : ''}${this
+        ._dropTooltip
+        ? html`<span class="drop-tooltip-action">${this._dropTooltip}</span>`
+        : ''}
     </div>`;
   }
 
