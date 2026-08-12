@@ -10,3 +10,4 @@ test/parity/dump-output.txt
 
 # Local-only internal notes — must never be pushed to the public remote
 CLAUDE.md
+docs/deep-work/
