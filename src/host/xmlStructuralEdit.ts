@@ -16,7 +16,7 @@ import {
   findEntryElementSpan,
   findEntryInsertionPoint,
 } from './xmlEntrySplice.js';
-import { findOwningEntry, cloneForPaste, type StructuralResult } from './structuralEdit.js';
+import { findOwningEntry, cloneForPaste, assertConstantValueAllowed, type StructuralResult } from './structuralEdit.js';
 
 export type { StructuralResult };
 
@@ -124,6 +124,7 @@ export function pasteEntryXml(
   }
   const newNode = section.parseEntry(raw);
   if (!newNode) throw new Error('Failed to paste the entry.');
+  assertConstantValueAllowed(section, newNode);
   return insertNewEntry(text, newNode);
 }
 

@@ -5,6 +5,7 @@ import type { NodeClassType } from './NodeRegistry';
 import type BaseNode from './BaseNode';
 import type DataNode from './DataNode';
 import MatlabVariableNode from './data/MatlabVariableNode';
+import ConstantNode from './data/ConstantNode';
 import StructNode from './data/StructNode';
 import ObjectNode from './data/ObjectNode';
 import ParameterNode from './data/ParameterNode';
@@ -31,6 +32,9 @@ import { _injectNodeClassMap } from './container/SectionNode';
 
 const CLASS_MAP: Record<string, NodeClassType> = {
     'MatlabVariable': MatlabVariableNode,
+    // A Constant is a derived MATLAB variable; registering it lets Architectural
+    // Data offer "Add Constant" directly (addEntry('Constant') → a scalar Constant).
+    'Constant': ConstantNode,
     'MatlabStruct': StructNode,
     'Simulink.Parameter': ParameterNode,
     'Simulink.LookupTable': LookupTableNode,
@@ -96,7 +100,20 @@ export function getRegisteredClasses(): string[] {
     return Object.keys(CLASS_MAP);
 }
 
-const api = { getClass, parseValue, getRegisteredClasses };
+// Reclass a just-parsed plain MATLAB variable as a Constant (for a derived, i.e.
+// Architectural Data, entry). Only a bare MatlabVariableNode qualifies: an opaque
+// MCOS object, a struct, or any object-class node keeps its own class. This is the
+// single seam that makes Design↔Arch conversion automatic — SectionNode calls it
+// after rebinding isderived, so a variable pasted into arch becomes a Constant and
+// one pasted back into design reparses as a plain variable.
+export function wrapDerivedVariable(node: DataNode): DataNode {
+    if (node.constructor === MatlabVariableNode && !(node as MatlabVariableNode)._isOpaque) {
+        return ConstantNode.fromVariable(node as MatlabVariableNode);
+    }
+    return node;
+}
+
+const api = { getClass, parseValue, getRegisteredClasses, wrapDerivedVariable };
 NodeRegistry.init(api);
 _injectNodeClassMap(api);
 

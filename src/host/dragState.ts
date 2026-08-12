@@ -17,6 +17,10 @@ export interface DragRegisterItem {
   arrayClass: string;
   kind: string;
   isMatlabVariable: boolean;
+  // Whether the entry's value is scalar-numeric. Only meaningful for a MATLAB
+  // variable; it is what decides whether the variable may CONVERT to a Constant
+  // when dropped into Architectural Data (a Constant must be scalar-numeric).
+  isScalarNumeric: boolean;
 }
 
 interface DragEntry {
@@ -35,7 +39,7 @@ export interface DragDescriptor {
   sectionName: string;
   sectionLabel: string;
   isDerived: boolean;
-  items: Array<{ className: string; arrayClass: string; kind: string; isMatlabVariable: boolean }>;
+  items: Array<{ className: string; arrayClass: string; kind: string; isMatlabVariable: boolean; isScalarNumeric: boolean }>;
 }
 
 let current: DragEntry | null = null;
@@ -71,6 +75,7 @@ export function dragDescriptor(): DragDescriptor | null {
       arrayClass: it.arrayClass,
       kind: it.kind,
       isMatlabVariable: it.isMatlabVariable,
+      isScalarNumeric: it.isScalarNumeric,
     })),
   };
 }

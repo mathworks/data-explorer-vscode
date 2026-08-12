@@ -361,6 +361,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
             arrayClass,
             kind: entry.kind ?? '',
             isMatlabVariable: !arrayClass,
+            isScalarNumeric: entry.isScalarNumeric === true,
           });
           const section = entry.parent;
           if (section) {

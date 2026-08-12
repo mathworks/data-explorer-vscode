@@ -46,26 +46,41 @@ function archTarget(docUri = 'a.sldd') {
   return { docUri, sectionName: 'arch', sectionLabel: 'Architectural Data', isDerived: true, allowedTypes: ARCH_ALLOWED };
 }
 
-// Convenience item builders.
-const bus = (kind = 'Bus') => ({ className: 'Simulink.Bus', arrayClass: 'Simulink.Bus', kind, isMatlabVariable: false });
+// Convenience item builders. Object entries carry isScalarNumeric: false — it is
+// only consulted for MATLAB variables (isMatlabVariable), so its value is inert
+// for objects; the field is required by the DragItem type.
+const bus = (kind = 'Bus') => ({ className: 'Simulink.Bus', arrayClass: 'Simulink.Bus', kind, isMatlabVariable: false, isScalarNumeric: false });
 const dataInterface = () => bus('Data Interface');
 const param = () => ({
   className: 'Simulink.Parameter',
   arrayClass: 'Simulink.Parameter',
   kind: 'Simulink Parameter',
   isMatlabVariable: false,
+  isScalarNumeric: false,
 });
 const service = () => ({
   className: 'Simulink.ServiceBus',
   arrayClass: 'Simulink.ServiceBus',
   kind: 'Service Interface',
   isMatlabVariable: false,
+  isScalarNumeric: false,
 });
+// A scalar-numeric MATLAB variable (the common case — a Constant-eligible value).
 const matlabVar = (kind = 'MATLAB Variable') => ({
   className: 'double',
   arrayClass: '',
   kind,
   isMatlabVariable: true,
+  isScalarNumeric: true,
+});
+// A NON-scalar-numeric MATLAB variable (an array/struct/cell) — cannot become a
+// Constant, so it must be rejected when dropped into Architectural Data.
+const nonScalarVar = (kind = 'MATLAB Variable') => ({
+  className: 'double',
+  arrayClass: '',
+  kind,
+  isMatlabVariable: true,
+  isScalarNumeric: false,
 });
 
 describe('dropDecision — accept/reject mirrors pasteEntry allow-check', () => {
@@ -88,11 +103,33 @@ describe('dropDecision — accept/reject mirrors pasteEntry allow-check', () => 
     expect(d.canDrop).toBe(true);
   });
 
-  it('accepts a MATLAB variable into any section (empty array-class skips the check)', () => {
-    // A MATLAB variable has no _array_class, so pasteEntry never rejects it —
-    // even into arch, where it becomes a Constant.
+  it('accepts a scalar-numeric MATLAB variable into arch (it becomes a Constant)', () => {
+    // A MATLAB variable has no _array_class; a scalar-numeric one is a valid
+    // Constant, so it drops into arch.
     const d = dropDecision(designSource([matlabVar()], 'b.sldd'), archTarget('a.sldd'), 'copy');
     expect(d.canDrop).toBe(true);
+  });
+});
+
+describe('dropDecision — Variable→Constant scalar-numeric gate', () => {
+  it('rejects a NON-scalar-numeric MATLAB variable dropped into Architectural Data', () => {
+    // An array/struct/cell variable can't become a (scalar) Constant.
+    const d = dropDecision(designSource([nonScalarVar()], 'b.sldd'), archTarget('a.sldd'), 'copy');
+    expect(d.canDrop).toBe(false);
+    expect(d.cursor).toBe('no-drop');
+    expect(d.tooltip).toBe('MATLAB Variable must be scalar and numeric to be a Constant');
+  });
+
+  it('allows a NON-scalar-numeric MATLAB variable within Design Data (stays a Variable)', () => {
+    // Moving among Design Data keeps it a MATLAB Variable — no Constant rule applies.
+    const d = dropDecision(designSource([nonScalarVar()], 'b.sldd'), designTarget('a.sldd'), 'move');
+    expect(d.canDrop).toBe(true);
+  });
+
+  it('multi-select into arch: one non-scalar variable rejects the whole drop', () => {
+    const d = dropDecision(designSource([matlabVar(), nonScalarVar()], 'b.sldd'), archTarget('a.sldd'), 'copy');
+    expect(d.canDrop).toBe(false);
+    expect(d.tooltip).toBe('MATLAB Variable must be scalar and numeric to be a Constant');
   });
 });
 

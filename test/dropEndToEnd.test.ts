@@ -39,6 +39,7 @@ function dragItemOf(node: any): DragItem {
     arrayClass,
     kind: node.kind ?? '',
     isMatlabVariable: !arrayClass,
+    isScalarNumeric: node.isScalarNumeric === true,
   };
 }
 

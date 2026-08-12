@@ -472,6 +472,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
             arrayClass,
             kind: entry.kind ?? '',
             isMatlabVariable: !arrayClass,
+            isScalarNumeric: entry.isScalarNumeric === true,
           });
           const section = entry.parent;
           if (section) {

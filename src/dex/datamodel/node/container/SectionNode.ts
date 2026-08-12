@@ -33,6 +33,7 @@ const ALLOWED_TYPES: Record<string, string[]> = {
     'CustomObject',
   ],
   arch: [
+    'Constant',
     'Simulink.Signal',
     'Simulink.Bus',
     'Simulink.ConnectionBus',
@@ -231,10 +232,19 @@ export default class SectionNode extends ContainerNode {
       return null;
     }
     const entryName = (rawEntry.name as string) || '';
-    const dataNode = _nodeClassMap.parseValue(rawEntry.value, entryName, this) as DataNode;
+    let dataNode = _nodeClassMap.parseValue(rawEntry.value, entryName, this) as DataNode;
     dataNode.metadata = (rawEntry.metadata as Record<string, unknown>) || null;
     if (rawEntry.rawXml) {
       dataNode.rawXml = rawEntry.rawXml as string;
+    }
+
+    // A plain MATLAB variable in a DERIVED (Architectural Data) entry is a
+    // Constant. parseValue picks the class from the value shape alone (it never
+    // sees metadata), so we reclass here now that isderived is known — the single
+    // seam that makes Design↔Arch conversion automatic (paste/drop rebinds
+    // isderived before re-parsing, so the class follows the section).
+    if (dataNode.isDerived) {
+      dataNode = _nodeClassMap.wrapDerivedVariable(dataNode);
     }
 
     // Classify entries via the systemcomposer catalog. The classification token
