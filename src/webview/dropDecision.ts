@@ -97,20 +97,23 @@ export function dropDecision(source: DragSource, target: DropTarget, mode: DragM
   }
 
   const cursor: DropCursor = mode === 'copy' ? 'copy' : 'move';
-  return { canDrop: true, cursor, tooltip: dropTooltip(items, target), noop: false };
+  return { canDrop: true, cursor, tooltip: dropTooltip(items, target, mode), noop: false };
 }
 
-// The hover label for an allowed drop. Single item: name the Kind and, when the
-// drop changes it (design↔arch), phrase it as a conversion. Multiple items: a
-// count label, still distinguishing a same-Kind copy/move from a conversion.
-function dropTooltip(items: DragItem[], target: DropTarget): string {
+// The hover label for an allowed drop. The verb reflects the LIVE drag mode —
+// "Copy" while Ctrl/Cmd is held, "Move" otherwise — so it matches the action the
+// drop will actually perform. Single item: name the Kind and, when the drop
+// changes it (design↔arch), phrase it as a conversion. Multiple items: a count
+// label, still distinguishing a same-Kind move/copy from a conversion.
+function dropTooltip(items: DragItem[], target: DropTarget, mode: DragMode): string {
+  const verb = mode === 'copy' ? 'Copy' : 'Move';
   if (items.length === 1) {
     const it = items[0];
     const from = it.kind;
     const to = kindInTarget(it, target);
-    return from === to ? `Copy/Move ${from}` : `Convert ${from} to ${to}`;
+    return from === to ? `${verb} ${from}` : `Convert ${from} to ${to}`;
   }
   const converts = items.some((it) => it.kind !== kindInTarget(it, target));
   if (converts) return `Convert ${items.length} items to ${target.sectionLabel}`;
-  return `Copy/Move ${items.length} items`;
+  return `${verb} ${items.length} items`;
 }
