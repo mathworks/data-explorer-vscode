@@ -21,7 +21,9 @@ import {
   type StructuralResult,
 } from './structuralEdit.js';
 import { annotateDataRows } from './usageGraph.js';
-import { onNavigateSelect, consumePendingSelect } from './navigate.js';
+import { wireNavigateSelect, consumePendingSelect } from './navigate.js';
+import { basename } from '../common/pathUtil.js';
+import type { TableToHostMessage } from '../common/protocol.js';
 
 // Custom editor for EDITABLE JSON .sldd, backed by VS Code's native TextDocument
 // (CustomTextEditorProvider). Because every edit is a WorkspaceEdit on that
@@ -92,7 +94,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     webviewPanel.iconPath = new vscode.ThemeIcon('table');
 
     const uriString = document.uri.toString();
-    const name = document.uri.path.split('/').pop() ?? 'document';
+    const name = basename(document.uri.path) || 'document';
 
     // Capture the on-open baseline once so per-entry "Modified" marks are diffed
     // against the initial content.
@@ -576,7 +578,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     };
 
     // --- Message wiring ---------------------------------------------------------
-    const sub = webview.onDidReceiveMessage((msg) => {
+    const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
       if (msg?.type === 'ready') {
         post();
       } else if (msg?.type === 'select') {
@@ -612,12 +614,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
     // Live cross-tab selection: if a navigation targets THIS already-open file,
     // select the row immediately (the just-opened case is drained in post()).
-    // Consume the pending entry too, so it can't re-fire on a later repaint.
-    const navSub = onNavigateSelect((e) => {
-      if (e.uri !== uriString) return;
-      consumePendingSelect(uriString);
-      webview.postMessage({ type: 'selectByName', name: e.name });
-    });
+    const navSub = wireNavigateSelect(webview, uriString);
 
     // Repaint on ANY change to this document: table edits, text-view edits, undo,
     // and redo all arrive here. setRows (webview side) preserves expansion and

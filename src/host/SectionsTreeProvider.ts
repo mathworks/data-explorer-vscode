@@ -6,6 +6,7 @@ import { buildGraphSource, type RawFile } from './structuralIndex.js';
 import { readProjectStore } from './projectStore.js';
 import { encode, type HealthState } from './health.js';
 import { isZipBytes } from './slddFormat.js';
+import { toArrayBuffer } from '../common/bytes.js';
 
 // The Data Explorer tree is a cross-format relationship graph (model->model,
 // model->sldd/mat, sldd->sldd), rendered as an expansion tree. Structural
@@ -126,10 +127,7 @@ export class SectionsTreeProvider implements vscode.TreeDataProvider<SlddTreeNod
             return buildGraphSource(raw);
           }
           const bytes = await vscode.workspace.fs.readFile(uri);
-          const ab = bytes.buffer.slice(
-            bytes.byteOffset,
-            bytes.byteOffset + bytes.byteLength,
-          ) as ArrayBuffer;
+          const ab = toArrayBuffer(bytes);
           // JSON .sldd is passed as text so extractReferences works; others as bytes.
           if (uri.path.endsWith('.sldd')) {
             if (isZipBytes(bytes)) raw.bytes = ab;

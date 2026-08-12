@@ -9,6 +9,8 @@ import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, res
 import { dropDecision, type DragMode, type DropTarget, type DragSource } from './dropDecision.js';
 import type { SectionRule } from '../host/sectionRules.js';
 import type { DragDescriptor } from '../host/dragState.js';
+import { isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
+import type { HostToTableMessage } from '../common/protocol.js';
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -38,15 +40,11 @@ let dragDescriptor: DragDescriptor | null = null;
 // that section; a data row carries its section via its `parent` (also a header
 // id). Returns the matching SectionRule, or null if it can't be resolved.
 function sectionRuleForRow(rowId: string): SectionRule | null {
-  let sectionName: string | null = null;
-  if (rowId.indexOf('section:') === 0) {
-    sectionName = rowId.slice('section:'.length);
-  } else {
+  let sectionName = sectionNameFromRowId(rowId);
+  if (sectionName == null) {
     const row = (table.rows ?? []).find((r: { ID: string; parent?: string | null }) => r.ID === rowId);
     const parent = row?.parent;
-    if (typeof parent === 'string' && parent.indexOf('section:') === 0) {
-      sectionName = parent.slice('section:'.length);
-    }
+    if (typeof parent === 'string') sectionName = sectionNameFromRowId(parent);
   }
   if (sectionName == null) return null;
   return sectionRulesList.find((r) => r.sectionName === sectionName) ?? null;
@@ -155,7 +153,7 @@ function setNotice(message: string | undefined): void {
 }
 
 window.addEventListener('message', (event: MessageEvent) => {
-  const msg = event.data;
+  const msg = event.data as HostToTableMessage;
   if (msg.type === 'setRows') {
     hideLoading();
     clearError();
@@ -256,7 +254,7 @@ table.addEventListener(
       const selected = Array.isArray(table.selectedRowIds) ? table.selectedRowIds : [];
       const rowId = selected[0];
       // Section rows carry no owning entry; the host would reject them, so skip.
-      if (typeof rowId !== 'string' || rowId.startsWith('section:')) return;
+      if (typeof rowId !== 'string' || isSectionRowId(rowId)) return;
       ev.preventDefault();
       ev.stopPropagation();
       vscode.postMessage({ type: 'locateInText', rowId });
@@ -294,7 +292,7 @@ table.addEventListener(
     // targets that section); the rest need a data row, since section headers
     // carry no capability flags.
     if (typeof rowId !== 'string') return;
-    if (action !== 'paste' && rowId.startsWith('section:')) return;
+    if (action !== 'paste' && isSectionRowId(rowId)) return;
     const row = (table.rows ?? []).find((r: MenuRow) => r.ID === rowId) ?? null;
     // Gate on the same capability the menu uses, so shortcuts match the menu.
     const enabled =

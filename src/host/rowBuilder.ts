@@ -1,6 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 
 import ModelBlockNode from '../dex/datamodel/node/data/ModelBlockNode.js';
+import { buildSectionRowId } from '../common/sectionRowId.js';
 
 // Columns shown across the dictionary tree (union that fits all sections).
 export const COLUMNS = ['Name', 'Value', 'Class', 'Kind', 'DataType', 'Status', 'UsedBy'];
@@ -36,7 +37,7 @@ export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: Cli
     // Always emit the section row, even when it has no entries.
     // Parent row for the section
     rows.push({
-      ID: `section:${section.name}`,
+      ID: buildSectionRowId(section.name),
       parent: null,
       Name: { label: section.displayName || section.name, iconId: section.icon, editable: false, disabled: false, element: false },
       Value: '', Class: '', Kind: '', DataType: '', Status: '', UsedBy: '',
@@ -92,7 +93,7 @@ export function buildEntryRows(entry: any, sectionName: string, modifiedNames?: 
     }
     // Reparent top-level entries under the section row; keep nested parents as-is.
     if (row.parent == null || row.ID === entry.id) {
-      row = { ...row, parent: `section:${sectionName}` };
+      row = { ...row, parent: buildSectionRowId(sectionName) };
     }
     // Mark only the top-level entry row as Modified (not nested children).
     if (row.ID === entry.id && modifiedNames?.has(entry.name)) {

@@ -19,6 +19,7 @@ import { parseSlx } from '../dex/datamodel/parser/SlxParser.js';
 import { parseMat } from '../dex/datamodel/parser/MatParser.js';
 import { parseBinarySldd } from '../dex/datamodel/parser/BinarySlddParser.js';
 import { isZipBytes } from './slddFormat.js';
+import { toArrayBuffer } from '../common/bytes.js';
 import {
   basename,
   buildEdges,
@@ -50,8 +51,7 @@ function labelOf(uriPath: string): string {
 
 async function readBytes(uri: vscode.Uri): Promise<ArrayBuffer | null> {
   try {
-    const b = await vscode.workspace.fs.readFile(uri);
-    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
+    return toArrayBuffer(await vscode.workspace.fs.readFile(uri));
   } catch {
     return null;
   }
@@ -157,6 +157,17 @@ export async function paramLinksForBlock(modelUri: string, blockName: string): P
 
 // --- Row annotation ---------------------------------------------------------
 
+// Shape reverse-edge block refs into the `blockLinks` Usage-cell payload (each
+// link navigates back to the block in its owning model). Shared by both the
+// data view and the model-workspace-variable path below.
+function toBlockLinks(refs: BlockRef[]): { blockName: string; modelName: string; linkTarget: string }[] {
+  return refs.map((r) => ({
+    blockName: r.blockName,
+    modelName: r.modelName,
+    linkTarget: `blocks:${r.blockName}@${r.modelUri}`,
+  }));
+}
+
 // Data view (.sldd/.mat): set the Usage column on variable rows to the blocks
 // that use them (links back to each block's model). `sourceUri` is the open
 // file's uriString. Rows that already carry a Usage value are left untouched.
@@ -168,13 +179,7 @@ export async function annotateDataRows(sourceUri: string, rows: any[]): Promise<
     const name: string = row.Name?.label ?? '';
     const refs = g.reverse.get(`${sourceUri}\n${name}`);
     if (!refs || refs.length === 0) continue;
-    row.UsedBy = {
-      blockLinks: refs.map((r) => ({
-        blockName: r.blockName,
-        modelName: r.modelName,
-        linkTarget: `blocks:${r.blockName}@${r.modelUri}`,
-      })),
-    };
+    row.UsedBy = { blockLinks: toBlockLinks(refs) };
     changed = true;
   }
   return changed;
@@ -199,13 +204,7 @@ export async function annotateModelRows(modelUri: string, rows: any[]): Promise<
     if (!row.UsedBy) {
       const refs = g.reverse.get(`${modelUri}\n${row.Name?.label ?? ''}`);
       if (refs && refs.length > 0) {
-        row.UsedBy = {
-          blockLinks: refs.map((r) => ({
-            blockName: r.blockName,
-            modelName: r.modelName,
-            linkTarget: `blocks:${r.blockName}@${r.modelUri}`,
-          })),
-        };
+        row.UsedBy = { blockLinks: toBlockLinks(refs) };
         changed = true;
       }
     }
