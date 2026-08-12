@@ -53,6 +53,53 @@ describe('buildRows host-side tree construction', () => {
   });
 });
 
+describe('clipboard affordance — stamps Name.clipboardMode on the cut/copied source row', () => {
+  it('marks the named entry in its section as "cut" when a clipMark cut is passed', () => {
+    const path = fixturePath('numeric_json.sldd');
+    const text = readFileSync(path, 'utf8');
+    const sldd = getModel('test://numeric_json-cut.sldd', 'numeric_json.sldd', text);
+    const rows = buildRows(sldd, undefined, { name: 'Number', section: 'design', mode: 'cut' });
+
+    const numberRow = rows.find((r) => r.Name && r.Name.label === 'Number');
+    expect(numberRow.Name.clipboardMode).toBe('cut');
+
+    // No other entry row carries the mark.
+    const others = rows.filter(
+      (r) => r.Name && typeof r.Name === 'object' && r.Name.label !== 'Number' && !String(r.ID).startsWith('section:'),
+    );
+    for (const r of others) expect(r.Name.clipboardMode).toBeUndefined();
+  });
+
+  it('marks the named entry as "copied" for a copy clipMark', () => {
+    const path = fixturePath('numeric_json.sldd');
+    const text = readFileSync(path, 'utf8');
+    const sldd = getModel('test://numeric_json-copy.sldd', 'numeric_json.sldd', text);
+    const rows = buildRows(sldd, undefined, { name: 'Number', section: 'design', mode: 'copy' });
+    const numberRow = rows.find((r) => r.Name && r.Name.label === 'Number');
+    expect(numberRow.Name.clipboardMode).toBe('copy');
+  });
+
+  it('does not stamp when the clipMark section does not match the entry’s section', () => {
+    const path = fixturePath('numeric_json.sldd');
+    const text = readFileSync(path, 'utf8');
+    const sldd = getModel('test://numeric_json-nomatch.sldd', 'numeric_json.sldd', text);
+    // "Number" lives in design, not in some other section.
+    const rows = buildRows(sldd, undefined, { name: 'Number', section: 'references', mode: 'cut' });
+    const numberRow = rows.find((r) => r.Name && r.Name.label === 'Number');
+    expect(numberRow.Name.clipboardMode).toBeUndefined();
+  });
+
+  it('stamps nothing when no clipMark is given (default behavior unchanged)', () => {
+    const path = fixturePath('numeric_json.sldd');
+    const text = readFileSync(path, 'utf8');
+    const sldd = getModel('test://numeric_json-none.sldd', 'numeric_json.sldd', text);
+    const rows = buildRows(sldd);
+    for (const r of rows) {
+      if (r.Name && typeof r.Name === 'object') expect(r.Name.clipboardMode).toBeUndefined();
+    }
+  });
+});
+
 describe('buildEntryRows capability flags (for the context menu)', () => {
   // Duck-typed nodes exercising the capability branches. capabilityFlags reads
   // isEntry, canAddChild(), and parent.canRemoveChild() defensively.
