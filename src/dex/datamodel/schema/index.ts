@@ -49,10 +49,53 @@ export function getSchema(className: string): ResolvedProp[] | undefined {
     return resolved;
 }
 
-// Walk a dotted sourcePath against a `_properties` bag. Non-terminal hops
-// descend into the sub-object's inner `_properties` (the model nests MCOS
-// sub-objects as `{ _object_class, _properties: {...} }`). Returns undefined if
-// any hop is absent — the caller then substitutes the descriptor's default.
+// Given a container object and the next path segment, return the object that
+// directly holds that key. Model sub-objects nest their fields one of two ways:
+//   flat MCOS:      { _object_class, _properties: { key: ... } }
+//   MATLABArray:    { _array_class, _mw_element_type: 'MATLABArray', _elements: [ { _properties: { key: ... } } ] }
+// so if the key is not already at the top level, descend into whichever inner
+// bag actually carries it. Returns the container unchanged when nothing matches
+// (so `container[key]` then yields undefined).
+function propertyBag(container: Record<string, unknown>, key: string): Record<string, unknown> {
+    if (key in container) {
+        return container;
+    }
+    const inner = container._properties;
+    if (inner && typeof inner === 'object' && key in (inner as Record<string, unknown>)) {
+        return inner as Record<string, unknown>;
+    }
+    const elements = container._elements;
+    if (Array.isArray(elements) && elements[0] && typeof elements[0] === 'object') {
+        const elemProps = (elements[0] as Record<string, unknown>)._properties;
+        if (elemProps && typeof elemProps === 'object') {
+            return elemProps as Record<string, unknown>;
+        }
+    }
+    return container;
+}
+
+// Unwrap a typed-scalar leaf `{ _type, _value }` (e.g. an int32 stored as
+// { _type:'int32', _value:'-1' }) to a primitive. Numeric MATLAB types coerce to
+// Number; everything else returns the raw `_value`. Plain values pass through.
+function unwrapScalar(value: unknown): unknown {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const o = value as Record<string, unknown>;
+        if ('_type' in o && '_value' in o) {
+            const t = String(o._type);
+            if (/^u?int|^double$|^single$/.test(t)) {
+                const n = Number(o._value);
+                return Number.isNaN(n) ? o._value : n;
+            }
+            return o._value;
+        }
+    }
+    return value;
+}
+
+// Walk a dotted sourcePath against a `_properties` bag. Non-terminal hops descend
+// through nested sub-objects (flat `_properties` OR MATLABArray-wrapped
+// `_elements[0]._properties`). Returns undefined if any hop is absent — the caller
+// then substitutes the descriptor's default. Typed-scalar leaves are unwrapped.
 export function resolveSourcePath(properties: Record<string, unknown> | undefined, path: string): unknown {
     if (!properties) {
         return undefined;
@@ -63,13 +106,10 @@ export function resolveSourcePath(properties: Record<string, unknown> | undefine
         if (current === null || current === undefined || typeof current !== 'object') {
             return undefined;
         }
-        // Descend into a nested MCOS sub-object's inner _properties, if present.
-        const container = current as Record<string, unknown>;
-        const inner = (container._properties as Record<string, unknown> | undefined);
-        const bag = inner && !(parts[i] in container) ? inner : container;
+        const bag = propertyBag(current as Record<string, unknown>, parts[i]);
         current = bag[parts[i]];
     }
-    return current;
+    return unwrapScalar(current);
 }
 
 // Read a property's value from a `_properties` bag for DISPLAY, substituting the
