@@ -1,0 +1,13 @@
+{
+  "Simulink.Signal": [
+    { "$ref": "dataType", "default": "auto" },
+    "description",
+    "dimensions",
+    "complexity",
+    "min",
+    "max",
+    "unit",
+    "storageClass",
+    "alignment"
+  ]
+}
