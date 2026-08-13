@@ -50,6 +50,8 @@ const DEFAULT_WIDTHS: Record<string, number> = {
   alignment: 10,
   dimensions: 12,
   complexity: 12,
+  lastModified: 18,
+  lastModifiedBy: 14,
 };
 
 const COLUMN_LABELS: Record<string, string> = {
@@ -65,6 +67,8 @@ const COLUMN_LABELS: Record<string, string> = {
   complexity: 'Complexity',
   storageClass: 'Storage Class',
   alignment: 'Alignment',
+  lastModified: 'Last Modified',
+  lastModifiedBy: 'Last Modified By',
 };
 
 // The default column order and visibility. Class and Kind are supplementary
@@ -83,8 +87,10 @@ const DEFAULT_COLUMN_ORDER = [
   'complexity',
   'storageClass',
   'alignment',
+  'lastModified',
+  'lastModifiedBy',
 ];
-const DEFAULT_HIDDEN_COLUMNS = ['Kind', 'Class', 'dimensions', 'complexity', 'storageClass', 'alignment'];
+const DEFAULT_HIDDEN_COLUMNS = ['Kind', 'Class', 'dimensions', 'complexity', 'storageClass', 'alignment', 'lastModified', 'lastModifiedBy'];
 
 @customElement('dex-tree-table')
 export class DexTreeTable extends LitElement {
