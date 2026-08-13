@@ -168,6 +168,7 @@ window.addEventListener('message', (event: MessageEvent) => {
     hasTextView = !!msg.hasTextView;
     table.columns = msg.columns ?? null;
     table.columnLabels = msg.columnLabels ?? null;
+    table.columnGroups = (msg.columnGroups as Record<string, string> | undefined) ?? null;
     // Preserve the current selection across the rebuild if the row still exists.
     // EVERY repaint (value edit, structural edit, text-view edit, undo, redo)
     // arrives here, so this is what keeps selection stable through all of them.

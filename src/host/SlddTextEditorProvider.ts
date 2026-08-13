@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { renderWebviewHtml } from './webviewHtml.js';
 import { getModel, invalidate, findNode } from './SlddModel.js';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
-import { buildRows, COLUMNS, COLUMN_LABELS, type ClipMark } from './rowBuilder.js';
+import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { captureBaseline, computeModified, clearBaseline } from './slddBaseline.js';
 import { setClipboard, getClipboard, clearClipboard, clipboardState } from './clipboard.js';
 import { setDrag, getDrag, clearDrag, type DragRegisterItem } from './dragState.js';
@@ -118,6 +118,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
               rows,
               columns: COLUMNS,
               columnLabels: COLUMN_LABELS,
+              columnGroups: COLUMN_GROUPS,
               editable: true,
               // Backed by a TextDocument, so "Location in Text" has a target.
               hasTextView: true,

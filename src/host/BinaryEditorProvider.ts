@@ -6,6 +6,7 @@ import {
   buildRows,
   COLUMNS,
   COLUMN_LABELS,
+  COLUMN_GROUPS,
   PROJECT_COLUMNS,
   PROJECT_COLUMN_LABELS,
 } from './rowBuilder.js';
@@ -206,6 +207,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           rows,
           columns: COLUMNS,
           columnLabels: COLUMN_LABELS,
+          columnGroups: COLUMN_GROUPS,
           editable: false,
           notice,
         });

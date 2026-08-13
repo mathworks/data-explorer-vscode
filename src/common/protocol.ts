@@ -28,6 +28,7 @@ export interface SetRowsMessage {
   rows: any[];
   columns: unknown;
   columnLabels: unknown;
+  columnGroups?: unknown;
   editable: boolean;
   /** Persistent read-only banner text (e.g. size-limited JSON .sldd). */
   notice?: string;
