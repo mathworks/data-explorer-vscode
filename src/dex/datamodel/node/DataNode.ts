@@ -11,6 +11,23 @@ import {
   pad as xmlPad,
 } from '../parser/XmlUtils';
 
+// Format a raw MATLAB timestamp ('YYYYMMDDThhmmss[.ffffff]') as an ISO-like
+// display string ('YYYY-MM-DDThh:mm:ssZ'). Mirrors the binary parser's
+// formatDate so a text-format and a binary-format entry render identically.
+// Values too short to parse (or empty) pass through unchanged.
+function formatMatlabTimestamp(raw: string): string {
+  if (!raw || raw.length < 15) {
+    return raw || '';
+  }
+  const year = raw.substring(0, 4);
+  const month = raw.substring(4, 6);
+  const day = raw.substring(6, 8);
+  const hour = raw.substring(9, 11);
+  const min = raw.substring(11, 13);
+  const sec = raw.substring(13, 15);
+  return year + '-' + month + '-' + day + 'T' + hour + ':' + min + ':' + sec + 'Z';
+}
+
 const MATLAB_NAME_RE = /^[A-Za-z][A-Za-z0-9_]*$/;
 const MATLAB_KEYWORDS = new Set([
   'break',
@@ -121,6 +138,38 @@ export default class DataNode extends BaseNode {
 
   get isDerived(): boolean {
     return !!(this.metadata && this.metadata.isderived === '1');
+  }
+
+  // The entry's last-modified timestamp, normalized to a single display string
+  // across the two parse paths. The text `.sldd` path stores a raw MATLAB
+  // timestamp under `lastmod` (also the shape freshly-added entries use); the
+  // binary path pre-formats it to ISO under `lastModifiedDate` and keeps the raw
+  // string under `_rawLastMod`. We prefer whichever ISO value exists and fall
+  // back to formatting the raw one, so both formats render identically. Empty
+  // when the entry carries no timestamp (e.g. nested children).
+  get lastModified(): string {
+    const m = this.metadata;
+    if (!m) {
+      return '';
+    }
+    const iso = m.lastModifiedDate;
+    if (typeof iso === 'string' && iso) {
+      return iso;
+    }
+    const raw = m.lastmod ?? m._rawLastMod;
+    return typeof raw === 'string' ? formatMatlabTimestamp(raw) : '';
+  }
+
+  // The user who last modified the entry. The text path stores it under
+  // `modifiedby`, the binary path under `lastModifiedBy`; new entries leave it
+  // empty. Empty when absent.
+  get lastModifiedBy(): string {
+    const m = this.metadata;
+    if (!m) {
+      return '';
+    }
+    const by = m.lastModifiedBy ?? m.modifiedby;
+    return typeof by === 'string' ? by : '';
   }
 
   get nameEditable(): boolean {

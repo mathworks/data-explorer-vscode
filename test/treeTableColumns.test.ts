@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { DexTreeTable, type TreeTableRow } from '../src/dex/components/dex-tree-table.js';
 
-const HOST_COLUMNS = ['Name', 'Value', 'Class', 'Kind', 'DataType', 'Status', 'UsedBy', 'dimensions', 'complexity', 'storageClass', 'alignment'];
+const HOST_COLUMNS = ['Name', 'Value', 'Class', 'Kind', 'DataType', 'Status', 'UsedBy', 'dimensions', 'complexity', 'storageClass', 'alignment', 'lastModified', 'lastModifiedBy'];
 
 function makeTable(): DexTreeTable {
   const table = new DexTreeTable();
@@ -181,6 +181,31 @@ describe('schema-driven object-property columns', () => {
     const r = row('p', { storageClass: 'ExportedGlobal' } as any);
     // The generic path reads row[columnKey] with no per-column code.
     expect((table as any)._getCellText(r, 'storageClass')).toBe('ExportedGlobal');
+  });
+});
+
+describe('dictionary metadata columns', () => {
+  const META_COLS = ['lastModified', 'lastModifiedBy'];
+
+  it('the metadata columns ship hidden by default', () => {
+    const table = makeTable();
+    expect(visibleCols(table)).toEqual(['Name', 'Value', 'DataType', 'UsedBy', 'Status']);
+    for (const col of META_COLS) {
+      expect(visibleCols(table)).not.toContain(col);
+    }
+  });
+
+  it('a hidden metadata column is still available/orderable (shows in the picker)', () => {
+    const table = makeTable();
+    expect((table as any)._orderedColumns).toContain('lastModified');
+    expect((table as any)._orderedColumns).toContain('lastModifiedBy');
+  });
+
+  it('renders/sorts a metadata column generically from row[key]', () => {
+    const table = makeTable();
+    const r = row('p', { lastModified: '2026-07-04T01:52:02Z', lastModifiedBy: 'weiwang' } as any);
+    expect((table as any)._getCellText(r, 'lastModified')).toBe('2026-07-04T01:52:02Z');
+    expect((table as any)._getCellText(r, 'lastModifiedBy')).toBe('weiwang');
   });
 });
 
