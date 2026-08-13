@@ -94,3 +94,17 @@ export function schemaColumnGroups(): Record<string, string> {
     }
     return map;
 }
+
+// Column-key → display label for every schema-driven read-only column, unioned
+// across all schema classes. The label lives once in the shared prop registry,
+// so the host merges this over its base-column labels instead of hand-copying
+// the schema labels (single source of truth).
+export function schemaColumnLabels(): Record<string, string> {
+    const map: Record<string, string> = {};
+    for (const className of getSchemaClasses()) {
+        for (const prop of eligibleProps(className)) {
+            map[prop.key] = prop.label;
+        }
+    }
+    return map;
+}

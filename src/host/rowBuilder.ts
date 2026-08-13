@@ -1,14 +1,18 @@
 // Copyright 2026 The MathWorks, Inc.
 
 import ModelBlockNode from '../dex/datamodel/node/data/ModelBlockNode.js';
-import { schemaColumnGroups } from '../dex/datamodel/node/schemaBridge.js';
+import { schemaColumnGroups, schemaColumnLabels } from '../dex/datamodel/node/schemaBridge.js';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 
 // Columns shown across the dictionary tree (union that fits all sections).
 export const COLUMNS = ['Name', 'Value', 'Class', 'Kind', 'DataType', 'Status', 'UsedBy', 'dimensions', 'complexity', 'storageClass', 'alignment'];
+// Base labels for the host-owned columns, merged with the schema-derived labels
+// for the schema-driven columns (dimensions/complexity/storageClass/alignment).
+// The schema is the single source of truth for its own columns' labels, so we
+// overlay them rather than hand-copying them here.
 export const COLUMN_LABELS: Record<string, string> = {
   Name: 'Name', Value: 'Value', Class: 'Class', Kind: 'Kind', DataType: 'Data Type', Status: 'Status', UsedBy: 'Usage',
-  dimensions: 'Dimensions', complexity: 'Complexity', storageClass: 'Storage Class', alignment: 'Alignment',
+  ...schemaColumnLabels(),
 };
 
 // Column-key → picker group header, derived from the shared schema (single
