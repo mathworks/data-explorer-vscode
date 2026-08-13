@@ -249,6 +249,23 @@ describe('dictionary metadata columns', () => {
   });
 });
 
+describe('header labels come from the host-provided map', () => {
+  it('renders host columnLabels for a column and falls back to the raw key', async () => {
+    const table = makeTable();
+    // The host is the single source of truth for labels; the component no longer
+    // keeps a static fallback map, so an unmapped key renders as its raw key.
+    (table as any).columnLabels = { DataType: 'Data Type', UsedBy: 'Usage' };
+    (table as any).rows = [row('a', { DataType: 'int8' })];
+    document.body.appendChild(table as any);
+    await (table as any).updateComplete;
+    const labels = Array.from((table as any).shadowRoot.querySelectorAll('.th-label')).map((el: any) => el.textContent.trim());
+    // DataType is mapped; Value has no entry in the provided map -> raw key.
+    expect(labels).toContain('Data Type');
+    expect(labels).toContain('Value');
+    (table as any).remove();
+  });
+});
+
 describe('search matches across visible columns', () => {
   function filter(table: DexTreeTable, text: string, rows: TreeTableRow[]): string[] {
     return (table as any)._filterRows(rows, text).map((r: TreeTableRow) => r.ID);
