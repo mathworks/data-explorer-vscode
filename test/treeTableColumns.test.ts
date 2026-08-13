@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { DexTreeTable, type TreeTableRow } from '../src/dex/components/dex-tree-table.js';
 
-const HOST_COLUMNS = ['Name', 'Value', 'Class', 'Kind', 'DataType', 'Status', 'UsedBy', 'dimensions', 'complexity', 'dimensionsMode', 'storageClass', 'alignment', 'lastModified', 'lastModifiedBy'];
+const HOST_COLUMNS = ['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class', 'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit', 'storageClass', 'headerFile', 'alignment', 'lastModified', 'lastModifiedBy'];
 
 function makeTable(): DexTreeTable {
   const table = new DexTreeTable();
@@ -160,7 +160,7 @@ describe('persisted state is restored', () => {
 });
 
 describe('schema-driven object-property columns', () => {
-  const SCHEMA_COLS = ['dimensions', 'complexity', 'dimensionsMode', 'storageClass', 'alignment'];
+  const SCHEMA_COLS = ['dimensions', 'complexity', 'dimensionsMode', 'storageClass', 'headerFile', 'alignment'];
 
   it('the schema columns ship hidden by default', () => {
     const table = makeTable();
@@ -304,11 +304,21 @@ describe('search matches across visible columns', () => {
 describe('grouped column picker', () => {
   it('renders a group header before the schema columns and none for ungrouped ones', async () => {
     const table = makeTable();
+    // Mirror the host grouping: every column in each group is mapped, so the
+    // groups stay contiguous in the default order (a header renders once per
+    // group). Data Dictionary covers the trailing metadata columns.
     (table as any).columnGroups = {
       dimensions: 'Data Object',
+      dimensionsMode: 'Data Object',
       complexity: 'Data Object',
+      Min: 'Data Object',
+      Max: 'Data Object',
+      Unit: 'Data Object',
       storageClass: 'Code Generation',
+      headerFile: 'Code Generation',
       alignment: 'Code Generation',
+      lastModified: 'Data Dictionary',
+      lastModifiedBy: 'Data Dictionary',
     };
     (table as any)._hiddenColumns = new Set();
     (table as any)._columnMenuOpen = true;
@@ -317,7 +327,7 @@ describe('grouped column picker', () => {
     const headers = Array.from(
       (table as any).shadowRoot.querySelectorAll('.column-menu-group-header'),
     ).map((el: any) => el.textContent.trim());
-    expect(headers).toEqual(['Data Object', 'Code Generation']);
+    expect(headers).toEqual(['Data Object', 'Code Generation', 'Data Dictionary']);
     const items = (table as any).shadowRoot.querySelectorAll('.column-menu-item');
     expect(items.length).toBe(HOST_COLUMNS.length);
     (table as any).remove();
