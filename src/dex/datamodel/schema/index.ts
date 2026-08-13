@@ -118,6 +118,65 @@ export function resolveSourcePath(properties: Record<string, unknown> | undefine
     return unwrapScalar(current);
 }
 
+// Given a container and the next path segment, return the bag a value should be
+// WRITTEN into — the write-side mirror of propertyBag. Unlike the read side, the
+// leaf key need not already exist (we may be adding an omitted default), so we
+// pick the bag by container shape: an inner `_properties` (flat MCOS) or
+// `_elements[0]._properties` (MATLABArray) if present, else the container itself.
+function writableBag(container: Record<string, unknown>): Record<string, unknown> | null {
+    const inner = container._properties;
+    if (inner && typeof inner === 'object') {
+        return inner as Record<string, unknown>;
+    }
+    const elements = container._elements;
+    if (Array.isArray(elements) && elements[0] && typeof elements[0] === 'object') {
+        const elemProps = (elements[0] as Record<string, unknown>)._properties;
+        if (elemProps && typeof elemProps === 'object') {
+            return elemProps as Record<string, unknown>;
+        }
+    }
+    return container;
+}
+
+// Write `value` at a dotted sourcePath in a `_properties` bag, mutating in place.
+// Non-terminal hops descend into nested sub-objects (flat `_properties` OR
+// MATLABArray-wrapped `_elements[0]._properties`) via writableBag. A pre-existing
+// typed-scalar leaf `{_type,_value}` keeps its shape (only `_value` is rewritten,
+// stringified to match the parsed form); any other leaf is written as the plain
+// value. Returns false without mutating if an intermediate sub-object is absent
+// (we never synthesize e.g. a missing CoderInfo). Display/edit-only; the caller
+// owns dirty-marking and serialization.
+export function writeSourcePath(
+    properties: Record<string, unknown> | undefined,
+    path: string,
+    value: unknown,
+): boolean {
+    if (!properties) {
+        return false;
+    }
+    const parts = path.split('.');
+    let current: Record<string, unknown> = properties;
+    for (let i = 0; i < parts.length - 1; i++) {
+        const next = propertyBag(current, parts[i])[parts[i]];
+        if (next === null || next === undefined || typeof next !== 'object') {
+            return false;
+        }
+        current = next as Record<string, unknown>;
+    }
+    const leafKey = parts[parts.length - 1];
+    const bag = writableBag(current);
+    if (!bag) {
+        return false;
+    }
+    const existing = bag[leafKey];
+    if (existing && typeof existing === 'object' && !Array.isArray(existing) && '_type' in (existing as Record<string, unknown>) && '_value' in (existing as Record<string, unknown>)) {
+        (existing as Record<string, unknown>)._value = String(value);
+    } else {
+        bag[leafKey] = value;
+    }
+    return true;
+}
+
 // Read a property's value from a `_properties` bag for DISPLAY, substituting the
 // descriptor's declared default when the value is absent. This is display-only:
 // it never writes back to the bag, so serialization stays minimal (defaults are

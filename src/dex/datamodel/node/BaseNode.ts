@@ -53,6 +53,12 @@ export interface PIObject {
   showDefaultGroup: boolean;
 }
 
+// Columns the webview renders through a dedicated, format-specific branch (they
+// consume a plain string cell and manage their own editability). Generic
+// editable columns (the schema Code Generation columns) are NOT in this set, so
+// only they receive the editable-object cell shape in toRow.
+const DEDICATED_COLUMNS = new Set(['Name', 'Value', 'DataType', 'Class', 'Kind', 'Description', 'UsedBy', 'Status']);
+
 export default class BaseNode {
   name: string;
   parent: BaseNode | null;
@@ -269,6 +275,13 @@ export default class BaseNode {
           row.Value = info.displayValue;
         }
         row._valueEditable = info.editable;
+      } else if (info.editable && !DEDICATED_COLUMNS.has(colKey)) {
+        // An editable GENERIC column (e.g. the schema Code Generation columns).
+        // Carry the editor + options onto the cell so the webview can open the
+        // right editor. Columns with a dedicated webview render branch (DataType,
+        // Class, …) consume a plain string and set their own editability, so they
+        // are excluded here and fall through to the string form below.
+        row[colKey] = { text: info.displayValue, editable: true, editor: info.editor, options: info.options };
       } else {
         row[colKey] = info.displayValue;
       }

@@ -52,10 +52,16 @@ describe('schemaColumns — bridge schema props into table columns', () => {
     }
   });
 
-  it('column items are read-only (editor label) with the schema label as displayName', () => {
+  it('the Code Generation columns are editable (storageClass select w/ options, alignment text)', () => {
     const storage = schemaColumns('Simulink.Parameter').find((c) => c.key === 'storageClass')!;
     expect(storage.displayName).toBe('Storage Class');
-    expect(storage.editor).toBe('label');
+    expect(storage.editor).toBe('select');
+    expect(storage.readOptions!({} as any)).toContain('ExportedGlobal');
+    const alignment = schemaColumns('Simulink.Parameter').find((c) => c.key === 'alignment')!;
+    expect(alignment.editor).toBe('text');
+    // The Data Object columns stay read-only labels.
+    const dims = schemaColumns('Simulink.Parameter').find((c) => c.key === 'dimensions')!;
+    expect(dims.editor).toBe('label');
   });
 
   it('readValue hydrates from serial._properties, filling defaults when omitted', () => {

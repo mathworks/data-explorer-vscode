@@ -1727,6 +1727,14 @@ export class DexTreeTable extends LitElement {
       if (row._valueEditable === false) return;
       const val = typeof row.Description === 'object' ? row.Description.text : String(row.Description || '');
       this._onCellDblClick(row.ID, 'Description', val);
+    } else {
+      // Generic editable column (e.g. the schema Code Generation columns): the
+      // cell is an object carrying editable/editor/options. Read-only columns are
+      // plain strings and fall through with no editor.
+      const raw = (row as any)[columnId];
+      if (raw && typeof raw === 'object' && raw.editable === true) {
+        this._onCellDblClick(row.ID, columnId, String(raw.text ?? ''), raw.editor, raw.options);
+      }
     }
   }
 
@@ -2158,14 +2166,43 @@ export class DexTreeTable extends LitElement {
       return html`<span class="${val ? 'status-modified' : ''}">${val}</span>`;
     }
 
-    // Generic read-only fallback for schema-driven label columns (storageClass,
-    // alignment, dimensions, complexity, and any future label column). Reads the
-    // value emitted by toRow under row[columnId]. Must stay ABOVE the empty return.
+    // Generic branch for schema-driven columns (storageClass, alignment,
+    // dimensions, complexity, and any future column). Reads the value emitted by
+    // toRow under row[columnId]: a plain string for a read-only column, or an
+    // object { text, editable, editor, options } for an editable one. Must stay
+    // ABOVE the empty return.
     {
       const raw = (row as any)[columnId];
+      const isObj = raw !== null && typeof raw === 'object';
+      const editable = isObj && (raw as any).editable === true;
+      if (editable && isEditing) {
+        const editor = (raw as any).editor;
+        const text = String((raw as any).text ?? '');
+        if (editor === 'select') {
+          const options: string[] = (raw as any).options || [];
+          return html`<select
+            class="edit-input"
+            @keydown=${this._onEditKeyDown}
+            @change=${this._onEditBlur}
+            @blur=${this._onEditBlur}
+          >
+            ${options.map((opt) => html`<option .value=${opt} ?selected=${opt === text}>${opt}</option>`)}
+          </select>`;
+        }
+        return html`<input
+          class="edit-input"
+          .value=${text}
+          @keydown=${this._onEditKeyDown}
+          @blur=${this._onEditBlur}
+        />`;
+      }
       if (raw !== undefined && raw !== null && raw !== '') {
-        const val = typeof raw === 'object' ? (raw.text ?? '') : String(raw);
-        return html`<span class="readonly-cell">${this._highlight(val)}</span>`;
+        const val = isObj ? ((raw as any).text ?? '') : String(raw);
+        // Editable cells render as plain (editable) text; only genuinely
+        // read-only columns get the dimmed readonly-cell treatment.
+        return editable
+          ? html`<span>${this._highlight(val)}</span>`
+          : html`<span class="readonly-cell">${this._highlight(val)}</span>`;
       }
     }
     return html``;
