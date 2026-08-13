@@ -19,7 +19,7 @@
 import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
 import { renderWebviewHtml } from './webviewHtml.js';
-import { buildRows, COLUMNS, COLUMN_LABELS, type ClipMark } from './rowBuilder.js';
+import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { sectionRules } from './sectionRules.js';
 import { parseBinarySlddParts } from '../dex/datamodel/parser/BinarySlddParser.js';
 import { serializeEntryToXml } from '../dex/datamodel/parser/BinarySlddSerializer.js';
@@ -169,6 +169,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           rows,
           columns: COLUMNS,
           columnLabels: COLUMN_LABELS,
+          columnGroups: COLUMN_GROUPS,
           editable: true,
         });
         webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });

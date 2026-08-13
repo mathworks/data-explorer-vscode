@@ -1,6 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 
 import ModelBlockNode from '../dex/datamodel/node/data/ModelBlockNode.js';
+import { schemaColumnGroups } from '../dex/datamodel/node/schemaBridge.js';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 
 // Columns shown across the dictionary tree (union that fits all sections).
@@ -9,6 +10,10 @@ export const COLUMN_LABELS: Record<string, string> = {
   Name: 'Name', Value: 'Value', Class: 'Class', Kind: 'Kind', DataType: 'Data Type', Status: 'Status', UsedBy: 'Usage',
   dimensions: 'Dimensions', complexity: 'Complexity', storageClass: 'Storage Class', alignment: 'Alignment',
 };
+
+// Column-key → picker group header, derived from the shared schema (single
+// source of truth — not hand-maintained). Ungrouped columns are simply absent.
+export const COLUMN_GROUPS: Record<string, string> = schemaColumnGroups();
 
 // Columns for a MATLAB/Simulink Project (.prj). buildRows is generic over
 // section containers, so a ProjectNode produces its rows via the same path;

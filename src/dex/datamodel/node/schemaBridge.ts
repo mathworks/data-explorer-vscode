@@ -10,7 +10,7 @@
 // ungrouped props (Value, Data Type, Description, Min, Max, Unit) remain owned by
 // the node as live fields; the schema does not duplicate them here.
 
-import { getSchema, hydrate } from '../schema/index';
+import { getSchema, getSchemaClasses, hydrate } from '../schema/index';
 import type { ResolvedProp } from '../schema/types';
 import type { PropClass, PIGroupDef } from './BaseNode';
 import type BaseNode from './BaseNode';
@@ -77,4 +77,20 @@ export function schemaPILayout(className: string): PIGroupDef[] {
 // read-only PropClass whose `column` equals its key, so toRow emits row[key].
 export function schemaColumns(className: string): PropClass[] {
     return eligibleProps(className).map((prop) => toPropClass(prop, prop.key));
+}
+
+// Column-key → group-name for every schema-driven read-only column, unioned
+// across all schema classes. Each key's group is defined once in the shared
+// prop registry (via $ref), so the union is unambiguous. Used by the host to
+// tell the column picker which group header each column sits under.
+export function schemaColumnGroups(): Record<string, string> {
+    const map: Record<string, string> = {};
+    for (const className of getSchemaClasses()) {
+        for (const prop of eligibleProps(className)) {
+            if (prop.group !== undefined) {
+                map[prop.key] = prop.group;
+            }
+        }
+    }
+    return map;
 }

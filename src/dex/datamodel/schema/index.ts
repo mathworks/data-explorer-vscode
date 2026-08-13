@@ -49,6 +49,12 @@ export function getSchema(className: string): ResolvedProp[] | undefined {
     return resolved;
 }
 
+// The classNames that have a schema (the keys of the class-reference registry).
+// Lets a host/UI layer enumerate schema-backed classes without a node instance.
+export function getSchemaClasses(): string[] {
+    return Object.keys(CLASS_REFS);
+}
+
 // Given a container object and the next path segment, return the object that
 // directly holds that key. Model sub-objects nest their fields one of two ways:
 //   flat MCOS:      { _object_class, _properties: { key: ... } }

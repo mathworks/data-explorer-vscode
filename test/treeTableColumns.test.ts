@@ -218,3 +218,35 @@ describe('search matches across visible columns', () => {
     expect(filter(table, 'kind:Connection', rows)).toEqual(['b']);
   });
 });
+
+describe('grouped column picker', () => {
+  it('renders a group header before the schema columns and none for ungrouped ones', async () => {
+    const table = makeTable();
+    (table as any).columnGroups = {
+      dimensions: 'Data Object',
+      complexity: 'Data Object',
+      storageClass: 'Code Generation',
+      alignment: 'Code Generation',
+    };
+    (table as any)._hiddenColumns = new Set();
+    (table as any)._columnMenuOpen = true;
+    document.body.appendChild(table as any);
+    await (table as any).updateComplete;
+    const headers = Array.from(
+      (table as any).shadowRoot.querySelectorAll('.column-menu-group-header'),
+    ).map((el: any) => el.textContent.trim());
+    expect(headers).toEqual(['Data Object', 'Code Generation']);
+    const items = (table as any).shadowRoot.querySelectorAll('.column-menu-item');
+    expect(items.length).toBe(HOST_COLUMNS.length);
+    (table as any).remove();
+  });
+
+  it('renders no group headers when columnGroups is null', async () => {
+    const table = makeTable();
+    (table as any)._columnMenuOpen = true;
+    document.body.appendChild(table as any);
+    await (table as any).updateComplete;
+    expect((table as any).shadowRoot.querySelectorAll('.column-menu-group-header').length).toBe(0);
+    (table as any).remove();
+  });
+});

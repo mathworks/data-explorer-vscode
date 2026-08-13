@@ -318,6 +318,17 @@ export class DexTreeTable extends LitElement {
         background: var(--dex-border-color-light, #e0e0e0);
       }
 
+      .column-menu-group-header {
+        padding: 6px 12px 2px 6px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--dex-color-text-muted, #999);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        user-select: none;
+        cursor: default;
+      }
+
       .column-menu-reset {
         display: block;
         width: calc(100% - 16px);
@@ -609,6 +620,7 @@ export class DexTreeTable extends LitElement {
   @property({ type: Number }) rowHeight = DEFAULT_ROW_HEIGHT;
   @property({ type: String, reflect: true, attribute: 'table-style' }) tableStyle: 'normal' | 'light' = 'normal';
   @property({ type: Object }) columnLabels: Record<string, string> | null = null;
+  @property({ type: Object }) columnGroups: Record<string, string> | null = null;
   @property({ type: Array }) columns: string[] | null = null;
 
   get selectedRowId(): string {
@@ -2405,18 +2417,27 @@ export class DexTreeTable extends LitElement {
     if (!this._columnMenuOpen) return nothing;
     return html`
       <div class="column-menu" style="right: ${this._columnMenuX}px; top: ${this._columnMenuY}px;">
-        ${this._orderedColumns.map((col) => {
-          const isName = col === 'Name';
-          const isVisible = !this._hiddenColumns.has(col);
-          const overCls =
-            this._menuDragOverCol === col
-              ? this._menuDragOverSide === 'top'
-                ? 'drag-over-top'
-                : 'drag-over-bottom'
-              : '';
-          const draggingCls = this._menuDragCol === col ? 'dragging' : '';
-          return html`
-            <label
+        ${(() => {
+          let lastGroup: string | null = null;
+          return this._orderedColumns.map((col) => {
+            const group = this.columnGroups?.[col] ?? null;
+            const header =
+              group && group !== lastGroup
+                ? html`<div class="column-menu-group-header">${group}</div>`
+                : nothing;
+            lastGroup = group;
+            const isName = col === 'Name';
+            const isVisible = !this._hiddenColumns.has(col);
+            const overCls =
+              this._menuDragOverCol === col
+                ? this._menuDragOverSide === 'top'
+                  ? 'drag-over-top'
+                  : 'drag-over-bottom'
+                : '';
+            const draggingCls = this._menuDragCol === col ? 'dragging' : '';
+            return html`
+              ${header}
+              <label
               class="column-menu-item ${isName ? 'disabled' : ''} ${overCls} ${draggingCls}"
               draggable=${isName ? 'false' : 'true'}
               @dragstart=${(e: DragEvent) => this._onMenuDragStart(col, e)}
@@ -2443,7 +2464,8 @@ export class DexTreeTable extends LitElement {
               <span class="col-label">${this.columnLabels?.[col] || COLUMN_LABELS[col] || col}</span>
             </label>
           `;
-        })}
+          });
+        })()}
         <div class="column-menu-separator"></div>
         <button type="button" class="column-menu-reset" @click=${(e: Event) => this._resetColumns(e)}>
           Reset to default
