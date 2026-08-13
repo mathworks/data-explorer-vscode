@@ -6,6 +6,7 @@ coverage/
 .vscode-test-web/
 *.vsix
 test/parity/dump-output.txt
+test/parity/codegen_probe.txt
 .DS_Store
 
 # Local-only internal notes — must never be pushed to the public remote

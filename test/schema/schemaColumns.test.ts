@@ -42,6 +42,27 @@ describe('toRow emits schema columns for Parameter/Signal', () => {
     expect(row.storageClass.editable).toBe(true);
   });
 
+  it('SignalNode surfaces a read-only Dimensions Mode column defaulting to "auto"', () => {
+    // Confirmed from real MATLAB data (test/parity/gen_codegen_fixture.m probe):
+    // DimensionsMode is a top-level char on Simulink.Signal, default 'auto'.
+    const node = SignalNode.createDefault('s', null);
+    const prop = node.getProperties().find((p: any) => p.key === 'dimensionsMode')!;
+    expect(prop.column).toBe('dimensionsMode');
+    expect(prop.editor).toBe('label');
+    const row: any = node.toRow();
+    // Read-only label props render as plain strings (its omitted default).
+    expect(row.dimensionsMode).toBe('auto');
+  });
+
+  it('ParameterNode does NOT surface Dimensions Mode (absent on the class)', () => {
+    // The probe showed DimensionsMode is Unrecognized on Simulink.Parameter, so
+    // it is deliberately not in the Parameter schema.
+    const props = ParameterNode.createDefault('p', null).getProperties();
+    expect(props.find((p: any) => p.key === 'dimensionsMode')).toBeUndefined();
+    const row: any = ParameterNode.createDefault('p', null).toRow();
+    expect('dimensionsMode' in row).toBe(false);
+  });
+
   it('the legacy columns are still emitted (no regression)', () => {
     const row: any = ParameterNode.createDefault('p', null).toRow();
     expect(row.Name).toBeDefined();
