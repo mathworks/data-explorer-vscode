@@ -29,10 +29,14 @@ describe('schema data integrity', () => {
 
   it('the confirmed Code Generation columns are present for Parameter', () => {
     const keys = new Set(getSchema('Simulink.Parameter')!.map(p => p.key));
-    // Only the paths verified from real data in Phase 1 (Task 3). The remaining
-    // props.png Code Generation columns (Data Scope, Header File, Preserve
-    // Dimensions) + Dimensions Mode are added in Task 3b once their Parameter
-    // source paths are confirmed from a binary dump.
+    // Only the paths verified from real data. Task 4b dumped the real binary
+    // fixture (test/parity/artifacts/binary/params.sldd, entry "gravity") and
+    // found DataScope, HeaderFile, PreserveDimensions, and DimensionsMode are
+    // absent from a Parameter's raw _properties tree (neither top-level nor
+    // under CoderInfo._properties) — so they are NOT added here. The Parameter's
+    // CoderInfo._properties held only HasCoderInfo, StorageClass, TypeQualifier,
+    // Alias, Alignment, IsCSCPackageOverridden, CSCPackageName, ParameterOrSignal,
+    // CustomStorageClass, CustomAttributes. Never ship a guessed source path.
     for (const k of ['storageClass', 'alignment']) {
       expect(keys.has(k)).toBe(true);
     }
