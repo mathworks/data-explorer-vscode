@@ -33,8 +33,22 @@ import { COLUMN_GROUPS } from '../../src/host/rowBuilder.js';
 describe('rowBuilder COLUMN_GROUPS', () => {
   it('exposes the schema-derived group map for the picker', () => {
     expect(COLUMN_GROUPS.storageClass).toBe('Code Generation');
+    expect(COLUMN_GROUPS.headerFile).toBe('Code Generation');
     expect(COLUMN_GROUPS.dimensions).toBe('Data Object');
     expect('Name' in COLUMN_GROUPS).toBe(false);
     expect('DataType' in COLUMN_GROUPS).toBe(false);
+  });
+
+  it('groups the node-owned value props (Min/Max/Unit) under Data Object', () => {
+    // These are not schema props, so the host adds their grouping; the schema
+    // is still the single source of truth for its own columns' groups.
+    expect(COLUMN_GROUPS.Min).toBe('Data Object');
+    expect(COLUMN_GROUPS.Max).toBe('Data Object');
+    expect(COLUMN_GROUPS.Unit).toBe('Data Object');
+  });
+
+  it('groups the host-owned metadata columns under Data Dictionary', () => {
+    expect(COLUMN_GROUPS.lastModified).toBe('Data Dictionary');
+    expect(COLUMN_GROUPS.lastModifiedBy).toBe('Data Dictionary');
   });
 });
