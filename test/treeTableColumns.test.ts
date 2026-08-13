@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { DexTreeTable, type TreeTableRow } from '../src/dex/components/dex-tree-table.js';
 
-const HOST_COLUMNS = ['Name', 'Value', 'Class', 'Kind', 'DataType', 'Status', 'UsedBy', 'dimensions', 'complexity', 'storageClass', 'alignment', 'lastModified', 'lastModifiedBy'];
+const HOST_COLUMNS = ['Name', 'Value', 'Class', 'Kind', 'DataType', 'Status', 'UsedBy', 'dimensions', 'complexity', 'dimensionsMode', 'storageClass', 'alignment', 'lastModified', 'lastModifiedBy'];
 
 function makeTable(): DexTreeTable {
   const table = new DexTreeTable();
@@ -160,9 +160,9 @@ describe('persisted state is restored', () => {
 });
 
 describe('schema-driven object-property columns', () => {
-  const SCHEMA_COLS = ['dimensions', 'complexity', 'storageClass', 'alignment'];
+  const SCHEMA_COLS = ['dimensions', 'complexity', 'dimensionsMode', 'storageClass', 'alignment'];
 
-  it('the 4 schema columns ship hidden by default', () => {
+  it('the schema columns ship hidden by default', () => {
     const table = makeTable();
     // Default visible set is the legacy arrangement; the schema columns are hidden.
     expect(visibleCols(table)).toEqual(['Name', 'Value', 'DataType', 'UsedBy', 'Status']);

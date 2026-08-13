@@ -7,7 +7,7 @@ import { buildSectionRowId } from '../common/sectionRowId.js';
 // Columns shown across the dictionary tree (union that fits all sections).
 // lastModified/lastModifiedBy are dictionary-entry metadata columns (host-owned,
 // stamped in buildEntryRows); they ship hidden by default like Class/Kind.
-export const COLUMNS = ['Name', 'Value', 'Class', 'Kind', 'DataType', 'Status', 'UsedBy', 'dimensions', 'complexity', 'storageClass', 'alignment', 'lastModified', 'lastModifiedBy'];
+export const COLUMNS = ['Name', 'Value', 'Class', 'Kind', 'DataType', 'Status', 'UsedBy', 'dimensions', 'complexity', 'dimensionsMode', 'storageClass', 'alignment', 'lastModified', 'lastModifiedBy'];
 // Base labels for the host-owned columns, merged with the schema-derived labels
 // for the schema-driven columns (dimensions/complexity/storageClass/alignment).
 // The schema is the single source of truth for its own columns' labels, so we

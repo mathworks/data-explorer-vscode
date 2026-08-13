@@ -4,6 +4,7 @@
     "description",
     "dimensions",
     "complexity",
+    "dimensionsMode",
     "min",
     "max",
     "unit",
