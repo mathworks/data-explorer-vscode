@@ -1,4 +1,6 @@
 .vscode/**
+.claude/**
+.github/**
 src/**
 test/**
 test-integration/**
