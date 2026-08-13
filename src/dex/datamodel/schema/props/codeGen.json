@@ -1,0 +1,4 @@
+{
+  "storageClass": { "label": "Storage Class", "sourcePath": "CoderInfo.StorageClass", "type": "string", "editor": "label", "group": "Code Generation", "default": "Auto" },
+  "alignment":    { "label": "Alignment",      "sourcePath": "CoderInfo.Alignment",    "type": "int",    "editor": "label", "group": "Code Generation", "default": -1 }
+}
