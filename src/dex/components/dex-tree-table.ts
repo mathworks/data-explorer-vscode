@@ -46,6 +46,10 @@ const DEFAULT_WIDTHS: Record<string, number> = {
   Description: 15,
   UsedBy: 12,
   Status: 10,
+  storageClass: 14,
+  alignment: 10,
+  dimensions: 12,
+  complexity: 12,
 };
 
 const COLUMN_LABELS: Record<string, string> = {
@@ -57,13 +61,30 @@ const COLUMN_LABELS: Record<string, string> = {
   Description: 'Description',
   UsedBy: 'Used By',
   Status: 'Status',
+  dimensions: 'Dimensions',
+  complexity: 'Complexity',
+  storageClass: 'Storage Class',
+  alignment: 'Alignment',
 };
 
 // The default column order and visibility. Class and Kind are supplementary
 // classifications, so they ship hidden; the user can enable them via the column
 // menu (and Reset restores this arrangement).
-const DEFAULT_COLUMN_ORDER = ['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class', 'Description'];
-const DEFAULT_HIDDEN_COLUMNS = ['Kind', 'Class'];
+const DEFAULT_COLUMN_ORDER = [
+  'Name',
+  'Value',
+  'DataType',
+  'UsedBy',
+  'Status',
+  'Kind',
+  'Class',
+  'Description',
+  'dimensions',
+  'complexity',
+  'storageClass',
+  'alignment',
+];
+const DEFAULT_HIDDEN_COLUMNS = ['Kind', 'Class', 'dimensions', 'complexity', 'storageClass', 'alignment'];
 
 @customElement('dex-tree-table')
 export class DexTreeTable extends LitElement {
@@ -1140,8 +1161,13 @@ export class DexTreeTable extends LitElement {
           return (row.UsedBy as any).blockLinks.map((b: any) => `${b.blockName}(${b.modelName})`).join(', ');
         if ('links' in row.UsedBy) return row.UsedBy.links.map((l) => l.text).join(', ');
         return (row.UsedBy as any).text;
-      default:
-        return '';
+      default: {
+        const raw = (row as any)[col];
+        if (raw === undefined || raw === null) {
+          return '';
+        }
+        return typeof raw === 'object' ? String(raw.text ?? '') : String(raw);
+      }
     }
   }
 
@@ -2114,6 +2140,16 @@ export class DexTreeTable extends LitElement {
       return html`<span class="${val ? 'status-modified' : ''}">${val}</span>`;
     }
 
+    // Generic read-only fallback for schema-driven label columns (storageClass,
+    // alignment, dimensions, complexity, and any future label column). Reads the
+    // value emitted by toRow under row[columnId]. Must stay ABOVE the empty return.
+    {
+      const raw = (row as any)[columnId];
+      if (raw !== undefined && raw !== null && raw !== '') {
+        const val = typeof raw === 'object' ? (raw.text ?? '') : String(raw);
+        return html`<span class="readonly-cell">${this._highlight(val)}</span>`;
+      }
+    }
     return html``;
   }
 

@@ -13,7 +13,7 @@ import PropMax from '../../prop/PropMax';
 import PropUnit from '../../prop/PropUnit';
 import PropDescription from '../../prop/PropDescription';
 import MatlabValueParser from '../../parser/MatlabValueParser';
-import { schemaPILayout } from '../schemaBridge';
+import { schemaPILayout, schemaColumns } from '../schemaBridge';
 
 const CLASS_NAME = 'Simulink.Parameter';
 
@@ -53,7 +53,7 @@ export default class ParameterNode extends DataNode {
     }
 
     getProperties(): PropClass[] {
-        return [PropName, PropValue, PropDataType, PropMin, PropMax, PropUnit, PropDescription];
+        return [PropName, PropValue, PropDataType, PropMin, PropMax, PropUnit, PropDescription, ...schemaColumns(this.className)];
     }
 
     getPILayout() {
