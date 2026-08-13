@@ -39,12 +39,7 @@ export default class SignalNode extends DataNode {
 
     setProperty(propName: string, stringValue: string): true | SetPropertyResult {
         if (propName === 'Min' || propName === 'Max') {
-            if (stringValue === '' || stringValue === '[]') { (this as unknown as Record<string, unknown>)[propName] = undefined; this._markModified(); return true; }
-            const num = Number(stringValue);
-            if (Number.isNaN(num)) { const cv = (this as unknown as Record<string, unknown>)[propName] as number | undefined; return { error: true, reason: 'Expected a numeric value', invalidValue: stringValue, validValue: cv !== undefined ? String(cv) : '[]' }; }
-            if (propName === 'Min' && this.Max !== undefined && num > this.Max) { return { error: true, reason: 'Min must not exceed Max (' + this.Max + ')', invalidValue: stringValue, validValue: this.Min !== undefined ? String(this.Min) : '[]' }; }
-            if (propName === 'Max' && this.Min !== undefined && num < this.Min) { return { error: true, reason: 'Max must not be less than Min (' + this.Min + ')', invalidValue: stringValue, validValue: this.Max !== undefined ? String(this.Max) : '[]' }; }
-            (this as unknown as Record<string, unknown>)[propName] = num; this._markModified(); return true;
+            return this._setMinMax(propName, stringValue);
         }
         return DataNode.prototype.setProperty.call(this, propName, stringValue);
     }

@@ -28,17 +28,15 @@ describe('trySetSchemaProperty routing via node.setProperty', () => {
     expect(JSON.stringify(node.serial._properties)).toBe(before);
   });
 
-  it('sets alignment to an integer', () => {
+  it('does not write alignment through the schema (read-only, editor label)', () => {
+    // Alignment is conservatively read-only: its valid values depend on the
+    // object's StorageClass (verified against MATLAB — "Cannot set Alignment when
+    // StorageClass is 'Auto'") and bad input is silently coerced to -1, so we do
+    // not offer it as an editable schema property. trySetSchemaProperty ignores a
+    // label prop, so the write never reaches CoderInfo.Alignment.
     const node = ParameterNode.createDefault('p', null);
-    expect(node.setProperty('alignment', '8')).toBe(true);
-    expect(resolveSourcePath(node.serial._properties, 'CoderInfo.Alignment')).toBe(8);
-  });
-
-  it('rejects a non-integer alignment', () => {
-    const node = ParameterNode.createDefault('p', null);
-    const r = node.setProperty('alignment', '3.5');
-    expect(r).not.toBe(true);
-    expect((r as any).error).toBe(true);
+    node.setProperty('alignment', '8');
+    expect(resolveSourcePath(node.serial._properties, 'CoderInfo.Alignment')).not.toBe(8);
   });
 
   it('falls through to node logic for a non-schema property (Description)', () => {
@@ -72,14 +70,6 @@ describe('Code Gen edit round-trip: text (JSON) gravity Parameter', () => {
     expect(resolveSourcePath(reparsed.serial._properties, 'CoderInfo.StorageClass')).toBe('ExportedGlobal');
   });
 
-  it('alignment edit persists into the reserialized entry', () => {
-    const { node } = loadGravity('text');
-    expect(node.setProperty('alignment', '16')).toBe(true);
-    const serialized: any = node.serialize();
-    const reparsed = ParameterNode.parse(serialized.value, 'gravity', null);
-    expect(resolveSourcePath(reparsed.serial._properties, 'CoderInfo.Alignment')).toBe(16);
-  });
-
   it('marks the entry Modified after a schema edit', () => {
     const { node } = loadGravity('text');
     node.setProperty('storageClass', 'Custom');
@@ -95,12 +85,12 @@ describe('Code Gen edit round-trip: binary (XML) gravity Parameter', () => {
     expect(resolveSourcePath(node.serial._properties, 'CoderInfo.StorageClass')).toBe('Custom');
   });
 
-  it('alignment edit keeps the int32 typed-scalar shape', () => {
+  it('leaves the int32 Alignment leaf untouched (read-only)', () => {
     const { node } = loadGravity('binary');
-    expect(node.setProperty('alignment', '32')).toBe(true);
-    // The binary CoderInfo.Alignment leaf is a typed scalar; the edit rewrites
-    // _value while preserving _type, so it stays int32 for XML serialization.
     const align = node.serial._properties.CoderInfo._elements[0]._properties.Alignment;
-    expect(align).toEqual({ _type: 'int32', _value: '32' });
+    const before = JSON.stringify(align);
+    node.setProperty('alignment', '32');
+    // A label prop is not written back, so the typed-scalar leaf is unchanged.
+    expect(JSON.stringify(node.serial._properties.CoderInfo._elements[0]._properties.Alignment)).toBe(before);
   });
 });
