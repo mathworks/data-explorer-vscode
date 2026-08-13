@@ -6,22 +6,24 @@ import SignalNode from '../../src/dex/datamodel/node/data/SignalNode.js';
 describe('toRow emits schema columns for Parameter/Signal', () => {
   it('ParameterNode.toRow includes storageClass/alignment/dimensions/complexity', () => {
     const row: any = ParameterNode.createDefault('p', null).toRow();
-    // storageClass/alignment are editable (object cells); dimensions/complexity
+    // storageClass is editable (object cell); alignment/dimensions/complexity
     // stay read-only (plain strings).
     expect(row.storageClass.text).toBe('Auto');
-    expect(row.alignment.text).toBe('-1');
+    expect(row.alignment).toBe('-1');
     expect(row.complexity).toBe('real');
     expect('dimensions' in row).toBe(true);
   });
 
-  it('the schema Code Generation columns are editable in getProperties (storageClass select, alignment text)', () => {
+  it('only storageClass is editable in getProperties; alignment is a read-only label', () => {
     const node = ParameterNode.createDefault('p', null);
     const props = node.getProperties();
     const storage = props.find((p: any) => p.key === 'storageClass')!;
     expect(storage.column).toBe('storageClass');
     expect(storage.editor).toBe('select');
+    // Alignment is conservatively read-only: its valid values depend on the
+    // object's StorageClass (MATLAB rejects it under 'Auto'), so we don't edit it.
     const alignment = props.find((p: any) => p.key === 'alignment')!;
-    expect(alignment.editor).toBe('text');
+    expect(alignment.editor).toBe('label');
     // The Data Object columns remain read-only labels.
     const dims = props.find((p: any) => p.key === 'dimensions')!;
     expect(dims.editor).toBe('label');
@@ -32,8 +34,8 @@ describe('toRow emits schema columns for Parameter/Signal', () => {
     expect(row.storageClass.editable).toBe(true);
     expect(row.storageClass.editor).toBe('select');
     expect(row.storageClass.options).toContain('ExportedGlobal');
-    expect(row.alignment.editable).toBe(true);
-    expect(row.alignment.editor).toBe('text');
+    // alignment is a read-only label → a plain string, not an editable cell.
+    expect(row.alignment).toBe('-1');
   });
 
   it('SignalNode.toRow also emits an editable storageClass', () => {

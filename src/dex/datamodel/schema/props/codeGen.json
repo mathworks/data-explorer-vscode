@@ -1,5 +1,5 @@
 {
   "storageClass": { "label": "Storage Class", "sourcePath": "CoderInfo.StorageClass", "type": "string", "editor": "select", "group": "Code Generation", "default": "Auto", "projected": true, "options": ["Auto", "SimulinkGlobal", "ExportedGlobal", "ImportedExtern", "ImportedExternPointer", "Custom"] },
   "headerFile":   { "label": "Header File",    "sourcePath": "CoderInfo.CustomAttributes.HeaderFile", "type": "string", "editor": "label", "group": "Code Generation", "default": "", "projected": true },
-  "alignment":    { "label": "Alignment",      "sourcePath": "CoderInfo.Alignment",    "type": "int",    "editor": "text",   "group": "Code Generation", "default": -1, "projected": true }
+  "alignment":    { "label": "Alignment",      "sourcePath": "CoderInfo.Alignment",    "type": "int",    "editor": "label",  "group": "Code Generation", "default": -1, "projected": true }
 }

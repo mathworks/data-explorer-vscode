@@ -17,7 +17,7 @@ function cell(row: any, key: string): any {
 }
 
 describe('Min / Max / Unit table columns', () => {
-  it('a Parameter emits Min/Max/Unit as editable text cells carrying the value', () => {
+  it('a Parameter emits Min/Max as editable text cells and Unit as a read-only label', () => {
     const p = ParameterNode.createDefault('p', null);
     p.Min = 2;
     p.Max = 9;
@@ -25,24 +25,26 @@ describe('Min / Max / Unit table columns', () => {
     const row = p.toRow();
     expect(cell(row, 'Min')).toEqual({ text: '2', editable: true, editor: 'text' });
     expect(cell(row, 'Max')).toEqual({ text: '9', editable: true, editor: 'text' });
-    expect(cell(row, 'Unit')).toEqual({ text: 'm/s', editable: true, editor: 'text' });
+    // Unit is conservatively read-only (Simulink runs it through a unit-expression
+    // parser we can't replicate), so toRow emits it as a plain string, not a cell.
+    expect(cell(row, 'Unit')).toBe('m/s');
   });
 
-  it('an unset Min/Max/Unit renders a blank (empty-text) editable cell', () => {
+  it('an unset Min/Max renders a blank editable cell; Unit is a blank string', () => {
     const p = ParameterNode.createDefault('p', null);
     const row = p.toRow();
     expect(cell(row, 'Min').text).toBe('');
     expect(cell(row, 'Max').text).toBe('');
-    expect(cell(row, 'Unit').text).toBe('');
+    expect(cell(row, 'Unit')).toBe('');
   });
 
-  it('a Signal also emits Min/Max/Unit columns (no Value column, though)', () => {
+  it('a Signal also emits Min (editable) and Unit (read-only) columns (no Value column, though)', () => {
     const s = SignalNode.createDefault('s', null);
     s.Min = -5;
     s.Unit = 'K';
     const row = s.toRow();
     expect(cell(row, 'Min')).toEqual({ text: '-5', editable: true, editor: 'text' });
-    expect(cell(row, 'Unit')).toEqual({ text: 'K', editable: true, editor: 'text' });
+    expect(cell(row, 'Unit')).toBe('K');
     // A Signal carries no scalar value — its Value cell is empty and not editable.
     expect(row.Value).toBe('');
     expect(row._valueEditable).toBe(false);
@@ -59,14 +61,21 @@ describe('Min / Max / Unit table columns', () => {
     expect(allPIKeys.filter((k: string) => k === 'Min')).toEqual(['Min']);
   });
 
-  it('editing a Min/Max/Unit column still routes to the node fields', () => {
+  it('editing a Min/Max column routes to the node fields', () => {
     const p = ParameterNode.createDefault('p', null);
     expect(p.setProperty('Min', '3')).toBe(true);
     expect(p.Min).toBe(3);
-    expect(p.setProperty('Unit', 'kg')).toBe(true);
-    expect(p.Unit).toBe('kg');
-    // Max must not be less than Min — the node validation still fires through the column.
-    const r = p.setProperty('Max', '1');
-    expect((r as any).error).toBe(true);
+    expect(p.setProperty('Max', '9')).toBe(true);
+    expect(p.Max).toBe(9);
+  });
+
+  it('accepts Min > Max — MATLAB does not enforce the ordering, so neither do we', () => {
+    // Verified against MATLAB (BR2025ad): setPropValue('Min','5') then
+    // setPropValue('Max','1') is accepted (Min=5, Max=1). We must not be stricter.
+    const p = ParameterNode.createDefault('p', null);
+    expect(p.setProperty('Min', '5')).toBe(true);
+    expect(p.setProperty('Max', '1')).toBe(true);
+    expect(p.Min).toBe(5);
+    expect(p.Max).toBe(1);
   });
 });

@@ -60,13 +60,15 @@ describe('schemaColumns — bridge schema props into table columns', () => {
     expect(piHf.column).toBeNull();
   });
 
-  it('the Code Generation columns are editable (storageClass select w/ options, alignment text)', () => {
+  it('storageClass is the only editable Code Generation column (select w/ options); alignment is read-only', () => {
     const storage = schemaColumns('Simulink.Parameter').find((c) => c.key === 'storageClass')!;
     expect(storage.displayName).toBe('Storage Class');
     expect(storage.editor).toBe('select');
     expect(storage.readOptions!({} as any)).toContain('ExportedGlobal');
+    // Alignment is conservatively read-only (its valid values depend on
+    // StorageClass — MATLAB rejects it under 'Auto'), so it renders as a label.
     const alignment = schemaColumns('Simulink.Parameter').find((c) => c.key === 'alignment')!;
-    expect(alignment.editor).toBe('text');
+    expect(alignment.editor).toBe('label');
     // The Data Object columns stay read-only labels.
     const dims = schemaColumns('Simulink.Parameter').find((c) => c.key === 'dimensions')!;
     expect(dims.editor).toBe('label');

@@ -274,6 +274,42 @@ export default class DataNode extends BaseNode {
     return true;
   }
 
+  // Apply an edit to the node-owned Min/Max value property, mirroring the exact
+  // constraint Simulink.DataObject/setPropValue enforces (verified against MATLAB
+  // BR2025ad: see test/parity/gen_propconstraints_probe.m). MATLAB requires a
+  // "finite real double scalar value" — so we accept a lone real finite number
+  // and reject arrays, Inf/-Inf, NaN, complex, and non-numeric text. An empty
+  // string or '[]' clears the bound (MATLAB stores []). NOTE: MATLAB does NOT
+  // enforce Min <= Max (it accepts Min=5, Max=1), so we deliberately impose no
+  // cross-check — matching the object exactly rather than being stricter.
+  _setMinMax(propName: 'Min' | 'Max', stringValue: string): true | SetPropertyResult {
+    const self = this as unknown as Record<string, unknown>;
+    const trimmed = stringValue.trim();
+    if (trimmed === '' || trimmed === '[]') {
+      self[propName] = undefined;
+      this._markModified();
+      return true;
+    }
+    const label = propName === 'Min' ? 'Minimum' : 'Maximum';
+    const num = Number(trimmed);
+    // Number('') is 0 and Number of a whitespace-only string is 0, but we already
+    // handled empties; here a non-finite or NaN result means the text was not a
+    // finite real scalar. (Number() rejects arrays like '[5 6]' → NaN and complex
+    // like '5+2i' → NaN, so those funnel here too.)
+    if (!Number.isFinite(num)) {
+      const cur = self[propName] as number | undefined;
+      return {
+        error: true,
+        reason: label + ' must be a finite real double scalar value',
+        invalidValue: stringValue,
+        validValue: cur !== undefined ? String(cur) : '[]',
+      };
+    }
+    self[propName] = num;
+    this._markModified();
+    return true;
+  }
+
   execAddChild(): unknown {
     return null;
   }
