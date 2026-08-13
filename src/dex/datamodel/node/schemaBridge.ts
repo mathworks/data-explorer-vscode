@@ -28,14 +28,15 @@ function formatSchemaValue(value: unknown): string {
     return String(value);
 }
 
-// Adapt one ResolvedProp to a PropClass. column:null keeps it PI-only (toRow
-// skips column===null); readValue reads the node's serial._properties bag —
-// display-only, never mutating serial.
-function toPropClass(prop: ResolvedProp): PropClass {
+// Adapt one ResolvedProp to a PropClass. `column` controls the surface:
+//   null  → PI-only (toRow skips column===null)
+//   <key> → a table column emitted by toRow as row[key]
+// readValue reads the node's serial._properties bag — display-only, never mutating serial.
+function toPropClass(prop: ResolvedProp, column: string | null): PropClass {
     return {
         key: prop.key,
         displayName: prop.label,
-        column: null,
+        column,
         editor: prop.editor,
         readValue: (node: BaseNode): string => {
             const props = (node as unknown as { serial?: { _properties?: Record<string, unknown> } }).serial?._properties;
@@ -45,23 +46,35 @@ function toPropClass(prop: ResolvedProp): PropClass {
     };
 }
 
-// The PI groups contributed by the schema for a className, in first-seen group
-// order. Empty when the class has no schema.
-export function schemaPILayout(className: string): PIGroupDef[] {
+// The schema props eligible for UI projection: read-only (editor 'label') and
+// grouped. Shared by the PI (grouped) and table-column (flat) bridges. Empty when
+// the class has no schema.
+function eligibleProps(className: string): ResolvedProp[] {
     const resolved = getSchema(className);
     if (!resolved) {
         return [];
     }
-    const eligible = resolved.filter((p) => p.editor === 'label' && p.group !== undefined);
+    return resolved.filter((p) => p.editor === 'label' && p.group !== undefined);
+}
+
+// The PI groups contributed by the schema for a className, in first-seen group
+// order. Each item is a PI-only PropClass (column:null).
+export function schemaPILayout(className: string): PIGroupDef[] {
     const order: string[] = [];
     const byGroup = new Map<string, PropClass[]>();
-    for (const prop of eligible) {
+    for (const prop of eligibleProps(className)) {
         const group = prop.group as string;
         if (!byGroup.has(group)) {
             byGroup.set(group, []);
             order.push(group);
         }
-        byGroup.get(group)!.push(toPropClass(prop));
+        byGroup.get(group)!.push(toPropClass(prop, null));
     }
     return order.map((group) => ({ group, items: byGroup.get(group)! }));
+}
+
+// The table columns contributed by the schema for a className. Each is a
+// read-only PropClass whose `column` equals its key, so toRow emits row[key].
+export function schemaColumns(className: string): PropClass[] {
+    return eligibleProps(className).map((prop) => toPropClass(prop, prop.key));
 }

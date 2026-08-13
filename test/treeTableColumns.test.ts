@@ -9,7 +9,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { DexTreeTable, type TreeTableRow } from '../src/dex/components/dex-tree-table.js';
 
-const HOST_COLUMNS = ['Name', 'Value', 'Class', 'Kind', 'DataType', 'Status', 'UsedBy'];
+const HOST_COLUMNS = ['Name', 'Value', 'Class', 'Kind', 'DataType', 'Status', 'UsedBy', 'dimensions', 'complexity', 'storageClass', 'alignment'];
 
 function makeTable(): DexTreeTable {
   const table = new DexTreeTable();
@@ -156,6 +156,31 @@ describe('persisted state is restored', () => {
     // Class and Kind, though missing from the saved order, are still available.
     expect(visibleCols(table)).toContain('Class');
     expect(visibleCols(table)).toContain('Kind');
+  });
+});
+
+describe('schema-driven object-property columns', () => {
+  const SCHEMA_COLS = ['dimensions', 'complexity', 'storageClass', 'alignment'];
+
+  it('the 4 schema columns ship hidden by default', () => {
+    const table = makeTable();
+    // Default visible set is the legacy arrangement; the schema columns are hidden.
+    expect(visibleCols(table)).toEqual(['Name', 'Value', 'DataType', 'UsedBy', 'Status']);
+    for (const col of SCHEMA_COLS) {
+      expect(visibleCols(table)).not.toContain(col);
+    }
+  });
+
+  it('a hidden schema column is still available/orderable (shows in the picker)', () => {
+    const table = makeTable();
+    expect((table as any)._orderedColumns).toContain('storageClass');
+  });
+
+  it('renders/sorts a schema column generically from row[key]', () => {
+    const table = makeTable();
+    const r = row('p', { storageClass: 'ExportedGlobal' } as any);
+    // The generic path reads row[columnKey] with no per-column code.
+    expect((table as any)._getCellText(r, 'storageClass')).toBe('ExportedGlobal');
   });
 });
 

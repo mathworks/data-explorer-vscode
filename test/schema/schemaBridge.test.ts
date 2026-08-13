@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 import { describe, it, expect } from 'vitest';
-import { schemaPILayout } from '../../src/dex/datamodel/node/schemaBridge.js';
+import { schemaPILayout, schemaColumns } from '../../src/dex/datamodel/node/schemaBridge.js';
 
 // A minimal stand-in for a node: only `serial._properties` is read by the bridge.
 function fakeNode(properties: Record<string, unknown>): any {
@@ -40,5 +40,34 @@ describe('schemaPILayout — bridge schema props into PI groups', () => {
 
   it('returns [] for a class with no schema', () => {
     expect(schemaPILayout('Simulink.NotAThing')).toEqual([]);
+  });
+});
+
+describe('schemaColumns — bridge schema props into table columns', () => {
+  it('returns a flat PropClass[] with the column key = prop key', () => {
+    const cols = schemaColumns('Simulink.Parameter');
+    expect(cols.map((c) => c.key)).toEqual(['dimensions', 'complexity', 'storageClass', 'alignment']);
+    for (const c of cols) {
+      expect(c.column).toBe(c.key);
+    }
+  });
+
+  it('column items are read-only (editor label) with the schema label as displayName', () => {
+    const storage = schemaColumns('Simulink.Parameter').find((c) => c.key === 'storageClass')!;
+    expect(storage.displayName).toBe('Storage Class');
+    expect(storage.editor).toBe('label');
+  });
+
+  it('readValue hydrates from serial._properties, filling defaults when omitted', () => {
+    const cols = schemaColumns('Simulink.Parameter');
+    const storage = cols.find((c) => c.key === 'storageClass')!;
+    const alignment = cols.find((c) => c.key === 'alignment')!;
+    const node: any = { serial: { _properties: { Value: 1 } }, className: 'Simulink.Parameter' };
+    expect(storage.readValue!(node)).toBe('Auto');
+    expect(alignment.readValue!(node)).toBe('-1');
+  });
+
+  it('returns [] for a class with no schema', () => {
+    expect(schemaColumns('Simulink.NotAThing')).toEqual([]);
   });
 });

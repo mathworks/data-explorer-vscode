@@ -4,9 +4,10 @@ import ModelBlockNode from '../dex/datamodel/node/data/ModelBlockNode.js';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 
 // Columns shown across the dictionary tree (union that fits all sections).
-export const COLUMNS = ['Name', 'Value', 'Class', 'Kind', 'DataType', 'Status', 'UsedBy'];
+export const COLUMNS = ['Name', 'Value', 'Class', 'Kind', 'DataType', 'Status', 'UsedBy', 'dimensions', 'complexity', 'storageClass', 'alignment'];
 export const COLUMN_LABELS: Record<string, string> = {
   Name: 'Name', Value: 'Value', Class: 'Class', Kind: 'Kind', DataType: 'Data Type', Status: 'Status', UsedBy: 'Usage',
+  dimensions: 'Dimensions', complexity: 'Complexity', storageClass: 'Storage Class', alignment: 'Alignment',
 };
 
 // Columns for a MATLAB/Simulink Project (.prj). buildRows is generic over
