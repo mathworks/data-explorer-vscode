@@ -1,0 +1,14 @@
+{
+  "Simulink.Parameter": [
+    "value",
+    "dataType",
+    "description",
+    "dimensions",
+    "complexity",
+    "min",
+    "max",
+    "unit",
+    "storageClass",
+    "alignment"
+  ]
+}
