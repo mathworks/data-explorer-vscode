@@ -4,23 +4,39 @@ import ModelBlockNode from '../dex/datamodel/node/data/ModelBlockNode.js';
 import { schemaColumnGroups, schemaColumnLabels } from '../dex/datamodel/node/schemaBridge.js';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 
-// Columns shown across the dictionary tree (union that fits all sections).
-// lastModified/lastModifiedBy are dictionary-entry metadata columns (host-owned,
-// stamped in buildEntryRows); they ship hidden by default like Class/Kind.
-export const COLUMNS = ['Name', 'Value', 'Class', 'Kind', 'DataType', 'Status', 'UsedBy', 'dimensions', 'complexity', 'dimensionsMode', 'storageClass', 'alignment', 'lastModified', 'lastModifiedBy'];
+// Columns shown across the dictionary tree (union that fits all sections), in
+// display order: the ungrouped core columns first, then the grouped columns
+// (Data Object → Code Generation → Data Dictionary). Min/Max/Unit are node-owned
+// value properties surfaced as columns; lastModified/lastModifiedBy are
+// dictionary-entry metadata columns (host-owned, stamped in buildEntryRows).
+// Grouped and metadata columns ship hidden by default like Class/Kind.
+export const COLUMNS = [
+  'Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class',
+  'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit',
+  'storageClass', 'headerFile', 'alignment',
+  'lastModified', 'lastModifiedBy',
+];
 // Base labels for the host-owned columns, merged with the schema-derived labels
-// for the schema-driven columns (dimensions/complexity/storageClass/alignment).
-// The schema is the single source of truth for its own columns' labels, so we
-// overlay them rather than hand-copying them here.
+// for the schema-driven columns (dimensions/complexity/dimensionsMode/
+// storageClass/headerFile/alignment). The schema is the single source of truth
+// for its own columns' labels, so we overlay them rather than hand-copying them.
+// Min/Max/Unit are node-owned, so their (short) column labels live here.
 export const COLUMN_LABELS: Record<string, string> = {
   Name: 'Name', Value: 'Value', Class: 'Class', Kind: 'Kind', DataType: 'Data Type', Status: 'Status', UsedBy: 'Usage',
+  Min: 'Min', Max: 'Max', Unit: 'Unit',
   lastModified: 'Last Modified', lastModifiedBy: 'Last Modified By',
   ...schemaColumnLabels(),
 };
 
-// Column-key → picker group header, derived from the shared schema (single
-// source of truth — not hand-maintained). Ungrouped columns are simply absent.
-export const COLUMN_GROUPS: Record<string, string> = schemaColumnGroups();
+// Column-key → picker group header. The schema is the single source of truth for
+// its own columns' groups; the node-owned value props (Min/Max/Unit → Data
+// Object) and the host-owned metadata columns (lastModified/lastModifiedBy →
+// Data Dictionary) are grouped here since the schema does not own them.
+export const COLUMN_GROUPS: Record<string, string> = {
+  Min: 'Data Object', Max: 'Data Object', Unit: 'Data Object',
+  lastModified: 'Data Dictionary', lastModifiedBy: 'Data Dictionary',
+  ...schemaColumnGroups(),
+};
 
 // Columns for a MATLAB/Simulink Project (.prj). buildRows is generic over
 // section containers, so a ProjectNode produces its rows via the same path;

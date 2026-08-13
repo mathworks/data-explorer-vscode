@@ -4,7 +4,7 @@ export default class PropMin {
     static key = 'Min';
     static displayName = 'Minimum';
     static editor = 'text';
-    static column: string | null = null;
+    static column: string | null = 'Min';
     static defaultValue: number | undefined = undefined;
 
     static format(value: unknown): string {

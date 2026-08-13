@@ -7,6 +7,8 @@ coverage/
 *.vsix
 test/parity/dump-output.txt
 test/parity/codegen_probe.txt
+test/parity/csc_probe.txt
+test/parity/headerfile_probe.txt
 .DS_Store
 
 # Local-only internal notes — must never be pushed to the public remote

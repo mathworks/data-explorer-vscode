@@ -4,7 +4,7 @@ export default class PropUnit {
     static key = 'Unit';
     static displayName = 'Unit';
     static editor = 'text';
-    static column: string | null = null;
+    static column: string | null = 'Unit';
     static defaultValue = '';
 
     static format(value: unknown): string {

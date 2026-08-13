@@ -13,7 +13,7 @@ describe('schemaPILayout — bridge schema props into PI groups', () => {
     const groups = layout.map((g) => g.group);
     expect(groups).toEqual(['Data Object', 'Code Generation']);
     const keys = layout.flatMap((g) => g.items.map((i) => i.key));
-    expect(keys).toEqual(['dimensions', 'complexity', 'storageClass', 'alignment']);
+    expect(keys).toEqual(['dimensions', 'complexity', 'storageClass', 'headerFile', 'alignment']);
     expect(keys).not.toContain('min');
     expect(keys).not.toContain('value');
   });
@@ -46,10 +46,18 @@ describe('schemaPILayout — bridge schema props into PI groups', () => {
 describe('schemaColumns — bridge schema props into table columns', () => {
   it('returns a flat PropClass[] with the column key = prop key', () => {
     const cols = schemaColumns('Simulink.Parameter');
-    expect(cols.map((c) => c.key)).toEqual(['dimensions', 'complexity', 'storageClass', 'alignment']);
+    expect(cols.map((c) => c.key)).toEqual(['dimensions', 'complexity', 'storageClass', 'headerFile', 'alignment']);
     for (const c of cols) {
       expect(c.column).toBe(c.key);
     }
+  });
+
+  it('the Header File column is a read-only label under Code Generation', () => {
+    const hf = schemaColumns('Simulink.Parameter').find((c) => c.key === 'headerFile')!;
+    expect(hf.displayName).toBe('Header File');
+    expect(hf.editor).toBe('label');
+    const piHf = schemaPILayout('Simulink.Parameter').flatMap((g) => g.items).find((i) => i.key === 'headerFile')!;
+    expect(piHf.column).toBeNull();
   });
 
   it('the Code Generation columns are editable (storageClass select w/ options, alignment text)', () => {
