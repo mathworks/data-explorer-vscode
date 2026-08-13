@@ -3,9 +3,13 @@
 import { BaseBusNode, BaseBusElementNode, PropName, PropDataType, PropDescription } from './BaseBusNode';
 import type { PropClass } from '../BaseNode';
 import type BaseNode from '../BaseNode';
+import type { SetPropertyResult } from '../DataNode';
 import PropMin from '../../prop/PropMin';
 import PropMax from '../../prop/PropMax';
 import PropUnit from '../../prop/PropUnit';
+import PropComplexity from '../../prop/PropComplexity';
+import PropDimensions from '../../prop/PropDimensions';
+import PropDimensionsMode from '../../prop/PropDimensionsMode';
 
 const CLASS_NAME = 'Simulink.Bus';
 
@@ -16,6 +20,14 @@ export class BusElementNode extends BaseBusElementNode {
     Max: number | undefined;
     Unit: string;
     DataType: string;
+    // Verified against MATLAB (Simulink.BusElement): these are real element
+    // properties that were not surfaced before, so their columns read empty.
+    // Complexity {real|complex} and DimensionsMode {Fixed|Variable} are enums;
+    // Dimensions is a positive double vector. All three are surfaced read-only
+    // (conservative — see the Prop* classes for the rationale).
+    Complexity: string;
+    Dimensions: unknown;
+    DimensionsMode: string;
 
     constructor(name: string, parent: BaseNode | null, props: Record<string, unknown>, serial: Record<string, unknown>) {
         super(name, parent, props, serial);
@@ -28,6 +40,9 @@ export class BusElementNode extends BaseBusElementNode {
         // DataType); an unset type means the Simulink default of 'double'.
         const rawDataType = props.DataType_internal !== undefined ? props.DataType_internal : props.DataType;
         this.DataType = (rawDataType as string) || 'double';
+        this.Complexity = (props.Complexity as string) || '';
+        this.Dimensions = props.Dimensions;
+        this.DimensionsMode = (props.DimensionsMode as string) || '';
     }
 
     static _normalizeMinMax(val: unknown): number | undefined {
@@ -48,8 +63,19 @@ export class BusElementNode extends BaseBusElementNode {
     get className(): string { return 'Simulink.BusElement'; }
     // A bus element's mapped data type is a real data type — show it in the column.
     get dataType(): string { return this.DataType; }
-    getProperties(): PropClass[] { return [PropName, PropDataType, PropMin, PropMax, PropUnit, PropDescription]; }
-    getPILayout() { return [{ group: 'Element Properties', items: [PropName, PropDataType, PropMin, PropMax, PropUnit, PropDescription] }]; }
+    getProperties(): PropClass[] { return [PropName, PropDataType, PropDimensions, PropComplexity, PropDimensionsMode, PropMin, PropMax, PropUnit, PropDescription]; }
+    getPILayout() { return [{ group: 'Element Properties', items: [PropName, PropDataType, PropDimensions, PropComplexity, PropDimensionsMode, PropMin, PropMax, PropUnit, PropDescription] }]; }
+
+    // Route Min/Max through the shared, MATLAB-verified "finite real double
+    // scalar" validator (verified error: "Minimum on element 'x' must be a finite
+    // real double scalar value"). Without this override the edit falls through to
+    // DataNode's generic numeric path, which wrongly accepts Inf/NaN.
+    setProperty(propName: string, stringValue: string): true | SetPropertyResult {
+        if (propName === 'Min' || propName === 'Max') {
+            return this._setMinMax(propName, stringValue);
+        }
+        return super.setProperty(propName, stringValue);
+    }
 
     _applyElementOverrides(props: Record<string, unknown>): void {
         const sp = this.serial._properties as Record<string, unknown>;

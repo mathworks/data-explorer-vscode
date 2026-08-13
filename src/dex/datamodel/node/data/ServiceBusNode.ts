@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 
-import { BaseBusNode, BaseBusElementNode, PropName, PropDataType, PropDescription } from './BaseBusNode';
+import { BaseBusNode, BaseBusElementNode, PropName } from './BaseBusNode';
 import type { PropClass } from '../BaseNode';
 import type BaseNode from '../BaseNode';
 
@@ -23,8 +23,13 @@ export class FunctionElementNode extends BaseBusElementNode {
     // empty (not applicable).
     get dataType(): string { return ''; }
     get displayValue(): string { return this.Prototype; }
-    getProperties(): PropClass[] { return [PropName, PropDataType, PropDescription]; }
-    getPILayout() { return [{ group: 'Element Properties', items: [PropName, PropDataType, PropDescription] }]; }
+    // A Simulink.FunctionElement has only Name / Prototype / Asynchronous /
+    // Arguments (verified against MATLAB) — notably NO Description and NO
+    // DataType. Surfacing those foreign props previously let an edit inject a key
+    // the object doesn't own; we list just Name here (the Value column shows the
+    // Prototype via displayValue).
+    getProperties(): PropClass[] { return [PropName]; }
+    getPILayout() { return [{ group: 'Element Properties', items: [PropName] }]; }
 }
 
 export class ServiceBusNode extends BaseBusNode {
