@@ -71,3 +71,12 @@ export function resolveSourcePath(properties: Record<string, unknown> | undefine
     }
     return current;
 }
+
+// Read a property's value from a `_properties` bag for DISPLAY, substituting the
+// descriptor's declared default when the value is absent. This is display-only:
+// it never writes back to the bag, so serialization stays minimal (defaults are
+// not persisted). Returns the raw value; the caller/app formats by `prop.type`.
+export function hydrate(properties: Record<string, unknown> | undefined, prop: ResolvedProp): unknown {
+    const raw = resolveSourcePath(properties, prop.sourcePath);
+    return raw === undefined ? prop.default : raw;
+}
