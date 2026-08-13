@@ -1,6 +1,6 @@
 {
-  "dimensions": { "label": "Dimensions", "sourcePath": "Dimensions", "type": "dims",   "editor": "label", "group": "Data Object" },
-  "complexity": { "label": "Complexity", "sourcePath": "Complexity", "type": "string", "editor": "label", "group": "Data Object", "default": "real" },
+  "dimensions": { "label": "Dimensions", "sourcePath": "Dimensions", "type": "dims",   "editor": "label", "group": "Data Object", "projected": true },
+  "complexity": { "label": "Complexity", "sourcePath": "Complexity", "type": "string", "editor": "label", "group": "Data Object", "default": "real", "projected": true },
   "min":        { "label": "Min",        "sourcePath": "Min",        "type": "any",    "editor": "text",  "group": "Data Object" },
   "max":        { "label": "Max",        "sourcePath": "Max",        "type": "any",    "editor": "text",  "group": "Data Object" },
   "unit":       { "label": "Unit",       "sourcePath": "DocUnits",   "type": "string", "editor": "text",  "group": "Data Object", "default": "" }

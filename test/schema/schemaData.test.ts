@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { getSchema } from '../../src/dex/datamodel/schema/index.js';
 
 const CLASSES = ['Simulink.Parameter', 'Simulink.Signal'];
-const VALID_EDITORS = new Set(['text', 'textArea', 'label', 'bool']);
+const VALID_EDITORS = new Set(['text', 'textArea', 'label', 'bool', 'select']);
 const VALID_GROUPS = new Set([undefined, 'Data Object', 'Code Generation']);
 
 describe('schema data integrity', () => {

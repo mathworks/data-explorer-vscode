@@ -17,8 +17,14 @@ export interface RawProp {
     type: string;
     // UI grouping label (e.g. 'Data Object', 'Code Generation'); omitted = top.
     group?: string;
-    // 'text' | 'textArea' | 'label' | 'bool'; 'label' = read-only.
+    // 'text' | 'textArea' | 'label' | 'select' | 'bool'; 'label' = read-only.
     editor: string;
+    // Fixed option list for a 'select' editor (e.g. the StorageClass values).
+    options?: string[];
+    // Whether the schema itself surfaces this prop into the UI (PI groups + table
+    // columns). Props the owning node already exposes as live fields (min/max/unit)
+    // are authored here for reference but NOT projected, to avoid duplicating them.
+    projected?: boolean;
 }
 
 // A class references a shared prop by key, optionally overlaying overrides.
@@ -39,4 +45,6 @@ export interface ResolvedProp {
     type: string;
     group?: string;
     editor: string;
+    options?: string[];
+    projected?: boolean;
 }

@@ -1,6 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 
 import BaseNode from './BaseNode';
+import { trySetSchemaProperty } from './schemaBridge';
 import { KIND_BY_CLASS, DERIVED_KIND_BY_CLASS, KIND_BY_CLASSIFICATION } from '../kindMap';
 import {
   escapeXml,
@@ -194,6 +195,15 @@ export default class DataNode extends BaseNode {
   }
 
   setProperty(propName: string, stringValue: string): true | SetPropertyResult {
+    // A schema-projected, editable property (e.g. the Code Generation columns
+    // Storage Class / Alignment) writes back into serial._properties along its
+    // schema sourcePath — including the nested CoderInfo sub-object. Returns null
+    // when propName isn't such a property, so we fall through to the field-based
+    // logic below.
+    const schemaResult = trySetSchemaProperty(this, propName, stringValue);
+    if (schemaResult !== null) {
+      return schemaResult;
+    }
     const resolved = this._resolveProperty(propName);
     if (resolved === 'name') {
       const error = validateMatlabName(stringValue);

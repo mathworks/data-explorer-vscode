@@ -182,6 +182,46 @@ describe('schema-driven object-property columns', () => {
     // The generic path reads row[columnKey] with no per-column code.
     expect((table as any)._getCellText(r, 'storageClass')).toBe('ExportedGlobal');
   });
+
+  it('_getCellText unwraps an editable object cell to its .text', () => {
+    const table = makeTable();
+    const r = row('p', { storageClass: { text: 'Auto', editable: true, editor: 'select', options: ['Auto', 'ExportedGlobal'] } } as any);
+    expect((table as any)._getCellText(r, 'storageClass')).toBe('Auto');
+  });
+});
+
+describe('editable Code Generation cells', () => {
+  it('double-clicking an editable select cell enters edit mode with editor + options', () => {
+    const table = makeTable();
+    const r = row('p', {
+      storageClass: { text: 'Auto', editable: true, editor: 'select', options: ['Auto', 'ExportedGlobal', 'Custom'] },
+    } as any);
+    (table as any)._onCellDblClickIfEditable(r, 'storageClass');
+    const editing = (table as any)._editingCell;
+    expect(editing).toMatchObject({ rowId: 'p', columnId: 'storageClass', value: 'Auto', editor: 'select' });
+    expect(editing.options).toContain('ExportedGlobal');
+  });
+
+  it('double-clicking an editable text cell (alignment) enters edit mode as text', () => {
+    const table = makeTable();
+    const r = row('p', { alignment: { text: '-1', editable: true, editor: 'text' } } as any);
+    (table as any)._onCellDblClickIfEditable(r, 'alignment');
+    expect((table as any)._editingCell).toMatchObject({ rowId: 'p', columnId: 'alignment', value: '-1', editor: 'text' });
+  });
+
+  it('double-clicking a read-only (plain string) schema cell does NOT enter edit mode', () => {
+    const table = makeTable();
+    const r = row('p', { dimensions: '[1 1]' } as any);
+    (table as any)._onCellDblClickIfEditable(r, 'dimensions');
+    expect((table as any)._editingCell).toBeNull();
+  });
+
+  it('an editable-object cell without editable:true is not edited', () => {
+    const table = makeTable();
+    const r = row('p', { storageClass: { text: 'Auto' } } as any);
+    (table as any)._onCellDblClickIfEditable(r, 'storageClass');
+    expect((table as any)._editingCell).toBeNull();
+  });
 });
 
 describe('dictionary metadata columns', () => {
