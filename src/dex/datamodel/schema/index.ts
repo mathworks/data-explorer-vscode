@@ -48,3 +48,26 @@ export function getSchema(className: string): ResolvedProp[] | undefined {
     cache.set(className, resolved);
     return resolved;
 }
+
+// Walk a dotted sourcePath against a `_properties` bag. Non-terminal hops
+// descend into the sub-object's inner `_properties` (the model nests MCOS
+// sub-objects as `{ _object_class, _properties: {...} }`). Returns undefined if
+// any hop is absent — the caller then substitutes the descriptor's default.
+export function resolveSourcePath(properties: Record<string, unknown> | undefined, path: string): unknown {
+    if (!properties) {
+        return undefined;
+    }
+    const parts = path.split('.');
+    let current: unknown = properties;
+    for (let i = 0; i < parts.length; i++) {
+        if (current === null || current === undefined || typeof current !== 'object') {
+            return undefined;
+        }
+        // Descend into a nested MCOS sub-object's inner _properties, if present.
+        const container = current as Record<string, unknown>;
+        const inner = (container._properties as Record<string, unknown> | undefined);
+        const bag = inner && !(parts[i] in container) ? inner : container;
+        current = bag[parts[i]];
+    }
+    return current;
+}
