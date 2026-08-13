@@ -29,6 +29,13 @@ function formatMatlabTimestamp(raw: string): string {
   return year + '-' + month + '-' + day + 'T' + hour + ':' + min + ':' + sec + 'Z';
 }
 
+// The current time as a raw MATLAB timestamp ('YYYYMMDDThhmmss.000000'), the
+// shape both serializers write and both parsers read. Mirrors SectionNode's
+// formatTimestamp (new entries) and BinarySlddSerializer's formatDateNow.
+function matlabTimestampNow(): string {
+  return new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+Z$/, '.000000');
+}
+
 const MATLAB_NAME_RE = /^[A-Za-z][A-Za-z0-9_]*$/;
 const MATLAB_KEYWORDS = new Set([
   'break',
@@ -288,6 +295,7 @@ export default class DataNode extends BaseNode {
       if ((node as DataNode)._rawInput !== undefined) {
         (node as DataNode)._rawInput = undefined;
       }
+      (node as DataNode)._stampLastModified();
     }
     let root: BaseNode = this;
     while (root.parent) {
@@ -295,6 +303,35 @@ export default class DataNode extends BaseNode {
     }
     if ((root as unknown as { dirty?: boolean }).dirty !== undefined) {
       (root as unknown as { dirty: boolean }).dirty = true;
+    }
+  }
+
+  // Refresh the owning entry's last-modified timestamp to now. Called from
+  // _markModified on the entry node so every edit (value, name, Min/Max/Unit,
+  // schema props) updates the Last Modified column. The two parse paths carry
+  // the timestamp under different keys; we update only the keys already present
+  // so the JSON path stays byte-faithful (no injected keys) and the binary path
+  // round-trips through its own scheme:
+  //   text/JSON  — `lastmod` (raw); the getter formats it, JSON dumps it verbatim.
+  //   binary     — `lastModifiedDate` (ISO, what the getter reads) + `_rawLastMod`
+  //                (what serializeEntryToXml writes back).
+  // Who modified it is not tracked (the extension has no user identity), so
+  // lastModifiedBy/modifiedby is left as-is. No-op when the entry carries no
+  // metadata bag (e.g. transient nodes).
+  _stampLastModified(): void {
+    const m = this.metadata;
+    if (!m) {
+      return;
+    }
+    const raw = matlabTimestampNow();
+    if ('lastmod' in m) {
+      m.lastmod = raw;
+    }
+    if ('_rawLastMod' in m) {
+      m._rawLastMod = raw;
+    }
+    if ('lastModifiedDate' in m) {
+      m.lastModifiedDate = formatMatlabTimestamp(raw);
     }
   }
 

@@ -59,6 +59,67 @@ describe('DataNode metadata normalization', () => {
   });
 });
 
+describe('Last Modified is refreshed on edit (_stampLastModified)', () => {
+  const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+
+  it('updates the text-format key (lastmod) in place, leaving author untouched', () => {
+    const node = new DataNode('p', null);
+    node.metadata = { uuid: 'x', namespace: 'y', lastmod: '20200101T000000.000000', modifiedby: 'weiwang', isderived: '0' };
+    node._stampLastModified();
+    // The raw timestamp changed and the getter now reports a fresh ISO value.
+    expect(node.metadata.lastmod).not.toBe('20200101T000000.000000');
+    expect(node.lastModified).toMatch(ISO_RE);
+    // Author and the other metadata keys are left as-is; no keys are injected.
+    expect(node.lastModifiedBy).toBe('weiwang');
+    expect(Object.keys(node.metadata).sort()).toEqual(['isderived', 'lastmod', 'modifiedby', 'namespace', 'uuid']);
+  });
+
+  it('updates the binary-format keys (lastModifiedDate + _rawLastMod)', () => {
+    const node = new DataNode('p', null);
+    node.metadata = {
+      lastModifiedDate: '2020-01-01T00:00:00Z',
+      lastModifiedBy: 'weiwang',
+      _rawLastMod: '20200101T000000.000000',
+      isderived: '0',
+    };
+    node._stampLastModified();
+    expect(node.metadata._rawLastMod).not.toBe('20200101T000000.000000');
+    expect(node.metadata.lastModifiedDate).toMatch(ISO_RE);
+    expect(node.lastModified).toMatch(ISO_RE);
+    expect(node.lastModifiedBy).toBe('weiwang');
+  });
+
+  it('is a no-op when the node carries no metadata', () => {
+    const node = new DataNode('p', null);
+    expect(() => node._stampLastModified()).not.toThrow();
+    expect(node.metadata).toBeNull();
+  });
+
+  it('does not inject a key scheme the entry did not already have', () => {
+    // A text-format entry (only `lastmod`) must not gain the binary keys.
+    const node = new DataNode('p', null);
+    node.metadata = { lastmod: '20200101T000000.000000', modifiedby: '' };
+    node._stampLastModified();
+    expect('lastModifiedDate' in node.metadata).toBe(false);
+    expect('_rawLastMod' in node.metadata).toBe(false);
+  });
+
+  it('every edit funnels through _markModified, so setProperty refreshes the timestamp', () => {
+    // Prove the wiring end-to-end on a real Parameter: an edit stamps a newer
+    // timestamp than the one parsed from the fixture.
+    const node = loadModel('text');
+    const gravity = (() => {
+      for (const s of node.children ?? []) for (const e of s.children ?? []) if (e.name === 'gravity') return e;
+      throw new Error('gravity not found');
+    })();
+    const before = gravity.metadata.lastmod as string;
+    gravity.setProperty('Value', '42');
+    expect(gravity.metadata.lastmod).not.toBe(before);
+    expect(gravity.lastModified).toMatch(ISO_RE);
+    expect(gravity.status).toBe('Modified');
+  });
+});
+
 const ART = (variant: string, name: string) =>
   fileURLToPath(new URL(`./parity/artifacts/${variant}/${name}`, import.meta.url));
 
