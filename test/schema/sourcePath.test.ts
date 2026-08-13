@@ -30,3 +30,35 @@ describe('resolveSourcePath — read a dotted path from a _properties bag', () =
     expect(resolveSourcePath({ Value: 1 }, 'CoderInfo.StorageClass')).toBeUndefined();
   });
 });
+
+describe('resolveSourcePath — real parsed shapes', () => {
+  it('descends a MATLABArray-wrapped sub-object (_elements[0]._properties)', () => {
+    const props = {
+      Value: 9.81,
+      CoderInfo: {
+        _array_class: 'Simulink.CoderInfo',
+        _mw_element_type: 'MATLABArray',
+        _dimensions: [1, 1],
+        _elements: [{ _properties: { StorageClass: 'ExportedGlobal', Alignment: { _type: 'int32', _value: '8' } } }],
+      },
+    };
+    expect(resolveSourcePath(props, 'CoderInfo.StorageClass')).toBe('ExportedGlobal');
+  });
+
+  it('unwraps a typed-scalar leaf {_type,_value} to a coerced number', () => {
+    const props = {
+      CoderInfo: { _elements: [{ _properties: { Alignment: { _type: 'int32', _value: '-1' } } }] },
+    };
+    expect(resolveSourcePath(props, 'CoderInfo.Alignment')).toBe(-1);
+  });
+
+  it('leaves a non-numeric typed-scalar as its raw string value', () => {
+    const props = { DataType: { _type: 'char', _value: 'double' } };
+    expect(resolveSourcePath(props, 'DataType')).toBe('double');
+  });
+
+  it('returns undefined for a missing key inside a MATLABArray-wrapped sub-object', () => {
+    const props = { CoderInfo: { _elements: [{ _properties: { StorageClass: 'Auto' } }] } };
+    expect(resolveSourcePath(props, 'CoderInfo.DataScope')).toBeUndefined();
+  });
+});
