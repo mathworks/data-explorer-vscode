@@ -26,6 +26,7 @@ import { serializeEntryToXml } from '../dex/datamodel/parser/BinarySlddSerialize
 import DataModel from '../dex/core/DataModel.js';
 import '../dex/datamodel/node/NodeClassMap.js';
 import { findOwningEntry, resolveSectionForPaste } from './structuralEdit.js';
+import { captureBaseline, computeModified, clearBaseline } from './slddBaseline.js';
 import {
   deleteEntryXml,
   deleteChildXml,
@@ -144,6 +145,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     const uriString = document.uri.toString();
     const name = basename(document.uri.path) || 'document';
 
+    // Capture the on-open baseline once so per-entry "Modified" marks are diffed
+    // against the initial content. post() rebuilds the model on every call, so
+    // this flag (not a one-shot in openCustomDocument) guards the first capture.
+    let initialized = false;
+
     // Rebuild the model from the live chunkXml (+ pass-through parts).
     const buildModel = () => {
       DataModel.removeDataSource(document.srcId);
@@ -158,12 +164,17 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     const post = () => {
       try {
         const node = buildModel();
+        if (!initialized) {
+          captureBaseline(uriString, node);
+          initialized = true;
+        }
+        const modified = computeModified(uriString, node);
         const clip = getClipboard();
         const clipMark: ClipMark | undefined =
           clip && clip.sourceDocUri === uriString && clip.payload.name
             ? { name: clip.payload.name as string, section: clip.sourceSection, mode: clip.mode }
             : undefined;
-        const rows = buildRows(node, undefined, clipMark);
+        const rows = buildRows(node, modified, clipMark);
         webview.postMessage({
           type: 'setRows',
           rows,
@@ -484,12 +495,17 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       }
       sub.dispose();
       document._afterMutate = undefined;
+      clearBaseline(uriString);
     });
   }
 
   // --- Save / backup / revert (the safety gate lives here) ---
   async saveCustomDocument(document: BinarySlddDocument, _token: vscode.CancellationToken): Promise<void> {
     await this.writeTo(document, document.uri);
+    // Re-baseline to the just-saved content so per-row "Modified" marks clear,
+    // then repaint (mirrors SlddTextEditorProvider's onDidSaveTextDocument path).
+    this.reBaseline(document);
+    document._afterMutate?.();
   }
 
   async saveCustomDocumentAs(
@@ -524,6 +540,23 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         }
       },
     };
+  }
+
+  // Re-capture the per-URI baseline from the document's current chunkXml so
+  // per-row "Modified" marks reset after a save. Rebuilds the model under the
+  // document's srcId (the same source post() paints from) and snapshots it.
+  private reBaseline(document: BinarySlddDocument): void {
+    try {
+      DataModel.removeDataSource(document.srcId);
+      const node = DataModel.addDataSource(
+        document.srcId,
+        parseBinarySlddParts(document.chunkXml, document.zipMeta),
+        { path: basename(document.uri.path) || 'document' },
+      );
+      captureBaseline(document.uri.toString(), node);
+    } catch {
+      /* leave baseline as-is on parse failure */
+    }
   }
 
   // Save gate: re-parse chunkXml before zipping. On failure, throw — VS Code keeps
