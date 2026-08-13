@@ -54,23 +54,6 @@ const DEFAULT_WIDTHS: Record<string, number> = {
   lastModifiedBy: 14,
 };
 
-const COLUMN_LABELS: Record<string, string> = {
-  Name: 'Name',
-  Value: 'Value',
-  Class: 'Class',
-  Kind: 'Kind',
-  DataType: 'Data Type',
-  Description: 'Description',
-  UsedBy: 'Used By',
-  Status: 'Status',
-  dimensions: 'Dimensions',
-  complexity: 'Complexity',
-  storageClass: 'Storage Class',
-  alignment: 'Alignment',
-  lastModified: 'Last Modified',
-  lastModifiedBy: 'Last Modified By',
-};
-
 // The default column order and visibility. Class and Kind are supplementary
 // classifications, so they ship hidden; the user can enable them via the column
 // menu (and Reset restores this arrangement).
@@ -2344,7 +2327,7 @@ export class DexTreeTable extends LitElement {
                       @dragend=${(e: DragEvent) => this._onHeaderDragEnd(e)}
                     >
                       <div class="th-content">
-                        <span class="th-label">${this.columnLabels?.[col] || COLUMN_LABELS[col] || col}</span>
+                        <span class="th-label">${this.columnLabels?.[col] || col}</span>
                         ${this._getSortIndicator(col)}
                       </div>
                       <div
@@ -2504,7 +2487,7 @@ export class DexTreeTable extends LitElement {
                   if (!isName) this._toggleColumnVisibility(col);
                 }}
               />
-              <span class="col-label">${this.columnLabels?.[col] || COLUMN_LABELS[col] || col}</span>
+              <span class="col-label">${this.columnLabels?.[col] || col}</span>
             </label>
           `;
           });
