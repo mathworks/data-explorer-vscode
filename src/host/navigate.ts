@@ -45,7 +45,8 @@ export function consumePendingSelect(uriString: string): string | undefined {
 // repaint) and ask the webview to select the named row. The just-opened case is
 // drained separately in each provider's first paint via consumePendingSelect.
 // Returns the subscription for the caller to dispose on panel teardown. Shared
-// verbatim by both providers (SlddTextEditorProvider, BinaryEditorProvider).
+// verbatim by all three table providers (SlddTextEditorProvider,
+// BinaryEditorProvider, BinarySlddEditorProvider).
 export function wireNavigateSelect(
   webview: Pick<vscode.Webview, 'postMessage'>,
   uriString: string,
