@@ -49,6 +49,7 @@ import {
   deleteFromSource,
 } from './editorHub.js';
 import { basename } from '../common/pathUtil.js';
+import { wireNavigateSelect, consumePendingSelect } from './navigate.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 
 // srcId prefix so the editable model never collides with the read-only
@@ -185,6 +186,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         });
         webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
         webview.postMessage({ type: 'clipboardState', ...clipboardState() });
+        // If a cross-tab navigation targeted this file (e.g. it was just opened
+        // by a Usage-link click or the global entry search), select the requested
+        // row now that rows exist. Live navigations to an already-open view are
+        // handled by wireNavigateSelect below.
+        const navName = consumePendingSelect(uriString);
+        if (navName) webview.postMessage({ type: 'selectByName', name: navName });
       } catch (err) {
         webview.postMessage({ type: 'error', message: `Failed to parse ${name}: ${(err as Error).message}` });
       }
@@ -475,6 +482,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       } else if (msg?.type === 'undo' || msg?.type === 'redo') void vscode.commands.executeCommand(msg.type);
     });
 
+    // Live cross-tab selection: if a navigation targets THIS already-open file,
+    // select the row immediately (the just-opened case is drained in post()).
+    const navSub = wireNavigateSelect(webview, uriString);
+
     webview.html = renderWebviewHtml(webview, distRoot, {
       scriptFile: 'table.js',
       title: 'Data Explorer',
@@ -494,6 +505,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         broadcastDragState();
       }
       sub.dispose();
+      navSub.dispose();
       document._afterMutate = undefined;
       clearBaseline(uriString);
     });
