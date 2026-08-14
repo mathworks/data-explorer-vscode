@@ -39,12 +39,20 @@ export function buildTypedNodeFromMcos(
   if (!className || GENERIC_KEYS.has(className)) {
     return null;
   }
-  if (!NodeRegistry.getClass(className)) {
+  // A class the data model KNOWS (Simulink.Parameter, …) routes to its own typed
+  // node. A class it does NOT know is a customer-defined object: expand it as the
+  // generic ObjectNode the SLDD path uses so its properties surface as child rows
+  // (issue #3) — but ONLY when the decoder actually recovered properties, since an
+  // empty bag has nothing to show and should stay an opaque shell.
+  const isKnown = !!NodeRegistry.getClass(className);
+  if (!isKnown && (!properties || Object.keys(properties).length === 0)) {
     return null;
   }
-  // The value object mirrors the SLDD `entry.value`: one element whose
-  // _properties is the decoded bag (or empty for the shell). Every typed node's
-  // parse() tolerates an empty _properties (no children, defaulted fields).
+  // The value object mirrors the SLDD `entry.value`: one element whose _properties
+  // is the decoded bag (or empty for a known-class shell). NodeRegistry.parseValue
+  // dispatches on _array_class — known class -> its typed node, unknown class ->
+  // ObjectNode — so both converge on the same recursion the SLDD paths use. Every
+  // typed node's parse() tolerates an empty _properties (no children, defaults).
   const rawVal = {
     _array_class: className,
     _array_type: 'MATLABArray',

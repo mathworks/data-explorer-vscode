@@ -72,6 +72,7 @@ const STRUCTURAL_PARSERS: StructuralParser[] = [
     { matcher: function (val) { return val !== null && typeof val === 'object' && !!(val as Record<string, unknown>)._type && !!(val as Record<string, unknown>)._value && typeof (val as Record<string, unknown>)._value === 'string' && ((val as Record<string, unknown>)._value as string).indexOf('Matrix(') === 0; }, NodeClass: MatlabVariableNode },
     { matcher: function (val) { return Array.isArray(val); }, NodeClass: MatlabVariableNode },
     { matcher: function (val) { return val !== null && typeof val === 'object' && !!(val as Record<string, unknown>)._array_class; }, NodeClass: ObjectNode },
+    { matcher: function (val) { return val !== null && typeof val === 'object' && !!(val as Record<string, unknown>)._object_class; }, NodeClass: ObjectNode },
     { matcher: function (val) { return val === null || val === undefined || typeof val === 'number' || typeof val === 'boolean' || typeof val === 'string'; }, NodeClass: MatlabVariableNode }
 ];
 

@@ -453,7 +453,18 @@ function parsePropContent(prop: XmlNode, handleStructClass = true): unknown {
   const childElements = prop.Element;
 
   if (childElements && childElements.length > 0) {
-    if (dimension) {
+    if (propClass === 'cell') {
+      // A nested cell property (with or without a Dimension) serializes its
+      // items as <Element> children — decode them like the top-level entry
+      // path instead of treating each as a generic object with empty props.
+      const dimParts = dimension ? dimension.split('*').map(Number) : [1, childElements.length];
+      return {
+        _array_type: 'Cell',
+        _dimensions: dimParts,
+        _elements: childElements.map((e) => parseCellElement(e)),
+        _mw_element_type: 'MATLABArray',
+      };
+    } else if (dimension) {
       return parseArrayOfElements(childElements, dimension, propClass);
     } else if (handleStructClass && propClass === 'struct') {
       const parsed = childElements.map((e) => parseStructElement(e));
@@ -465,6 +476,12 @@ function parsePropContent(prop: XmlNode, handleStructClass = true): unknown {
         _fields: fields,
         _mw_element_type: 'MATLABArray',
       };
+    } else if (childElements[0]['@_Class'] === 'string') {
+      // A nested MATLAB string property serializes as <Element Class="string">
+      // wrapping a saveobj cell of chars — decode it to its text like the
+      // top-level entry path does, instead of treating it as a generic object
+      // (which drops the value into a bogus "undefined" -> char envelope).
+      return parseStringValue(childElements[0], dimension);
     } else if (childElements.length === 1) {
       return parseElement(childElements[0]);
     } else {

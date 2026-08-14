@@ -1,0 +1,77 @@
+{
+	"__MW_TEXT_COREPROPERTIES__": { "release": "R2027a" },
+	"__MW_TEXT_PARTS__": {
+		"__MW_TEXT_PART__/data/chunk0": {
+			"__MW_TEXT_content": {
+				"entries": [
+					{
+						"name": "a",
+						"metadata": { "namespace": "42516768-0ace-4981-8ac7-0a9b32cba471", "isderived": "0" },
+						"value": {
+							"_array_type": "Struct",
+							"_dimensions": [1, 1],
+							"_elements": [ { "b": 5, "c": { "_array_type": "Struct", "_dimensions": [1, 1], "_elements": [ { "d": 42 } ], "_fields": ["d"] } } ],
+							"_fields": ["b", "c"],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "fleetObject",
+						"metadata": { "namespace": "42516768-0ace-4981-8ac7-0a9b32cba471", "isderived": "0" },
+						"value": {
+							"_array_class": "Fleet",
+							"_dimensions": [1, 1],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"Count": 3,
+										"FleetName": ["east"],
+										"Lead": {
+											"_id": "2",
+											"_object_class": "Garage",
+											"_properties": { "Capacity": 25, "Location": ["Boston"] }
+										}
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "vehicleObject",
+						"metadata": { "namespace": "42516768-0ace-4981-8ac7-0a9b32cba471", "isderived": "0" },
+						"value": {
+							"_array_class": "Vehicle",
+							"_dimensions": [1, 1],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"Engine": {
+											"_id": "2",
+											"_object_class": "Engine",
+											"_properties": { "Cylinders": 8, "Displacement": 5.7, "Label": ["V8"] }
+										},
+										"Name": ["Model-X"],
+										"Specs": {
+											"_array_type": "Struct",
+											"_dimensions": [1, 1],
+											"_elements": [ { "color": "blue", "mass": 2200 } ],
+											"_fields": ["mass", "color"]
+										},
+										"Tags": { "_array_type": "Cell", "_dimensions": [1, 2], "_elements": ["suv", "electric"] },
+										"Wheels": 6
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					}
+				],
+				"Dictionary References": [],
+				"AllowAccessBWS": false
+			}
+		}
+	}
+}

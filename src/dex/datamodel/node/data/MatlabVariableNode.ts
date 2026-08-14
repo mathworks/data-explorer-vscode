@@ -11,6 +11,7 @@ import PropValue from '../../prop/PropValue';
 import PropDataType from '../../prop/PropDataType';
 import PropDescription from '../../prop/PropDescription';
 import MatlabValueParser from '../../parser/MatlabValueParser';
+import { NOT_AVAILABLE } from '../../parser/McosParser';
 import {
   escapeXml,
   formatDoubleXml,
@@ -301,6 +302,10 @@ export default class MatlabVariableNode extends DataNode {
     if (this._scalarType === 'struct') {
       return false;
     }
+    // The "value unrecoverable" placeholder has no real value to edit.
+    if (this._scalarValue === NOT_AVAILABLE) {
+      return false;
+    }
     return true;
   }
 
@@ -348,6 +353,13 @@ export default class MatlabVariableNode extends DataNode {
   }
 
   _formatScalar(): string {
+    // The MCOS decoder's "value unrecoverable" sentinel is a bare-angle-bracket
+    // placeholder, not real text — render it unquoted (like `<1x1 class_name>`) so
+    // the table styles it gray/italic and gives it no editor, rather than showing
+    // it as a quoted, editable string literal.
+    if (this._scalarValue === NOT_AVAILABLE) {
+      return NOT_AVAILABLE;
+    }
     if (this._scalarType === 'char') {
       return "'" + this._scalarValue + "'";
     }
