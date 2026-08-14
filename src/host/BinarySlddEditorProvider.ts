@@ -49,7 +49,7 @@ import {
   deleteFromSource,
 } from './editorHub.js';
 import { basename } from '../common/pathUtil.js';
-import { wireNavigateSelect, consumePendingSelect } from './navigate.js';
+import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 
 // srcId prefix so the editable model never collides with the read-only
@@ -186,12 +186,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         });
         webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
         webview.postMessage({ type: 'clipboardState', ...clipboardState() });
-        // If a cross-tab navigation targeted this file (e.g. it was just opened
-        // by a Usage-link click or the global entry search), select the requested
-        // row now that rows exist. Live navigations to an already-open view are
-        // handled by wireNavigateSelect below.
-        const navName = consumePendingSelect(uriString);
-        if (navName) webview.postMessage({ type: 'selectByName', name: navName });
+        drainNavigateSelect(webview, uriString);
       } catch (err) {
         webview.postMessage({ type: 'error', message: `Failed to parse ${name}: ${(err as Error).message}` });
       }

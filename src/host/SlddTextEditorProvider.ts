@@ -30,7 +30,7 @@ import {
   type StructuralResult,
 } from './structuralEdit.js';
 import { annotateDataRows } from './usageGraph.js';
-import { wireNavigateSelect, consumePendingSelect } from './navigate.js';
+import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { basename } from '../common/pathUtil.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 
@@ -127,10 +127,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
             // a drop (dropDecision) live on dragover without a host round-trip.
             webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
             webview.postMessage({ type: 'clipboardState', ...clipboardState() });
-            // If a cross-tab navigation targeted this file (e.g. it was just
-            // opened by a Usage-link click), select the requested row now.
-            const navName = consumePendingSelect(uriString);
-            if (navName) webview.postMessage({ type: 'selectByName', name: navName });
+            drainNavigateSelect(webview, uriString);
           });
       } catch (err) {
         invalidate(uriString);
