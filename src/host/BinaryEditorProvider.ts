@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
-import { renderWebviewHtml } from './webviewHtml.js';
+import { renderWebviewHtml, LOADING_OVERLAY_HTML } from './webviewHtml.js';
 import { getModelFromBytes, getProjectModel, invalidate } from './SlddModel.js';
 import {
   buildRows,
@@ -14,7 +14,7 @@ import { buildMatRows } from './matRowBuilder.js';
 import { readProjectStore } from './projectStore.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, exceedsStringDecodeLimit, isZipBytes } from './slddFormat.js';
 import { annotateDataRows, annotateModelRows } from './usageGraph.js';
-import { wireNavigateSelect, consumePendingSelect } from './navigate.js';
+import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
@@ -157,12 +157,6 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       return toArrayBuffer(await vscode.workspace.fs.readFile(document.uri));
     };
 
-    // If a cross-tab navigation targeted this file (e.g. it was just opened by a
-    // Usage-link click), select the requested row now that rows exist.
-    const drainNavSelect = (): void => {
-      const navName = consumePendingSelect(uriString);
-      if (navName) webview.postMessage({ type: 'selectByName', name: navName });
-    };
 
     // Read/parse the file host-side and push rows to the webview. On failure,
     // drop the cached model and post a banner.
@@ -182,7 +176,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
             columnLabels: PROJECT_COLUMN_LABELS,
             editable: false,
           });
-          drainNavSelect();
+          drainNavigateSelect(webview, uriString);
           return;
         }
 
@@ -211,7 +205,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           editable: false,
           notice,
         });
-        drainNavSelect();
+        drainNavigateSelect(webview, uriString);
       } catch (err) {
         invalidate(uriString);
         webview.postMessage({
@@ -287,14 +281,10 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     return renderWebviewHtml(webview, distRoot, {
       scriptFile: 'table.js',
       title: 'Data Explorer',
-      body: `    <style>@keyframes dex-spin { to { transform: rotate(360deg); } }</style>
-    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
+      body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
     <div id="dex-notice" role="status" style="display:none;position:absolute;top:0;left:0;right:0;z-index:2;box-sizing:border-box;padding:6px 10px;font-family:var(--vscode-font-family,sans-serif);font-size:12px;color:var(--vscode-inputValidation-infoForeground,var(--vscode-foreground));background:var(--vscode-inputValidation-infoBackground,rgba(100,148,237,0.12));border-bottom:1px solid var(--vscode-inputValidation-infoBorder,#4084d0);"></div>
     <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>
-    <div id="dex-loading" role="status" aria-label="Loading" style="position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-family:var(--vscode-font-family,sans-serif);font-size:12px;color:var(--vscode-descriptionForeground,var(--vscode-foreground));background:var(--vscode-editor-background,transparent);">
-      <div style="width:28px;height:28px;border:3px solid var(--vscode-progressBar-background,#0e70c0);border-top-color:transparent;border-radius:50%;animation:dex-spin 0.8s linear infinite;"></div>
-      <div>Loading…</div>
-    </div>
+${LOADING_OVERLAY_HTML}
     <dex-context-menu></dex-context-menu>`,
     });
   }

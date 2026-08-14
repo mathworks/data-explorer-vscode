@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
-import { renderWebviewHtml } from './webviewHtml.js';
+import { renderWebviewHtml, LOADING_OVERLAY_HTML } from './webviewHtml.js';
 import { getModel, invalidate, findNode } from './SlddModel.js';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
 import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
@@ -30,7 +30,7 @@ import {
   type StructuralResult,
 } from './structuralEdit.js';
 import { annotateDataRows } from './usageGraph.js';
-import { wireNavigateSelect, consumePendingSelect } from './navigate.js';
+import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { basename } from '../common/pathUtil.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 
@@ -127,10 +127,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
             // a drop (dropDecision) live on dragover without a host round-trip.
             webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
             webview.postMessage({ type: 'clipboardState', ...clipboardState() });
-            // If a cross-tab navigation targeted this file (e.g. it was just
-            // opened by a Usage-link click), select the requested row now.
-            const navName = consumePendingSelect(uriString);
-            if (navName) webview.postMessage({ type: 'selectByName', name: navName });
+            drainNavigateSelect(webview, uriString);
           });
       } catch (err) {
         invalidate(uriString);
@@ -661,6 +658,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       title: 'Data Explorer',
       body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
     <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>
+${LOADING_OVERLAY_HTML}
     <dex-context-menu></dex-context-menu>
     <dex-error-dialog></dex-error-dialog>`,
     });

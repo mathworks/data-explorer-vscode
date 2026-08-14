@@ -128,6 +128,12 @@
         "title": "View as Table",
         "category": "Data Explorer",
         "icon": "$(table)"
+      },
+      {
+        "command": "dataExplorer.searchDataSources",
+        "title": "Search Data Source Entries",
+        "category": "Data Explorer",
+        "icon": "$(search)"
       }
     ],
     "menus": {
@@ -152,8 +158,22 @@
           "command": "dataExplorer.viewAsTable",
           "when": "resourceExtname == .sldd"
         }
+      ],
+      "view/title": [
+        {
+          "command": "dataExplorer.searchDataSources",
+          "when": "view == dataExplorer.sections",
+          "group": "navigation@1"
+        }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "dataExplorer.searchDataSources",
+        "key": "ctrl+alt+e",
+        "mac": "cmd+alt+e"
+      }
+    ]
   },
   "scripts": {
     "build:webview": "vite build",

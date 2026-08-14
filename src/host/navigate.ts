@@ -34,26 +34,41 @@ export function requestSelect(uriString: string, name: string): void {
   emitter.fire({ uri: uriString, name });
 }
 
-export function consumePendingSelect(uriString: string): string | undefined {
+// Internal: read-and-clear the pending selection for a uri. Exposed to providers
+// only through drainNavigateSelect / wireNavigateSelect below.
+function consumePendingSelect(uriString: string): string | undefined {
   const name = pending.get(uriString);
   pending.delete(uriString);
   return name;
 }
 
+// Drain any pending cross-tab selection for THIS file and ask the webview to
+// select that row. Called by a table provider from its FIRST paint (once rows
+// exist) to cover the just-opened case: a Usage-link click or the global entry
+// search fires requestSelect before this editor exists to hear the live event,
+// so the target lands in the pending map and is drained here.
+export function drainNavigateSelect(
+  webview: Pick<vscode.Webview, 'postMessage'>,
+  uriString: string,
+): void {
+  const name = consumePendingSelect(uriString);
+  if (name) void webview.postMessage({ type: 'selectByName', name });
+}
+
 // Wire live cross-tab selection for an already-open editor: when a navigation
 // targets THIS file, consume its pending entry (so it can't re-fire on a later
 // repaint) and ask the webview to select the named row. The just-opened case is
-// drained separately in each provider's first paint via consumePendingSelect.
+// drained separately in each provider's first paint via drainNavigateSelect.
 // Returns the subscription for the caller to dispose on panel teardown. Shared
-// verbatim by both providers (SlddTextEditorProvider, BinaryEditorProvider).
+// by all three table providers (SlddTextEditorProvider, BinaryEditorProvider,
+// BinarySlddEditorProvider).
 export function wireNavigateSelect(
   webview: Pick<vscode.Webview, 'postMessage'>,
   uriString: string,
 ): vscode.Disposable {
   return onNavigateSelect((e) => {
     if (e.uri !== uriString) return;
-    consumePendingSelect(uriString);
-    void webview.postMessage({ type: 'selectByName', name: e.name });
+    drainNavigateSelect(webview, uriString);
   });
 }
 
