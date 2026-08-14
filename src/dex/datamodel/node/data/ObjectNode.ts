@@ -30,6 +30,12 @@ export default class ObjectNode extends DataNode {
         return this.arrayClass;
     }
 
+    // This node's children are MATLAB class properties, whose names are fixed by
+    // the class definition and therefore not renameable (see BaseNode).
+    get isObjectPropertyBag(): boolean {
+        return true;
+    }
+
     get displayValue(): string {
         const raw = (this.serial._rawVal as Record<string, unknown>) || {};
         const d = (raw._dimensions as number[]) || [(raw._num_rows as number) || 1, (raw._num_columns as number) || 1];

@@ -292,6 +292,10 @@ export default class MatlabVariableNode extends DataNode {
     if (this.parent && this.parent instanceof MatlabVariableNode) {
       return false;
     }
+    // A class property name is fixed by the class definition (see BaseNode).
+    if (this.parent?.isObjectPropertyBag) {
+      return false;
+    }
     return true;
   }
 
