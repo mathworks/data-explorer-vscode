@@ -42,7 +42,12 @@ export async function ensureIndex(): Promise<void> {
 export async function listEntries(): Promise<NameRecord[]> {
   await ensureIndex();
   const out: NameRecord[] = [];
-  for (const bucket of index?.values() ?? []) out.push(...bucket);
+  // NB: append with a loop, not `out.push(...bucket)`. A data source can hold
+  // tens of thousands of entries, and spreading a huge array as call arguments
+  // overflows the engine's argument limit ("Maximum call stack size exceeded").
+  for (const bucket of index?.values() ?? []) {
+    for (const rec of bucket) out.push(rec);
+  }
   return out;
 }
 
