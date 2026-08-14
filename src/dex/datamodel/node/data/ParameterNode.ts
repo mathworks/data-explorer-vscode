@@ -70,11 +70,18 @@ export default class ParameterNode extends DataNode {
             if (!parsed) {
                 return { error: true, reason: 'Invalid MATLAB expression', invalidValue: stringValue, validValue: this.displayValue };
             }
-            if ((parsed.type === 'double' && Array.isArray(parsed.value)) || parsed.type === 'cell' || parsed.type === 'string-array') {
+            // MATLAB rejects cell arrays as Parameter.Value (R2027a probe).
+            if (parsed.type === 'cell') {
+                return {
+                    error: true,
+                    reason: 'Invalid value specified for parameter. Value must be a numeric array, fi object, enumerated value, structure whose fields contain valid values, string scalar, or an expression.',
+                    invalidValue: stringValue,
+                    validValue: this.displayValue,
+                };
+            }
+            if ((parsed.type === 'double' && Array.isArray(parsed.value)) || parsed.type === 'string-array') {
                 let rawValue: unknown;
-                if (parsed.type === 'cell') {
-                    rawValue = { _array_type: 'Cell', _dimensions: parsed.dims, _elements: parsed.value, _mw_element_type: 'MATLABArray' };
-                } else if (parsed.type === 'string-array') {
+                if (parsed.type === 'string-array') {
                     rawValue = { _array_type: 'String', _dimensions: parsed.dims, _elements: parsed.value };
                 } else if (parsed.dims && parsed.dims[0] > 1) {
                     const rows = parsed.dims[0];

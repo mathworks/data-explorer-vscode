@@ -15,6 +15,7 @@ test/parity/storageclass_probe.txt
 test/parity/buselement_probe.txt
 test/parity/element_probe.txt
 test/parity/buselement_constraints_probe.txt
+test/parity/fidelity/out/
 .DS_Store
 
 # Local-only internal notes — must never be pushed to the public remote

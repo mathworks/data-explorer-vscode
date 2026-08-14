@@ -50,13 +50,22 @@ export class BaseBusNode extends DataNode {
         const elementsInternal = this.children.map(function (child) { return (child as BaseBusElementNode).serializeValue(); });
         const props = Object.assign({}, this.serial._properties as Record<string, unknown>);
         const rawEI = (this.serial._properties as Record<string, unknown>).Elements_internal;
-        if (rawEI && typeof rawEI === 'object' && !Array.isArray(rawEI)) {
-            // Preserve the source's Elements_internal metadata but re-derive both
-            // _elements and _dimensions from the live children, so adding or
-            // removing an element keeps the column-vector dimension in sync.
-            props.Elements_internal = Object.assign({}, rawEI as Record<string, unknown>, { _elements: elementsInternal, _dimensions: [elementsInternal.length, 1] });
-        } else if (elementsInternal.length > 0) {
-            props.Elements_internal = { _array_class: (this.constructor as typeof BaseBusNode).ELEMENT_CLASS_NAME, _dimensions: [elementsInternal.length, 1], _elements: elementsInternal, _mw_element_type: 'MATLABArray' };
+        if (elementsInternal.length > 0) {
+            // The source's Elements_internal may be in single-object form
+            // (_object_class + _properties) or array form (_array_class + _elements).
+            // Always emit the canonical array form so the serializer uses the correct
+            // branch (_array_class) and respects the live _elements and _dimensions.
+            const arrayClass = rawEI && typeof rawEI === 'object' && !Array.isArray(rawEI)
+                ? ((rawEI as Record<string, unknown>)._array_class as string
+                    || (rawEI as Record<string, unknown>)._object_class as string
+                    || (this.constructor as typeof BaseBusNode).ELEMENT_CLASS_NAME)
+                : (this.constructor as typeof BaseBusNode).ELEMENT_CLASS_NAME;
+            props.Elements_internal = { _array_class: arrayClass, _dimensions: [elementsInternal.length, 1], _elements: elementsInternal, _mw_element_type: 'MATLABArray' };
+        } else if (rawEI) {
+            // When all children are removed, emit an empty array. This matches what
+            // MATLAB produces (Elements_internal = []) and ensures the XML serializer
+            // omits the property entirely (no phantom self-closing <Element/> tag).
+            props.Elements_internal = [];
         }
         if ('Description' in (this.serial._properties as Record<string, unknown>) || this.Description) { props.Description = this.Description; }
         return props;
@@ -149,6 +158,10 @@ export class BaseBusNode extends DataNode {
             ((busElements as Record<string, unknown>)._elements as Record<string, unknown>[]).forEach(function (busElem) {
                 const childProps = (busElem._properties as Record<string, unknown>) || {};
                 const elemName = (childProps.Name as string) || '';
+                // Skip phantom elements with empty properties — these arise when a
+                // self-closing <Element Class="..."/> round-trips through the binary
+                // XML serializer (representing a bus with 0 elements).
+                if (!elemName && Object.keys(childProps).length === 0) { return; }
                 const childSerial = { _rawElem: busElem, _properties: childProps };
                 const childNode = new ElementNodeClass(elemName, node, childProps, childSerial as Record<string, unknown>);
                 node.addChild(childNode);
