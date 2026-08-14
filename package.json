@@ -166,7 +166,14 @@
           "group": "navigation@1"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "dataExplorer.searchDataSources",
+        "key": "ctrl+k g",
+        "mac": "cmd+k g"
+      }
+    ]
   },
   "scripts": {
     "build:webview": "vite build",
