@@ -8,8 +8,10 @@ import { BinarySlddEditorProvider } from './host/BinarySlddEditorProvider.js';
 import { HealthDecorationProvider } from './host/HealthDecorationProvider.js';
 import { invalidate, findNode } from './host/SlddModel.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, isZipBytes } from './host/slddFormat.js';
-import { handleNavigate } from './host/navigate.js';
+import { handleNavigate, requestSelect } from './host/navigate.js';
 import { invalidateUsageGraph } from './host/usageGraph.js';
+import { searchDataSources } from './host/searchSources.js';
+import { listEntries, reindexFile, removeFile } from './host/nameIndex.js';
 import { isSectionRowId } from './common/sectionRowId.js';
 
 const SUPPORTED_RE = /\.(sldd|mat|slx|prj)$/;
@@ -158,13 +160,24 @@ export function activate(context: vscode.ExtensionContext): void {
       piProvider,
     ),
     watcher,
-    // Files added/removed change the root list.
-    watcher.onDidCreate(refreshAll),
-    watcher.onDidDelete(refreshAll),
+    // Files added/removed change the root list. Also keep the name index in sync:
+    // reindex the new file / drop the removed file's bucket. Both index ops are
+    // no-ops until the index is first built (by the first search), so they're
+    // cheap when search has never been opened.
+    watcher.onDidCreate((uri) => {
+      void reindexFile(uri);
+      refreshAll();
+    }),
+    watcher.onDidDelete((uri) => {
+      removeFile(uri.toString());
+      refreshAll();
+    }),
     // A file's contents changed: drop its cached model (table) and rebuild the
-    // reference index (tree), since edits may add or remove references.
+    // reference index (tree), since edits may add or remove references. Also
+    // reindex its entry names (no-op until the index is first built).
     watcher.onDidChange((uri) => {
       invalidate(uri.toString());
+      void reindexFile(uri);
       refreshAll();
     }),
     // Live edits in an open editor: invalidate the cached model and refresh.
@@ -173,8 +186,11 @@ export function activate(context: vscode.ExtensionContext): void {
         invalidate(e.document.uri.toString());
       }
       // A dirty-state transition on any supported file changes the "modified"
-      // health badge, so refresh decorations for supported docs.
+      // health badge, so refresh decorations for supported docs. Also re-sync
+      // the name index for live entry-name edits (e.g. renaming an entry in an
+      // open .sldd); reindexFile is a no-op until the index is first built.
       if (SUPPORTED_RE.test(e.document.uri.path)) {
+        void reindexFile(e.document.uri);
         refreshAll();
       }
     }),
@@ -222,6 +238,14 @@ export function activate(context: vscode.ExtensionContext): void {
         /* ignore */
       }
     }),
+    // Global entry-name search overlay: pick an entry by name across all data
+    // sources, then open its source file and select the matching row.
+    vscode.commands.registerCommand('dataExplorer.searchDataSources', () =>
+      searchDataSources(listEntries, async (sourceUri, entryName) => {
+        requestSelect(sourceUri, entryName);
+        await openInBestEditor(vscode.Uri.parse(sourceUri), { preview: true });
+      }),
+    ),
   );
 }
 

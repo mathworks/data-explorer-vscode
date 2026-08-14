@@ -18,7 +18,7 @@
 // cached model of the same file.
 import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
-import { renderWebviewHtml } from './webviewHtml.js';
+import { renderWebviewHtml, LOADING_OVERLAY_HTML } from './webviewHtml.js';
 import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { sectionRules } from './sectionRules.js';
 import { parseBinarySlddParts } from '../dex/datamodel/parser/BinarySlddParser.js';
@@ -49,6 +49,7 @@ import {
   deleteFromSource,
 } from './editorHub.js';
 import { basename } from '../common/pathUtil.js';
+import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 
 // srcId prefix so the editable model never collides with the read-only
@@ -185,6 +186,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         });
         webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
         webview.postMessage({ type: 'clipboardState', ...clipboardState() });
+        drainNavigateSelect(webview, uriString);
       } catch (err) {
         webview.postMessage({ type: 'error', message: `Failed to parse ${name}: ${(err as Error).message}` });
       }
@@ -475,11 +477,16 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       } else if (msg?.type === 'undo' || msg?.type === 'redo') void vscode.commands.executeCommand(msg.type);
     });
 
+    // Live cross-tab selection: if a navigation targets THIS already-open file,
+    // select the row immediately (the just-opened case is drained in post()).
+    const navSub = wireNavigateSelect(webview, uriString);
+
     webview.html = renderWebviewHtml(webview, distRoot, {
       scriptFile: 'table.js',
       title: 'Data Explorer',
       body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
     <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>
+${LOADING_OVERLAY_HTML}
     <dex-context-menu></dex-context-menu>
     <dex-error-dialog></dex-error-dialog>`,
     });
@@ -494,6 +501,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         broadcastDragState();
       }
       sub.dispose();
+      navSub.dispose();
       document._afterMutate = undefined;
       clearBaseline(uriString);
     });
