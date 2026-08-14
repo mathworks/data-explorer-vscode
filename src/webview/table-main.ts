@@ -113,11 +113,27 @@ function applyPendingNameSelection(): void {
   pendingSelectName = null;
 }
 
-// Hide the initial loading spinner. The host runs a synchronous parse (and, on
-// first open, a whole-workspace usage-graph scan) before it can post the first
-// message, so this covers the several-second gap between 'ready' and 'setRows'.
-// Called on the first payload (setRows) or on error — either ends the wait.
+// Loading spinner, shown only if the first payload is slow to arrive. The host
+// runs a synchronous parse (and, on first open, a whole-workspace usage-graph
+// scan) before it can post 'setRows', which can take several seconds on a large
+// file. Rather than flash a spinner on every open, we arm a timer at boot and
+// reveal the overlay only if that gap exceeds the delay below; a fast open hides
+// the (never-shown) overlay and cancels the timer, so it never flashes. The
+// webview renderer runs this timer independently of the busy extension host.
+const LOADING_SPINNER_DELAY_MS = 500;
+let loadingTimer: ReturnType<typeof setTimeout> | undefined = setTimeout(() => {
+  loadingTimer = undefined;
+  const el = document.getElementById('dex-loading');
+  if (el) el.style.display = 'flex';
+}, LOADING_SPINNER_DELAY_MS);
+
+// Cancel the pending reveal and hide the overlay. Called on the first payload
+// (setRows) or on error — either ends the wait.
 function hideLoading(): void {
+  if (loadingTimer !== undefined) {
+    clearTimeout(loadingTimer);
+    loadingTimer = undefined;
+  }
   const el = document.getElementById('dex-loading');
   if (el) el.style.display = 'none';
 }
