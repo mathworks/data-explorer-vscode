@@ -170,8 +170,8 @@
     "keybindings": [
       {
         "command": "dataExplorer.searchDataSources",
-        "key": "ctrl+k g",
-        "mac": "cmd+k g"
+        "key": "ctrl+alt+e",
+        "mac": "cmd+alt+e"
       }
     ]
   },
