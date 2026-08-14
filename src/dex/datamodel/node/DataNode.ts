@@ -184,6 +184,10 @@ export default class DataNode extends BaseNode {
     if (this._displayName) {
       return false;
     }
+    // A class property name is fixed by the class definition (see BaseNode).
+    if (this.parent?.isObjectPropertyBag) {
+      return false;
+    }
     return !this.isIndexedName;
   }
 

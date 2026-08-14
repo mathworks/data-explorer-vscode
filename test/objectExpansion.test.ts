@@ -84,6 +84,43 @@ describe('issue#3 object expansion — text .sldd', () => {
   });
 });
 
+// A class property NAME is fixed by the class definition — it cannot be renamed the
+// way a struct field can. So every direct child of an object node (whatever its own
+// node type: scalar variable, nested object, struct, or cell) must have a
+// NON-editable Name cell. Struct fields, by contrast, stay renameable.
+describe('issue#3 object property names are read-only (class-fixed), struct fields are not', () => {
+  const uri = 'test://object_props_name_edit';
+  invalidate(uri);
+  const sldd = getModel(uri, 'object_props_text.sldd', fixture('object_props_text.sldd'));
+  buildRows(sldd);
+  const base = `${uri}/other`;
+  const nameEditableOf = (id: string) => findNode(uri, id)?.nameEditable;
+
+  it('makes an object scalar property name read-only (Vehicle.Wheels)', () => {
+    expect(nameEditableOf(`${base}/vehicleObject/Wheels`)).toBe(false);
+  });
+
+  it('makes a nested-object property name read-only (Vehicle.Engine)', () => {
+    expect(nameEditableOf(`${base}/vehicleObject/Engine`)).toBe(false);
+  });
+
+  it('makes a struct-typed property name read-only (Vehicle.Specs)', () => {
+    expect(nameEditableOf(`${base}/vehicleObject/Specs`)).toBe(false);
+  });
+
+  it('makes a cell-typed property name read-only (Vehicle.Tags)', () => {
+    expect(nameEditableOf(`${base}/vehicleObject/Tags`)).toBe(false);
+  });
+
+  it('makes a nested-object scalar property name read-only (Engine.Cylinders)', () => {
+    expect(nameEditableOf(`${base}/vehicleObject/Engine/Cylinders`)).toBe(false);
+  });
+
+  it('KEEPS a struct field name editable (Vehicle.Specs.mass) — struct fields can be renamed', () => {
+    expect(nameEditableOf(`${base}/vehicleObject/Specs/mass`)).toBe(true);
+  });
+});
+
 // Editing an object property in an .sldd must WRITE BACK: the object's serialized
 // value (JSON for text .sldd, XML for the entry text splice) must reflect the edit,
 // not the stale value the file was loaded with. The object serializes from its live

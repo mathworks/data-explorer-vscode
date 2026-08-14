@@ -126,11 +126,25 @@ export default class BaseNode {
     return this.isIndexedName || !!this._displayName;
   }
 
+  // True when this node's CHILDREN are the properties of a MATLAB class object
+  // (ObjectNode overrides it). A class property's name is fixed by the class
+  // definition, so — unlike a struct field — it can never be renamed. Children
+  // consult `this.parent?.isObjectPropertyBag` in nameEditable. Kept as a getter
+  // on BaseNode (rather than an `instanceof ObjectNode` check) to avoid the import
+  // cycle ObjectNode → DataNode → BaseNode.
+  get isObjectPropertyBag(): boolean {
+    return false;
+  }
+
   get nameEditable(): boolean {
     if (this.isIndexedName) {
       return false;
     }
     if (this._displayName) {
+      return false;
+    }
+    // A class property name is fixed by the class definition.
+    if (this.parent?.isObjectPropertyBag) {
       return false;
     }
     return true;
