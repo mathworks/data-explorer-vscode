@@ -14,7 +14,7 @@ import { buildMatRows } from './matRowBuilder.js';
 import { readProjectStore } from './projectStore.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, exceedsStringDecodeLimit, isZipBytes } from './slddFormat.js';
 import { annotateDataRows, annotateModelRows } from './usageGraph.js';
-import { wireNavigateSelect, consumePendingSelect } from './navigate.js';
+import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
@@ -157,12 +157,6 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       return toArrayBuffer(await vscode.workspace.fs.readFile(document.uri));
     };
 
-    // If a cross-tab navigation targeted this file (e.g. it was just opened by a
-    // Usage-link click), select the requested row now that rows exist.
-    const drainNavSelect = (): void => {
-      const navName = consumePendingSelect(uriString);
-      if (navName) webview.postMessage({ type: 'selectByName', name: navName });
-    };
 
     // Read/parse the file host-side and push rows to the webview. On failure,
     // drop the cached model and post a banner.
@@ -182,7 +176,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
             columnLabels: PROJECT_COLUMN_LABELS,
             editable: false,
           });
-          drainNavSelect();
+          drainNavigateSelect(webview, uriString);
           return;
         }
 
@@ -211,7 +205,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           editable: false,
           notice,
         });
-        drainNavSelect();
+        drainNavigateSelect(webview, uriString);
       } catch (err) {
         invalidate(uriString);
         webview.postMessage({
