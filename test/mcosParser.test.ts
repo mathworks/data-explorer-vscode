@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { decodeMcosBlob, type McosObjectData, type OpaqueVarRef } from '../src/dex/datamodel/parser/McosParser.js';
+import { decodeMcosBlob, NOT_AVAILABLE, type McosObjectData, type OpaqueVarRef } from '../src/dex/datamodel/parser/McosParser.js';
 import { parseMat } from '../src/dex/datamodel/parser/MatParser.js';
 import { parseSlx } from '../src/dex/datamodel/parser/SlxParser.js';
 import type { MatVariable } from '../src/dex/datamodel/node/data/MatlabVariableNode.js';
@@ -153,6 +153,62 @@ describe('decodeMcosBlob — .mat and .slx paths agree on the meaningful values'
       expect(fromSlx.properties[k], `${name}.${k}`).toEqual(fromMat.properties[k]);
     }
     expect(fromSlx.value).toEqual(fromMat.value);
+  });
+});
+
+describe('decodeMcosBlob — custom class objects (multi-object graph, .mat)', () => {
+  // object_props.mat holds two customer-defined classes with no known schema:
+  //   v = Vehicle{ Name="Model-X" (string), Wheels=6, Engine=Engine{...},
+  //                Specs=struct{mass,color}, Tags={'suv','electric'} }
+  //   f = Fleet{ FleetName="east" (string), Count=3, Lead=Garage{...}, Notes=struct }
+  // It exercises the object->block indirection (word4), the class-defaults merge
+  // (Fleet.Notes lives in defaults, not the instance block), struct/cell value
+  // resolution, nested handle recursion, and the string sentinel.
+  const decoded = decodeMat('object_props');
+  const v = decoded.get('v');
+  const f = decoded.get('f');
+
+  it('decodes both custom objects from the shared blob', () => {
+    expect(v).toBeDefined();
+    expect(f).toBeDefined();
+    expect(v!.className).toBe('Vehicle');
+    expect(f!.className).toBe('Fleet');
+  });
+
+  it('resolves numeric, struct, cell, and nested-object property values', () => {
+    expect(v!.properties.Wheels).toBe(6);
+    // nested object -> { _object_class, _properties }
+    const engine = v!.properties.Engine as Record<string, unknown>;
+    expect(engine._object_class).toBe('Engine');
+    expect((engine._properties as Record<string, unknown>).Cylinders).toBe(8);
+    // struct -> SLDD Struct shape
+    const specs = v!.properties.Specs as Record<string, unknown>;
+    expect(specs._array_type).toBe('Struct');
+    expect((specs._elements as Record<string, unknown>[])[0].mass).toBe(2200);
+    // cell -> SLDD Cell shape with char elements
+    const tags = v!.properties.Tags as Record<string, unknown>;
+    expect(tags._array_type).toBe('Cell');
+    expect(tags._elements).toEqual(['suv', 'electric']);
+  });
+
+  it('surfaces a MATLAB string-typed property value as the honest sentinel', () => {
+    // The value cannot be recovered, but the property NAME is still present.
+    expect('Name' in v!.properties).toBe(true);
+    expect(v!.properties.Name).toBe(NOT_AVAILABLE);
+  });
+
+  it('merges class defaults so a default-valued property (Fleet.Notes) still appears', () => {
+    // Notes was left at its class default and is absent from the instance block; it
+    // must still surface (by name and value) from the per-class defaults cell.
+    expect('Notes' in f!.properties).toBe(true);
+    const notes = f!.properties.Notes as Record<string, unknown>;
+    expect(notes._array_type).toBe('Struct');
+  });
+
+  it('recurses a nested handle-object property to the correct class (Fleet.Lead=Garage)', () => {
+    const lead = f!.properties.Lead as Record<string, unknown>;
+    expect(lead._object_class).toBe('Garage');
+    expect((lead._properties as Record<string, unknown>).Capacity).toBe(25);
   });
 });
 

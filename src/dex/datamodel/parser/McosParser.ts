@@ -12,12 +12,19 @@ import { parseMatrix, MatVariable } from './MatParser';
 //   • Header: 10 uint32 words at [0,40); w[2..] are segment END offsets.
 //   • String table: null-terminated ASCII [40, w[2]); index 0 is the empty string.
 //   • Class table: [w[2], w[3]) 16-byte rows [pkgStrIdx, clsStrIdx, 0, 0], 0-based.
-//   • Object table: [w[4], w[5]) 24-byte rows; word0 = classId (0-based). Row 0 is
-//     the synthetic null object.
-//   • Property blocks: [w[5], w[6)); ONE block per object in object order (the
-//     null object included), each [nProps, (nameStrIdx, flag, value)*nProps] then
-//     padded to an 8-byte boundary. The i-th block belongs to obj[i] — positional,
-//     no indirection.
+//   • Object table: [w[4], w[5]) 24-byte rows; word0 = classId (0-based), word4 =
+//     the 1-based index of this object's property block (0 = the empty block).
+//     Row 0 is the synthetic null object. Multiple objects of the same class that
+//     were never mutated share block 0; a mutated instance points to its own block.
+//   • Property blocks: [w[5], w[6)); each [nProps, (nameStrIdx, flag, value)*nProps]
+//     then padded to an 8-byte boundary. Blocks are addressed by object word4, NOT
+//     positionally — obj[i] does not necessarily own block[i]. A block holds only
+//     the properties MUTATED away from the class default on that instance; props
+//     left at their class default live in the per-class defaults cell (below).
+//   • Per-class defaults: the LAST heap cell is a cell array indexed by classId;
+//     each entry is a struct of that class's default property values. Merged UNDER
+//     the instance block so a default-valued property still surfaces (by name and
+//     value) even when the instance block omits it.
 //   • flag 1 → value is a heap-cell index; the mxArray is cells[value + 2].
 //     flag 0 → value is a string-table index (enum/string literal).
 //     flag 2 → value is an inline boolean (value !== 0).
@@ -58,6 +65,9 @@ interface ClassRow {
 
 interface ObjectRow {
   classId: number;
+  // 1-based property-block index (0 = the empty/default block). Addressed via
+  // word4 of the 24-byte object row; the block set is NOT positional per object.
+  blockIdx: number;
 }
 
 type Triple = [nameIdx: number, flag: number, value: number];
@@ -72,11 +82,22 @@ interface MetaTable {
 interface DecodeContext {
   cells: (MatVariable | null)[];
   meta: MetaTable;
+  // Per-class default property structs, indexed by classId (the last heap cell).
+  // Empty when absent; merged under the instance block in buildProperties.
+  defaults: (MatVariable | null)[];
 }
 
 const MI_MATRIX = 14;
 const MCOS_HANDLE_MAGIC = 3707764736; // 0xDD000000
 const MAX_RECURSION_DEPTH = 32;
+
+// A MATLAB `string`-typed property is stored as its own MCOS object whose text
+// lives in a packed uint64 heap cell using an internal, undocumented encoding we
+// cannot reverse with confidence. Rather than surface corrupted text, such a value
+// resolves to this honest sentinel. (char arrays — 'like this' — are ordinary and
+// decode correctly; only the double-quoted string type is affected.)
+export const NOT_AVAILABLE = '<not available>';
+const STRING_CLASS_NAME = 'string';
 
 function align8(n: number): number {
   return n + ((8 - (n % 8)) % 8);
@@ -190,13 +211,15 @@ function parseMetaTable(cells: (MatVariable | null)[]): MetaTable | null {
     classes.push({ fullName: pkg ? pkg + '.' + cls : cls });
   }
 
-  // Object table: 0-based rows; word0 = classId. Row 0 is the null object.
+  // Object table: 0-based rows; word0 = classId, word4 = property-block index.
+  // Row 0 is the null object.
   const objects: ObjectRow[] = [];
   for (let p = w[4]; p + 24 <= w[5]; p += 24) {
-    objects.push({ classId: u32(p) });
+    objects.push({ classId: u32(p), blockIdx: u32(p + 16) });
   }
 
-  // Property blocks: one per object in order, each 8-byte aligned.
+  // Property blocks: each 8-byte aligned, addressed by object word4 (not
+  // positionally). block[0] is the empty/default block.
   const blocks: Triple[][] = [];
   for (let p = w[5]; p < w[6]; ) {
     const start = p;
@@ -240,9 +263,11 @@ function buildMatrixValue(dims: number[], elements: number[]): unknown {
   return { _type: 'double', _value: 'Matrix(' + rows + ',' + cols + ')\n' + rowStrs.join('\n') };
 }
 
-// Turn a heap cell into a property value. Object handles recurse into nested
-// { _object_class, _properties }. Unresolvable cells return undefined (dropped).
-function resolveCellValue(cell: MatVariable | null, ctx: DecodeContext, path: Set<number>, depth: number): unknown {
+// Turn a parsed mxArray value into a property value in the SLDD-shaped form the
+// data model expects. Object handles recurse into nested { _object_class,
+// _properties }; structs and cells recurse into { _array_type: 'Struct'|'Cell', … }.
+// Unresolvable values return undefined (dropped).
+function resolveValue(cell: MatVariable | null, ctx: DecodeContext, path: Set<number>, depth: number): unknown {
   if (!cell) return undefined;
 
   if (isObjectHandle(cell)) {
@@ -253,6 +278,18 @@ function resolveCellValue(cell: MatVariable | null, ctx: DecodeContext, path: Se
   const cls = cell.className;
   const val = cell.value;
 
+  if (cls === 'struct') {
+    return buildStructValue(cell, ctx, path, depth);
+  }
+  if (cls === 'cell') {
+    const elems = Array.isArray(val) ? (val as (MatVariable | null)[]) : [];
+    return {
+      _array_type: 'Cell',
+      _dimensions: cell.dimensions || [1, elems.length],
+      _elements: elems.map((e) => resolveValue(e, ctx, path, depth)),
+      _mw_element_type: 'MATLABArray',
+    };
+  }
   if (cls === 'char') {
     return typeof val === 'string' ? val : '';
   }
@@ -275,6 +312,26 @@ function resolveCellValue(cell: MatVariable | null, ctx: DecodeContext, path: Se
   return undefined;
 }
 
+// A parsed struct mxArray -> the SLDD Struct value shape (single-element bag of
+// fields), so StructNode.parse builds the same nested field rows the JSON path does.
+function buildStructValue(cell: MatVariable, ctx: DecodeContext, path: Set<number>, depth: number): unknown {
+  const fields = cell.fields || {};
+  const element: Record<string, unknown> = {};
+  const fieldNames: string[] = [];
+  for (const [fieldName, fieldVar] of Object.entries(fields)) {
+    const fv = Array.isArray(fieldVar) ? fieldVar[0] : fieldVar;
+    element[fieldName] = resolveValue(fv, ctx, path, depth);
+    fieldNames.push(fieldName);
+  }
+  return {
+    _array_type: 'Struct',
+    _dimensions: cell.dimensions || [1, 1],
+    _elements: [element],
+    _fields: fieldNames,
+    _mw_element_type: 'MATLABArray',
+  };
+}
+
 // Build the _properties bag for an object id, resolving each triple. Nested calls
 // wrap the result as { _object_class, _properties }; the caller for a root object
 // takes .properties directly.
@@ -285,13 +342,29 @@ function buildProperties(objId: number, ctx: DecodeContext, path: Set<number>, d
   if (!obj) return props;
 
   path.add(objId);
-  const block = ctx.meta.blocks[objId] || [];
+
+  // 1) Class defaults FIRST, so every property this class declares surfaces by name
+  //    (and value) even when the instance left it at its default and the instance
+  //    block omits it. Then the instance block overrides those it mutated.
+  const dflt = ctx.defaults[obj.classId];
+  if (dflt && dflt.className === 'struct' && dflt.fields) {
+    for (const [fieldName, fieldVar] of Object.entries(dflt.fields)) {
+      const fv = Array.isArray(fieldVar) ? fieldVar[0] : fieldVar;
+      const resolved = resolveValue(fv, ctx, path, depth);
+      if (resolved !== undefined) {
+        props[fieldName] = resolved;
+      }
+    }
+  }
+
+  // 2) Per-instance overrides, addressed by the object's block index (word4).
+  const block = ctx.meta.blocks[obj.blockIdx] || [];
   for (const [nameIdx, flag, value] of block) {
     const name = ctx.meta.strings[nameIdx];
     if (!name) continue;
     let resolved: unknown;
     if (flag === 1) {
-      resolved = resolveCellValue(ctx.cells[value + 2] || null, ctx, path, depth);
+      resolved = resolveValue(ctx.cells[value + 2] || null, ctx, path, depth);
     } else if (flag === 0) {
       resolved = ctx.meta.strings[value] ?? '';
     } else if (flag === 2) {
@@ -311,6 +384,11 @@ function buildObjectValue(objId: number, ctx: DecodeContext, path: Set<number>, 
   const obj = ctx.meta.objects[objId];
   if (!obj) return undefined;
   const cls = ctx.meta.classes[obj.classId];
+  // A `string`-typed value object's text cannot be recovered — surface the honest
+  // sentinel rather than an empty object shell or corrupted characters.
+  if (cls && cls.fullName === STRING_CLASS_NAME) {
+    return NOT_AVAILABLE;
+  }
   const properties = buildProperties(objId, ctx, path, depth);
   return { _object_class: cls ? cls.fullName : '', _properties: properties };
 }
@@ -351,7 +429,15 @@ export function decodeMcosBlob(anonRawBytes: Uint8Array, opaqueVars: OpaqueVarRe
   const meta = parseMetaTable(cells);
   if (!meta) return result;
 
-  const ctx: DecodeContext = { cells, meta };
+  // Per-class defaults are the LAST heap cell: a cell array indexed by classId.
+  // Absent or non-cell -> no defaults (buildProperties then relies on blocks only).
+  const lastCell = cells.length > 0 ? cells[cells.length - 1] : null;
+  const defaults: (MatVariable | null)[] =
+    lastCell && lastCell.className === 'cell' && Array.isArray(lastCell.value)
+      ? (lastCell.value as (MatVariable | null)[])
+      : [];
+
+  const ctx: DecodeContext = { cells, meta, defaults };
 
   for (const v of opaqueVars) {
     const rootId = rootObjectIdFromRaw(v.rawBytes);
