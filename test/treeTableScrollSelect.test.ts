@@ -47,5 +47,17 @@ describe('scroll-to-selected on large virtualized table', () => {
     expect(!!rendered).toBe(true);
     // The virtual window advanced off the top to bring the row into view.
     expect((table as any)._scrollTop).toBeGreaterThan(0);
+
+    // The row should land near the vertical CENTER of the table view, not
+    // pinned to the bottom edge. With row height h and usable height (viewport
+    // minus the sticky header), a centered row sits at scrollTop ≈ top - (usable - h)/2.
+    const rowH = (table as any)._rowH as number;
+    const viewH = (table as any)._viewportHeight as number;
+    const usable = viewH - rowH; // sticky header
+    const idx = 401; // S is idx 0; S/400 is the 402nd visible row
+    const top = idx * rowH;
+    const expectedCentered = Math.round(top - (usable - rowH) / 2);
+    // Allow a row of slack for rounding.
+    expect(Math.abs((table as any)._scrollTop - expectedCentered)).toBeLessThanOrEqual(rowH);
   });
 });

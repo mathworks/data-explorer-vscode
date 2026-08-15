@@ -2267,13 +2267,21 @@ export class DexTreeTable extends LitElement {
       // tracked viewport height when the container hasn't been laid out.
       const cur = this._scrollTop;
       const viewHeight = this._container.clientHeight || this._viewportHeight;
+      // The sticky header covers the top `headerHeight` of the viewport, so the
+      // area a row can actually occupy is this tall.
+      const usable = viewHeight - headerHeight;
       let next = cur;
-      if (top < cur) {
-        next = top;
-      } else if (top + this._rowH > cur + viewHeight - headerHeight) {
-        next = top + this._rowH - viewHeight + headerHeight;
+      // Only move when the row isn't already fully in view (above the current
+      // window, or past its bottom). Leave a comfortably-visible row where it is.
+      if (top < cur || top + this._rowH > cur + usable) {
+        // Center the row in the usable area rather than pinning it to an edge,
+        // so a jumped-to selection lands near the middle of the table. Clamped
+        // near the list ends, where centering isn't possible.
+        next = Math.round(top - (usable - this._rowH) / 2);
+        const totalHeight = visible.length * this._rowH;
+        const maxScroll = Math.max(0, totalHeight + headerHeight - viewHeight);
+        next = Math.max(0, Math.min(next, maxScroll));
       }
-      next = Math.max(0, next);
       if (next === cur) return;
       // Drive the virtual window via reactive state so the slice repaints to
       // include the target row, then sync the DOM scroll position once the
