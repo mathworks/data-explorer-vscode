@@ -50,3 +50,14 @@ jobs:
         with:
           files: simulink-data-explorer-*.vsix
           generate_release_notes: true
+
+      # Publish the exact .vsix already built above to the VS Code Marketplace
+      # (via --packagePath, so the Marketplace gets the same artifact attached
+      # to the GitHub Release). Requires the VSCE_PAT secret: an Azure DevOps
+      # PAT with Marketplace: Manage scope for the `mathworks` publisher.
+      - name: Publish to VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          npx vsce publish --packagePath "simulink-data-explorer-${VERSION}.vsix"
