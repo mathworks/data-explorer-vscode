@@ -737,6 +737,10 @@ export class DexTreeTable extends LitElement {
     if (this._boundOnWindowBlur) {
       window.removeEventListener('blur', this._boundOnWindowBlur);
     }
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
+    }
   }
 
   private _boundOnDocClick: ((e: Event) => void) | null = null;
@@ -1189,6 +1193,38 @@ export class DexTreeTable extends LitElement {
   override firstUpdated(): void {
     if (this._container) {
       this._viewportHeight = this._container.clientHeight;
+    }
+  }
+
+  // Keep _viewportHeight in sync with the actual container height. It can't be
+  // measured reliably in firstUpdated: the first paint is often the empty-state
+  // template (no `.table-container`) or a zero-height panel, so the height would
+  // stay at its default and the virtual window would size wrong — too few rows to
+  // fill a tall panel, so a row scrolled to the bottom falls outside the rendered
+  // slice. The observer (re)measures once rows render and on every panel resize.
+  private _resizeObserver: ResizeObserver | null = null;
+
+  override updated(changedProps: Map<string, unknown>): void {
+    super.updated(changedProps);
+    if (!this._resizeObserver && this._container && typeof ResizeObserver !== 'undefined') {
+      this._resizeObserver = new ResizeObserver(() => {
+        if (!this._container) return;
+        const h = this._container.clientHeight;
+        if (h > 0 && h !== this._viewportHeight) this._viewportHeight = h;
+      });
+      this._resizeObserver.observe(this._container);
+    }
+    if (this._pendingFlashId) {
+      const id = this._pendingFlashId;
+      this._pendingFlashId = null;
+      requestAnimationFrame(() => {
+        const container = this.shadowRoot?.querySelector('.table-container');
+        if (!container) return;
+        const tr = container.querySelector(`tr[data-row-id="${id}"]`) as HTMLElement;
+        if (!tr) return;
+        tr.classList.add('copy-flash');
+        tr.addEventListener('animationend', () => tr.classList.remove('copy-flash'), { once: true });
+      });
     }
   }
 
@@ -2223,13 +2259,37 @@ export class DexTreeTable extends LitElement {
       if (idx < 0) return;
       const top = idx * this._rowH;
       const headerHeight = this._rowH;
-      const scrollTop = this._container.scrollTop;
-      const viewHeight = this._container.clientHeight;
-      if (top < scrollTop) {
-        this._container.scrollTop = top;
-      } else if (top + this._rowH > scrollTop + viewHeight - headerHeight) {
-        this._container.scrollTop = top + this._rowH - viewHeight + headerHeight;
+      // Scroll relative to the reactive _scrollTop (the source of truth for the
+      // virtual window), not the live DOM scrollTop. On a fresh open the
+      // container isn't scrollable yet (its rows aren't painted), so writing
+      // _container.scrollTop clamps to 0 and fires no scroll event — the window
+      // would never move and a deep row would never render. Fall back to the
+      // tracked viewport height when the container hasn't been laid out.
+      const cur = this._scrollTop;
+      const viewHeight = this._container.clientHeight || this._viewportHeight;
+      // The sticky header covers the top `headerHeight` of the viewport, so the
+      // area a row can actually occupy is this tall.
+      const usable = viewHeight - headerHeight;
+      let next = cur;
+      // Only move when the row isn't already fully in view (above the current
+      // window, or past its bottom). Leave a comfortably-visible row where it is.
+      if (top < cur || top + this._rowH > cur + usable) {
+        // Center the row in the usable area rather than pinning it to an edge,
+        // so a jumped-to selection lands near the middle of the table. Clamped
+        // near the list ends, where centering isn't possible.
+        next = Math.round(top - (usable - this._rowH) / 2);
+        const totalHeight = visible.length * this._rowH;
+        const maxScroll = Math.max(0, totalHeight + headerHeight - viewHeight);
+        next = Math.max(0, Math.min(next, maxScroll));
       }
+      if (next === cur) return;
+      // Drive the virtual window via reactive state so the slice repaints to
+      // include the target row, then sync the DOM scroll position once the
+      // spacer that makes the container scrollable exists.
+      this._scrollTop = next;
+      this.updateComplete.then(() => {
+        if (this._container) this._container.scrollTop = next;
+      });
     });
   }
 
@@ -2239,22 +2299,6 @@ export class DexTreeTable extends LitElement {
   }
 
   private _pendingFlashId: string | null = null;
-
-  override updated(changedProps: Map<string, unknown>): void {
-    super.updated(changedProps);
-    if (this._pendingFlashId) {
-      const id = this._pendingFlashId;
-      this._pendingFlashId = null;
-      requestAnimationFrame(() => {
-        const container = this.shadowRoot?.querySelector('.table-container');
-        if (!container) return;
-        const tr = container.querySelector(`tr[data-row-id="${id}"]`) as HTMLElement;
-        if (!tr) return;
-        tr.classList.add('copy-flash');
-        tr.addEventListener('animationend', () => tr.classList.remove('copy-flash'), { once: true });
-      });
-    }
-  }
 
   override render() {
     this._buildCaches();
