@@ -285,6 +285,23 @@ table.addEventListener(
   true,
 );
 
+// Cmd/Ctrl+F: focus the search/filter input above the table. The built-in
+// webview find widget is not enabled for these panels, so this chord is free to
+// claim. Pure client-side (no host round-trip) — just forward focus to the
+// component's filter input. Skipped with modifiers we don't own (Shift/Alt).
+table.addEventListener(
+  'keydown',
+  (e: Event) => {
+    const ev = e as KeyboardEvent;
+    if ((ev.key === 'f' || ev.key === 'F') && (ev.metaKey || ev.ctrlKey) && !ev.shiftKey && !ev.altKey) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      table.focusFilter?.();
+    }
+  },
+  true,
+);
+
 // Cut/Copy/Paste/Delete keyboard shortcuts — the keyboard equivalents of the
 // context-menu actions (whose labels advertise these chords). Enablement mirrors
 // buildContextMenuItems exactly (same editable / clipboard / per-row-flag gates),

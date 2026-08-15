@@ -1974,6 +1974,14 @@ export class DexTreeTable extends LitElement {
     }
   }
 
+  /** Focus (and select) the search/filter input — e.g. for a Ctrl+F shortcut. */
+  focusFilter(): void {
+    const input = this._filterInput;
+    if (!input) return;
+    input.focus();
+    input.select();
+  }
+
   private _onFilterInput(e: Event): void {
     this._filterText = (e.target as HTMLInputElement).value.trim();
     this._visibleRowsCache = null;
