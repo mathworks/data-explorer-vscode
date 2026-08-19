@@ -78,13 +78,32 @@ function slddSummary(uri: string, content: Record<string, unknown>): DataSummary
   return { uri, varNames, dictRefs };
 }
 
+const GRAPH_FILE_RE = /\.(slx|sldd|mat)$/i;
+
+// Supported files currently open in an editor tab. Custom-editor and text tab
+// inputs both expose `.uri`. Included in the graph so a single file opened via
+// Cmd+O (no workspace folder → findFiles returns nothing) still resolves its own
+// intra-model usage (blocks referencing the model's own workspace variables).
+function openTabUris(): vscode.Uri[] {
+  return vscode.window.tabGroups.all
+    .flatMap((g) => g.tabs)
+    .map((t) => (t.input as { uri?: vscode.Uri } | undefined)?.uri)
+    .filter((u): u is vscode.Uri => !!u && GRAPH_FILE_RE.test(u.path));
+}
+
 async function buildGraph(): Promise<ResolvedGraph> {
-  let uris: vscode.Uri[];
+  let found: vscode.Uri[] = [];
   try {
-    uris = await vscode.workspace.findFiles('**/*.{slx,sldd,mat}');
+    found = await vscode.workspace.findFiles('**/*.{slx,sldd,mat}');
   } catch {
-    return { reverse: new Map(), forward: new Map() };
+    /* no workspace folder open — fall back to open tabs only */
   }
+
+  // Union workspace files with open tabs, deduped by uriString. The graph keys
+  // on full uriStrings, so a file present in both sources contributes once.
+  const byUri = new Map<string, vscode.Uri>();
+  for (const uri of [...found, ...openTabUris()]) byUri.set(uri.toString(), uri);
+  const uris = [...byUri.values()];
 
   const models: ModelSummary[] = [];
   // basename -> data summary (first match wins; ambiguous basenames are rare).
