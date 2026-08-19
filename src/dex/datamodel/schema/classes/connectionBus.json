@@ -1,0 +1,11 @@
+{
+  "Simulink.ConnectionBus": {
+    "props": [
+      "description"
+    ],
+    "layout": [
+      { "group": "General", "items": ["name", "kind", "class"] },
+      { "group": "Value Properties", "items": ["description"] }
+    ]
+  }
+}

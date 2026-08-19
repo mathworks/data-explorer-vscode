@@ -1,34 +1,47 @@
 // Copyright 2026 The MathWorks, Inc.
 import { describe, it, expect } from 'vitest';
-import { schemaPILayout, schemaColumns } from '../../src/dex/datamodel/node/schemaBridge.js';
+import { buildPILayout, schemaColumns } from '../../src/dex/datamodel/node/schemaBridge.js';
 
 // A minimal stand-in for a node: only `serial._properties` is read by the bridge.
 function fakeNode(properties: Record<string, unknown>): any {
   return { serial: { _properties: properties }, className: 'Simulink.Parameter' };
 }
 
-describe('schemaPILayout — bridge schema props into PI groups', () => {
-  it('returns only read-only grouped props, grouped by `group`', () => {
-    const layout = schemaPILayout('Simulink.Parameter');
-    const groups = layout.map((g) => g.group);
-    expect(groups).toEqual(['Data Object', 'Code Generation']);
+describe('buildPILayout — declarative PI layout from schema', () => {
+  it('builds the class layout: groups + order from schema, curated atoms + schema props resolved', () => {
+    const layout = buildPILayout('Simulink.Parameter')!;
+    // A common, fixed-name "General" identity group opens every schema class,
+    // then the message-catalog groups. Dimensions/Complexity live INSIDE Value
+    // Properties; custom code-gen attributes get their own Custom Attributes group.
+    expect(layout.map((g) => g.group)).toEqual([
+      'General',
+      'Value Properties',
+      'Code Generation',
+      'Custom Attributes',
+    ]);
+    // Atom keys resolve to the atom's own display key (e.g. 'value' → 'Value',
+    // 'kind' → 'Kind', 'class' → 'Class'); schema keys keep their registry key.
     const keys = layout.flatMap((g) => g.items.map((i) => i.key));
-    expect(keys).toEqual(['dimensions', 'complexity', 'storageClass', 'headerFile', 'alignment']);
-    expect(keys).not.toContain('min');
-    expect(keys).not.toContain('value');
+    expect(keys).toEqual([
+      'Name', 'Value', 'DataType', 'Kind', 'Class',
+      'dimensions', 'complexity', 'Min', 'Max', 'storedIntMin', 'storedIntMax', 'Unit', 'Description',
+      'storageClass', 'identifier', 'alignment',
+      'headerFile', 'definitionFile', 'owner', 'preserveDimensions', 'structName', 'getFunction', 'setFunction',
+    ]);
   });
 
-  it('bridged items are read-only (editor label) with the schema label as displayName', () => {
-    const items = schemaPILayout('Simulink.Parameter').flatMap((g) => g.items);
+  it('schema-resolved items are read-only labels with the schema label as displayName', () => {
+    const items = buildPILayout('Simulink.Parameter')!.flatMap((g) => g.items);
     const storage = items.find((i) => i.key === 'storageClass')!;
     expect(storage.displayName).toBe('Storage Class');
     expect(storage.editor).toBe('label');
     expect(storage.column).toBeNull();
   });
 
-  it('readValue hydrates from serial._properties, filling the default when omitted', () => {
-    const storage = schemaPILayout('Simulink.Parameter').flatMap((g) => g.items).find((i) => i.key === 'storageClass')!;
-    const alignment = schemaPILayout('Simulink.Parameter').flatMap((g) => g.items).find((i) => i.key === 'alignment')!;
+  it('schema-resolved readValue hydrates from serial._properties, filling the default when omitted', () => {
+    const items = buildPILayout('Simulink.Parameter')!.flatMap((g) => g.items);
+    const storage = items.find((i) => i.key === 'storageClass')!;
+    const alignment = items.find((i) => i.key === 'alignment')!;
     expect(storage.readValue!(fakeNode({ Value: 1 }))).toBe('Auto');
     expect(alignment.readValue!(fakeNode({ Value: 1 }))).toBe('-1');
     const withCoder = fakeNode({
@@ -38,8 +51,8 @@ describe('schemaPILayout — bridge schema props into PI groups', () => {
     expect(alignment.readValue!(withCoder)).toBe('8');
   });
 
-  it('returns [] for a class with no schema', () => {
-    expect(schemaPILayout('Simulink.NotAThing')).toEqual([]);
+  it('returns null for a class with no schema layout', () => {
+    expect(buildPILayout('Simulink.NotAThing')).toBeNull();
   });
 });
 
@@ -52,11 +65,11 @@ describe('schemaColumns — bridge schema props into table columns', () => {
     }
   });
 
-  it('the Header File column is a read-only label under Code Generation', () => {
+  it('the Header File column is a read-only label; the PI item is column-less', () => {
     const hf = schemaColumns('Simulink.Parameter').find((c) => c.key === 'headerFile')!;
     expect(hf.displayName).toBe('Header File');
     expect(hf.editor).toBe('label');
-    const piHf = schemaPILayout('Simulink.Parameter').flatMap((g) => g.items).find((i) => i.key === 'headerFile')!;
+    const piHf = buildPILayout('Simulink.Parameter')!.flatMap((g) => g.items).find((i) => i.key === 'headerFile')!;
     expect(piHf.column).toBeNull();
   });
 

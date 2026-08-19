@@ -13,7 +13,7 @@ import PropMax from '../../prop/PropMax';
 import PropUnit from '../../prop/PropUnit';
 import PropDescription from '../../prop/PropDescription';
 import MatlabValueParser from '../../parser/MatlabValueParser';
-import { schemaPILayout, schemaColumns } from '../schemaBridge';
+import { schemaColumns } from '../schemaBridge';
 
 const CLASS_NAME = 'Simulink.Parameter';
 
@@ -56,13 +56,8 @@ export default class ParameterNode extends DataNode {
         return [PropName, PropValue, PropDataType, PropMin, PropMax, PropUnit, PropDescription, ...schemaColumns(this.className)];
     }
 
-    getPILayout() {
-        return [
-            { group: 'Data Properties', items: [PropName, PropValue, PropDataType] },
-            { group: 'Value Properties', items: [PropMin, PropMax, PropUnit, PropDescription] },
-            ...schemaPILayout(this.className)
-        ];
-    }
+    // PI layout is now declarative — see schema/classes/parameter.json `layout`,
+    // resolved by the inherited BaseNode.getPILayout via buildPILayout.
 
     setProperty(propName: string, stringValue: string): true | SetPropertyResult {
         if (propName === 'Value') {

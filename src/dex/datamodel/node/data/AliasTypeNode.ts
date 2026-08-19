@@ -4,7 +4,6 @@ import type { PropClass } from '../BaseNode';
 import type BaseNode from '../BaseNode';
 import PropName from '../../prop/PropName';
 import PropBaseType from '../../prop/PropBaseType';
-import PropDataType from '../../prop/PropDataType';
 import PropDescription from '../../prop/PropDescription';
 const CLASS_NAME = 'Simulink.AliasType';
 export default class AliasTypeNode extends DataNode {
@@ -20,7 +19,7 @@ export default class AliasTypeNode extends DataNode {
     // Table columns: PropBaseType owns the Data Type column, so PropDataType (which
     // would show the class name 'Simulink.AliasType') is omitted here.
     getProperties(): PropClass[] { return [PropName, PropBaseType, PropDescription]; }
-    getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropBaseType, PropDataType, PropDescription] }]; }
+    // PI layout is schema-driven (schema/classes/aliasType.json).
     _getSerializedProperties(): Record<string, unknown> { const props = Object.assign({}, this.serial._properties as Record<string, unknown>); props.BaseType = this.BaseType; if ('Description' in (this.serial._properties as Record<string, unknown>) || this.Description) { props.Description = this.Description; } return props; }
     serializeValue(): unknown { const overrides: Record<string, unknown> = { BaseType: this.BaseType }; if ('Description' in (this.serial._properties as Record<string, unknown>) || this.Description) { overrides.Description = this.Description; } return this._serializeSimulinkObject(overrides); }
     static get defaultName(): string { return 'AliasType'; }

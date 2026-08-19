@@ -4,17 +4,56 @@
 // render contract. Lives OUTSIDE schema/ (it depends on both the schema and node
 // types) so the schema module stays a self-contained, extractable package.
 //
-// Phase 2 scope: contribute ONLY read-only, grouped object properties (editor
-// 'label' with a `group`) to the Property Inspector — Dimensions, Complexity
-// (Data Object) and Storage Class, Alignment (Code Generation). The editable /
-// ungrouped props (Value, Data Type, Description, Min, Max, Unit) remain owned by
-// the node as live fields; the schema does not duplicate them here.
+// Two surfaces are bridged:
+//   - buildPILayout: turns a class's declarative PI layout (schema `layout`:
+//     ordered groups → prop keys) into PIGroupDef[]. Each key resolves either to
+//     a curated node atom (ATOM_BY_KEY — computed/live props like Name, Value,
+//     Data Type) or to a hydrated schema prop (Dimensions, Storage Class, …).
+//     This is the single generic implementation behind BaseNode.getPILayout.
+//   - schemaColumns / schemaColumnLabels: the schema-driven read-only table
+//     columns (Dimensions, Complexity, Storage Class, …). Column GROUPING is NOT
+//     here — it is a global table concern owned by host/rowBuilder.COLUMN_GROUPS.
 
-import { getSchema, getSchemaClasses, hydrate, writeSourcePath } from '../schema/index';
+import { getSchema, getSchemaClasses, getLayout, hydrate, writeSourcePath } from '../schema/index';
 import type { ResolvedProp } from '../schema/types';
 import type { PropClass, PIGroupDef } from './BaseNode';
 import type BaseNode from './BaseNode';
 import type { SetPropertyResult } from './DataNode';
+import PropName from '../prop/PropName';
+import PropValue from '../prop/PropValue';
+import PropDataType from '../prop/PropDataType';
+import PropKind from '../prop/PropKind';
+import PropClassAtom from '../prop/PropClass';
+import PropBaseType from '../prop/PropBaseType';
+import PropCondition from '../prop/PropCondition';
+import PropSpecification from '../prop/PropSpecification';
+import PropEnumValue from '../prop/PropEnumValue';
+import PropMin from '../prop/PropMin';
+import PropMax from '../prop/PropMax';
+import PropUnit from '../prop/PropUnit';
+import PropDescription from '../prop/PropDescription';
+
+// Curated atom keys a schema `layout` may reference. These are the node-owned,
+// often COMPUTED properties (Name→displayName, Value→displayValue formatting,
+// Data Type→computed getter) that a static sourcePath cannot express — the schema
+// declares WHERE they sit (layout), the atom supplies HOW to read/format them.
+// Keyed by the lowercase layout key; the atom keeps its own display key ('Name').
+// Extend this map when a new schema-driven class references a new atom key.
+const ATOM_BY_KEY: Record<string, PropClass> = {
+    name: PropName as unknown as PropClass,
+    value: PropValue as unknown as PropClass,
+    dataType: PropDataType as unknown as PropClass,
+    kind: PropKind as unknown as PropClass,
+    class: PropClassAtom as unknown as PropClass,
+    baseType: PropBaseType as unknown as PropClass,
+    condition: PropCondition as unknown as PropClass,
+    specification: PropSpecification as unknown as PropClass,
+    enumValue: PropEnumValue as unknown as PropClass,
+    min: PropMin as unknown as PropClass,
+    max: PropMax as unknown as PropClass,
+    unit: PropUnit as unknown as PropClass,
+    description: PropDescription as unknown as PropClass,
+};
 
 // Format a hydrated raw value for display. Arrays render as `[a, b]`; absent
 // values as ''; everything else via String(). (Type-specific formatting can be
@@ -42,6 +81,10 @@ function toPropClass(prop: ResolvedProp, column: string | null, editorOverride?:
         displayName: prop.label,
         column,
         editor: editorOverride ?? prop.editor,
+        // The top-level _properties key this prop reads through (e.g. 'CoderInfo'
+        // for 'CoderInfo.StorageClass'). Lets the PI "Other" catch-all exclude the
+        // whole bag this prop already surfaces.
+        sourceKeys: [prop.sourcePath.split('.')[0]],
         readValue: (node: BaseNode): string => {
             const props = (node as unknown as { serial?: { _properties?: Record<string, unknown> } }).serial?._properties;
             return formatSchemaValue(hydrate(props, prop));
@@ -69,23 +112,39 @@ function eligibleProps(className: string): ResolvedProp[] {
     return resolved.filter((p) => p.projected === true);
 }
 
-// The PI groups contributed by the schema for a className, in first-seen group
-// order. Each item is a PI-only PropClass (column:null).
-export function schemaPILayout(className: string): PIGroupDef[] {
-    const order: string[] = [];
-    const byGroup = new Map<string, PropClass[]>();
-    for (const prop of eligibleProps(className)) {
-        const group = prop.group as string;
-        if (!byGroup.has(group)) {
-            byGroup.set(group, []);
-            order.push(group);
-        }
-        // The Property Inspector has no edit channel, so its schema props render
-        // read-only regardless of their editor — force 'label' here. (The table
-        // surface, via schemaColumns, keeps the real editor and is editable.)
-        byGroup.get(group)!.push(toPropClass(prop, null, 'label'));
+// Resolve one PI-layout key to a renderable PropClass for `className`. Curated
+// atom keys (Name/Value/Data Type/…) resolve to the node atom; any other key is
+// a schema-registry prop, hydrated from its sourcePath and forced read-only
+// ('label') because the Property Inspector has no edit channel. Returns null if
+// the key matches neither (a layout referencing an unknown key is skipped).
+function resolvePropForKey(className: string, key: string): PropClass | null {
+    const atom = ATOM_BY_KEY[key];
+    if (atom) {
+        return atom;
     }
-    return order.map((group) => ({ group, items: byGroup.get(group)! }));
+    const resolved = getSchema(className)?.find((p) => p.key === key);
+    if (!resolved) {
+        return null;
+    }
+    return toPropClass(resolved, null, 'label');
+}
+
+// The Property Inspector layout for `className`, built from the declarative schema
+// `layout` (ordered groups → prop keys). Returns null when the class has no schema
+// layout, so BaseNode.getPILayout can fall back to a node-authored override. This
+// is the single generic PI-layout implementation; grouping/order live in the
+// schema, value resolution in the atoms/schema props.
+export function buildPILayout(className: string): PIGroupDef[] | null {
+    const layout = getLayout(className);
+    if (!layout) {
+        return null;
+    }
+    return layout.map((g) => ({
+        group: g.group,
+        items: g.items
+            .map((key) => resolvePropForKey(className, key))
+            .filter((pc): pc is PropClass => pc !== null),
+    }));
 }
 
 // The table columns contributed by the schema for a className. Each PropClass's
@@ -144,22 +203,6 @@ export function trySetSchemaProperty(node: BaseNode, key: string, stringValue: s
     }
     (node as unknown as { _markModified?: () => void })._markModified?.();
     return true;
-}
-
-// Column-key → group-name for every schema-driven read-only column, unioned
-// across all schema classes. Each key's group is defined once in the shared
-// prop registry (via $ref), so the union is unambiguous. Used by the host to
-// tell the column picker which group header each column sits under.
-export function schemaColumnGroups(): Record<string, string> {
-    const map: Record<string, string> = {};
-    for (const className of getSchemaClasses()) {
-        for (const prop of eligibleProps(className)) {
-            if (prop.group !== undefined) {
-                map[prop.key] = prop.group;
-            }
-        }
-    }
-    return map;
 }
 
 // Column-key → display label for every schema-driven read-only column, unioned

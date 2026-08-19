@@ -14,7 +14,7 @@ export default class CustomObjectNode extends DataNode {
     get className(): string { return CLASS_NAME; }
     get displayValue(): string { return '<1x1 ' + CLASS_NAME + '>'; }
     getProperties(): PropClass[] { return [PropName, PropValue, PropDataType, PropDescription]; }
-    getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropValue, PropDataType, PropDescription] }]; }
+    // PI layout: schema-driven "General" group (classes/customObject.json).
     _getSerializedProperties(): Record<string, unknown> { const props = Object.assign({}, this.serial._properties as Record<string, unknown>); if ('Description' in (this.serial._properties as Record<string, unknown>) || this.Description) { props.Description = this.Description; } return props; }
     serializeValue(): unknown { const overrides: Record<string, unknown> = {}; if ('Description' in (this.serial._properties as Record<string, unknown>) || this.Description) { overrides.Description = this.Description; } return this._serializeSimulinkObject(overrides); }
     static get defaultName(): string { return 'CustomObject'; }

@@ -10,6 +10,8 @@ import PropName from '../../prop/PropName';
 import PropValue from '../../prop/PropValue';
 import PropDataType from '../../prop/PropDataType';
 import PropDescription from '../../prop/PropDescription';
+import PropKind from '../../prop/PropKind';
+import PropClassAtom from '../../prop/PropClass';
 import MatlabValueParser from '../../parser/MatlabValueParser';
 import { NOT_AVAILABLE } from '../../parser/McosParser';
 import {
@@ -442,7 +444,9 @@ export default class MatlabVariableNode extends DataNode {
   }
 
   getPILayout() {
-    return [{ group: 'Properties', items: [PropName, PropValue, PropDataType, PropDescription] }];
+    // className is dynamic (double/int8/struct/the opaque MCOS class), so this
+    // can't be schema-keyed; author the common "General" identity group directly.
+    return [{ group: 'General', items: [PropName, PropValue, PropDataType, PropKind, PropClassAtom, PropDescription] }];
   }
 
   setProperty(propName: string, stringValue: string): true | SetPropertyResult {

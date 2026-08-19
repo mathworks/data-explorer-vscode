@@ -13,7 +13,7 @@ export default class VariantExpressionNode extends DataNode {
     get className(): string { return CLASS_NAME; }
     get displayValue(): string { return PropCondition.format(this.Condition); }
     getProperties(): PropClass[] { return [PropName, PropCondition, PropDataType]; }
-    getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropCondition, PropDataType] }]; }
+    // PI layout: schema-driven "General" group (classes/variantExpression.json).
     _getSerializedProperties(): Record<string, unknown> { const props = Object.assign({}, this.serial._properties as Record<string, unknown>); props.Condition = this.Condition; return props; }
     serializeValue(): unknown { return this._serializeSimulinkObject({ Condition: this.Condition }); }
     static get defaultName(): string { return 'VariantExpression'; }

@@ -1,5 +1,18 @@
 {
-  "storageClass": { "label": "Storage Class", "sourcePath": "CoderInfo.StorageClass", "type": "string", "editor": "select", "group": "Code Generation", "default": "Auto", "projected": true, "options": ["Auto", "SimulinkGlobal", "ExportedGlobal", "ImportedExtern", "ImportedExternPointer", "Custom"] },
-  "headerFile":   { "label": "Header File",    "sourcePath": "CoderInfo.CustomAttributes.HeaderFile", "type": "string", "editor": "label", "group": "Code Generation", "default": "", "projected": true },
-  "alignment":    { "label": "Alignment",      "sourcePath": "CoderInfo.Alignment",    "type": "int",    "editor": "label",  "group": "Code Generation", "default": -1, "projected": true }
+  "storageClass": { "label": "Storage Class", "sourcePath": "CoderInfo.StorageClass", "type": "string", "editor": "select", "default": "Auto", "projected": true, "options": ["Auto", "SimulinkGlobal", "ExportedGlobal", "ImportedExtern", "ImportedExternPointer", "Custom"] },
+  "identifier":     { "label": "Identifier",    "sourcePath": "CoderInfo.Identifier", "type": "string", "editor": "label", "default": "" },
+
+  "dataScope":  { "label": "Data Scope",  "sourcePath": "DataScope",  "type": "string", "editor": "label", "default": "" },
+  "headerFile": { "label": "Header File", "sourcePath": "HeaderFile", "type": "string", "editor": "label", "default": "" },
+  "alignment":  { "label": "Alignment",   "sourcePath": "Alignment",  "type": "int",    "editor": "label", "default": -1 },
+
+  "definitionFile":     { "label": "Definition File",          "sourcePath": "CoderInfo.CustomAttributes.DefinitionFile",     "type": "string", "editor": "label", "default": "" },
+  "owner":              { "label": "Owner",                    "sourcePath": "CoderInfo.CustomAttributes.Owner",              "type": "string", "editor": "label", "default": "" },
+  "preserveDimensions": { "label": "Preserve Array Dimensions","sourcePath": "CoderInfo.CustomAttributes.PreserveDimensions", "type": "bool",   "editor": "label", "default": "" },
+  "structName":         { "label": "Struct Name",              "sourcePath": "CoderInfo.CustomAttributes.StructName",         "type": "string", "editor": "label", "default": "" },
+  "getFunction":        { "label": "Get Function",             "sourcePath": "CoderInfo.CustomAttributes.GetFunction",        "type": "string", "editor": "label", "default": "" },
+  "setFunction":        { "label": "Set Function",             "sourcePath": "CoderInfo.CustomAttributes.SetFunction",        "type": "string", "editor": "label", "default": "" },
+
+  "preserveElementDimensions": { "label": "Preserve Element Dimensions", "sourcePath": "PreserveElementDimensions", "type": "bool", "editor": "label", "default": "" },
+  "addClassNameToEnumNames":   { "label": "Add Class Name To Enum Names", "sourcePath": "AddClassNameToEnumNames",  "type": "bool", "editor": "label", "default": "" }
 }

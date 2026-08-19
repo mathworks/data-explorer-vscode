@@ -12,6 +12,9 @@ export default class PropDimensionsMode {
     static editor = 'label';
     static column: string | null = 'dimensionsMode';
     static defaultValue = '';
+    // Raw _properties key (differs from the lowercase display key) so the PI
+    // "Other" catch-all treats it as already shown.
+    static sourceKeys = ['DimensionsMode'];
 
     static readValue(node: BaseNode): string {
         return ((node as unknown as { DimensionsMode?: string }).DimensionsMode) || '';

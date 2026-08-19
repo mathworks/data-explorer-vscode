@@ -3,7 +3,6 @@ import DataNode from '../DataNode';
 import type { PropClass } from '../BaseNode';
 import type BaseNode from '../BaseNode';
 import PropName from '../../prop/PropName';
-import PropValue from '../../prop/PropValue';
 import PropDataType from '../../prop/PropDataType';
 import PropDescription from '../../prop/PropDescription';
 const CLASS_NAME = 'Simulink.Breakpoint';
@@ -16,7 +15,7 @@ export default class BreakpointNode extends DataNode {
     get displayValue(): string { return ''; }
     get valueEditable(): boolean { return false; }
     getProperties(): PropClass[] { return [PropName, PropDataType, PropDescription]; }
-    getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropValue, PropDataType, PropDescription] }]; }
+    // PI layout: schema-driven "General" group (classes/breakpoint.json).
     _getSerializedProperties(): Record<string, unknown> { const props = Object.assign({}, this.serial._properties as Record<string, unknown>); if ('Description' in (this.serial._properties as Record<string, unknown>) || this.Description) { props.Description = this.Description; } return props; }
     serializeValue(): unknown { const overrides: Record<string, unknown> = {}; if ('Description' in (this.serial._properties as Record<string, unknown>) || this.Description) { overrides.Description = this.Description; } return this._serializeSimulinkObject(overrides); }
     static get defaultName(): string { return 'Breakpoint'; }

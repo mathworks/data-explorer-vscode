@@ -1,0 +1,16 @@
+{
+  "Simulink.Bus": {
+    "props": [
+      "description",
+      "dataScope",
+      "headerFile",
+      "alignment",
+      "preserveElementDimensions"
+    ],
+    "layout": [
+      { "group": "General", "items": ["name", "kind", "class"] },
+      { "group": "Value Properties", "items": ["description"] },
+      { "group": "Code Generation", "items": ["dataScope", "headerFile", "alignment", "preserveElementDimensions"] }
+    ]
+  }
+}

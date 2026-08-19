@@ -4,23 +4,73 @@
 // NO import of node classes or src/dex runtime — this module is the seed of a
 // future standalone `dex-schema` package; dependencies point INTO it only.
 
-import type { RawProp, ClassRef, ResolvedProp } from './types.js';
+import type { RawProp, ClassRef, ClassDef, PILayoutGroup, ResolvedProp } from './types.js';
 import core from './props/core.json';
 import dataObject from './props/dataObject.json';
 import codeGen from './props/codeGen.json';
+import typeObject from './props/typeObject.json';
 import parameter from './classes/parameter.json';
 import signal from './classes/signal.json';
+import valueType from './classes/valueType.json';
+import aliasType from './classes/aliasType.json';
+import numericType from './classes/numericType.json';
+import enumType from './classes/enumType.json';
+import bus from './classes/bus.json';
+import connectionBus from './classes/connectionBus.json';
+import serviceBus from './classes/serviceBus.json';
+import variantControl from './classes/variantControl.json';
+import variantExpression from './classes/variantExpression.json';
+import variantVariable from './classes/variantVariable.json';
+import variantBank from './classes/variantBank.json';
+import variantBankCoderInfo from './classes/variantBankCoderInfo.json';
+import variantConfigurationData from './classes/variantConfigurationData.json';
+import configSet from './classes/configSet.json';
+import configSetRef from './classes/configSetRef.json';
+import lookupTable from './classes/lookupTable.json';
+import breakpoint from './classes/breakpoint.json';
+import customObject from './classes/customObject.json';
 
 const REGISTRY: Record<string, RawProp> = {
     ...(core as Record<string, RawProp>),
     ...(dataObject as Record<string, RawProp>),
     ...(codeGen as Record<string, RawProp>),
+    ...(typeObject as Record<string, RawProp>),
 };
 
-const CLASS_REFS: Record<string, ClassRef[]> = {
-    ...(parameter as Record<string, ClassRef[]>),
-    ...(signal as Record<string, ClassRef[]>),
-};
+// A class file authors either the new object form ({ props, layout }) or the
+// legacy bare reference array. Normalize both to ClassDef so the rest of the
+// loader is shape-agnostic.
+function normalizeClassDef(raw: unknown): ClassDef {
+    if (Array.isArray(raw)) {
+        return { props: raw as ClassRef[] };
+    }
+    return raw as ClassDef;
+}
+
+const CLASS_DEFS: Record<string, ClassDef> = Object.fromEntries(
+    Object.entries({
+        ...(parameter as Record<string, unknown>),
+        ...(signal as Record<string, unknown>),
+        ...(valueType as Record<string, unknown>),
+        ...(aliasType as Record<string, unknown>),
+        ...(numericType as Record<string, unknown>),
+        ...(enumType as Record<string, unknown>),
+        ...(bus as Record<string, unknown>),
+        ...(connectionBus as Record<string, unknown>),
+        ...(serviceBus as Record<string, unknown>),
+        ...(variantControl as Record<string, unknown>),
+        ...(variantExpression as Record<string, unknown>),
+        ...(variantVariable as Record<string, unknown>),
+        ...(variantBank as Record<string, unknown>),
+        ...(variantBankCoderInfo as Record<string, unknown>),
+        ...(variantConfigurationData as Record<string, unknown>),
+        ...(configSet as Record<string, unknown>),
+        ...(configSetRef as Record<string, unknown>),
+        ...(lookupTable as Record<string, unknown>),
+        ...(breakpoint as Record<string, unknown>),
+        ...(customObject as Record<string, unknown>),
+    }).map(([cls, def]) => [cls, normalizeClassDef(def)]),
+);
 
 const cache = new Map<string, ResolvedProp[] | undefined>();
 
@@ -43,16 +93,24 @@ export function getSchema(className: string): ResolvedProp[] | undefined {
     if (cache.has(className)) {
         return cache.get(className);
     }
-    const refs = CLASS_REFS[className];
-    const resolved = refs ? refs.map(resolveRef).filter((p): p is ResolvedProp => p !== null) : undefined;
+    const def = CLASS_DEFS[className];
+    const resolved = def ? def.props.map(resolveRef).filter((p): p is ResolvedProp => p !== null) : undefined;
     cache.set(className, resolved);
     return resolved;
 }
 
-// The classNames that have a schema (the keys of the class-reference registry).
+// The Property Inspector layout (ordered groups → prop keys) declared for a
+// className, or undefined if the class has no schema or authors no layout. This
+// is the single declarative source of PI grouping/order; the node's atom bridge
+// resolves each key to a renderable property.
+export function getLayout(className: string): PILayoutGroup[] | undefined {
+    return CLASS_DEFS[className]?.layout;
+}
+
+// The classNames that have a schema (the keys of the class-definition registry).
 // Lets a host/UI layer enumerate schema-backed classes without a node instance.
 export function getSchemaClasses(): string[] {
-    return Object.keys(CLASS_REFS);
+    return Object.keys(CLASS_DEFS);
 }
 
 // Given a container object and the next path segment, return the object that

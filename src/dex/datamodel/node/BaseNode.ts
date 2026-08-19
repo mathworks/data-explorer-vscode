@@ -1,5 +1,8 @@
 // Copyright 2026 The MathWorks, Inc.
 
+import { buildPILayout } from './schemaBridge';
+import { buildOtherRows } from './piOther';
+
 export interface PropClass {
   key: string;
   displayName: string;
@@ -8,6 +11,10 @@ export interface PropClass {
   nodeProperty?: string;
   readValue?: (node: BaseNode) => string;
   readOptions?: (node: BaseNode) => string[];
+  // Top-level keys in the node's raw `_properties` bag that this prop consumes.
+  // The PI "Other" catch-all group uses this to avoid re-listing already-shown
+  // data. When omitted, toPIObject falls back to [nodeProperty ?? key].
+  sourceKeys?: string[];
   format: (value: unknown) => string;
 }
 
@@ -328,8 +335,15 @@ export default class BaseNode {
     return [];
   }
 
+  // The Property Inspector layout (ordered groups → props). Default: the
+  // declarative schema layout for this node's class, when one exists (see
+  // schema/classes/*.json + buildPILayout). Node subclasses without a schema
+  // layout override this to author their groups directly; a subclass may also
+  // override to fully replace the schema-driven layout. Returns null when neither
+  // a schema layout nor an override applies → no curated groups (toPIObject may
+  // still show the "Other" group).
   getPILayout(): PIGroupDef[] | null {
-    return null;
+    return buildPILayout(this.className);
   }
 
   toPIObject(): PIObject | null {
@@ -341,6 +355,11 @@ export default class BaseNode {
     const properties: unknown[] = [];
     const groups: unknown[] = [];
     const obj: Record<string, unknown> = { _id: { nodeId: this.id } };
+
+    // Top-level raw `_properties` keys the curated/schema layout already shows, so
+    // the "Other" catch-all below never re-lists them. A prop names its consumed
+    // keys via `sourceKeys`; absent that, it consumes [nodeProperty ?? key].
+    const shownKeys = new Set<string>();
 
     for (let g = 0; g < layout.length; g++) {
       const groupDef = layout[g];
@@ -360,13 +379,53 @@ export default class BaseNode {
         });
         groupItems.push({ name: info.key, type: 'property' });
         obj[info.key] = info.displayValue;
+        const keys = PropClassRef.sourceKeys ?? [PropClassRef.nodeProperty ?? PropClassRef.key];
+        for (const k of keys) {
+          shownKeys.add(k);
+        }
       }
+      // Schema-driven classes open with a fixed "General" identity group, so group
+      // titles are normally literal. A layout MAY still embed the `{name}` token to
+      // fold its object name into a title (buildPILayout has no node instance); the
+      // node substitutes its displayName here. Titles without the token pass through.
+      const displayName = groupDef.group.replace('{name}', this.displayName);
       groups.push({
-        name: groupDef.group.replace(/\s+/g, '') + 'Group',
+        name: displayName.replace(/[^A-Za-z0-9]+/g, '') + 'Group',
         type: 'group',
-        displayName: groupDef.group,
+        displayName,
         items: groupItems,
         expanded: true,
+      });
+    }
+
+    // "Other" catch-all: every remaining raw property this node carries but the
+    // curated/schema layout did not surface. Namespaced property names ('Other.X')
+    // avoid colliding with a group prop that shares a bare key.
+    const rawProps = (this as unknown as { serial?: { _properties?: unknown } }).serial?._properties;
+    const otherRows = buildOtherRows(rawProps, shownKeys);
+    if (otherRows.length > 0) {
+      const otherItems: unknown[] = [];
+      for (const row of otherRows) {
+        const propName = 'Other.' + row.name;
+        properties.push({
+          name: propName,
+          displayName: row.name,
+          dataType: 'char',
+          renderer: 'rendererseditors/editors/LabelEditor',
+          inPlaceEditor: null,
+          editor: null,
+          editable: false,
+          valid: true,
+        });
+        otherItems.push({ name: propName, type: 'property' });
+        obj[propName] = row.value;
+      }
+      groups.push({
+        name: 'OtherGroup',
+        type: 'group',
+        displayName: 'Other',
+        items: otherItems,
+        expanded: false,
       });
     }
 

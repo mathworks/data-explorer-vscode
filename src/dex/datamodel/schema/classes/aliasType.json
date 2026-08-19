@@ -1,0 +1,15 @@
+{
+  "Simulink.AliasType": {
+    "props": [
+      "baseType",
+      "description",
+      "dataScope",
+      "headerFile"
+    ],
+    "layout": [
+      { "group": "General", "items": ["name", "baseType", "kind", "class"] },
+      { "group": "Value Properties", "items": ["description"] },
+      { "group": "Code Generation", "items": ["dataScope", "headerFile"] }
+    ]
+  }
+}

@@ -17,7 +17,7 @@ describe('getSchema — resolve class reference lists', () => {
   it('resolves a nested code-gen prop with its seeded default', () => {
     const props = getSchema('Simulink.Parameter')!;
     const alignment = props.find(p => p.key === 'alignment')!;
-    expect(alignment).toMatchObject({ sourcePath: 'CoderInfo.Alignment', default: -1, group: 'Code Generation' });
+    expect(alignment).toMatchObject({ sourcePath: 'CoderInfo.Alignment', default: -1 });
   });
 
   it('applies a $ref override without mutating the shared registry', () => {

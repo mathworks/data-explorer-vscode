@@ -13,6 +13,9 @@ export default class PropDimensions {
     static editor = 'label';
     static column: string | null = 'dimensions';
     static defaultValue = '';
+    // Raw _properties key (differs from the lowercase display key) so the PI
+    // "Other" catch-all treats it as already shown.
+    static sourceKeys = ['Dimensions'];
 
     static readValue(node: BaseNode): string {
         const d = (node as unknown as { Dimensions?: unknown }).Dimensions;

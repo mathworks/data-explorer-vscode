@@ -24,3 +24,4 @@ test/fixtures/rt_out/
 # Local-only internal notes — must never be pushed to the public remote
 CLAUDE.md
 docs/deep-work/
+docs/superpowers/

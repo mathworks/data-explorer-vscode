@@ -1,0 +1,8 @@
+{
+  "Simulink.VariantVariable": {
+    "props": [],
+    "layout": [
+      { "group": "General", "items": ["name", "specification", "dataType", "kind", "class"] }
+    ]
+  }
+}

@@ -13,6 +13,9 @@ export default class PropComplexity {
     static editor = 'label';
     static column: string | null = 'complexity';
     static defaultValue = '';
+    // Raw _properties key (differs from the lowercase display key) so the PI
+    // "Other" catch-all treats it as already shown.
+    static sourceKeys = ['Complexity'];
 
     static readValue(node: BaseNode): string {
         return ((node as unknown as { Complexity?: string }).Complexity) || '';

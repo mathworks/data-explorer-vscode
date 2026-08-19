@@ -8,11 +8,13 @@ import '../../src/dex/datamodel/node/NodeClassMap.js';
 import { getModel, getModelFromBytes, invalidate } from '../../src/host/SlddModel.js';
 
 describe('Parameter/Signal PI includes hydrated schema groups', () => {
-  it('ParameterNode PI has Data Object + Code Generation groups after the node-owned groups', () => {
+  it('ParameterNode PI opens with the common General group, then Value Properties/Code Generation/Custom Attributes', () => {
     const node = ParameterNode.createDefault('p', null);
     const pi = node.toPIObject()!;
     const groupNames = (pi.propertySheet.groups as any[]).map((g) => g.displayName);
-    expect(groupNames).toEqual(['Data Properties', 'Value Properties', 'Data Object', 'Code Generation']);
+    expect(groupNames).toEqual(['General', 'Value Properties', 'Code Generation', 'Custom Attributes']);
+    const general = (pi.propertySheet.groups as any[]).find((g) => g.displayName === 'General');
+    expect(general.items.map((i: any) => i.name)).toEqual(['Name', 'Value', 'DataType', 'Kind', 'Class']);
   });
 
   it('ParameterNode PI shows the seeded Code Generation defaults (createDefault has StorageClass Auto)', () => {

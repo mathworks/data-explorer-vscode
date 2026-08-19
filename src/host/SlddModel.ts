@@ -55,9 +55,12 @@ export function invalidate(uriString: string): void {
 }
 
 export function findNode(uriString: string, nodeId: string): any | null {
-  const model = cache.get(uriString);
-  if (!model) return null;
-  // Prefer the global registry if available.
+  // Prefer the global registry — it is keyed by the FULL node id (which embeds
+  // the source's srcId), so it resolves regardless of which provider registered
+  // the model. Crucially, the editable binary/text providers register their
+  // model in DataModel under a prefixed srcId but NOT in this module's `cache`,
+  // so gating on `cache.get(uriString)` here would wrongly drop their selections
+  // (the Property Inspector would never render). Try the registry unconditionally.
   try {
     const viaRegistry = (DataModel as any).findNodeById
       ? (DataModel as any).findNodeById(nodeId)
@@ -66,8 +69,9 @@ export function findNode(uriString: string, nodeId: string): any | null {
   } catch {
     /* fall through */
   }
-  // Fallback: flatten the cached model tree.
-  if (typeof model.flatten === 'function') {
+  // Fallback: flatten the cached model tree (for models registered via getModel).
+  const model = cache.get(uriString);
+  if (model && typeof model.flatten === 'function') {
     return model.flatten().find((n: any) => n.id === nodeId) ?? null;
   }
   return null;

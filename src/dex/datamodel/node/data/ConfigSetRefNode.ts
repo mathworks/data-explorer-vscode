@@ -3,7 +3,6 @@ import DataNode from '../DataNode';
 import type { PropClass } from '../BaseNode';
 import type BaseNode from '../BaseNode';
 import PropName from '../../prop/PropName';
-import PropValue from '../../prop/PropValue';
 import PropDataType from '../../prop/PropDataType';
 const CLASS_NAME = 'Simulink.ConfigSetRef';
 export default class ConfigSetRefNode extends DataNode {
@@ -17,7 +16,7 @@ export default class ConfigSetRefNode extends DataNode {
     get displayValue(): string { return ''; }
     get valueEditable(): boolean { return false; }
     getProperties(): PropClass[] { return [PropName, PropDataType]; }
-    getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropValue, PropDataType] }]; }
+    // PI layout: schema-driven "General" group (classes/configSetRef.json).
     _getSerializedProperties(): Record<string, unknown> { const props = Object.assign({}, this.serial._properties as Record<string, unknown>); props.SourceName = this.SourceName; return props; }
     serializeValue(): unknown { return this._serializeSimulinkObject({ SourceName: this.SourceName }); }
     static get defaultName(): string { return 'ConfigSetRef'; }

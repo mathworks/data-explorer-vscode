@@ -3,7 +3,6 @@ import DataNode from '../DataNode';
 import type { PropClass } from '../BaseNode';
 import type BaseNode from '../BaseNode';
 import PropName from '../../prop/PropName';
-import PropValue from '../../prop/PropValue';
 import PropDataType from '../../prop/PropDataType';
 const CLASS_NAME = 'Simulink.VariantConfigurationData';
 export default class VariantConfigurationDataNode extends DataNode {
@@ -17,7 +16,7 @@ export default class VariantConfigurationDataNode extends DataNode {
     get displayValue(): string { return ''; }
     get valueEditable(): boolean { return false; }
     getProperties(): PropClass[] { return [PropName, PropDataType]; }
-    getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropValue, PropDataType] }]; }
+    // PI layout: schema-driven "General" group (classes/variantConfigurationData.json).
     _getSerializedProperties(): Record<string, unknown> { const props = Object.assign({}, this.serial._properties as Record<string, unknown>); props.Value = this.Value; return props; }
     serializeValue(): unknown { return this._serializeSimulinkObject({ Value: this.Value }); }
     static get defaultName(): string { return 'VariantConfigurationData'; }

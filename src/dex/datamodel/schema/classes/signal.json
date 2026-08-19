@@ -1,15 +1,36 @@
 {
-  "Simulink.Signal": [
-    { "$ref": "dataType", "default": "auto" },
-    "description",
-    "dimensions",
-    "complexity",
-    "dimensionsMode",
-    "min",
-    "max",
-    "unit",
-    "storageClass",
-    "headerFile",
-    "alignment"
-  ]
+  "Simulink.Signal": {
+    "props": [
+      { "$ref": "dataType", "default": "auto" },
+      "description",
+      "dimensions",
+      "dimensionsMode",
+      "initialValue",
+      "complexity",
+      "min",
+      "max",
+      "unit",
+      "storedIntMin",
+      "storedIntMax",
+      "sampleTime",
+      "samplingMode",
+      "storageClass",
+      "identifier",
+      { "$ref": "alignment", "sourcePath": "CoderInfo.Alignment", "projected": true },
+      { "$ref": "dataScope", "sourcePath": "CoderInfo.CustomAttributes.DataScope" },
+      { "$ref": "headerFile", "sourcePath": "CoderInfo.CustomAttributes.HeaderFile", "projected": true },
+      "definitionFile",
+      "owner",
+      "preserveDimensions",
+      "structName",
+      "getFunction",
+      "setFunction"
+    ],
+    "layout": [
+      { "group": "General", "items": ["name", "dataType", "kind", "class"] },
+      { "group": "Value Properties", "items": ["dimensions", "dimensionsMode", "initialValue", "complexity", "min", "max", "storedIntMin", "storedIntMax", "unit", "sampleTime", "samplingMode", "description"] },
+      { "group": "Code Generation",  "items": ["storageClass", "identifier", "alignment"] },
+      { "group": "Custom Attributes", "items": ["dataScope", "headerFile", "definitionFile", "owner", "preserveDimensions", "structName", "getFunction", "setFunction"] }
+    ]
+  }
 }
