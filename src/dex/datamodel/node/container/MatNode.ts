@@ -121,8 +121,10 @@ export default class MatNode extends ContainerNode {
     // Decode MCOS objects if present
     const opaqueVars = parsed.variables.filter((v) => v.isOpaque && v.name);
     const anonElement = parsed.variables.find((v) => (v as unknown as { _anonymous?: boolean })._anonymous);
-    let mcosData: Map<string, { value: unknown; properties: Record<string, unknown>; dimensions: number[] }> | null =
-      null;
+    let mcosData: Map<
+      string,
+      { value: unknown; properties: Record<string, unknown>; elements: Record<string, unknown>[]; dimensions: number[] }
+    > | null = null;
     if (opaqueVars.length > 0 && anonElement?._rawBytes) {
       mcosData = decodeMcosBlob(
         anonElement._rawBytes,
@@ -142,14 +144,20 @@ export default class MatNode extends ContainerNode {
         // real values (SLDD-shaped); otherwise it is an empty shell. The class
         // comes from the variable's own metadata, so this works even for objects
         // the decoder could not resolve.
-        const decodedProps = mcosData?.get(variable.name)?.properties;
-        const typed = buildTypedNodeFromMcos(variable.className, variable.name, node, decodedProps);
+        const decoded = mcosData?.get(variable.name);
+        const typed = buildTypedNodeFromMcos(
+          variable.className,
+          variable.name,
+          node,
+          decoded?.properties,
+          decoded?.elements,
+          decoded?.dimensions,
+        );
         if (typed) {
           node.addChild(typed);
           continue;
         }
         // No typed node for this class: opaque node, enriched when decoded.
-        const decoded = mcosData?.get(variable.name);
         if (decoded) {
           node.addChild(MatlabVariableNode.createFromMcosDecoded(variable, decoded, node));
           continue;

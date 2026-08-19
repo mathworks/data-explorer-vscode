@@ -178,8 +178,10 @@ export default class ModelNode extends ContainerNode {
     const trailingElements = (wsVars as unknown as { _trailingElements?: Uint8Array[] })._trailingElements;
     const opaqueWsVars = wsVars.filter((v) => v.isOpaque && v.name);
 
-    let mcosData: Map<string, { value: unknown; properties: Record<string, unknown>; dimensions: number[] }> | null =
-      null;
+    let mcosData: Map<
+      string,
+      { value: unknown; properties: Record<string, unknown>; elements: Record<string, unknown>[]; dimensions: number[] }
+    > | null = null;
     if (opaqueWsVars.length > 0 && trailingElements && trailingElements.length > 0) {
       mcosData = decodeMcosBlob(
         trailingElements[0],
@@ -196,15 +198,21 @@ export default class ModelNode extends ContainerNode {
         // shaped); otherwise it is an empty shell. The class comes from the
         // variable's own metadata, so it works even for objects the decoder
         // could not resolve.
-        const decodedProps = mcosData?.get(entry.name)?.properties;
-        const typed = buildTypedNodeFromMcos(entry.className, entry.name, wsSection, decodedProps);
+        const decoded = mcosData?.get(entry.name);
+        const typed = buildTypedNodeFromMcos(
+          entry.className,
+          entry.name,
+          wsSection,
+          decoded?.properties,
+          decoded?.elements,
+          decoded?.dimensions,
+        );
         if (typed) {
           wsSection.addChild(typed);
           continue;
         }
         // No typed node for this class (e.g. Simulink.DataStore): keep the opaque
         // representation, enriched with decoded properties when available.
-        const decoded = mcosData?.get(entry.name);
         if (decoded) {
           wsSection.addChild(MatlabVariableNode.createFromMcosDecoded(entry, decoded, wsSection));
           continue;

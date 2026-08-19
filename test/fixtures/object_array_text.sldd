@@ -1,0 +1,46 @@
+{
+  "__MW_TEXT_COREPROPERTIES__": { "release": "R2027a" },
+  "__MW_TEXT_PARTS__": {
+    "__MW_TEXT_PART__/data/chunk0": {
+      "__MW_TEXT_content": {
+        "entries": [
+          {
+            "name": "paramArray",
+            "metadata": {
+              "namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+              "isderived": "0"
+            },
+            "value": {
+              "_array_class": "Simulink.Parameter",
+              "_dimensions": [3, 1],
+              "_mw_element_type": "MATLABArray",
+              "_elements": [
+                { "_properties": { "Value": 10, "DataType": "int32", "Description": "first" } },
+                { "_properties": { "Value": 20, "DataType": "int32", "Description": "second" } },
+                { "_properties": { "Value": 30, "DataType": "int32", "Description": "third" } }
+              ]
+            }
+          },
+          {
+            "name": "usageArray",
+            "metadata": {
+              "namespace": "42516768-0ace-4981-8ac7-0a9b32cba471",
+              "isderived": "0"
+            },
+            "value": {
+              "_array_class": "Simulink.VariableUsage",
+              "_dimensions": [2, 1],
+              "_mw_element_type": "MATLABArray",
+              "_elements": [
+                { "_properties": { "Name": ["Ka"], "Source": ["f14"], "SourceType": ["model workspace"] } },
+                { "_properties": { "Name": ["Kf"], "Source": ["f14"], "SourceType": ["model workspace"] } }
+              ]
+            }
+          }
+        ],
+        "Dictionary References": [],
+        "AllowAccessBWS": false
+      }
+    }
+  }
+}
