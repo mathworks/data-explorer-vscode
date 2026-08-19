@@ -4,6 +4,10 @@
 # Push an annotated tag matching `v*` (e.g. `v1.0.1`) to trigger this. The
 # packaged version comes from the tag (v1.0.1 -> 1.0.1) and must match the
 # version in package.json.
+#
+# Marketplace publishing is intentionally manual (download the Release .vsix
+# and run `npx vsce publish --packagePath <vsix>`); this workflow only builds
+# and publishes the GitHub Release.
 name: Release
 
 on:
@@ -51,13 +55,6 @@ jobs:
           files: simulink-data-explorer-*.vsix
           generate_release_notes: true
 
-      # Publish the exact .vsix already built above to the VS Code Marketplace
-      # (via --packagePath, so the Marketplace gets the same artifact attached
-      # to the GitHub Release). Requires the VSCE_PAT secret: an Azure DevOps
-      # PAT with Marketplace: Manage scope for the `mathworks` publisher.
-      - name: Publish to VS Code Marketplace
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          npx vsce publish --packagePath "simulink-data-explorer-${VERSION}.vsix"
+      # Publishing to the VS Code Marketplace is done manually: download the
+      # .vsix attached to the GitHub Release (or build it locally with
+      # `npm run package`) and run `npx vsce publish --packagePath <vsix>`.
