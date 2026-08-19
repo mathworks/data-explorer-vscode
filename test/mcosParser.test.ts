@@ -244,3 +244,37 @@ describe('decodeMcosBlob — refuses to guess (confidence gate + defensive retur
     expect(decodeMcosBlob(anon!._rawBytes!, [orphan]).has('Param')).toBe(false);
   });
 });
+
+describe('decodeMcosBlob — object arrays (all elements, real dimensions)', () => {
+  // variableUsageArray.mat is a 20x1 Simulink.VariableUsage — the object handle in
+  // the variable's raw bytes encodes [magic, ndims=2, 20, 1, id0..id19]. The decoder
+  // must return one element bag per object id and the real [20, 1] shape, not just
+  // the first object as a [1, 1] scalar.
+  const decoded = decodeMat('variableUsageArray').get('variables')!;
+
+  it('reports the true array dimensions', () => {
+    expect(decoded).toBeDefined();
+    expect(decoded.dimensions).toEqual([20, 1]);
+  });
+
+  it('returns one element property bag per array element (20)', () => {
+    expect(decoded.elements).toHaveLength(20);
+    expect(decoded.elements[0].Name).toBe('Ka');
+    expect(decoded.elements[19].Name).toBe('g');
+  });
+
+  it('mirrors elements[0] into the scalar-compat properties/value fields', () => {
+    expect(decoded.properties).toEqual(decoded.elements[0]);
+    expect(decoded.value).toEqual(decoded.elements[0].Value);
+  });
+
+  it('decodes distinct data per element (Name + Source)', () => {
+    for (const el of decoded.elements) {
+      expect(typeof el.Name).toBe('string');
+      expect(el.Source).toBe('f14');
+      expect(el.SourceType).toBe('model workspace');
+    }
+    const names = decoded.elements.map((e) => e.Name);
+    expect(new Set(names).size).toBe(20); // all distinct
+  });
+});

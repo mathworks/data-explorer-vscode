@@ -45,8 +45,12 @@ export interface McosObjectData {
   shortClassName: string;
   // Reconstructed `_properties` bag in the same shape the SLDD path produces:
   // scalars as numbers/strings/booleans, matrices as a Matrix(r,c) value object,
-  // nested objects as { _object_class, _properties }.
+  // nested objects as { _object_class, _properties }. For an object ARRAY this
+  // mirrors elements[0] (back-compat for callers that only read a scalar).
   properties: Record<string, unknown>;
+  // One `_properties` bag per array element, in column-major order (MATLAB's).
+  // Length is the product of `dimensions`; a scalar object has exactly one entry.
+  elements: Record<string, unknown>[];
   dimensions: number[];
   // Convenience mirror of properties.Value for the opaque-fallback display path.
   value: unknown;
@@ -248,6 +252,26 @@ function isObjectHandle(cell: MatVariable): boolean {
   return Array.isArray(v) && v.length >= 5 && v[0] === MCOS_HANDLE_MAGIC;
 }
 
+// Parse an object handle already decoded into a uint32 value array (as it appears
+// for a NESTED object-valued property inside a block), laid out exactly like the
+// raw-byte form: [magic, ndims, dim0, dim1, …, objId0, objId1, …]. A scalar handle
+// is [magic, 2, 1, 1, id]; an N-element array is [magic, 2, N, 1, id0..idN-1]. Returns
+// the dimensions and the FULL id list so a nested object ARRAY (e.g. a Bus's
+// Elements_internal, or any object-array property) keeps every element, not just its
+// first. Returns null if the array isn't a well-formed handle.
+function objectHandleFromValue(v: number[]): { dims: number[]; ids: number[] } | null {
+  if (!Array.isArray(v) || v.length < 5 || v[0] !== MCOS_HANDLE_MAGIC) return null;
+  const ndims = v[1];
+  if (ndims < 1 || ndims > 8 || 2 + ndims > v.length) return null;
+  const dims: number[] = [];
+  for (let d = 0; d < ndims; d++) dims.push(v[2 + d]);
+  const count = dims.reduce((a, b) => a * b, 1);
+  if (count < 1 || 2 + ndims + count > v.length) return null;
+  const ids: number[] = [];
+  for (let k = 0; k < count; k++) ids.push(v[2 + ndims + k]);
+  return { dims, ids };
+}
+
 function buildMatrixValue(dims: number[], elements: number[]): unknown {
   const rows = dims[0];
   const cols = dims[1];
@@ -271,8 +295,26 @@ function resolveValue(cell: MatVariable | null, ctx: DecodeContext, path: Set<nu
   if (!cell) return undefined;
 
   if (isObjectHandle(cell)) {
-    const refId = (cell.value as number[])[4];
-    return buildObjectValue(refId, ctx, path, depth + 1);
+    const handle = objectHandleFromValue(cell.value as number[]);
+    // A SCALAR object property (the common case): one nested { _object_class,
+    // _properties }, exactly as before.
+    if (!handle || handle.ids.length === 1) {
+      const refId = handle ? handle.ids[0] : (cell.value as number[])[4];
+      return buildObjectValue(refId, ctx, path, depth + 1);
+    }
+    // An object ARRAY property (e.g. a Bus's Elements_internal holding N
+    // BusElements): expand EVERY id into its own element, producing the same
+    // value-object array shape the SLDD path emits so the data model builds one
+    // child node per element instead of dropping all but the first.
+    const cls = ctx.meta.classes[ctx.meta.objects[handle.ids[0]]?.classId];
+    const dims = handle.dims.length >= 2 ? [handle.dims[0], handle.dims[1]] : [1, handle.ids.length];
+    return {
+      _array_class: cls ? cls.fullName : '',
+      _array_type: 'MATLABArray',
+      _dimensions: dims,
+      _mw_element_type: 'MATLABArray',
+      _elements: handle.ids.map((id) => ({ _properties: buildProperties(id, ctx, path, depth + 1) })),
+    };
   }
 
   const cls = cell.className;
@@ -401,17 +443,29 @@ function splitClassName(fullClassName: string): { packageName: string; shortClas
   return { packageName: fullClassName.substring(0, lastDot), shortClassName: fullClassName.substring(lastDot + 1) };
 }
 
-// A named opaque variable's own element bytes contain an object handle; the word
-// at (magic + 4) is its root object id. Returns 0 (not found) if absent.
-function rootObjectIdFromRaw(rawBytes: Uint8Array | null | undefined): number {
-  if (!rawBytes || rawBytes.length < 4) return 0;
+// A named opaque variable's own element bytes contain an object handle laid out as
+// uint32 words: [magic, ndims, dim0, dim1, …, objId0, objId1, …]. For a scalar this
+// is [magic, 2, 1, 1, objId]; for an N-element array it is [magic, 2, N, 1, id0..idN-1]
+// (object ids in column-major order). Returns the dimensions and the full id list so
+// an object ARRAY expands into one node per element, not just its first object.
+function objectHandleFromRaw(rawBytes: Uint8Array | null | undefined): { dims: number[]; ids: number[] } | null {
+  if (!rawBytes || rawBytes.length < 4) return null;
   const view = new DataView(rawBytes.buffer, rawBytes.byteOffset, rawBytes.byteLength);
-  for (let o = 0; o + 24 <= rawBytes.length; o += 4) {
-    if (view.getUint32(o, true) === MCOS_HANDLE_MAGIC) {
-      return view.getUint32(o + 16, true); // magic is v[0]; v[4] is 16 bytes on
-    }
+  for (let o = 0; o + 8 <= rawBytes.length; o += 4) {
+    if (view.getUint32(o, true) !== MCOS_HANDLE_MAGIC) continue;
+    const word = (i: number): number => view.getUint32(o + i * 4, true);
+    const ndims = word(1);
+    // Defensive: a sane handle has 1..8 dims that fit within the remaining words.
+    if (ndims < 1 || ndims > 8 || o + (2 + ndims) * 4 > rawBytes.length) return null;
+    const dims: number[] = [];
+    for (let d = 0; d < ndims; d++) dims.push(word(2 + d));
+    const count = dims.reduce((a, b) => a * b, 1);
+    if (count < 1 || o + (2 + ndims + count) * 4 > rawBytes.length) return null;
+    const ids: number[] = [];
+    for (let k = 0; k < count; k++) ids.push(word(2 + ndims + k));
+    return { dims, ids };
   }
-  return 0;
+  return null;
 }
 
 export interface OpaqueVarRef {
@@ -440,24 +494,35 @@ export function decodeMcosBlob(anonRawBytes: Uint8Array, opaqueVars: OpaqueVarRe
   const ctx: DecodeContext = { cells, meta, defaults };
 
   for (const v of opaqueVars) {
-    const rootId = rootObjectIdFromRaw(v.rawBytes);
-    if (rootId <= 0 || rootId >= meta.objects.length) continue;
+    const handle = objectHandleFromRaw(v.rawBytes);
+    if (!handle || handle.ids.length === 0) continue;
 
-    // Confidence check: the root object's class must match the variable's declared
-    // class. If it doesn't, we located the wrong object — skip rather than guess.
-    const rootClass = meta.classes[meta.objects[rootId].classId];
-    if (!rootClass || rootClass.fullName !== v.className) continue;
+    // Confidence check: EVERY element object's class must match the variable's
+    // declared class. If any doesn't, we mis-located the object graph — skip the
+    // whole variable rather than surface a partial/guessed array.
+    const idsInRange = handle.ids.every((id) => id > 0 && id < meta.objects.length);
+    if (!idsInRange) continue;
+    const classesMatch = handle.ids.every((id) => {
+      const cls = meta.classes[meta.objects[id].classId];
+      return cls && cls.fullName === v.className;
+    });
+    if (!classesMatch) continue;
 
-    const properties = buildProperties(rootId, ctx, new Set<number>(), 0);
+    const elements = handle.ids.map((id) => buildProperties(id, ctx, new Set<number>(), 0));
+    // Normalize to a 2-D [rows, cols] shape the display path expects (a bare
+    // MATLAB column vector arrives as [N, 1]; a scalar as [1, 1]).
+    const dimensions =
+      handle.dims.length >= 2 ? [handle.dims[0], handle.dims[1]] : [1, handle.dims[0] ?? elements.length];
     const { packageName, shortClassName } = splitClassName(v.className);
     result.set(v.name, {
       name: v.name,
       className: v.className,
       packageName,
       shortClassName,
-      properties,
-      dimensions: [1, 1],
-      value: properties.Value,
+      properties: elements[0] ?? {},
+      elements,
+      dimensions,
+      value: (elements[0] ?? {}).Value,
     });
   }
 

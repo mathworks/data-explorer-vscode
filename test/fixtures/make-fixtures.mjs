@@ -45,4 +45,52 @@ const slddParts = {
 };
 writeFileSync(here('compressed.sldd'), zipSync(slddParts));
 
-console.log('wrote model_with_refs.slx, compressed.sldd');
+// --- object_array_binary.sldd: a binary (zip) SLDD holding two OBJECT ARRAYS ---
+// so the binary parser's multi-<Element> object path is exercised end-to-end:
+//   paramArray : 3x1 Simulink.Parameter (a KNOWN class → each element a typed
+//                ParameterNode) in Design Data
+//   usageArray : 2x1 Simulink.VariableUsage (a CUSTOM class → each element a
+//                generic ObjectNode) in Other Data
+// The shape mirrors object_props_binary.sldd: a <P Name="Value"> with a
+// Dimension attribute and one <Element Class="..."> per array element.
+const entry = (name, ns, valueXml) =>
+  `<Object Class="DD.ENTRY">` +
+  `<P Name="Name" Class="char">${name}</P>` +
+  `<P Name="Namespace" Class="char">${ns}</P>` +
+  `<P Name="IsDerived" Class="char">0</P>` +
+  `<P Name="Value" Dimension="${valueXml.dim}">${valueXml.elements}</P>` +
+  `</Object>`;
+const NS_DESIGN = 'dacaf35e-55a5-454d-a7c1-93db038a210e';
+const NS_OTHER = '42516768-0ace-4981-8ac7-0a9b32cba471';
+const paramElem = (v, desc) =>
+  `<Element Class="Simulink.Parameter">` +
+  `<P Name="Value" Class="int32">${v}</P>` +
+  `<P Name="Description" Class="char">${desc}</P>` +
+  `</Element>`;
+const usageElem = (n) =>
+  `<Element Class="Simulink.VariableUsage">` +
+  `<P Name="Name" Class="char">${n}</P>` +
+  `<P Name="Source" Class="char">f14</P>` +
+  `<P Name="SourceType" Class="char">model workspace</P>` +
+  `</Element>`;
+const objArrXml =
+  `<?xml version="1.0" encoding="UTF-8"?>` +
+  `<DataSource FormatVersion="1" MinRelease="R2014a" Arch="maca64">` +
+  entry('paramArray', NS_DESIGN, {
+    dim: '3*1',
+    elements: paramElem(10, 'first') + paramElem(20, 'second') + paramElem(30, 'third'),
+  }) +
+  entry('usageArray', NS_OTHER, {
+    dim: '2*1',
+    elements: usageElem('Ka') + usageElem('Kf'),
+  }) +
+  `</DataSource>`;
+writeFileSync(
+  here('object_array_binary.sldd'),
+  zipSync({
+    'data/chunk0.xml': strToU8(objArrXml),
+    'metadata/mwcoreProperties.xml': strToU8(`<x><matlabRelease>R2027a</matlabRelease></x>`),
+  }),
+);
+
+console.log('wrote model_with_refs.slx, compressed.sldd, object_array_binary.sldd');

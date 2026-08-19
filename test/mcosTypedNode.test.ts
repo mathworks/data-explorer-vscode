@@ -94,3 +94,64 @@ describe('buildTypedNodeFromMcos — unifies node class + values across formats'
     expect(buildTypedNodeFromMcos('', 'v', null)).toBeNull();
   });
 });
+
+// The .slx and .mat paths both enter object expansion HERE: the MCOS decoder hands
+// buildTypedNodeFromMcos a per-element `_properties` list plus the real dimensions,
+// and the adapter must apply the SAME general array rule the SLDD paths do — expand
+// a multi-element array into an ObjectNode container whose children are one scalar
+// node per element (a KNOWN class → its typed node; a CUSTOM class → an ObjectNode).
+// This is the format-independent proof for .slx/.mat known-class arrays; the raw
+// decode of a real object handle into these elements is covered by
+// mcosParser.test.ts (variableUsageArray.mat, 20x1) and mcosCrossFormat.test.ts.
+describe('buildTypedNodeFromMcos — object ARRAYS (the .slx/.mat entry point)', () => {
+  it('KNOWN class: a 3x1 Simulink.Parameter array becomes an ObjectNode of 3 ParameterNodes', () => {
+    const node = buildTypedNodeFromMcos(
+      'Simulink.Parameter',
+      'p',
+      null,
+      null,
+      [{ Value: 10 }, { Value: 20 }, { Value: 30 }],
+      [3, 1],
+    )!;
+    expect(node.constructor.name).toBe('ObjectNode');
+    expect(node.displayValue).toBe('<3x1 Simulink.Parameter>');
+    expect(node.children).toHaveLength(3);
+    node.children.forEach((child: any, i: number) => {
+      expect(child).toBeInstanceOf(ParameterNode);
+      expect(child._displayName).toBe(`p(${i + 1})`);
+    });
+    expect((node.children[0] as ParameterNode).Value).toBe(10);
+    expect((node.children[2] as ParameterNode).Value).toBe(30);
+  });
+
+  it('CUSTOM class: a 2x1 Simulink.VariableUsage array becomes an ObjectNode of 2 ObjectNodes', () => {
+    const node = buildTypedNodeFromMcos(
+      'Simulink.VariableUsage',
+      'u',
+      null,
+      null,
+      [{ Name: 'Ka' }, { Name: 'Kf' }],
+      [2, 1],
+    )!;
+    expect(node.constructor.name).toBe('ObjectNode');
+    expect(node.displayValue).toBe('<2x1 Simulink.VariableUsage>');
+    expect(node.children).toHaveLength(2);
+    node.children.forEach((child: any, i: number) => {
+      expect(child.constructor.name).toBe('ObjectNode');
+      expect(child._displayName).toBe(`u(${i + 1})`);
+    });
+  });
+
+  it('a SINGLE-element decode stays a scalar typed node (no array wrapper)', () => {
+    const node = buildTypedNodeFromMcos(
+      'Simulink.Parameter',
+      'p',
+      null,
+      null,
+      [{ Value: 7 }],
+      [1, 1],
+    )!;
+    expect(node).toBeInstanceOf(ParameterNode);
+    expect((node as ParameterNode).Value).toBe(7);
+  });
+});

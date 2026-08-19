@@ -209,9 +209,24 @@ function parseEntryValue(prop: XmlNode): unknown {
     return parseStringValue(elements[0], dimension);
   }
 
-  // Object: Element with a Simulink class
+  // Object: Element(s) with a Simulink class. A single <Element> is a scalar
+  // object; MULTIPLE <Element>s are an object ARRAY (e.g. a 3x1 Simulink.Parameter)
+  // and every element must be kept so the data model expands one row per element.
   if (elements && elements.length > 0 && elements[0]['@_Class']) {
-    return parseElement(elements[0]);
+    if (elements.length === 1) {
+      return parseElement(elements[0]);
+    }
+    const dimParts = dimension ? dimension.split('*').map(Number) : [elements.length, 1];
+    return {
+      _array_class: elements[0]['@_Class'],
+      _dimensions: dimParts,
+      _mw_element_type: 'MATLABArray',
+      _elements: elements.map((el) => {
+        const parsed = parseElement(el);
+        const inner = (parsed._elements as Record<string, unknown>[])[0];
+        return { _properties: inner._properties };
+      }),
+    };
   }
 
   // Char scalar (no elements, Class="char")

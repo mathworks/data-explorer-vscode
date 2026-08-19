@@ -30,35 +30,49 @@ const GENERIC_KEYS = new Set(['MatlabVariable', 'MatlabStruct', 'CustomObject'])
 // Returns a typed DataNode for any Simulink class the data model knows, populated
 // from `properties` when supplied (SLDD-shaped) or as an empty shell otherwise, or
 // null to signal the caller to fall back to the opaque representation.
+//
+// `elements`/`dimensions` describe an object ARRAY (e.g. a 20x1
+// Simulink.VariableUsage): each entry is one element's decoded `_properties` bag,
+// in column-major order. When omitted, the object is treated as a scalar built from
+// `properties`. An array routes through ObjectNode, which expands one child row per
+// element (Name(1), Name(2), …), each itself expanding into its property rows.
 export function buildTypedNodeFromMcos(
   className: string,
   name: string,
   parent: BaseNode | null,
   properties?: Record<string, unknown> | null,
+  elements?: Record<string, unknown>[] | null,
+  dimensions?: number[] | null,
 ): DataNode | null {
   if (!className || GENERIC_KEYS.has(className)) {
     return null;
   }
+  // Prefer the full element list (object arrays); fall back to the single scalar bag.
+  const elems = elements && elements.length > 0 ? elements : [properties || {}];
+  const dims = dimensions && dimensions.length >= 2 ? [dimensions[0], dimensions[1]] : [1, 1];
+  const isArray = elems.length > 1;
   // A class the data model KNOWS (Simulink.Parameter, …) routes to its own typed
   // node. A class it does NOT know is a customer-defined object: expand it as the
   // generic ObjectNode the SLDD path uses so its properties surface as child rows
   // (issue #3) — but ONLY when the decoder actually recovered properties, since an
-  // empty bag has nothing to show and should stay an opaque shell.
+  // empty bag has nothing to show and should stay an opaque shell. An object array
+  // always carries per-element data, so it expands regardless of class knowledge.
   const isKnown = !!NodeRegistry.getClass(className);
-  if (!isKnown && (!properties || Object.keys(properties).length === 0)) {
+  const hasData = isArray || elems.some((e) => e && Object.keys(e).length > 0);
+  if (!isKnown && !hasData) {
     return null;
   }
-  // The value object mirrors the SLDD `entry.value`: one element whose _properties
-  // is the decoded bag (or empty for a known-class shell). NodeRegistry.parseValue
-  // dispatches on _array_class — known class -> its typed node, unknown class ->
-  // ObjectNode — so both converge on the same recursion the SLDD paths use. Every
-  // typed node's parse() tolerates an empty _properties (no children, defaults).
+  // The value object mirrors the SLDD `entry.value`: one _elements entry per array
+  // element, each whose _properties is the decoded bag. NodeRegistry.parseValue
+  // dispatches on _array_class — known class -> its typed node (scalar), unknown or
+  // multi-element -> ObjectNode — so both converge on the same recursion the SLDD
+  // paths use. Every typed node's parse() tolerates an empty _properties.
   const rawVal = {
     _array_class: className,
     _array_type: 'MATLABArray',
-    _dimensions: [1, 1],
+    _dimensions: dims,
     _mw_element_type: 'MATLABArray',
-    _elements: [{ _properties: properties || {} }],
+    _elements: elems.map((e) => ({ _properties: e || {} })),
   };
   try {
     return NodeRegistry.parseValue(rawVal, name, parent);

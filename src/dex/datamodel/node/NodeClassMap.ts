@@ -82,6 +82,16 @@ export function getClass(className: string): NodeClassType | null {
 
 export function parseValue(rawVal: unknown, name: string, parent: BaseNode | null): DataNode {
     if (rawVal && typeof rawVal === 'object' && (rawVal as Record<string, unknown>)._array_class) {
+        // General array rule: a value object with MORE THAN ONE element is a
+        // vector/matrix of objects (e.g. a 3x1 Simulink.Parameter, a 20x1
+        // Simulink.VariableUsage). Expand it uniformly — regardless of class or
+        // source format — into an ObjectNode array container that holds one child
+        // per element, each element parsed as a SCALAR through its own typed node.
+        // Only a SINGLE-element value object dispatches straight to its typed class.
+        const elements = ((rawVal as Record<string, unknown>)._elements as unknown[]) || [];
+        if (elements.length > 1) {
+            return ObjectNode.parse(rawVal as Record<string, unknown>, name, parent);
+        }
         const NodeClass = CLASS_MAP[(rawVal as Record<string, unknown>)._array_class as string];
         if (NodeClass) {
             return NodeClass.parse(rawVal, name, parent);
