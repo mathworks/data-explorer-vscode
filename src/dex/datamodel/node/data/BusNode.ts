@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 
-import { BaseBusNode, BaseBusElementNode, PropName, PropDataType, PropDescription } from './BaseBusNode';
+import { BaseBusNode, BaseBusElementNode, PropName, PropDataType, PropDescription, PropKind, PropClassAtom, withSourceKeys } from './BaseBusNode';
 import type { PropClass } from '../BaseNode';
 import type BaseNode from '../BaseNode';
 import type { SetPropertyResult } from '../DataNode';
@@ -64,7 +64,29 @@ export class BusElementNode extends BaseBusElementNode {
     // A bus element's mapped data type is a real data type — show it in the column.
     get dataType(): string { return this.DataType; }
     getProperties(): PropClass[] { return [PropName, PropDataType, PropDimensions, PropComplexity, PropDimensionsMode, PropMin, PropMax, PropUnit, PropDescription]; }
-    getPILayout() { return [{ group: 'Element Properties', items: [PropName, PropDataType, PropDimensions, PropComplexity, PropDimensionsMode, PropMin, PropMax, PropUnit, PropDescription] }]; }
+    // DataType/Min/Max read the `*_internal` aliased raw keys, so widen their
+    // sourceKeys to both spellings — otherwise the alias leaks into "Other".
+    getPILayout() {
+        // A bus element shares its parent's className resolution path and reads
+        // several props through `*_internal` aliases, so it stays override-driven
+        // (not schema-keyed) — but opens with the common "General" identity group
+        // like every other node, then a "Value Properties" group for its
+        // value-semantics. DataType/Min/Max widen sourceKeys to both spellings so
+        // the alias the node carries isn't leaked into "Other".
+        return [
+            { group: 'General', items: [
+                PropName,
+                withSourceKeys(PropDataType, ['DataType', 'DataType_internal']),
+                PropKind, PropClassAtom,
+            ] },
+            { group: 'Value Properties', items: [
+                PropDimensions, PropComplexity, PropDimensionsMode,
+                withSourceKeys(PropMin, ['Min', 'Min_internal']),
+                withSourceKeys(PropMax, ['Max', 'Max_internal']),
+                PropUnit, PropDescription,
+            ] },
+        ];
+    }
 
     // Route Min/Max through the shared, MATLAB-verified "finite real double
     // scalar" validator (verified error: "Minimum on element 'x' must be a finite

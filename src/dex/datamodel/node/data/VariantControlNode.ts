@@ -19,7 +19,8 @@ export default class VariantControlNode extends DataNode {
     get className(): string { return CLASS_NAME; }
     get displayValue(): string { return PropValue.format(this.Value); }
     getProperties(): PropClass[] { return [PropName, PropValue, PropDataType]; }
-    getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropValue, PropDataType] }]; }
+    // PI layout: inherited BaseNode.getPILayout → buildPILayout drives the schema
+    // "General" identity group (classes/variantControl.json).
 
     /**
      * Validate and apply a Value edit. MATLAB requires the Value to be an

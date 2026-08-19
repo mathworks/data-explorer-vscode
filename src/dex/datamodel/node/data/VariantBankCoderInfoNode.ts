@@ -13,7 +13,7 @@ export default class VariantBankCoderInfoNode extends DataNode {
     get className(): string { return CLASS_NAME; }
     get displayValue(): string { return PropValue.format(this.Value); }
     getProperties(): PropClass[] { return [PropName, PropValue, PropDataType]; }
-    getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropValue, PropDataType] }]; }
+    // PI layout: schema-driven "General" group (classes/variantBankCoderInfo.json).
     _getSerializedProperties(): Record<string, unknown> { const props = Object.assign({}, this.serial._properties as Record<string, unknown>); props.Value = this.Value; return props; }
     serializeValue(): unknown { return this._serializeSimulinkObject({ Value: this.Value }); }
     static get defaultName(): string { return 'VariantBankCoderInfo'; }

@@ -9,6 +9,10 @@ export default class PropName {
     static column = 'Name';
     static nodeProperty = 'name';
     static defaultValue = '';
+    // The raw _properties key is 'Name' (capital) — distinct from nodeProperty
+    // ('name', the JS field). Declare it so the PI "Other" catch-all treats a
+    // node's raw 'Name' key as already shown (e.g. bus elements store it).
+    static sourceKeys = ['Name'];
 
     static readValue(node: BaseNode): string {
         return node.displayName;

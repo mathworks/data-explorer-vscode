@@ -13,7 +13,7 @@ export default class VariantVariableNode extends DataNode {
     get className(): string { return CLASS_NAME; }
     get displayValue(): string { return PropSpecification.format(this.Specification); }
     getProperties(): PropClass[] { return [PropName, PropSpecification, PropDataType]; }
-    getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropSpecification, PropDataType] }]; }
+    // PI layout: schema-driven "General" group (classes/variantVariable.json).
     _getSerializedProperties(): Record<string, unknown> { const props = Object.assign({}, this.serial._properties as Record<string, unknown>); props.Specification = this.Specification; return props; }
     serializeValue(): unknown { return this._serializeSimulinkObject({ Specification: this.Specification }); }
     static get defaultName(): string { return 'VariantVariable'; }

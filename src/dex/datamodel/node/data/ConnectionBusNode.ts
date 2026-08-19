@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 
-import { BaseBusNode, BaseBusElementNode, PropName, PropDataType, PropDescription } from './BaseBusNode';
+import { BaseBusNode, BaseBusElementNode, PropName, PropDataType, PropDescription, PropKind, PropClassAtom, withSourceKeys } from './BaseBusNode';
 import type { PropClass } from '../BaseNode';
 import type BaseNode from '../BaseNode';
 
@@ -29,7 +29,18 @@ export class ConnectionBusElementNode extends BaseBusElementNode {
     // A connection element's mapped connection type is a real data type — show it.
     get dataType(): string { return this.Type; }
     getProperties(): PropClass[] { return [PropName, PropDataType, PropDescription]; }
-    getPILayout() { return [{ group: 'Element Properties', items: [PropName, PropDataType, PropDescription] }]; }
+    // The Data Type column reads the connection type from the `Type_internal`
+    // aliased raw key (falling back to `Type`), so widen sourceKeys to both
+    // spellings — otherwise the alias leaks into the "Other" catch-all.
+    // Common "General" identity group, then the element's value-semantics.
+    // DataType widens sourceKeys to the `Type`/`Type_internal` aliases so neither
+    // spelling leaks into "Other".
+    getPILayout() {
+        return [
+            { group: 'General', items: [PropName, withSourceKeys(PropDataType, ['Type_internal', 'Type']), PropKind, PropClassAtom] },
+            { group: 'Value Properties', items: [PropDescription] },
+        ];
+    }
 
     _applyElementOverrides(props: Record<string, unknown>): void {
         const sp = this.serial._properties as Record<string, unknown>;

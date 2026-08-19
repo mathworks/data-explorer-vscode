@@ -1,7 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 
 import ModelBlockNode from '../dex/datamodel/node/data/ModelBlockNode.js';
-import { schemaColumnGroups, schemaColumnLabels } from '../dex/datamodel/node/schemaBridge.js';
+import { schemaColumnLabels } from '../dex/datamodel/node/schemaBridge.js';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 
 // Columns shown across the dictionary tree (union that fits all sections), in
@@ -28,14 +28,19 @@ export const COLUMN_LABELS: Record<string, string> = {
   ...schemaColumnLabels(),
 };
 
-// Column-key → picker group header. The schema is the single source of truth for
-// its own columns' groups; the node-owned value props (Min/Max/Unit → Data
-// Object) and the host-owned metadata columns (lastModified/lastModifiedBy →
-// Data Dictionary) are grouped here since the schema does not own them.
+// Column-key → picker group header. Column grouping is a GLOBAL table concern
+// (one picker, columns unioned across all sections), so it is owned here rather
+// than derived per-class from the schema: node-owned value props (Min/Max/Unit),
+// host-owned metadata (lastModified/lastModifiedBy), and the schema-driven
+// read-only columns (dimensions/complexity/dimensionsMode → Data Object;
+// storageClass/headerFile/alignment → Code Generation) all get their picker
+// header here. Labels still come from the schema (schemaColumnLabels), which
+// remains the single source of truth for a column's display name.
 export const COLUMN_GROUPS: Record<string, string> = {
   Min: 'Data Object', Max: 'Data Object', Unit: 'Data Object',
+  dimensions: 'Data Object', complexity: 'Data Object', dimensionsMode: 'Data Object',
+  storageClass: 'Code Generation', headerFile: 'Code Generation', alignment: 'Code Generation',
   lastModified: 'Data Dictionary', lastModifiedBy: 'Data Dictionary',
-  ...schemaColumnGroups(),
 };
 
 // Columns for a MATLAB/Simulink Project (.prj). buildRows is generic over

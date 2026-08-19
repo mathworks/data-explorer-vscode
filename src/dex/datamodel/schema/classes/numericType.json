@@ -1,0 +1,22 @@
+{
+  "Simulink.NumericType": {
+    "props": [
+      "description",
+      "dataTypeMode",
+      "signedness",
+      "wordLength",
+      "fractionLength",
+      "slope",
+      "bias",
+      "dataTypeOverride",
+      "isAlias",
+      "dataScope",
+      "headerFile"
+    ],
+    "layout": [
+      { "group": "General", "items": ["name", "kind", "class"] },
+      { "group": "Value Properties", "items": ["dataTypeMode", "signedness", "wordLength", "fractionLength", "slope", "bias", "dataTypeOverride", "isAlias", "description"] },
+      { "group": "Code Generation", "items": ["dataScope", "headerFile"] }
+    ]
+  }
+}

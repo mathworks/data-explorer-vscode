@@ -1,0 +1,18 @@
+{
+  "Simulink.ValueType": {
+    "props": [
+      "dataType",
+      "description",
+      "dimensions",
+      "dimensionsMode",
+      "complexity",
+      "min",
+      "max",
+      "unit"
+    ],
+    "layout": [
+      { "group": "General", "items": ["name", "dataType", "kind", "class"] },
+      { "group": "Value Properties", "items": ["dimensions", "complexity", "min", "max", "unit", "dimensionsMode", "description"] }
+    ]
+  }
+}

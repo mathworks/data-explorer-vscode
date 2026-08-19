@@ -1,0 +1,16 @@
+{
+  "Simulink.data.dictionary.EnumTypeDefinition": {
+    "props": [
+      "description",
+      "storageType",
+      "dataScope",
+      "headerFile",
+      "addClassNameToEnumNames"
+    ],
+    "layout": [
+      { "group": "General", "items": ["name", "kind", "class"] },
+      { "group": "Value Properties", "items": ["enumValue", "storageType", "description"] },
+      { "group": "Code Generation", "items": ["dataScope", "headerFile", "addClassNameToEnumNames"] }
+    ]
+  }
+}

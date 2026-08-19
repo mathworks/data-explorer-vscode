@@ -10,6 +10,10 @@ export default class PropUnit {
     static editor = 'label';
     static column: string | null = 'Unit';
     static defaultValue = '';
+    // Unit is displayed from either raw key (DocUnits is the modern SLDD key;
+    // Unit the legacy one). Listing both lets the PI "Other" catch-all treat
+    // whichever key the node carries as already shown, so it is never re-listed.
+    static sourceKeys = ['DocUnits', 'Unit'];
 
     static format(value: unknown): string {
         return (value as string) || '';

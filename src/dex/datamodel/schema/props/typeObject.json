@@ -1,0 +1,11 @@
+{
+  "storageType":       { "label": "Storage Type",        "sourcePath": "StorageType",       "type": "string", "editor": "label", "default": "" },
+  "dataTypeMode":      { "label": "Data Type Mode",       "sourcePath": "DataTypeMode",      "type": "string", "editor": "label", "default": "" },
+  "signedness":        { "label": "Signedness",           "sourcePath": "Signed",            "type": "string", "editor": "label", "default": "" },
+  "wordLength":        { "label": "Word Length",          "sourcePath": "WordLength",        "type": "any",    "editor": "label", "default": "" },
+  "fractionLength":    { "label": "Fraction Length",      "sourcePath": "FractionLength",    "type": "any",    "editor": "label", "default": "" },
+  "slope":             { "label": "Slope",                "sourcePath": "Slope",             "type": "any",    "editor": "label", "default": "" },
+  "bias":              { "label": "Bias",                 "sourcePath": "Bias",              "type": "any",    "editor": "label", "default": "" },
+  "dataTypeOverride":  { "label": "Data Type Override",   "sourcePath": "DataTypeOverride",  "type": "string", "editor": "label", "default": "" },
+  "isAlias":           { "label": "Is Alias",             "sourcePath": "IsAlias",           "type": "bool",   "editor": "label", "default": "" }
+}

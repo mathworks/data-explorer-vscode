@@ -15,8 +15,6 @@ export interface RawProp {
     default?: unknown;
     // Value kind a consuming app formats by.
     type: string;
-    // UI grouping label (e.g. 'Data Object', 'Code Generation'); omitted = top.
-    group?: string;
     // 'text' | 'textArea' | 'label' | 'select' | 'bool'; 'label' = read-only.
     editor: string;
     // Fixed option list for a 'select' editor (e.g. the StorageClass values).
@@ -30,10 +28,27 @@ export interface RawProp {
 // A class references a shared prop by key, optionally overlaying overrides.
 export type ClassRef = string | ({ $ref: string } & Partial<RawProp>);
 
-// The registry (merged props/*.json) plus per-class reference lists.
+// One Property Inspector group for a class: a named group and the ordered prop
+// keys it contains. Grouping/order is per-CLASS (declared here), not per-prop, so
+// the same prop can appear in different groups across classes. `items` are prop
+// keys — either a schema-registry key (hydrated from sourcePath) or a curated
+// atom key (e.g. 'name', 'value', 'dataType') resolved by the node's atom bridge.
+export interface PILayoutGroup {
+    group: string;
+    items: string[];
+}
+
+// A class definition: the ordered prop reference list plus an optional PI layout.
+// (Older single-array form is normalized to { props } by the loader.)
+export interface ClassDef {
+    props: ClassRef[];
+    layout?: PILayoutGroup[];
+}
+
+// The registry (merged props/*.json) plus per-class definitions.
 export interface SchemaBundle {
     props: Record<string, RawProp>;
-    classes: Record<string, ClassRef[]>;
+    classes: Record<string, ClassDef>;
 }
 
 // A fully resolved descriptor for one property of one class.
@@ -43,7 +58,6 @@ export interface ResolvedProp {
     sourcePath: string;
     default?: unknown;
     type: string;
-    group?: string;
     editor: string;
     options?: string[];
     projected?: boolean;

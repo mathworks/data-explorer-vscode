@@ -10,7 +10,7 @@ import PropMin from '../../prop/PropMin';
 import PropMax from '../../prop/PropMax';
 import PropUnit from '../../prop/PropUnit';
 import PropDescription from '../../prop/PropDescription';
-import { schemaPILayout, schemaColumns } from '../schemaBridge';
+import { schemaColumns } from '../schemaBridge';
 
 const CLASS_NAME = 'Simulink.Signal';
 
@@ -35,7 +35,8 @@ export default class SignalNode extends DataNode {
     get valueEditable(): boolean { return false; }
 
     getProperties(): PropClass[] { return [PropName, PropDataType, PropMin, PropMax, PropUnit, PropDescription, ...schemaColumns(this.className)]; }
-    getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropDataType] }, { group: 'Value Properties', items: [PropMin, PropMax, PropUnit, PropDescription] }, ...schemaPILayout(this.className)]; }
+    // PI layout is now declarative — see schema/classes/signal.json `layout`,
+    // resolved by the inherited BaseNode.getPILayout via buildPILayout.
 
     setProperty(propName: string, stringValue: string): true | SetPropertyResult {
         if (propName === 'Min' || propName === 'Max') {

@@ -50,13 +50,15 @@ describe('Min / Max / Unit table columns', () => {
     expect(row._valueEditable).toBe(false);
   });
 
-  it('the PI layout still lists Min/Max/Unit under Value Properties (no duplication)', () => {
+  it('the PI layout lists Min/Max/Unit under Value Properties (no duplication)', () => {
     const p = ParameterNode.createDefault('p', null);
     const valueGroup = p.getPILayout().find((g: any) => g.group === 'Value Properties')!;
     const keys = valueGroup.items.map((i: any) => i.key);
-    expect(keys).toEqual(['Min', 'Max', 'Unit', 'Description']);
-    // The projected schema groups (Data Object / Code Generation) do NOT re-list
-    // Min/Max/Unit — they stay node-owned, so the PI shows each exactly once.
+    // MATLAB-parity Value Properties: Dimensions/Complexity fold in here (no
+    // separate Data Object group), then the value bounds/unit/description.
+    expect(keys).toEqual(['dimensions', 'complexity', 'Min', 'Max', 'storedIntMin', 'storedIntMax', 'Unit', 'Description']);
+    // Min/Max/Unit appear exactly once across the whole PI — no other group
+    // re-lists them, so the PI shows each once.
     const allPIKeys = p.getPILayout().flatMap((g: any) => g.items.map((i: any) => i.key));
     expect(allPIKeys.filter((k: string) => k === 'Min')).toEqual(['Min']);
   });

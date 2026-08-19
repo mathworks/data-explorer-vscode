@@ -3,7 +3,6 @@ import DataNode from '../DataNode';
 import type { PropClass } from '../BaseNode';
 import type BaseNode from '../BaseNode';
 import PropName from '../../prop/PropName';
-import PropValue from '../../prop/PropValue';
 import PropDataType from '../../prop/PropDataType';
 import PropDescription from '../../prop/PropDescription';
 const CLASS_NAME = 'Simulink.ValueType';
@@ -21,7 +20,7 @@ export default class ValueTypeNode extends DataNode {
     get displayValue(): string { return ''; }
     get valueEditable(): boolean { return false; }
     getProperties(): PropClass[] { return [PropName, PropDataType, PropDescription]; }
-    getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropValue, PropDataType, PropDescription] }]; }
+    // PI layout is schema-driven (schema/classes/valueType.json).
     _getSerializedProperties(): Record<string, unknown> { const props = Object.assign({}, this.serial._properties as Record<string, unknown>); if ('DataType' in (this.serial._properties as Record<string, unknown>) || this.DataType !== 'double') { props.DataType = this.DataType; } if ('Description' in (this.serial._properties as Record<string, unknown>) || this.Description) { props.Description = this.Description; } return props; }
     serializeValue(): unknown { const overrides: Record<string, unknown> = {}; if ('DataType' in (this.serial._properties as Record<string, unknown>) || this.DataType !== 'double') { overrides.DataType = this.DataType; } if ('Description' in (this.serial._properties as Record<string, unknown>) || this.Description) { overrides.Description = this.Description; } return this._serializeSimulinkObject(overrides); }
     static get defaultName(): string { return 'ValueType'; }

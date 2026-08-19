@@ -8,6 +8,8 @@ import PropValue from '../../prop/PropValue';
 import PropEnumValue from '../../prop/PropEnumValue';
 import PropDataType from '../../prop/PropDataType';
 import PropDescription from '../../prop/PropDescription';
+import PropKind from '../../prop/PropKind';
+import PropClassAtom from '../../prop/PropClass';
 
 const CLASS_NAME = 'Simulink.data.dictionary.EnumTypeDefinition';
 
@@ -40,7 +42,10 @@ export class EnumValueNode extends DataNode {
     get displayValue(): string { return this.Value !== undefined ? String(this.Value) : ''; }
     get disabled(): boolean { return true; }
     getProperties(): PropClass[] { return [PropName, PropValue, PropDescription]; }
-    getPILayout() { return [{ group: 'Properties', items: [PropName, PropValue, PropDescription] }]; }
+    // An enumeral shares its parent's className (EnumTypeDefinition), so it can't
+    // be schema-keyed; author the common "General" group directly. DataType is
+    // omitted (an enumeral has no data type — see dataType getter above).
+    getPILayout() { return [{ group: 'General', items: [PropName, PropValue, PropKind, PropClassAtom, PropDescription] }]; }
     serializeValue(): unknown {
         const raw = Object.assign({}, this.serial._rawProps as Record<string, unknown>);
         raw.Name = this.name; raw.Value = this.Value; raw.Description = this.Description;
@@ -66,7 +71,9 @@ export class EnumTypeNode extends DataNode {
         return (this.children[0] && this.children[0].name) || '';
     }
     getProperties(): PropClass[] { return [PropName, PropEnumValue, PropDataType, PropDescription]; }
-    getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropEnumValue, PropDataType, PropDescription] }]; }
+    // PI layout is schema-driven (schema/classes/enumType.json). NOTE: EnumValueNode
+    // shares this className but keeps its own getPILayout override (a value row, not
+    // the enum type), so it never resolves the schema layout.
 
     _getSerializedProperties(): Record<string, unknown> {
         const enumerals = this.children.map(function (child) { return (child as EnumValueNode).serializeValue(); });

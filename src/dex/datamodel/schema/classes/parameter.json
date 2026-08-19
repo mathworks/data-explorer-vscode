@@ -1,15 +1,32 @@
 {
-  "Simulink.Parameter": [
-    "value",
-    "dataType",
-    "description",
-    "dimensions",
-    "complexity",
-    "min",
-    "max",
-    "unit",
-    "storageClass",
-    "headerFile",
-    "alignment"
-  ]
+  "Simulink.Parameter": {
+    "props": [
+      "value",
+      "dataType",
+      "description",
+      "dimensions",
+      "complexity",
+      "min",
+      "max",
+      "unit",
+      "storedIntMin",
+      "storedIntMax",
+      "storageClass",
+      { "$ref": "headerFile", "sourcePath": "CoderInfo.CustomAttributes.HeaderFile", "projected": true },
+      { "$ref": "alignment", "sourcePath": "CoderInfo.Alignment", "projected": true },
+      "identifier",
+      "definitionFile",
+      "owner",
+      "preserveDimensions",
+      "structName",
+      "getFunction",
+      "setFunction"
+    ],
+    "layout": [
+      { "group": "General", "items": ["name", "value", "dataType", "kind", "class"] },
+      { "group": "Value Properties", "items": ["dimensions", "complexity", "min", "max", "storedIntMin", "storedIntMax", "unit", "description"] },
+      { "group": "Code Generation",  "items": ["storageClass", "identifier", "alignment"] },
+      { "group": "Custom Attributes", "items": ["headerFile", "definitionFile", "owner", "preserveDimensions", "structName", "getFunction", "setFunction"] }
+    ]
+  }
 }

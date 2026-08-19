@@ -1,0 +1,8 @@
+{
+  "Simulink.VariantExpression": {
+    "props": [],
+    "layout": [
+      { "group": "General", "items": ["name", "condition", "dataType", "kind", "class"] }
+    ]
+  }
+}

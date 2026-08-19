@@ -8,6 +8,8 @@ import PropName from '../../prop/PropName';
 import PropValue from '../../prop/PropValue';
 import PropDataType from '../../prop/PropDataType';
 import PropDescription from '../../prop/PropDescription';
+import PropKind from '../../prop/PropKind';
+import PropClassAtom from '../../prop/PropClass';
 import { escapeXml, pad as xmlPad } from '../../parser/XmlUtils';
 
 export default class StructNode extends DataNode {
@@ -41,8 +43,10 @@ export default class StructNode extends DataNode {
     }
 
     getPILayout(): PIGroupDef[] {
+        // className is the data type 'struct' (shared with plain struct variables),
+        // so this can't be schema-keyed; author the common "General" group directly.
         return [
-            { group: 'Properties', items: [PropName, PropValue, PropDataType, PropDescription] }
+            { group: 'General', items: [PropName, PropValue, PropDataType, PropKind, PropClassAtom, PropDescription] }
         ];
     }
 

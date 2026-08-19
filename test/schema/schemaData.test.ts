@@ -4,11 +4,10 @@ import { getSchema } from '../../src/dex/datamodel/schema/index.js';
 
 const CLASSES = ['Simulink.Parameter', 'Simulink.Signal'];
 const VALID_EDITORS = new Set(['text', 'textArea', 'label', 'bool', 'select']);
-const VALID_GROUPS = new Set([undefined, 'Data Object', 'Code Generation']);
 
 describe('schema data integrity', () => {
   for (const cls of CLASSES) {
-    it(`${cls}: every resolved prop has label, sourcePath, valid editor and group`, () => {
+    it(`${cls}: every resolved prop has label, sourcePath and a valid editor`, () => {
       const props = getSchema(cls)!;
       expect(props.length).toBeGreaterThan(0);
       for (const p of props) {
@@ -17,7 +16,6 @@ describe('schema data integrity', () => {
         expect(typeof p.sourcePath).toBe('string');
         expect(p.sourcePath.length).toBeGreaterThan(0);
         expect(VALID_EDITORS.has(p.editor)).toBe(true);
-        expect(VALID_GROUPS.has(p.group)).toBe(true);
       }
     });
 

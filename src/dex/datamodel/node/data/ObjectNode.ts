@@ -8,6 +8,8 @@ import PropName from '../../prop/PropName';
 import PropValue from '../../prop/PropValue';
 import PropDataType from '../../prop/PropDataType';
 import PropDescription from '../../prop/PropDescription';
+import PropKind from '../../prop/PropKind';
+import PropClassAtom from '../../prop/PropClass';
 
 export default class ObjectNode extends DataNode {
     arrayClass: string;
@@ -47,8 +49,11 @@ export default class ObjectNode extends DataNode {
     }
 
     getPILayout(): PIGroupDef[] {
+        // Object nodes carry a dynamic className (the MATLAB class), so they can't
+        // be schema-keyed; author the common "General" identity group directly to
+        // match the schema-driven classes.
         return [
-            { group: 'Properties', items: [PropName, PropValue, PropDataType, PropDescription] }
+            { group: 'General', items: [PropName, PropValue, PropDataType, PropKind, PropClassAtom, PropDescription] }
         ];
     }
 

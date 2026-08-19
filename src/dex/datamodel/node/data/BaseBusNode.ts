@@ -6,6 +6,20 @@ import type BaseNode from '../BaseNode';
 import PropName from '../../prop/PropName';
 import PropDataType from '../../prop/PropDataType';
 import PropDescription from '../../prop/PropDescription';
+import PropKind from '../../prop/PropKind';
+import PropClassAtom from '../../prop/PropClass';
+
+// Clone a Prop* atom with an expanded `sourceKeys`, preserving its static methods
+// (readValue/format) via the prototype chain — an object spread would drop them.
+// Bus/connection elements read some props through `*_internal` aliased raw keys
+// (DataType_internal, Min_internal, …); listing both spellings lets the PI
+// "Other" catch-all treat the alias the node actually carries as already shown,
+// without teaching the shared atom about element-specific key conventions.
+export function withSourceKeys(atom: PropClass, sourceKeys: string[]): PropClass {
+    const clone = Object.create(atom) as PropClass;
+    clone.sourceKeys = sourceKeys;
+    return clone;
+}
 
 export class BaseBusElementNode extends DataNode {
     Description: string;
@@ -44,7 +58,9 @@ export class BaseBusNode extends DataNode {
     get valueEditable(): boolean { return false; }
 
     getProperties(): PropClass[] { return [PropName, PropDataType, PropDescription]; }
-    getPILayout() { return [{ group: 'Data Properties', items: [PropName, PropDataType, PropDescription] }]; }
+    // PI layout is schema-driven (schema/classes/{bus,connectionBus,serviceBus}.json).
+    // Each concrete bus container has a schema entry keyed by its className, so the
+    // inherited BaseNode.getPILayout → buildPILayout(className) resolves it.
 
     _getSerializedProperties(): Record<string, unknown> {
         const elementsInternal = this.children.map(function (child) { return (child as BaseBusElementNode).serializeValue(); });
@@ -189,5 +205,5 @@ export class BaseBusNode extends DataNode {
     }
 }
 
-export { PropName, PropDataType, PropDescription };
-export default { BaseBusNode, BaseBusElementNode, PropName, PropDataType, PropDescription };
+export { PropName, PropDataType, PropDescription, PropKind, PropClassAtom };
+export default { BaseBusNode, BaseBusElementNode, PropName, PropDataType, PropDescription, PropKind, PropClassAtom };

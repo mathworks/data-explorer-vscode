@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 
-import { BaseBusNode, BaseBusElementNode, PropName } from './BaseBusNode';
+import { BaseBusNode, BaseBusElementNode, PropName, PropKind, PropClassAtom } from './BaseBusNode';
 import type { PropClass } from '../BaseNode';
 import type BaseNode from '../BaseNode';
 
@@ -29,7 +29,10 @@ export class FunctionElementNode extends BaseBusElementNode {
     // the object doesn't own; we list just Name here (the Value column shows the
     // Prototype via displayValue).
     getProperties(): PropClass[] { return [PropName]; }
-    getPILayout() { return [{ group: 'Element Properties', items: [PropName] }]; }
+    // Common "General" identity group. DataType/Description are intentionally
+    // absent (a FunctionElement owns neither — see note above); the Value column
+    // shows the Prototype via displayValue.
+    getPILayout() { return [{ group: 'General', items: [PropName, PropKind, PropClassAtom] }]; }
 }
 
 export class ServiceBusNode extends BaseBusNode {
