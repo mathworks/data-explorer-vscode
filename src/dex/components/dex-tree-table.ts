@@ -1154,7 +1154,7 @@ export class DexTreeTable extends LitElement {
       case 'DataType':
         if (typeof row.DataType === 'object' && 'paramLinks' in (row.DataType as any))
           return (row.DataType as any).paramLinks
-            .map((p: any) => `${p.property}=${p.paramName}(${p.source})`)
+            .map((p: any) => `${p.property}=${p.paramName}${p.source ? `(${p.source})` : ''}`)
             .join(', ');
         if (typeof row.DataType === 'object' && 'links' in (row.DataType as any))
           return (row.DataType as any).links.map((l: any) => l.text).join(', ');
@@ -1171,7 +1171,9 @@ export class DexTreeTable extends LitElement {
         if (!row.UsedBy) return '';
         if (typeof row.UsedBy === 'string') return row.UsedBy;
         if ('paramLinks' in (row.UsedBy as any))
-          return (row.UsedBy as any).paramLinks.map((p: any) => `${p.property}=${p.paramName}(${p.source})`).join(', ');
+          return (row.UsedBy as any).paramLinks
+            .map((p: any) => `${p.property}=${p.paramName}${p.source ? `(${p.source})` : ''}`)
+            .join(', ');
         if ('blockLinks' in (row.UsedBy as any))
           return (row.UsedBy as any).blockLinks.map((b: any) => `${b.blockName}(${b.modelName})`).join(', ');
         if ('links' in row.UsedBy) return row.UsedBy.links.map((l) => l.text).join(', ');
@@ -2107,7 +2109,7 @@ export class DexTreeTable extends LitElement {
             html`${i > 0 ? ', ' : ''}<span class="param-property">${p.property + '='}</span
               ><a class="value-link" href="#" @click=${(e: Event) => this._onLinkClick(p.linkTarget, e)}
                 >${this._highlight(p.paramName)}</a
-              ><span class="param-source">${'(' + p.source + ')'}</span>`,
+              >${p.source ? html`<span class="param-source">${'(' + p.source + ')'}</span>` : ''}`,
         )}`;
       }
       if ('links' in val) {
@@ -2163,7 +2165,7 @@ export class DexTreeTable extends LitElement {
             html`${i > 0 ? ', ' : ''}<span class="param-property">${p.property + '='}</span
               ><a class="value-link" href="#" @click=${(e: Event) => this._onLinkClick(p.linkTarget, e)}
                 >${this._highlight(p.paramName)}</a
-              ><span class="param-source">${'(' + p.source + ')'}</span>`,
+              >${p.source ? html`<span class="param-source">${'(' + p.source + ')'}</span>` : ''}`,
         )}`;
       }
       if ('blockLinks' in val) {

@@ -112,14 +112,17 @@ describe('buildEdges', () => {
     ]);
   });
 
-  it('labels a workspace param "Model Workspace" with a workspace: target', () => {
+  it('gives a workspace param an EMPTY source (no suffix) but keeps the workspace: target', () => {
+    // Own-model-workspace params render as just `SampleTime=Ts` — no `(...)`
+    // qualifier. The source is empty for display, but the linkTarget is intact so
+    // the value still hyperlinks to the Model Workspace row.
     const m = model({
       wsNames: new Set(['Ts']),
       blockParams: [{ blockName: 'B', property: 'SampleTime', value: 'Ts' }],
     });
     const g = buildEdges([m], sldds, mats);
     expect(g.forward.get(`${m.uri}\nB`)).toEqual([
-      { property: 'SampleTime', paramName: 'Ts', source: 'Model Workspace', linkTarget: `workspace:Ts@${m.uri}` },
+      { property: 'SampleTime', paramName: 'Ts', source: '', linkTarget: `workspace:Ts@${m.uri}` },
     ]);
     // Workspace vars key their reverse edge on the model uri (issue: model
     // workspace data shows the blocks that use it).
