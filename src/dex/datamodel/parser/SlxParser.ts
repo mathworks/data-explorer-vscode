@@ -124,21 +124,69 @@ function findText(obj: unknown, tagName: string): string | null {
 }
 
 const NUMERIC_RE = /^-?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
-const PARAM_PROPS = new Set([
-  'Gain',
-  'Value',
-  'Bias',
-  'UpperLimit',
-  'LowerLimit',
-  'Threshold',
-  'InitialCondition',
-  'SampleTime',
-  'Amplitude',
-  'Frequency',
-  'FinalValue',
-  'InitialOutput',
-  'AfterFinalValue',
+// At least one MATLAB identifier char-run — i.e. the value could name a variable.
+// Used to gate which block params count as data references (see below).
+const IDENT_RE = /[A-Za-z_]\w*/;
+
+// Block <P> properties that are cosmetic/structural, never a parameter
+// EXPRESSION. Every OTHER property whose value contains an identifier is treated
+// as a potential data reference. We use this SKIP set (a blocklist) rather than an
+// allowlist of "known" param props because an allowlist silently drops any block
+// type nobody enumerated: a TransferFcn keeps its coefficients in
+// Numerator/Denominator, a StateSpace in A/B/C/D, etc. — none of which were on the
+// old list, so those blocks never surfaced as Modeling Elements and the variables
+// they referenced showed empty Usage (issue #9). The identifier gate below keeps
+// pure operator/number values (a Sum's `Inputs=|++`, a `Gain=22.8`) out, so only
+// blocks that actually reference named data become rows.
+const NON_PARAM_PROPS = new Set([
+  'Position',
+  'ZOrder',
+  'FontName',
+  'FontSize',
+  'ForegroundColor',
+  'BackgroundColor',
+  'NameLocation',
+  'ShowName',
+  'BlockMirror',
+  'BlockRotation',
+  'Orientation',
+  'Ports',
+  'MaskType',
+  'SourceBlock',
+  'SourceType',
+  'IconShape',
+  'RndMeth',
+  'SaturateOnIntegerOverflow',
+  'OutDataTypeStr',
+  'ParamDataTypeStr',
+  'DataTypeStr',
+  'IOType',
+  'GraphicalSettings',
+  'WindowPosition',
+  'MultipleDisplayCache',
+  'LayoutDimensionsString',
+  'DataLoggingSaveFormat',
+  'OpenFcn',
+  'Units',
+  'WaveForm',
+  'MinAlgLoopOccurrences',
+  'TreatAsAtomicUnit',
+  'RequestExecContextInheritance',
 ]);
+
+// Simulink stores a block's line breaks as the numeric char reference `&#xA;`
+// (Simulink wraps long block labels across lines). fast-xml-parser decodes NAMED
+// entities but not numeric ones (no htmlEntities option), so the raw name keeps
+// the literal `&#xA;`. Decode CR/LF numeric refs and collapse any run of
+// whitespace to a single space so a multi-line label reads as one flat cell
+// (e.g. "Alpha-sensor&#xA;Low-pass Filter" -> "Alpha-sensor Low-pass Filter").
+function normalizeBlockName(name: string): string {
+  return name
+    .replace(/&#x0*(a|d);/gi, ' ') // hex: &#xA; &#x0A; &#xD; (LF, CR)
+    .replace(/&#0*(10|13);/g, ' ') // decimal: &#10; &#13; (LF, CR)
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 function extractBlockParamUsages(entries: Record<string, Uint8Array>): BlockParamUsage[] {
   const usages: BlockParamUsage[] = [];
@@ -148,7 +196,7 @@ function extractBlockParamUsages(entries: Record<string, Uint8Array>): BlockPara
     const blocks = findAll(doc, 'Block');
     for (const block of blocks) {
       const b = block as Record<string, unknown>;
-      const blockName = (b['@_Name'] as string) || '';
+      const blockName = normalizeBlockName((b['@_Name'] as string) || '');
       const blockType = (b['@_BlockType'] as string) || '';
       const props = b['P'];
       if (!props) continue;
@@ -156,11 +204,15 @@ function extractBlockParamUsages(entries: Record<string, Uint8Array>): BlockPara
       for (const p of propList) {
         const pObj = p as Record<string, unknown>;
         const propName = pObj['@_Name'] as string;
-        if (!propName || !PARAM_PROPS.has(propName)) continue;
+        if (!propName || NON_PARAM_PROPS.has(propName)) continue;
         const val = (pObj['#text'] as string) || '';
         if (!val || NUMERIC_RE.test(val)) continue;
         if (val === 'inf' || val === '-inf' || val === 'nan') continue;
         if (val === 'on' || val === 'off') continue;
+        // Must contain an identifier that could name a variable. This excludes
+        // operator-only sign patterns (Sum `Inputs=|++`) and enum-ish tokens
+        // handled above, while keeping expressions like `[Tal,1]` or `1/Uo`.
+        if (!IDENT_RE.test(val)) continue;
         usages.push({ blockName, blockType, paramProperty: propName, paramValue: val });
       }
     }

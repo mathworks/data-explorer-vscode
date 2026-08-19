@@ -112,7 +112,13 @@ export function buildEdges(
       const fkey = `${model.uri}\n${bp.blockName}`;
       const links = forward.get(fkey) ?? [];
       if (primary) {
-        const label = primary.kind === 'workspace' ? 'Model Workspace' : uriBasename(primary.uri);
+        // A param resolved to the block's OWN model workspace needs no source
+        // suffix — the value alone (e.g. `Gain=Kp`) is unambiguous in a model
+        // view. Only an EXTERNAL source (linked .sldd/.mat) gets a `(basename)`
+        // qualifier, since that's where disambiguation actually matters. The
+        // empty source is still distinguishable from an unresolved param below
+        // by its non-empty linkTarget.
+        const label = primary.kind === 'workspace' ? '' : uriBasename(primary.uri);
         const linkTarget =
           primary.kind === 'workspace'
             ? `workspace:${primary.token}@${primary.uri}`
