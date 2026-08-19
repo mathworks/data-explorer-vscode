@@ -101,10 +101,13 @@ suite('single-file Usage (open-tab union)', () => {
     assert.ok(links && links.length === 1, 'Gain1 has exactly one resolved param link');
     assert.strictEqual(links![0].property, 'Gain');
     assert.strictEqual(links![0].paramName, 'Bp');
+    // Own-model-workspace params render with an EMPTY source (no `(...)` suffix);
+    // the workspace: linkTarget is what identifies the source and drives the jump
+    // to the Model Workspace row.
     assert.strictEqual(
       links![0].source,
-      'Model Workspace',
-      'Bp resolves to the model workspace, not an external source',
+      '',
+      'Bp resolves to the model workspace, which renders without a source suffix',
     );
     assert.strictEqual(links![0].linkTarget, `workspace:Bp@${uri.toString()}`);
 
@@ -118,6 +121,7 @@ suite('single-file Usage (open-tab union)', () => {
     const constLinks = await paramLinksForBlock(uri.toString(), 'Const1');
     assert.strictEqual(constLinks.length, 1, 'Const1 has one resolved param link');
     assert.strictEqual(constLinks[0].paramName, 'Numeric');
-    assert.strictEqual(constLinks[0].source, 'Model Workspace');
+    assert.strictEqual(constLinks[0].source, '');
+    assert.strictEqual(constLinks[0].linkTarget, `workspace:Numeric@${uri.toString()}`);
   });
 });
