@@ -194,6 +194,13 @@ export function activate(context: vscode.ExtensionContext): void {
         refreshAll();
       }
     }),
+    // Opening/closing editor tabs changes the set of files the usage graph
+    // parses (open tabs are unioned into it so single-file Cmd+O opens resolve
+    // their own intra-model usage). The workspace watcher doesn't fire for files
+    // outside the workspace folder, so invalidate on tab changes too.
+    vscode.window.tabGroups.onDidChangeTabs(() => {
+      invalidateUsageGraph();
+    }),
     // Saving clears the dirty state → update the modified badge.
     vscode.workspace.onDidSaveTextDocument((doc) => {
       if (SUPPORTED_RE.test(doc.uri.path)) {
