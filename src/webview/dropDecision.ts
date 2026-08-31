@@ -16,7 +16,7 @@
 //
 // The bottom line it enforces: drag-drop matches cut/copy-paste — if you can
 // cut/copy you can drag, and if you can paste you can drop.
-import { kindForClass } from '../dex/datamodel/kindMap.js';
+import { kindForClass } from 'data-explorer-core';
 
 export type DragMode = 'copy' | 'move';
 export type DropCursor = 'copy' | 'move' | 'no-drop';

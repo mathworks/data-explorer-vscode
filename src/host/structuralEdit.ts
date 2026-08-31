@@ -19,8 +19,7 @@ import {
   findEntriesArrayInsertion,
   detectIndent,
 } from './entrySplice.js';
-import { generateUuid } from '../dex/datamodel/node/container/SectionNode.js';
-import { getSectionMetadata } from '../dex/datamodel/SectionConstants.js';
+import { generateUuid, getSectionMetadata } from 'data-explorer-core';
 import { buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
 
 export interface StructuralResult {

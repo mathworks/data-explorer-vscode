@@ -2,8 +2,8 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
-import { highContrastStyles } from '../styles/high-contrast.styles.js';
-import { dragModeFromModifiers, type DragMode } from '../../webview/dragMode.js';
+import { highContrastStyles } from './styles/high-contrast.styles.js';
+import { dragModeFromModifiers, type DragMode } from './dragMode.js';
 import './dex-icon.js';
 
 export interface TreeTableRow {

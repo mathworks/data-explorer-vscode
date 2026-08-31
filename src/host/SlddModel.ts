@@ -1,7 +1,5 @@
 // Copyright 2026 The MathWorks, Inc.
-import '../dex/datamodel/node/NodeClassMap.js';
-import DataModel from '../dex/core/DataModel.js';
-import { parseBinarySldd } from '../dex/datamodel/parser/BinarySlddParser.js';
+import { DataModel, parseBinarySldd } from 'data-explorer-core';
 import { isZipBytes } from './slddFormat.js';
 
 const cache = new Map<string, any>(); // uriString -> SlddNode

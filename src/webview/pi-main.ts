@@ -1,7 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
-import '../dex/styles/global.css';
+import './components/styles/global.css';
 import './vscode-theme.css';
-import '../dex/components/dex-property-inspector.js';
+import './components/dex-property-inspector.js';
 import type { HostToPropsMessage } from '../common/protocol.js';
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };

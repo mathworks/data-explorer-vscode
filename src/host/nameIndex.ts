@@ -13,9 +13,7 @@
 // This module does the vscode file I/O + parser dispatch; the pure
 // name-extraction core lives in nameExtract.ts (unit-tested).
 import * as vscode from 'vscode';
-import { parseSlx } from '../dex/datamodel/parser/SlxParser.js';
-import { parseMat } from '../dex/datamodel/parser/MatParser.js';
-import { parseBinarySldd } from '../dex/datamodel/parser/BinarySlddParser.js';
+import { parseSlx, parseMat, parseBinarySldd } from 'data-explorer-core';
 import { isZipBytes } from './slddFormat.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import { basename } from '../common/pathUtil.js';

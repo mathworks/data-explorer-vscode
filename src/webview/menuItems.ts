@@ -1,5 +1,5 @@
 // Copyright 2026 The MathWorks, Inc.
-import type { ContextMenuItem } from '../dex/components/dex-context-menu.js';
+import type { ContextMenuItem } from './components/dex-context-menu.js';
 
 // The subset of row data the menu builder needs. The host attaches these
 // capability flags in rowBuilder.buildEntryRows; section rows lack them (all

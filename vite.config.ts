@@ -3,14 +3,6 @@ import { resolve } from 'path';
 
 export default defineConfig({
   base: './',
-  resolve: {
-    alias: {
-      '@core': resolve(__dirname, 'src/dex/core'),
-      '@datamodel': resolve(__dirname, 'src/dex/datamodel'),
-      '@components': resolve(__dirname, 'src/dex/components'),
-      '@graph': resolve(__dirname, 'src/dex/graph'),
-    },
-  },
   build: {
     target: 'es2022',
     outDir: 'dist/webview',

@@ -7,7 +7,7 @@
 // default arrangement; persistence round-trips through localStorage; and an
 // unqualified search matches across every visible column.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { DexTreeTable, type TreeTableRow } from '../src/dex/components/dex-tree-table.js';
+import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
 
 const HOST_COLUMNS = ['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class', 'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit', 'storageClass', 'headerFile', 'alignment', 'lastModified', 'lastModifiedBy'];
 

@@ -1,7 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 
-import ModelBlockNode from '../dex/datamodel/node/data/ModelBlockNode.js';
-import { schemaColumnLabels } from '../dex/datamodel/node/schemaBridge.js';
+import { ModelBlockNode, schemaColumnLabels } from 'data-explorer-core';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 
 // Columns shown across the dictionary tree (union that fits all sections), in

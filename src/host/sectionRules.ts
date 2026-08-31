@@ -7,7 +7,7 @@
 // alongside its rows, and mirrors SectionNode's allow-list + the section→
 // isderived mapping so the webview's prediction matches what the host paste
 // would actually do.
-import { getSectionMetadata } from '../dex/datamodel/SectionConstants.js';
+import { getSectionMetadata } from 'data-explorer-core';
 
 export interface SectionRule {
   sectionName: string;

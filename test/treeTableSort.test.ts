@@ -1,7 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 // @vitest-environment happy-dom
 import { describe, it, expect } from 'vitest';
-import { DexTreeTable, type TreeTableRow } from '../src/dex/components/dex-tree-table.js';
+import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
 
 // Sorting a column must reorder rows WITHIN each hierarchy level (siblings),
 // never across parent/child boundaries. A child must always stay directly

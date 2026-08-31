@@ -15,7 +15,7 @@
 // showed on large, virtualized tables opened fresh. The fix drives the window
 // via the reactive _scrollTop so the slice repaints to include the target row.
 import { describe, it, expect } from 'vitest';
-import { DexTreeTable, type TreeTableRow } from '../src/dex/components/dex-tree-table.js';
+import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
 
 function makeRow(id: string, parent: string | null, name: string): TreeTableRow {
   return { ID: id, parent, Name: { label: name }, Value: '', DataType: '', Description: '', Status: '' };

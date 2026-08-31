@@ -2,7 +2,7 @@
 // Tier-1 structural extraction for .slx models: relationships only, no entries.
 // Wraps the full parseSlx and narrows to the relationship fields, tolerating
 // corrupt input by returning empty relationships (the file still becomes a node).
-import { parseSlx } from '../dex/datamodel/parser/SlxParser.js';
+import { parseSlx } from 'data-explorer-core';
 
 export interface SlxStructure {
   dataDictionary: string | null; // linked data dictionary (basename or path)
