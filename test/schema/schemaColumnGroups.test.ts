@@ -1,15 +1,5 @@
 // Copyright 2026 The MathWorks, Inc.
 import { describe, it, expect } from 'vitest';
-import { getSchemaClasses } from '../../src/dex/datamodel/schema/index.js';
-
-describe('getSchemaClasses', () => {
-  it('enumerates the classes that have a schema', () => {
-    const classes = getSchemaClasses();
-    expect(classes).toContain('Simulink.Parameter');
-    expect(classes).toContain('Simulink.Signal');
-  });
-});
-
 import { COLUMN_GROUPS } from '../../src/host/rowBuilder.js';
 
 // Column grouping is a global table concern owned by rowBuilder.COLUMN_GROUPS

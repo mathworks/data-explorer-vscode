@@ -10,7 +10,6 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getModelFromBytes, invalidate } from '../src/host/SlddModel.js';
-import '../src/dex/datamodel/node/NodeClassMap.js';
 
 function loadCodegen(): { cgSignal: any; cgParam: any } {
   const p = fileURLToPath(new URL('./parity/artifacts/binary/codegen.sldd', import.meta.url));

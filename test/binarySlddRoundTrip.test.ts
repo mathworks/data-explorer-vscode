@@ -3,14 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
-import DataModel from '../src/dex/core/DataModel.js';
-import '../src/dex/datamodel/node/NodeClassMap.js';
-import { parseBinarySlddParts } from '../src/dex/datamodel/parser/BinarySlddParser.js';
-import {
-  serializeBinarySldd,
-  buildDataChunkXml,
-  serializeEntryToXml,
-} from '../src/dex/datamodel/parser/BinarySlddSerializer.js';
+import { DataModel, parseBinarySlddParts, serializeEntryToXml } from 'data-explorer-core';
 import { findEntryObjectSpan } from '../src/host/xmlEntrySplice.js';
 
 function loadZip(fixture: string) {
@@ -24,30 +17,6 @@ function loadZip(fixture: string) {
 }
 
 describe('binary sldd round-trip', () => {
-  it('pass-through parts are byte-identical after re-serialize', () => {
-    DataModel.removeDataSource('mem://rt1');
-    const { zip, xml, meta } = loadZip('params.sldd');
-    const model = DataModel.addDataSource('mem://rt1', parseBinarySlddParts(xml, meta), { path: 'params.sldd' });
-    const out = serializeBinarySldd(model);
-    const outZip = unzipSync(new Uint8Array(out));
-    for (const name of Object.keys(meta)) {
-      expect(Array.from(outZip[name] ?? [])).toEqual(Array.from(zip[name]));
-    }
-  });
-
-  it('save gate: buildDataChunkXml output re-parses without throwing', () => {
-    DataModel.removeDataSource('mem://rt2');
-    const { xml, meta } = loadZip('params.sldd');
-    const model = DataModel.addDataSource('mem://rt2', parseBinarySlddParts(xml, meta), { path: 'params.sldd' });
-    const rebuilt = buildDataChunkXml(model);
-    expect(() => parseBinarySlddParts(rebuilt, meta)).not.toThrow();
-    const reparsed = parseBinarySlddParts(rebuilt, meta) as any;
-    const origNames = model.children.flatMap((s: any) => s.children.map((e: any) => e.name)).sort();
-    const rows = reparsed.__MW_TEXT_PARTS__['__MW_TEXT_PART__/data/chunk0'].__MW_TEXT_content.entries;
-    const newNames = rows.map((e: any) => e.name).sort();
-    expect(newNames).toEqual(origNames);
-  });
-
   it('value-edit splice: touched entry reflects the edit, untouched siblings stay byte-identical', () => {
     DataModel.removeDataSource('mem://rt3');
     const { xml, meta } = loadZip('params.sldd');

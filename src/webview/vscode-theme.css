@@ -1,6 +1,6 @@
 /* Copyright 2026 The MathWorks, Inc. */
 /* Remap Data Explorer design tokens onto VS Code theme variables.
-   Imported after dex/styles/global.css so these win the cascade. */
+   Imported after the component base styles so these win the cascade. */
 :root {
   --dex-color-text: var(--vscode-foreground);
   --dex-color-text-secondary: var(--vscode-descriptionForeground, var(--vscode-foreground));

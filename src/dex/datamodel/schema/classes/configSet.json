@@ -1,8 +1,0 @@
-{
-  "Simulink.ConfigSet": {
-    "props": [],
-    "layout": [
-      { "group": "General", "items": ["name", "value", "dataType", "kind", "class"] }
-    ]
-  }
-}

@@ -6,29 +6,27 @@
 //   • Kind is always 'Constant', icon is the arch-flavored one;
 //   • no children (a scalar leaf);
 //   • Value must be SCALAR and NUMERIC, enforced on edit with a specific message.
-// This suite locks those rules down, plus the metadata-driven class fork in
-// SectionNode.parseEntry (a derived plain variable becomes a ConstantNode, a
-// non-derived one stays a MatlabVariableNode) and the Design↔Arch round-trip.
+// This suite locks the metadata-driven class fork in SectionNode.parseEntry (a
+// derived plain variable becomes a ConstantNode, a non-derived one stays a
+// MatlabVariableNode), the Design↔Arch round-trip, and the host-side paste gate.
+// The pure ConstantNode/MatlabVariableNode value rules live in
+// data-explorer-core's constantNode.test.ts.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import ConstantNode from '../src/dex/datamodel/node/data/ConstantNode.js';
-import MatlabVariableNode from '../src/dex/datamodel/node/data/MatlabVariableNode.js';
-import { BusNode } from '../src/dex/datamodel/node/data/BusNode.js';
-import { parsedIsScalarNumeric } from '../src/dex/datamodel/parser/MatlabValueParser.js';
-import MatlabValueParser from '../src/dex/datamodel/parser/MatlabValueParser.js';
+import { getSectionMetadata } from 'data-explorer-core';
 import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
 import { buildRows } from '../src/host/rowBuilder.js';
 import { pasteEntry, pasteEntries } from '../src/host/structuralEdit.js';
-import { NS_DESIGN } from '../src/dex/datamodel/SectionConstants.js';
-import '../src/dex/datamodel/node/NodeClassMap.js';
+
+// The design/arch namespace URI, used to seed paste payloads. Read it from the
+// core barrel rather than importing the data-model-internal SectionConstants.
+const NS_DESIGN = getSectionMetadata('design').namespace;
 
 // Nodes built through the host (getModel/pasteEntry/addEntry) come from
-// data-explorer-core's node classes, whereas this file's direct unit tests use
-// the vendored src/dex copies. Same source, distinct class objects — so
-// `instanceof` can't bridge host-produced nodes to the src/dex constructors.
-// For the parseEntry/paste/addEntry fork assertions, check the runtime class
-// name instead (a faithful proxy for the class fork).
+// data-explorer-core's node classes. This file's assertions check the runtime
+// class name (a faithful proxy for the class fork) rather than `instanceof`,
+// which can't bridge across the package boundary.
 const classOf = (n: any): string | undefined => n?.constructor?.name;
 
 const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');
@@ -46,100 +44,6 @@ function entryNode(uri: string, m: any, name: string) {
 function sectionOf(m: any, name: string) {
   return m.children.find((s: any) => s.name === name);
 }
-
-describe('parsedIsScalarNumeric truth table', () => {
-  const scalarNumeric = ['5', '3.14', '-2', 'true', 'false', '1+2i'];
-  for (const expr of scalarNumeric) {
-    it(`accepts scalar numeric ${expr}`, () => {
-      expect(parsedIsScalarNumeric(MatlabValueParser.parse(expr))).toBe(true);
-    });
-  }
-  const notScalarNumeric = ["'hello'", '"world"', '[1 2 3]', '[1 2; 3 4]', '{1, 2}'];
-  for (const expr of notScalarNumeric) {
-    it(`rejects non-scalar-numeric ${expr}`, () => {
-      expect(parsedIsScalarNumeric(MatlabValueParser.parse(expr))).toBe(false);
-    });
-  }
-  it('rejects a null parse (unparseable expression)', () => {
-    expect(parsedIsScalarNumeric(null)).toBe(false);
-  });
-});
-
-describe('MatlabVariableNode.isScalarNumeric', () => {
-  it('is true for a scalar double', () => {
-    expect(MatlabVariableNode.parse(3.14, 'x', null).isScalarNumeric).toBe(true);
-  });
-  it('is true for a scalar logical', () => {
-    expect(MatlabVariableNode.parse(true, 'b', null).isScalarNumeric).toBe(true);
-  });
-  it('is false for a char', () => {
-    expect(MatlabVariableNode.parse('hi', 'c', null).isScalarNumeric).toBe(false);
-  });
-  it('is false for a numeric array', () => {
-    expect(MatlabVariableNode.parse([1, 2, 3], 'v', null).isScalarNumeric).toBe(false);
-  });
-  it('is false for a struct', () => {
-    const s = MatlabVariableNode.parse(0, 's', null);
-    s._kind = 'scalar';
-    s._scalarType = 'struct';
-    expect(s.isScalarNumeric).toBe(false);
-  });
-});
-
-describe('ConstantNode identity and structure', () => {
-  it('reports Kind "Constant" and the typeConstant icon', () => {
-    const c = ConstantNode.createDefault('Const', null);
-    expect(c).toBeInstanceOf(ConstantNode);
-    expect(c.kind).toBe('Constant');
-    expect(c.icon).toBe('typeConstant');
-  });
-
-  it('never allows children (a scalar leaf)', () => {
-    const c = ConstantNode.createDefault('Const', null);
-    expect(c.canAddChild()).toBe(false);
-  });
-
-  it('defaultName is "Const"', () => {
-    expect(ConstantNode.defaultName).toBe('Const');
-  });
-});
-
-describe('ConstantNode value validation on edit', () => {
-  it('accepts a scalar numeric value', () => {
-    const c = ConstantNode.createDefault('K', null);
-    expect(c.setProperty('Value', '42')).toBe(true);
-    expect(c.displayValue).toBe('42');
-  });
-
-  it('rejects a non-scalar (array) value with the exact message', () => {
-    const c = ConstantNode.createDefault('K', null);
-    const result = c.setProperty('Value', '[1 2 3]');
-    expect(result).not.toBe(true);
-    expect((result as any).error).toBe(true);
-    expect((result as any).reason).toBe("The value for constant 'K' must be scalar and numeric.");
-    // Rejected edits leave the value untouched.
-    expect(c.displayValue).toBe('0');
-  });
-
-  it('rejects a char value with the exact message', () => {
-    const c = ConstantNode.createDefault('MyConst', null);
-    const result = c.setProperty('Value', "'hello'");
-    expect(result).not.toBe(true);
-    expect((result as any).reason).toBe("The value for constant 'MyConst' must be scalar and numeric.");
-  });
-
-  it('rejects an unparseable value as an invalid expression', () => {
-    const c = ConstantNode.createDefault('K', null);
-    const result = c.setProperty('Value', 'int8(5)');
-    expect(result).not.toBe(true);
-    expect((result as any).reason).toBe('Invalid MATLAB expression');
-  });
-
-  it('a well-formed scalar Constant is value-editable', () => {
-    const c = ConstantNode.createDefault('K', null);
-    expect(c.valueEditable).toBe(true);
-  });
-});
 
 describe('SectionNode.parseEntry forks on isderived', () => {
   it('a derived scalar variable parses as a ConstantNode', () => {

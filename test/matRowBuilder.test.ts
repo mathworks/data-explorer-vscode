@@ -1,24 +1,24 @@
 // Copyright 2026 The MathWorks, Inc.
 import { describe, it, expect } from 'vitest';
-import '../src/dex/datamodel/node/NodeClassMap.js';
-import MatNode from '../src/dex/datamodel/node/container/MatNode.js';
+import { DataModel } from 'data-explorer-core';
 import { buildMatRows } from '../src/host/matRowBuilder.js';
 
-// Build a MatNode from parsed variables (scalar + a struct with fields).
-function makeNode() {
-  return MatNode.fromParsed(
+// Build a MatNode from parsed variables (scalar + a struct with fields) the way
+// the extension does — through the core barrel (addMatSourceParsed builds the
+// MatNode), not the data-model-internal MatNode class.
+let matSeq = 0;
+function makeNode(
+  variables: any[] = [
+    { name: 'Kp', className: 'double', dimensions: [1, 1], isComplex: false, isLogical: false, value: 3, fields: null },
     {
-      header: 'MATLAB 5.0',
-      variables: [
-        { name: 'Kp', className: 'double', dimensions: [1, 1], isComplex: false, isLogical: false, value: 3, fields: null },
-        {
-          name: 'cfg', className: 'struct', dimensions: [1, 1], isComplex: false, isLogical: false, value: null,
-          fields: { gain: { name: 'gain', className: 'double', dimensions: [1, 1], isComplex: false, isLogical: false, value: 2, fields: null } },
-        },
-      ],
-    } as any,
-    'simple.mat',
-  );
+      name: 'cfg', className: 'struct', dimensions: [1, 1], isComplex: false, isLogical: false, value: null,
+      fields: { gain: { name: 'gain', className: 'double', dimensions: [1, 1], isComplex: false, isLogical: false, value: 2, fields: null } },
+    },
+  ],
+) {
+  const uri = `matrb://${matSeq++}.mat`;
+  DataModel.removeDataSource(uri);
+  return DataModel.addMatSourceParsed(uri, { header: 'MATLAB 5.0', variables }, { path: uri });
 }
 
 describe('buildMatRows', () => {
@@ -36,7 +36,7 @@ describe('buildMatRows', () => {
   });
 
   it('returns an empty array for a MatNode with no variables', () => {
-    const node = MatNode.fromParsed({ header: 'MATLAB 5.0', variables: [] } as any, 'empty.mat');
+    const node = makeNode([]);
     expect(buildMatRows(node)).toEqual([]);
   });
 
@@ -71,10 +71,9 @@ describe('buildMatRows', () => {
 
   it('does not throw if a child node lacks toRow (defensive skip)', () => {
     // Inject a fake variable child whose toRow throws; buildMatRows must skip it.
-    const node: any = MatNode.fromParsed(
-      { header: 'MATLAB 5.0', variables: [{ name: 'ok', className: 'double', dimensions: [1, 1], isComplex: false, isLogical: false, value: 1, fields: null }] } as any,
-      'x.mat',
-    );
+    const node: any = makeNode([
+      { name: 'ok', className: 'double', dimensions: [1, 1], isComplex: false, isLogical: false, value: 1, fields: null },
+    ]);
     node.children.push({
       flatten() { return [this]; },
       toRow() { throw new Error('boom'); },
