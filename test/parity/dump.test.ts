@@ -4,7 +4,6 @@
 import { describe, it } from 'vitest';
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import '../../src/dex/datamodel/node/NodeClassMap.js';
 import { getModel, getModelFromBytes, invalidate } from '../../src/host/SlddModel.js';
 
 const ART = (v: string, n: string) => fileURLToPath(new URL(`./artifacts/${v}/${n}`, import.meta.url));

@@ -5,12 +5,18 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { DataModel } from 'data-explorer-core';
 import { getModel, getModelFromBytes, findNode, invalidate } from '../src/host/SlddModel.js';
 import { buildRows } from '../src/host/rowBuilder.js';
-import '../src/dex/datamodel/node/NodeClassMap.js';
-import MatNode from '../src/dex/datamodel/node/container/MatNode.js';
-import { parseMat } from '../src/dex/datamodel/parser/MatParser.js';
 import { buildMatRows } from '../src/host/matRowBuilder.js';
+
+// Build a MatNode from fixture bytes through the core barrel (addMatSource parses
+// the .mat and builds the MatNode), not the data-model-internal MatNode/parseMat.
+// srcId = the fixture's base name, so the row-ID roots match the assertions below.
+function matNode(name: string, srcId: string) {
+  DataModel.removeDataSource(srcId);
+  return DataModel.addMatSource(srcId, fixtureBytes(name), { path: srcId });
+}
 
 function fixture(name: string): string {
   return readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)), 'utf8');
@@ -251,10 +257,7 @@ describe('issue#3 object expansion — binary .sldd', () => {
 // keep their schema-driven typed presentation and are untouched by this path.
 describe('issue#3 object expansion — .mat (custom class, best-effort)', () => {
   function matRows() {
-    const buf = fixtureBytes('mcos/object_props.mat');
-    const parsed = parseMat(buf);
-    const node = MatNode.fromParsed(parsed as any, 'object_props.mat');
-    return buildMatRows(node);
+    return buildMatRows(matNode('mcos/object_props.mat', 'object_props.mat'));
   }
   const rows = matRows();
   const expandable = expandableIds(rows);
@@ -361,10 +364,7 @@ describe('issue#3 object expansion — .mat (custom class, best-effort)', () => 
 // an opaque "[object Object]" leaf.
 describe('issue#3 object expansion — .mat deep acyclic object graph', () => {
   function matRows() {
-    const buf = fixtureBytes('mcos/deep_objs.mat');
-    const parsed = parseMat(buf);
-    const node = MatNode.fromParsed(parsed as any, 'deep_objs.mat');
-    return buildMatRows(node);
+    return buildMatRows(matNode('mcos/deep_objs.mat', 'deep_objs.mat'));
   }
   const rows = matRows();
   const expandable = expandableIds(rows);
@@ -414,10 +414,7 @@ describe('issue#3 object expansion — .mat deep acyclic object graph', () => {
 // the real `Simulink.findVars('f14',...)` result (20 usages) saved to a .mat.
 describe('MCOS object array expansion — .mat (20x1 Simulink.VariableUsage)', () => {
   function matRows() {
-    const buf = fixtureBytes('mcos/variableUsageArray.mat');
-    const parsed = parseMat(buf);
-    const node = MatNode.fromParsed(parsed as any, 'variableUsageArray.mat');
-    return buildMatRows(node);
+    return buildMatRows(matNode('mcos/variableUsageArray.mat', 'variableUsageArray.mat'));
   }
   const rows = matRows();
   const expandable = expandableIds(rows);
@@ -480,10 +477,7 @@ describe('MCOS object array expansion — .mat (20x1 Simulink.VariableUsage)', (
 // verified R2027a — so a .mat is the ONLY container this shape can occur in.)
 describe('MCOS object array expansion — .mat (1x3 Simulink.Parameter, heterogeneous)', () => {
   function matRows() {
-    const buf = fixtureBytes('mcos/paramArray.mat');
-    const parsed = parseMat(buf);
-    const node = MatNode.fromParsed(parsed as any, 'paramArray.mat');
-    return buildMatRows(node);
+    return buildMatRows(matNode('mcos/paramArray.mat', 'paramArray.mat'));
   }
   const rows = matRows();
   const expandable = expandableIds(rows);
@@ -537,10 +531,7 @@ describe('MCOS object array expansion — .mat (1x3 Simulink.Parameter, heteroge
 // element id — so buses(2) lost 'y' and buses(3) lost 'q','r'.
 describe('MCOS object array expansion — .mat (1x3 Simulink.Bus, each a different element count)', () => {
   function matRows() {
-    const buf = fixtureBytes('mcos/busArray.mat');
-    const parsed = parseMat(buf);
-    const node = MatNode.fromParsed(parsed as any, 'busArray.mat');
-    return buildMatRows(node);
+    return buildMatRows(matNode('mcos/busArray.mat', 'busArray.mat'));
   }
   const rows = matRows();
   const expandable = expandableIds(rows);

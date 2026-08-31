@@ -17,7 +17,11 @@ import { fileURLToPath } from 'node:url';
 import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
 import { buildRows } from '../src/host/rowBuilder.js';
 import { pasteEntry } from '../src/host/structuralEdit.js';
-import { NS_DESIGN } from '../src/dex/datamodel/SectionConstants.js';
+import { getSectionMetadata } from 'data-explorer-core';
+
+// arch and design share one namespace (the section split is purely isderived);
+// obtain it via the core barrel rather than the data-model-internal constant.
+const NS_DESIGN = getSectionMetadata('design').namespace;
 
 const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');
 

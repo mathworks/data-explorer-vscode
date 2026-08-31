@@ -6,10 +6,10 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseProject, type ParsedProject } from '../../src/dex/datamodel/parser/ProjectParser.js';
-import '../../src/dex/datamodel/node/NodeClassMap.js';
-import ProjectNode from '../../src/dex/datamodel/node/container/ProjectNode.js';
+import { parseProject, DataModel } from 'data-explorer-core';
 import { buildRows } from '../../src/host/rowBuilder.js';
+
+type ParsedProject = ReturnType<typeof parseProject>;
 
 const ART = fileURLToPath(new URL('./artifacts/project/MyProj', import.meta.url));
 const GT_PATH = fileURLToPath(new URL('./project_ground_truth.json', import.meta.url));
@@ -32,10 +32,12 @@ function loadProjectFiles(projectRoot: string): Record<string, string> {
 
 let GT: any = null;
 let parsed: ParsedProject;
+let projectFiles: Record<string, string>;
 beforeAll(() => {
   if (!HAVE) return;
   GT = JSON.parse(readFileSync(GT_PATH, 'utf8'));
-  parsed = parseProject(loadProjectFiles(ART), 'MyProj');
+  projectFiles = loadProjectFiles(ART);
+  parsed = parseProject(projectFiles, 'MyProj');
 });
 
 (HAVE ? describe : describe.skip)('PROJECT PARITY (real MATLAB fixture)', () => {
@@ -101,7 +103,10 @@ beforeAll(() => {
     let node: any;
     let rows: any[];
     beforeAll(() => {
-      node = ProjectNode.fromParsed(parsed, 'MyProj.prj');
+      // Build the ProjectNode the way the extension does — through the core
+      // barrel (addProjectSource parses the files and builds the node), not the
+      // data-model-internal ProjectNode class.
+      node = DataModel.addProjectSource('test://proj-parity', projectFiles, { path: 'MyProj.prj' });
       rows = buildRows(node);
     });
 
@@ -125,6 +130,38 @@ beforeAll(() => {
     it('the referenced project appears as a row (LibProj)', () => {
       const names = rows.map((r) => (r.Name && r.Name.label) || '').join('|');
       expect(names).toContain('LibProj');
+    });
+
+    it('emits section header rows plus item rows in a valid tree', () => {
+      // Section headers for non-empty sections sit at the top level.
+      const filesHeader = rows.find((r: any) => r.ID === 'section:files');
+      expect(filesHeader).toBeDefined();
+      expect(filesHeader.parent).toBeNull();
+      // Item rows are reparented under their section.
+      const itemRows = rows.filter((r: any) => r.parent === 'section:files');
+      expect(itemRows.length).toBeGreaterThan(0);
+      // Every row's parent is null or references a real row (valid tree).
+      const ids = new Set(rows.map((r: any) => r.ID));
+      for (const r of rows as any[]) {
+        if (r.parent != null) {
+          expect(ids.has(r.parent)).toBe(true);
+        }
+      }
+    });
+
+    // ProjectItemNode reports nameEditable:false but is a real entry, not a
+    // positional array element. Its Name must therefore render in the normal color
+    // (element === false) even though the .prj view is read-only — coloring is
+    // structural, never derived from read-only-ness. Regression guard for the
+    // "grayed-out entries" bug via the real node type (not a synthetic stand-in).
+    it('renders project items in normal color (element === false)', () => {
+      const itemRows = rows.filter(
+        (r: any) => !String(r.ID).startsWith('section:') && r.Name && typeof r.Name === 'object',
+      );
+      expect(itemRows.length).toBeGreaterThan(0);
+      for (const r of itemRows as any[]) {
+        expect(r.Name.element).toBe(false); // real entries → NOT grayed
+      }
     });
   });
 });

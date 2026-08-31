@@ -3,9 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
-import DataModel from '../src/dex/core/DataModel.js';
-import '../src/dex/datamodel/node/NodeClassMap.js';
-import { parseBinarySlddParts } from '../src/dex/datamodel/parser/BinarySlddParser.js';
+import { DataModel, parseBinarySlddParts } from 'data-explorer-core';
 import { findEntryObjectSpan } from '../src/host/xmlEntrySplice.js';
 import {
   reserializeEntryXml,

@@ -11,12 +11,11 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import '../../src/dex/datamodel/node/NodeClassMap.js';
-import DataModel from '../../src/dex/core/DataModel.js';
+import { DataModel } from 'data-explorer-core';
 import { buildGraphSource } from '../../src/host/structuralIndex.js';
 import { RelGraph, type GraphSource } from '../../src/host/graphModel.js';
-import { parseMat } from '../../src/dex/datamodel/parser/MatParser.js';
-import { parseSlx } from '../../src/dex/datamodel/parser/SlxParser.js';
+import { parseMat } from 'data-explorer-core';
+import { parseSlx } from 'data-explorer-core';
 import { getModel, getModelFromBytes, invalidate } from '../../src/host/SlddModel.js';
 
 const ART = (variant: string, name: string) =>

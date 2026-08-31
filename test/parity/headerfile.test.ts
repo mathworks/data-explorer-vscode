@@ -12,7 +12,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import '../../src/dex/datamodel/node/NodeClassMap.js';
 import { getModel, getModelFromBytes, invalidate } from '../../src/host/SlddModel.js';
 
 const ART = (variant: string) =>

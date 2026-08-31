@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 import { describe, it, expect } from 'vitest';
-import { schemaColumnLabels } from '../../src/dex/datamodel/node/schemaBridge.js';
+import { schemaColumnLabels } from 'data-explorer-core';
 
 describe('schemaColumnLabels', () => {
   it('maps each schema column key to its display label', () => {

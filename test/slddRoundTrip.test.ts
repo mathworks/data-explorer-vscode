@@ -21,14 +21,14 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { unzipSync, zipSync } from 'fflate';
 import { getModel, getModelFromBytes, findNode, invalidate } from '../src/host/SlddModel.js';
 import { buildRows } from '../src/host/rowBuilder.js';
 import { reserializeEntry, addChild, deleteChild, findOwningEntry } from '../src/host/structuralEdit.js';
 import { detectIndent, findEntrySpan } from '../src/host/entrySplice.js';
 import { reserializeEntryXml, addChildXml, deleteChildXml } from '../src/host/xmlStructuralEdit.js';
 import { findEntryObjectSpan } from '../src/host/xmlEntrySplice.js';
-import { serializeEntryToXml, serializeBinarySldd, buildDataChunkXml } from '../src/dex/datamodel/parser/BinarySlddSerializer.js';
-import '../src/dex/datamodel/node/NodeClassMap.js';
+import { serializeEntryToXml } from 'data-explorer-core';
 
 const OUT_DIR = fileURLToPath(new URL('./fixtures/rt_out/', import.meta.url));
 
@@ -142,10 +142,15 @@ describe('issue#3 round-trip — binary .sldd write-back (drives the real XML tr
 
   beforeAll(() => {
     invalidate(uri);
-    const model = getModelFromBytes(uri, 'rt_bin.sldd', fixtureBytes('rt_bin.sldd'));
+    const fixBytes = fixtureBytes('rt_bin.sldd');
+    const model = getModelFromBytes(uri, 'rt_bin.sldd', fixBytes);
     buildRows(model);
-    // The chunk0.xml the provider edits in memory.
-    let xml = buildDataChunkXml(model as any);
+    // The chunk0.xml the provider edits in memory: the raw unzipped payload plus
+    // the pass-through metadata parts, exactly as BinarySlddEditorProvider holds it.
+    const zip = unzipSync(new Uint8Array(fixBytes));
+    let xml = new TextDecoder().decode(zip['data/chunk0.xml']);
+    const zipMeta: Record<string, Uint8Array> = {};
+    for (const [k, v] of Object.entries(zip)) if (k !== 'data/chunk0.xml') zipMeta[k] = v;
 
     const valueEdit = (path: string, newValue: string) => {
       const node = findNode(uri, propId(uri, path));
@@ -171,8 +176,10 @@ describe('issue#3 round-trip — binary .sldd write-back (drives the real XML tr
     xml = deleteChildXml(xml, color).newText;
 
     finalXml = xml;
-    // Re-zip the whole dictionary from the live model (preserves metadata parts).
-    const bytes = serializeBinarySldd(model as any);
+    // Re-zip exactly as the provider saves: edited chunk0.xml + pass-through parts.
+    const zipEntries: Record<string, Uint8Array> = { ...zipMeta };
+    zipEntries['data/chunk0.xml'] = new TextEncoder().encode(xml);
+    const bytes = zipSync(zipEntries, { level: 6 });
     writeFileSync(`${OUT_DIR}/rt_bin.sldd`, Buffer.from(bytes));
   });
 
