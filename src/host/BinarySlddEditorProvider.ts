@@ -21,10 +21,7 @@ import { unzipSync, zipSync } from 'fflate';
 import { renderWebviewHtml, LOADING_OVERLAY_HTML } from './webviewHtml.js';
 import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { sectionRules } from './sectionRules.js';
-import { parseBinarySlddParts } from '../dex/datamodel/parser/BinarySlddParser.js';
-import { serializeEntryToXml } from '../dex/datamodel/parser/BinarySlddSerializer.js';
-import DataModel from '../dex/core/DataModel.js';
-import '../dex/datamodel/node/NodeClassMap.js';
+import { parseBinarySlddParts, serializeEntryToXml, DataModel } from 'data-explorer-core';
 import { findOwningEntry, resolveSectionForPaste } from './structuralEdit.js';
 import { captureBaseline, computeModified, clearBaseline } from './slddBaseline.js';
 import {

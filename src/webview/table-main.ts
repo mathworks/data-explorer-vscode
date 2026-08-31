@@ -1,9 +1,9 @@
 // Copyright 2026 The MathWorks, Inc.
-import '../dex/styles/global.css';
+import './components/styles/global.css';
 import './vscode-theme.css';
-import '../dex/components/dex-tree-table.js';
-import '../dex/components/dex-context-menu.js';
-import '../dex/components/dex-error-dialog.js';
+import './components/dex-tree-table.js';
+import './components/dex-context-menu.js';
+import './components/dex-error-dialog.js';
 import { nextExpandedIds } from './rowUpdates.js';
 import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from './menuItems.js';
 import { dropDecision, type DragMode, type DropTarget, type DragSource } from './dropDecision.js';

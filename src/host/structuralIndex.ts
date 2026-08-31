@@ -6,8 +6,7 @@ import type { GraphSource, SourceType } from './graphModel.js';
 import { extractReferences } from './slddRefs.js';
 import { extractSlxStructure } from './slxStructure.js';
 import { isZipBytes } from './slddFormat.js';
-import { parseBinarySldd } from '../dex/datamodel/parser/BinarySlddParser.js';
-import { parseProject } from '../dex/datamodel/parser/ProjectParser.js';
+import { parseBinarySldd, parseProject } from 'data-explorer-core';
 import { basename } from '../common/pathUtil.js';
 
 export interface RawFile {

@@ -3,11 +3,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
-import { parseBinarySlddParts } from '../src/dex/datamodel/parser/BinarySlddParser.js';
-import DataModel from '../src/dex/core/DataModel.js';
+import { parseBinarySlddParts, DataModel } from 'data-explorer-core';
 import { findNode } from '../src/host/SlddModel.js';
 import { buildPropertyGroups } from '../src/host/piBuilder.js';
-import '../src/dex/datamodel/node/NodeClassMap.js';
 
 // The editable binary-SLDD provider registers its model in the global DataModel
 // singleton under a PREFIXED srcId (so it never collides with the read-only

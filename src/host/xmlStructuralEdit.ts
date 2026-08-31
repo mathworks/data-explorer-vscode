@@ -7,9 +7,7 @@
 // (findOwningEntry, resolveSectionForPaste, cloneForPaste) are shared with the JSON
 // path — imported, not duplicated.
 
-import { serializeEntryToXml } from '../dex/datamodel/parser/BinarySlddSerializer.js';
-import { generateUuid } from '../dex/datamodel/node/container/SectionNode.js';
-import { getSectionMetadata } from '../dex/datamodel/SectionConstants.js';
+import { serializeEntryToXml, generateUuid, getSectionMetadata } from 'data-explorer-core';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 import {
   findEntryObjectSpan,

@@ -7,7 +7,7 @@
 // pin the convention for every platform — including the ones we can't run
 // interactively — so the mapping can't regress unnoticed.
 import { describe, it, expect } from 'vitest';
-import { isMacPlatform, dragModeFromModifiers } from '../src/webview/dragMode.js';
+import { isMacPlatform, dragModeFromModifiers } from '../src/webview/components/dragMode.js';
 
 describe('isMacPlatform — recognizes Apple platform strings', () => {
   it('is true for the desktop navigator.platform value', () => {

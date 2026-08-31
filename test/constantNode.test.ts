@@ -23,6 +23,14 @@ import { pasteEntry, pasteEntries } from '../src/host/structuralEdit.js';
 import { NS_DESIGN } from '../src/dex/datamodel/SectionConstants.js';
 import '../src/dex/datamodel/node/NodeClassMap.js';
 
+// Nodes built through the host (getModel/pasteEntry/addEntry) come from
+// data-explorer-core's node classes, whereas this file's direct unit tests use
+// the vendored src/dex copies. Same source, distinct class objects — so
+// `instanceof` can't bridge host-produced nodes to the src/dex constructors.
+// For the parseEntry/paste/addEntry fork assertions, check the runtime class
+// name instead (a faithful proxy for the class fork).
+const classOf = (n: any): string | undefined => n?.constructor?.name;
+
 const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');
 
 function model(uri: string) {
@@ -138,7 +146,7 @@ describe('SectionNode.parseEntry forks on isderived', () => {
     const uri = 'test://const-fork.sldd';
     const m = model(uri);
     const c = entryNode(uri, m, 'Constant');
-    expect(c).toBeInstanceOf(ConstantNode);
+    expect(classOf(c)).toBe('ConstantNode');
     expect(c.kind).toBe('Constant');
     expect(c.canAddChild()).toBe(false);
   });
@@ -153,8 +161,7 @@ describe('SectionNode.parseEntry forks on isderived', () => {
     invalidate(uri);
     const m2 = getModel(uri, 'arch.sldd', newText);
     const copy = sectionOf(m2, 'design').children[0];
-    expect(copy).toBeInstanceOf(MatlabVariableNode);
-    expect(copy).not.toBeInstanceOf(ConstantNode);
+    expect(classOf(copy)).toBe('MatlabVariableNode');
     expect(copy.kind).toBe('MATLAB Variable');
   });
 
@@ -162,8 +169,7 @@ describe('SectionNode.parseEntry forks on isderived', () => {
     const uri = 'test://bus-fork.sldd';
     const m = model(uri);
     const di = entryNode(uri, m, 'DataInterface');
-    expect(di).toBeInstanceOf(BusNode);
-    expect(di).not.toBeInstanceOf(ConstantNode);
+    expect(classOf(di)).toBe('BusNode');
   });
 });
 
@@ -179,8 +185,7 @@ describe('Design ↔ Arch Constant conversion round-trip', () => {
     invalidate(uri);
     const m2 = getModel(uri, 'arch.sldd', t1);
     const designVar = sectionOf(m2, 'design').children[0];
-    expect(designVar).toBeInstanceOf(MatlabVariableNode);
-    expect(designVar).not.toBeInstanceOf(ConstantNode);
+    expect(classOf(designVar)).toBe('MatlabVariableNode');
     expect((designVar.metadata as any).isderived).toBe('0');
     expect(designVar.kind).toBe('MATLAB Variable');
 
@@ -192,7 +197,7 @@ describe('Design ↔ Arch Constant conversion round-trip', () => {
     const archConst = sectionOf(m3, 'arch').children.find(
       (c: any) => c.className === 'double' && c.name !== 'Constant',
     );
-    expect(archConst).toBeInstanceOf(ConstantNode);
+    expect(classOf(archConst)).toBe('ConstantNode');
     expect((archConst.metadata as any).isderived).toBe('1');
     expect(archConst.kind).toBe('Constant');
   });
@@ -243,7 +248,7 @@ describe('Variable→Constant paste gate (host side)', () => {
     invalidate(uri);
     const m2 = getModel(uri, 'arch.sldd', newText);
     const pasted = sectionOf(m2, 'arch').children.find((c: any) => c.name === 'K');
-    expect(pasted).toBeInstanceOf(ConstantNode);
+    expect(classOf(pasted)).toBe('ConstantNode');
   });
 
   it('multi-select paste is all-or-nothing: one non-scalar rejects the whole batch', () => {
@@ -264,8 +269,7 @@ describe('Variable→Constant paste gate (host side)', () => {
     invalidate(uri);
     const m2 = getModel(uri, 'arch.sldd', newText);
     const pasted = sectionOf(m2, 'design').children.find((c: any) => c.name === 'Vec');
-    expect(pasted).toBeInstanceOf(MatlabVariableNode);
-    expect(pasted).not.toBeInstanceOf(ConstantNode);
+    expect(classOf(pasted)).toBe('MatlabVariableNode');
   });
 });
 
@@ -275,7 +279,7 @@ describe('Add Constant via addEntry', () => {
     const m = model(uri);
     const arch = sectionOf(m, 'arch');
     const node = arch.addEntry('Constant');
-    expect(node).toBeInstanceOf(ConstantNode);
+    expect(classOf(node)).toBe('ConstantNode');
     expect(node.kind).toBe('Constant');
     expect((node.metadata as any).isderived).toBe('1');
     expect((node.metadata as any).namespace).toBe(NS_DESIGN);

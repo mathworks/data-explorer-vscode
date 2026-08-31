@@ -2,7 +2,7 @@
 
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { menuitemFocusRingStyles } from '../styles/focus.styles.js';
+import { menuitemFocusRingStyles } from './styles/focus.styles.js';
 
 export interface ContextMenuItem {
   id: string;
