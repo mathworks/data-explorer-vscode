@@ -6,7 +6,7 @@ import { findEntrySpan, detectIndent } from './entrySplice.js';
 import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { captureBaseline, computeModified, clearBaseline } from './slddBaseline.js';
 import { setClipboard, getClipboard, clearClipboard, clipboardState } from './clipboard.js';
-import { setDrag, getDrag, clearDrag, type DragRegisterItem } from './dragState.js';
+import { setDrag, getDrag, clearDrag } from './dragState.js';
 import {
   registerWebview,
   unregisterWebview,
@@ -27,6 +27,7 @@ import {
   findOwningEntry,
   resolveSectionForPaste,
   reserializeEntry,
+  buildDragSnapshot,
   type StructuralResult,
 } from './structuralEdit.js';
 import { annotateDataRows } from './usageGraph.js';
@@ -446,43 +447,18 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // serialized (the payload the eventual paste uses) alongside the display
     // facts (class/kind) the webview needs to predict the drop. Then broadcast
     // the payload-free descriptor so every open table can render live feedback.
+    // The snapshot itself is shared with BinarySlddEditorProvider
+    // (buildDragSnapshot); only getting a live model differs between the formats.
     const applyDragStart = (msg: { rowIds: string[] }): void => {
       try {
         const currentText = document.getText();
         invalidate(uriString);
         getModel(uriString, name, currentText);
-        const rowIds = Array.isArray(msg.rowIds) ? msg.rowIds : [];
-        const items: DragRegisterItem[] = [];
-        let sourceSection = '';
-        let sourceSectionLabel = '';
-        let sourceIsDerived = false;
-        for (const rowId of rowIds) {
-          const node = findNode(uriString, rowId);
-          if (!node) continue;
-          const entry = findOwningEntry(node);
-          if (!entry || !entry.isEntry) continue;
-          const payload = entry.serialize() as Record<string, unknown>;
-          const value = payload.value as Record<string, unknown> | undefined;
-          const arrayClass = (value && typeof value === 'object' && (value._array_class as string)) || '';
-          items.push({
-            payload,
-            className: entry.className ?? '',
-            arrayClass,
-            kind: entry.kind ?? '',
-            isMatlabVariable: !arrayClass,
-            isScalarNumeric: entry.isScalarNumeric === true,
-          });
-          const section = entry.parent;
-          if (section) {
-            sourceSection = section.name ?? '';
-            sourceSectionLabel = section.displayName ?? section.name ?? '';
-            sourceIsDerived = !!entry.isDerived;
-          }
-        }
-        if (items.length === 0) {
+        const snap = buildDragSnapshot(msg.rowIds, (rowId) => findNode(uriString, rowId));
+        if (snap.items.length === 0) {
           clearDrag();
         } else {
-          setDrag(uriString, sourceSection, sourceSectionLabel, sourceIsDerived, items);
+          setDrag(uriString, snap.sourceSection, snap.sourceSectionLabel, snap.sourceIsDerived, snap.items);
         }
         broadcastDragState();
       } catch {

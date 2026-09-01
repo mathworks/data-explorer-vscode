@@ -21,6 +21,7 @@ import {
 } from './entrySplice.js';
 import { generateUuid, getSectionMetadata } from 'data-explorer-core';
 import { buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
+import type { DragRegisterItem } from './dragState.js';
 
 export interface StructuralResult {
   newText: string;
@@ -53,6 +54,71 @@ export function resolveSectionForPaste(model: any, node: any, rowId: string): an
     if (section) return section;
   }
   return null;
+}
+
+/**
+ * Snapshot the rows a drag started on into the drag-register shape.
+ *
+ * Shared by BOTH table providers (SlddTextEditorProvider and
+ * BinarySlddEditorProvider): the two formats differ only in how they get a live
+ * model, never in what a dragged row means, so this ran as two near-identical
+ * 35-line copies. A divergence between them would show up as a drag from one
+ * .sldd format predicting a different drop than the same drag from the other.
+ *
+ * `findNode` is injected because that IS the per-format difference. A row id
+ * that resolves to nothing, or to a node with no owning entry (a section header,
+ * a detached node), contributes nothing rather than aborting the whole drag.
+ *
+ * Rows are DEDUPED BY OWNING ENTRY. A drag carries whole entries, but a
+ * multi-selection is a set of ROWS, and several rows can share one entry — a
+ * user shift-selecting a bus and the elements nested under it selects three rows
+ * belonging to one entry. Snapshotting per row instead of per entry made that
+ * drag paste the bus three times (DataInterface1, DataInterface2,
+ * DataInterface3) while a move deleted the single source once, so the user got
+ * three copies of what they dragged once.
+ *
+ * The section facts come from the LAST contributing row, matching how a
+ * multi-select drag is only ever within one section.
+ */
+export function buildDragSnapshot(
+  rowIds: unknown,
+  findNode: (rowId: string) => any,
+): { items: DragRegisterItem[]; sourceSection: string; sourceSectionLabel: string; sourceIsDerived: boolean } {
+  const items: DragRegisterItem[] = [];
+  const seen = new Set<any>();
+  let sourceSection = '';
+  let sourceSectionLabel = '';
+  let sourceIsDerived = false;
+  for (const rowId of Array.isArray(rowIds) ? rowIds : []) {
+    const node = findNode(rowId);
+    if (!node) continue;
+    const entry = findOwningEntry(node);
+    if (!entry || !entry.isEntry) continue;
+    // Identity, not name: two same-named entries in different sections are
+    // genuinely two entries, and both may legitimately be dragged at once.
+    if (seen.has(entry)) continue;
+    seen.add(entry);
+    const payload = entry.serialize() as Record<string, unknown>;
+    const value = payload.value as Record<string, unknown> | undefined;
+    // An empty `_array_class` means "not an object array", i.e. a plain MATLAB
+    // variable — the same falsy-is-absent rule the parser's envelope uses.
+    const arrayClass = (value && typeof value === 'object' && (value._array_class as string)) || '';
+    items.push({
+      payload,
+      className: entry.className ?? '',
+      arrayClass,
+      kind: entry.kind ?? '',
+      isMatlabVariable: !arrayClass,
+      isScalarNumeric: entry.isScalarNumeric === true,
+    });
+    const section = entry.parent;
+    if (section) {
+      sourceSection = section.name ?? '';
+      sourceSectionLabel = section.displayName ?? section.name ?? '';
+      sourceIsDerived = !!entry.isDerived;
+    }
+  }
+  return { items, sourceSection, sourceSectionLabel, sourceIsDerived };
 }
 
 // Reserialize one entry to text, indented to its array depth (5 levels), the

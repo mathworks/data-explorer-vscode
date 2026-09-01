@@ -22,7 +22,7 @@ import { renderWebviewHtml, LOADING_OVERLAY_HTML } from './webviewHtml.js';
 import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { sectionRules } from './sectionRules.js';
 import { parseBinarySlddParts, serializeEntryToXml, DataModel } from 'data-explorer-core';
-import { findOwningEntry, resolveSectionForPaste } from './structuralEdit.js';
+import { findOwningEntry, resolveSectionForPaste, buildDragSnapshot } from './structuralEdit.js';
 import { captureBaseline, computeModified, clearBaseline } from './slddBaseline.js';
 import {
   deleteEntryXml,
@@ -35,7 +35,7 @@ import {
 } from './xmlStructuralEdit.js';
 import { findEntryObjectSpan } from './xmlEntrySplice.js';
 import { setClipboard, getClipboard, clearClipboard, clipboardState } from './clipboard.js';
-import { setDrag, getDrag, clearDrag, type DragRegisterItem } from './dragState.js';
+import { setDrag, getDrag, clearDrag } from './dragState.js';
 import {
   registerWebview,
   unregisterWebview,
@@ -346,43 +346,17 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     };
 
     // --- Drag start: snapshot the dragged rows into the host drag register ------
-    // Mirrors SlddTextEditorProvider.applyDragStart: each dragged row's owning
-    // entry is serialized (the payload the drop pastes) alongside the display
-    // facts (class/kind) the target webview needs to predict the drop, then the
-    // payload-free descriptor is broadcast so every open table renders feedback.
+    // Each dragged row's owning entry is serialized (the payload the drop pastes)
+    // alongside the display facts (class/kind) the target webview needs to predict
+    // the drop, then the payload-free descriptor is broadcast so every open table
+    // renders feedback. The snapshot itself is shared with SlddTextEditorProvider
+    // (buildDragSnapshot); only getting a live model differs between the formats.
     const applyDragStart = (msg: { rowIds: string[] }): void => {
       try {
         buildModel();
-        const rowIds = Array.isArray(msg.rowIds) ? msg.rowIds : [];
-        const items: DragRegisterItem[] = [];
-        let sourceSection = '';
-        let sourceSectionLabel = '';
-        let sourceIsDerived = false;
-        for (const rowId of rowIds) {
-          const node = findNode(rowId);
-          if (!node) continue;
-          const entry = findOwningEntry(node);
-          if (!entry || !entry.isEntry) continue;
-          const payload = entry.serialize() as Record<string, unknown>;
-          const value = payload.value as Record<string, unknown> | undefined;
-          const arrayClass = (value && typeof value === 'object' && (value._array_class as string)) || '';
-          items.push({
-            payload,
-            className: entry.className ?? '',
-            arrayClass,
-            kind: entry.kind ?? '',
-            isMatlabVariable: !arrayClass,
-            isScalarNumeric: entry.isScalarNumeric === true,
-          });
-          const section = entry.parent;
-          if (section) {
-            sourceSection = section.name ?? '';
-            sourceSectionLabel = section.displayName ?? section.name ?? '';
-            sourceIsDerived = !!entry.isDerived;
-          }
-        }
-        if (items.length === 0) clearDrag();
-        else setDrag(uriString, sourceSection, sourceSectionLabel, sourceIsDerived, items);
+        const snap = buildDragSnapshot(msg.rowIds, findNode);
+        if (snap.items.length === 0) clearDrag();
+        else setDrag(uriString, snap.sourceSection, snap.sourceSectionLabel, snap.sourceIsDerived, snap.items);
         broadcastDragState();
       } catch {
         clearDrag();

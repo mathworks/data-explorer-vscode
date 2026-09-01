@@ -22,6 +22,8 @@ export default defineConfig({
         'src/host/navigate.ts',
         'src/host/iconMap.ts',
         'src/host/projectStore.ts',
+        // Thin `vscode` Uri-resolution shim; its shell/CSP core is webviewShell.ts.
+        'src/host/webviewHtml.ts',
         // Browser/DOM webview entrypoints + templates: no vitest DOM harness.
         'src/webview/*-main.ts',
         'src/webview/*.html',
