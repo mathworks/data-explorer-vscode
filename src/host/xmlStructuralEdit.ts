@@ -39,6 +39,18 @@ function payloadClassName(payload: Record<string, unknown>): string {
   return (value && typeof value === 'object' && (value._array_class as string)) || '';
 }
 
+// Reject a payload whose class has no home in the target section. Shared by the
+// single- and multi-paste paths, which differ only in WHEN they call it: paste
+// checks its one payload, drop checks every payload up front so a rejected
+// multi-drop leaves the document untouched. A classless payload (a plain MATLAB
+// variable) and a section with no allow-list are both unrestricted.
+function assertTypeAllowed(section: any, payload: Record<string, unknown>): void {
+  const className = payloadClassName(payload);
+  if (className && typeof section.allowsType === 'function' && !section.allowsType(className)) {
+    throw new Error(`A "${className}" entry is not allowed in ${section.displayName ?? section.name}.`);
+  }
+}
+
 // Replace the owning entry's fragment in-place with its reserialized form.
 function spliceEntry(text: string, entry: any, selectId: string | null): StructuralResult {
   const frag = reserializeEntryXml(entry);
@@ -106,10 +118,7 @@ export function pasteEntryXml(
   section: any,
   payload: Record<string, unknown>,
 ): StructuralResult {
-  const className = payloadClassName(payload);
-  if (className && typeof section.allowsType === 'function' && !section.allowsType(className)) {
-    throw new Error(`A "${className}" entry is not allowed in ${section.displayName ?? section.name}.`);
-  }
+  assertTypeAllowed(section, payload);
   const raw = cloneForPaste(payload);
   const baseName = typeof raw.name === 'string' ? raw.name : 'Entry';
   raw.name = section._uniqueName(baseName);
@@ -137,10 +146,7 @@ export function pasteEntriesXml(
   payloads: Record<string, unknown>[],
 ): { newText: string; selectIds: string[] } {
   for (const payload of payloads) {
-    const className = payloadClassName(payload);
-    if (className && typeof section.allowsType === 'function' && !section.allowsType(className)) {
-      throw new Error(`A "${className}" entry is not allowed in ${section.displayName ?? section.name}.`);
-    }
+    assertTypeAllowed(section, payload);
   }
   let currentText = text;
   const selectIds: string[] = [];

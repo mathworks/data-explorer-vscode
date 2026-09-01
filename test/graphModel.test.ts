@@ -388,3 +388,44 @@ describe('RelGraph folder/project grouping', () => {
     expect(ref.has('file:///text/util.sldd')).toBe(true);
   });
 });
+
+// SectionsTreeProvider.refresh() throws the RelGraph away (this.graph = null) and
+// fires onDidChangeTreeData, but VS Code keeps the TreeItems it already rendered
+// and may call getChildren with one of them AFTER the next graph is built — a
+// user deleting/renaming files while the tree is expanded does exactly this.
+// getChildren passes those stale nodes straight into children(), so every guard
+// below is what stops an expand-after-refresh from throwing into the tree view
+// (which VS Code surfaces as a broken "element could not be loaded" node).
+describe('RelGraph.children with a node from a previous graph', () => {
+  // The workspace the stale nodes came from, and the rebuilt graph in which none
+  // of those files exist any more.
+  const before = new RelGraph([
+    src('proj/top.slx', { modelRefs: ['sub.slx'], dataDictionary: 'd.sldd' }),
+    src('proj/sub.slx'),
+    src('proj/d.sldd'),
+  ]);
+  const after = new RelGraph([src('other/x.sldd')]);
+  const staleGroup = byLabel(before.roots(), 'proj');
+  const staleFile = byLabel(before.children(staleGroup), 'top.slx');
+  const staleExternalData = byLabel(before.children(staleFile), 'External Data');
+
+  it('returns [] for a folder/project group whose files are all gone', () => {
+    expect(after.children(staleGroup)).toEqual([]);
+  });
+
+  it('returns [] for a file node whose file is gone', () => {
+    expect(after.children(staleFile)).toEqual([]);
+  });
+
+  it('returns [] for an External Data group whose parent model is gone', () => {
+    expect(after.children(staleExternalData)).toEqual([]);
+  });
+
+  it('still expands the same nodes correctly in the graph that produced them', () => {
+    // The guards must not be over-eager: the identical nodes still resolve in
+    // their own graph, so a refresh that finds the same files keeps working.
+    expect(labels(before.children(staleGroup))).toEqual(['top.slx']);
+    expect(labels(before.children(staleFile))).toEqual(['sub.slx', 'External Data']);
+    expect(labels(before.children(staleExternalData))).toEqual(['d.sldd']);
+  });
+});

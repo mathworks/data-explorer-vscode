@@ -63,12 +63,10 @@ export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: Cli
   const rows: any[] = [];
   const sections = (sldd.children || []) as any[];
   for (const section of sections) {
-    const entries = (section.children || []) as any[];
     // Only the section the clipboard entry lives in can carry the mark, so pass
     // the mode down solely for that section (name uniqueness is per-section).
     const sectionMark = clipMark && clipMark.section === section.name ? clipMark : undefined;
-    // Always emit the section row, even when it has no entries.
-    // Parent row for the section
+    // Always emit the section's parent row, even when it has no entries.
     rows.push({
       ID: buildSectionRowId(section.name),
       parent: null,
@@ -76,7 +74,7 @@ export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: Cli
       Value: '', Class: '', Kind: '', DataType: '', Status: '', UsedBy: '',
     });
     // Entry rows (flatten each entry subtree so nested struct/bus children appear)
-    for (const entry of entries) {
+    for (const entry of (section.children || []) as any[]) {
       rows.push(...buildEntryRows(entry, section.name, modifiedNames, sectionMark));
     }
   }
@@ -97,9 +95,8 @@ function capabilityFlags(n: any): {
   // An entry is removable from its section; a nested child is removable only if
   // its parent container permits it (bus/struct/enum expose canRemoveChild).
   const parent = n.parent;
-  const canDelete = isEntry
-    ? true
-    : !!(parent && typeof parent.canRemoveChild === 'function' && parent.canRemoveChild());
+  const canDelete =
+    isEntry || !!(parent && typeof parent.canRemoveChild === 'function' && parent.canRemoveChild());
   const canAddChild = typeof n.canAddChild === 'function' && n.canAddChild();
   return { _isEntry: isEntry, _canCopy: true, _canDelete: canDelete, _canAddChild: canAddChild };
 }
@@ -113,7 +110,7 @@ export function buildEntryRows(entry: any, sectionName: string, modifiedNames?: 
   const flat = entry.flatten ? entry.flatten() : [entry];
   for (const n of flat) {
     let row: any;
-    try { row = n.toRow(); } catch (e) { continue; }
+    try { row = n.toRow(); } catch { continue; }
     if (!row) continue;
     // Block elements express their column meaning differently from data:
     // the node puts block type in Value and param-usage in DataType. Remap so
@@ -128,26 +125,27 @@ export function buildEntryRows(entry: any, sectionName: string, modifiedNames?: 
     if (row.parent == null || row.ID === entry.id) {
       row = { ...row, parent: buildSectionRowId(sectionName) };
     }
-    // Mark only the top-level entry row as Modified (not nested children).
-    if (row.ID === entry.id && modifiedNames?.has(entry.name)) {
-      row = { ...row, Status: 'Modified' };
-    }
-    // Stamp the dictionary metadata columns (Last Modified / Last Modified By)
-    // onto the top-level entry row only — nested children carry no metadata.
-    // The entry node normalizes the two parse-path key schemes into these
-    // display strings; absent values are empty and simply render blank.
+    // The stamps below apply to the TOP-LEVEL entry row only: nested children
+    // are never marked Modified, carry no dictionary metadata, and never take
+    // the clipboard affordance.
     if (row.ID === entry.id) {
+      if (modifiedNames?.has(entry.name)) {
+        row = { ...row, Status: 'Modified' };
+      }
+      // Dictionary metadata columns (Last Modified / Last Modified By). The entry
+      // node normalizes the two parse-path key schemes into these display
+      // strings; absent values are empty and simply render blank.
       const lastModified = typeof entry.lastModified === 'string' ? entry.lastModified : '';
       const lastModifiedBy = typeof entry.lastModifiedBy === 'string' ? entry.lastModifiedBy : '';
       if (lastModified || lastModifiedBy) {
         row = { ...row, lastModified, lastModifiedBy };
       }
-    }
-    // Stamp the clipboard affordance on the cut/copied entry's own row (the
-    // section is pre-matched by the caller, so here just match the name). The
-    // table reads Name.clipboardMode to dim (cut) or dash-outline (copied).
-    if (row.ID === entry.id && clipMark && clipMark.name === entry.name && row.Name && typeof row.Name === 'object') {
-      row = { ...row, Name: { ...row.Name, clipboardMode: clipMark.mode } };
+      // Clipboard affordance for the cut/copied entry (the section is pre-matched
+      // by the caller, so here just match the name). The table reads
+      // Name.clipboardMode to dim (cut) or dash-outline (copied).
+      if (clipMark && clipMark.name === entry.name && row.Name && typeof row.Name === 'object') {
+        row = { ...row, Name: { ...row.Name, clipboardMode: clipMark.mode } };
+      }
     }
     // Context-menu capability flags (consumed by the webview menu builder).
     out.push({ ...row, ...capabilityFlags(n) });

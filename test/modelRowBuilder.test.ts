@@ -41,3 +41,43 @@ describe('buildRows for a model', () => {
     expect(refEntry?.Name.element).toBe(false);
   });
 });
+
+// A ModelBlockNode reports its columns differently from a data node: it puts the
+// block TYPE in Value and the parameter usage in DataType. The table's columns
+// mean the same thing across every format, so buildEntryRows remaps them —
+// without it a block row would show "Constant" under Value and "Value=scalarD"
+// under Data Type, with the Usage column blank, i.e. three wrong columns at once.
+// model_with_refs.slx has no blocks, so this needs a fixture that does.
+describe('buildRows block-row column remap', () => {
+  // top.slx contains real Constant blocks whose Value parameters reference
+  // dictionary variables.
+  const blockRows = () => {
+    const b = readFileSync(fileURLToPath(new URL('./parity/artifacts/binary/top.slx', import.meta.url)));
+    const node = getModelFromBytes(
+      'test://blocks-top.slx',
+      'top.slx',
+      b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength),
+    );
+    return buildRows(node).filter((r: any) => r._isBlockRow);
+  };
+
+  it('moves the block type into Data Type and the param usage into Usage', () => {
+    const rows = blockRows();
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      // Data Type carries the block type (e.g. "Constant"), never a param expr.
+      expect(typeof r.DataType).toBe('string');
+      expect(r.DataType.length).toBeGreaterThan(0);
+      // Value is cleared: a block has no value of its own to show.
+      expect(r.Value).toBe('');
+    }
+  });
+
+  it('flags block rows so the async usage annotation can rewrite the Usage cell', () => {
+    // usageGraph replaces the Usage cell of flagged rows with cross-file-resolved
+    // param links; an unflagged block row would never get its links.
+    const rows = blockRows();
+    expect(rows.every((r: any) => r._isBlockRow === true)).toBe(true);
+    expect(rows.some((r: any) => r.DataType === 'Constant')).toBe(true);
+  });
+});

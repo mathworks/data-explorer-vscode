@@ -76,6 +76,23 @@ describe('resolveParam — workspace -> sldd -> mat, first found wins', () => {
     expect(resolveParam(m, 'Deep', chained, new Map())).toEqual({ kind: 'sldd', uri: 'file:///w/b.sldd' });
   });
 
+  it('keeps searching past a dictionary that is not in the workspace', () => {
+    // A model can name a dictionary that was never scanned — it lives outside the
+    // workspace, or the link is stale/broken. That must not stop the search: the
+    // params from the dictionaries that DO resolve still have to be found, or the
+    // Usage view would show them as unresolved purely because of an unrelated
+    // broken link listed ahead of them.
+    const m = model({ slddRefs: ['gone.sldd', 'd.sldd'] });
+    expect(resolveParam(m, 'Kp', sldds, mats)).toEqual({ kind: 'sldd', uri: 'file:///w/d.sldd' });
+  });
+
+  it('survives a chain into a dictionary that is not in the workspace', () => {
+    // Same hazard one level down: a resolved dictionary referencing an unscanned
+    // one must not throw or abort the BFS.
+    const chained = new Map([['a.sldd', data('file:///w/a.sldd', [], ['offWorkspace.sldd'])]]);
+    expect(resolveParam(model({ slddRefs: ['a.sldd'] }), 'Kp', chained, new Map())).toBeNull();
+  });
+
   it('does not loop on cyclic dictionary references', () => {
     const cyclic = new Map([
       ['a.sldd', data('file:///w/a.sldd', [], ['b.sldd'])],

@@ -25,6 +25,16 @@ describe('health encode/decode', () => {
   it('decodes when dexHealth is among other query params', () => {
     expect(decode(`x=1&${HEALTH_QUERY}=modified&y=2`)).toBe('modified');
   });
+
+  it('skips a valueless query param instead of misreading it', () => {
+    // A resourceUri query is not always our own: a valueless flag (`?readonly`)
+    // has no '=' at all, so slicing at index -1 would yield a bogus key and the
+    // real dexHealth pair further along would never be reached — the row would
+    // silently lose its badge. Both orders must still decode.
+    expect(decode(`readonly&${HEALTH_QUERY}=cycle`)).toBe('cycle');
+    expect(decode(`${HEALTH_QUERY}=cycle&readonly`)).toBe('cycle');
+    expect(decode('readonly')).toBeNull();
+  });
 });
 
 describe('DECORATIONS table', () => {

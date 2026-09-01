@@ -215,6 +215,22 @@ describe('keyboard navigation', () => {
     expect(focusedLabel(el)).toBe('Copy');
   });
 
+  it('ArrowUp past a disabled first item wraps to the last item', async () => {
+    // Add Child is disabled on a leaf row, so the first entry is often the
+    // disabled one; arrowing up off the top must not stall there.
+    const el = await makeMenu([
+      { id: 'addChild', label: 'Add Child', disabled: true },
+      { id: 'copy', label: 'Copy' },
+      { id: 'delete', label: 'Delete' },
+    ]);
+    key('ArrowDown'); // skips the disabled first item -> Copy
+    await el.updateComplete;
+    expect(focusedLabel(el)).toBe('Copy');
+    key('ArrowUp'); // Add Child is disabled -> wraps past the top to Delete
+    await el.updateComplete;
+    expect(focusedLabel(el)).toBe('Delete');
+  });
+
   it('Enter activates the focused item', async () => {
     const el = await makeMenu(ITEMS);
     const ids = recordActions(el);

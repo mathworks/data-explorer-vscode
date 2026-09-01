@@ -263,6 +263,23 @@ describe('keyboard focus', () => {
     cell.remove();
   });
 
+  it('captures the focused element from inside another component shadow root', async () => {
+    // The edit that triggered the error lives in the tree table's shadow DOM, so
+    // document.activeElement is the table host, not the input. Without piercing
+    // the shadow root focus would return to the whole table and the user would
+    // lose their place in it.
+    const wrapper = document.createElement('div');
+    wrapper.attachShadow({ mode: 'open' });
+    const inner = document.createElement('input');
+    wrapper.shadowRoot!.appendChild(inner);
+    document.body.appendChild(wrapper);
+    inner.focus();
+    const el = await makeDialog({ reason: 'x' });
+    el.hide();
+    expect(wrapper.shadowRoot!.activeElement).toBe(inner);
+    wrapper.remove();
+  });
+
   it('does not throw when the return target was removed while the dialog was up', async () => {
     // A host-pushed setRows re-renders the table, so the original cell element
     // can be gone by the time the user dismisses the dialog.

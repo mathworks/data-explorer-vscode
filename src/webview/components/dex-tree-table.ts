@@ -85,6 +85,28 @@ const DEFAULT_COLUMN_ORDER = [
 ];
 const DEFAULT_HIDDEN_COLUMNS = ['Kind', 'Class', 'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit', 'storageClass', 'headerFile', 'alignment', 'lastModified', 'lastModifiedBy'];
 
+// The display text of a cell value, which the host emits either as a plain
+// string or as an object carrying `text`.
+//
+// Two shapes need handling defensively, because these values come from a parsed
+// file rather than from code here. `typeof null === 'object'` in JavaScript, so a
+// null cell takes the object branch and dereferencing it throws *during render* —
+// blanking the ENTIRE table rather than the one bad cell. A shapeless `{}` (which
+// a partial parse does produce) yields undefined, which sorting then lowercases
+// and throws on. Both collapse to ''.
+function cellText(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'object') return String((value as { text?: unknown }).text ?? '');
+  return String(value);
+}
+
+// True when a cell value is in the object form, i.e. safe to read
+// `text`/`editable`/`links` off. Excludes null, which `typeof` alone calls an
+// object.
+function isCellObject(value: unknown): boolean {
+  return value !== null && typeof value === 'object';
+}
+
 @customElement('dex-tree-table')
 export class DexTreeTable extends LitElement {
   static override styles = [
@@ -495,6 +517,20 @@ export class DexTreeTable extends LitElement {
         align-items: center;
         justify-content: center;
         height: 100%;
+        color: var(--dex-color-text-secondary, #888);
+        font-size: 13px;
+        font-style: italic;
+      }
+
+      /* Shown when the document HAS rows but the active search matches none.
+         Without it the user just sees an empty grid under the header and can't
+         tell whether the file is empty or the filter is too narrow. */
+      .no-match-state {
+        position: absolute;
+        left: 0;
+        right: 0;
+        padding: 16px;
+        text-align: center;
         color: var(--dex-color-text-secondary, #888);
         font-size: 13px;
         font-style: italic;
@@ -1150,23 +1186,23 @@ export class DexTreeTable extends LitElement {
       case 'Name':
         return row.Name?.label || '';
       case 'Value':
-        return typeof row.Value === 'object' ? row.Value.text : String(row.Value || '');
+        return cellText(row.Value);
       case 'DataType':
-        if (typeof row.DataType === 'object' && 'paramLinks' in (row.DataType as any))
+        if (isCellObject(row.DataType) && 'paramLinks' in (row.DataType as any))
           return (row.DataType as any).paramLinks
             .map((p: any) => `${p.property}=${p.paramName}${p.source ? `(${p.source})` : ''}`)
             .join(', ');
-        if (typeof row.DataType === 'object' && 'links' in (row.DataType as any))
+        if (isCellObject(row.DataType) && 'links' in (row.DataType as any))
           return (row.DataType as any).links.map((l: any) => l.text).join(', ');
-        return typeof row.DataType === 'object' ? (row.DataType as any).text : String(row.DataType || '');
+        return cellText(row.DataType);
       case 'Class':
-        return typeof row.Class === 'object' ? row.Class.text : String(row.Class || '');
+        return cellText(row.Class);
       case 'Kind':
-        return typeof row.Kind === 'object' ? row.Kind.text : String(row.Kind || '');
+        return cellText(row.Kind);
       case 'Description':
-        return typeof row.Description === 'object' ? row.Description.text : String(row.Description || '');
+        return cellText(row.Description);
       case 'Status':
-        return typeof row.Status === 'object' ? row.Status.text : String(row.Status || '');
+        return cellText(row.Status);
       case 'UsedBy':
         if (!row.UsedBy) return '';
         if (typeof row.UsedBy === 'string') return row.UsedBy;
@@ -1177,7 +1213,10 @@ export class DexTreeTable extends LitElement {
         if ('blockLinks' in (row.UsedBy as any))
           return (row.UsedBy as any).blockLinks.map((b: any) => `${b.blockName}(${b.modelName})`).join(', ');
         if ('links' in row.UsedBy) return row.UsedBy.links.map((l) => l.text).join(', ');
-        return (row.UsedBy as any).text;
+        // Always a string: sorting lowercases this, so returning undefined for a
+        // shapeless object (usageGraph can leave `UsedBy: {}`) would throw and
+        // blank the whole table the moment the user sorts by Usage.
+        return cellText(row.UsedBy);
       default: {
         const raw = (row as any)[col];
         if (raw === undefined || raw === null) {
@@ -1273,7 +1312,13 @@ export class DexTreeTable extends LitElement {
       for (const r of this.rows) {
         let depth = 0;
         let pid = r.parent;
-        while (pid && rowById.has(pid)) {
+        // Rows are built from parsed file content, so a malformed document can
+        // present a parent cycle (a -> b -> a). Track the ids already walked:
+        // without this the loop never terminates and the whole webview hangs
+        // with no error — the user sees a permanently frozen editor tab.
+        const seen = new Set<string>([r.ID]);
+        while (pid && rowById.has(pid) && !seen.has(pid)) {
+          seen.add(pid);
           depth++;
           pid = rowById.get(pid)!.parent;
         }
@@ -1301,8 +1346,14 @@ export class DexTreeTable extends LitElement {
     // stays in sync with whatever columns the user actually sees (Class, Kind,
     // etc.) instead of a hardcoded subset.
     const searchColumns = this._visibleColumns;
+    // The tokenizer keeps a "quoted phrase" together as ONE token specifically so
+    // its spaces don't split it into separate terms; the quotes themselves are
+    // syntax, not text to match, so they must come off before comparing. Leaving
+    // them on makes every quoted search silently match nothing.
+    const unquote = (s: string): string =>
+      s.length > 1 && s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s;
     const makeGenericPredicate = (term: string): ((row: TreeTableRow) => boolean) => {
-      const lower = term.toLowerCase();
+      const lower = unquote(term).toLowerCase();
       return (row) => searchColumns.some((col) => this._getCellText(row, col).toLowerCase().includes(lower));
     };
 
@@ -1313,27 +1364,27 @@ export class DexTreeTable extends LitElement {
         const rawValue = token.slice(colonIdx + 1);
 
         if (prefix === 'name') {
-          const term = rawValue.toLowerCase();
+          const term = unquote(rawValue).toLowerCase();
           predicates.push((row) => {
             return this._getCellText(row, 'Name').toLowerCase().includes(term);
           });
         } else if (prefix === 'type') {
-          const term = rawValue.toLowerCase();
+          const term = unquote(rawValue).toLowerCase();
           predicates.push((row) => {
             return this._getCellText(row, 'DataType').toLowerCase().includes(term);
           });
         } else if (prefix === 'class') {
-          const term = rawValue.toLowerCase();
+          const term = unquote(rawValue).toLowerCase();
           predicates.push((row) => {
             return this._getCellText(row, 'Class').toLowerCase().includes(term);
           });
         } else if (prefix === 'kind') {
-          const term = rawValue.toLowerCase();
+          const term = unquote(rawValue).toLowerCase();
           predicates.push((row) => {
             return this._getCellText(row, 'Kind').toLowerCase().includes(term);
           });
         } else if (prefix === 'status') {
-          const term = rawValue.toLowerCase();
+          const term = unquote(rawValue).toLowerCase();
           predicates.push((row) => {
             return this._getCellText(row, 'Status').toLowerCase().includes(term);
           });
@@ -1370,7 +1421,7 @@ export class DexTreeTable extends LitElement {
               });
             }
           } else {
-            const term = rawValue.toLowerCase();
+            const term = unquote(rawValue).toLowerCase();
             predicates.push((row) => {
               return this._getCellText(row, 'Value').toLowerCase().includes(term);
             });
@@ -1400,12 +1451,17 @@ export class DexTreeTable extends LitElement {
       }
     }
 
+    // Every ancestor walk below is cycle-guarded: a malformed document can give
+    // two rows each other as parent, and an unguarded walk would spin forever,
+    // freezing the webview mid-search with no error shown.
     const includeSet = new Set<string>();
     for (const row of rows) {
       if (hitSet.has(row.ID)) {
         includeSet.add(row.ID);
         let parentId = row.parent;
-        while (parentId && rowById.has(parentId)) {
+        const seen = new Set<string>([row.ID]);
+        while (parentId && rowById.has(parentId) && !seen.has(parentId)) {
+          seen.add(parentId);
           includeSet.add(parentId);
           parentId = rowById.get(parentId)!.parent;
         }
@@ -1415,11 +1471,15 @@ export class DexTreeTable extends LitElement {
     for (const row of rows) {
       if (includeSet.has(row.ID)) continue;
       let parentId = row.parent;
-      while (parentId) {
+      const seen = new Set<string>([row.ID]);
+      while (parentId && !seen.has(parentId)) {
+        seen.add(parentId);
         if (hitSet.has(parentId)) {
           includeSet.add(row.ID);
           let mid = row.parent;
-          while (mid && mid !== parentId) {
+          const midSeen = new Set<string>([row.ID]);
+          while (mid && mid !== parentId && !midSeen.has(mid)) {
+            midSeen.add(mid);
             includeSet.add(mid);
             mid = rowById.get(mid)?.parent || null;
           }
@@ -1496,7 +1556,11 @@ export class DexTreeTable extends LitElement {
       const row = rowById.get(rowId);
       if (!row) continue;
       let pid = row.parent;
-      while (pid) {
+      // Cycle-guarded: a malformed document's parent cycle would otherwise spin
+      // here forever and hang the webview when a row is selected.
+      const seen = new Set<string>([row.ID]);
+      while (pid && !seen.has(pid)) {
+        seen.add(pid);
         if (!newSet.has(pid)) {
           newSet.add(pid);
           changed = true;
@@ -1548,6 +1612,12 @@ export class DexTreeTable extends LitElement {
   private _onRowClick(rowId: string, e?: MouseEvent): void {
     const ctrlKey = e ? e.ctrlKey || e.metaKey : false;
     const shiftKey = e ? e.shiftKey : false;
+
+    // A click re-anchors the keyboard cursor. _focusedRowId is the cursor left
+    // behind by ctrl/shift arrow navigation, and _onTableKeyDown prefers it over
+    // the selection — so leaving it set would make the next arrow key step from
+    // the row the user last arrowed to instead of the row they just clicked.
+    this._focusedRowId = null;
 
     if (ctrlKey) {
       const current = new Set(this.selectedRowIds);
@@ -1748,16 +1818,14 @@ export class DexTreeTable extends LitElement {
       if (!editable) return;
       this._onCellDblClick(row.ID, 'Name', row.Name?.label || '');
     } else if (columnId === 'Value') {
-      const val =
-        typeof row.Value === 'object'
-          ? row.Value
-          : { text: String(row.Value || ''), editable: row._valueEditable ?? false };
+      const val = isCellObject(row.Value)
+        ? (row.Value as { text: string; editable?: boolean })
+        : { text: cellText(row.Value), editable: row._valueEditable ?? false };
       if (!val.editable) return;
       this._onCellDblClick(row.ID, 'Value', val.text || '', (val as { editor?: string }).editor, (val as { options?: string[] }).options);
     } else if (columnId === 'Description') {
       if (row._valueEditable === false) return;
-      const val = typeof row.Description === 'object' ? row.Description.text : String(row.Description || '');
-      this._onCellDblClick(row.ID, 'Description', val);
+      this._onCellDblClick(row.ID, 'Description', cellText(row.Description));
     } else {
       // Generic editable column (e.g. the schema Code Generation columns): the
       // cell is an object carrying editable/editor/options. Read-only columns are
@@ -1811,6 +1879,35 @@ export class DexTreeTable extends LitElement {
       case 'ArrowLeft': {
         e.preventDefault();
         this._focusedCol = Math.max(this._focusedCol - 1, 0);
+        break;
+      }
+      // Home/End/PageUp/PageDown jump the selection the way every other grid
+      // does. Without them these keys fell through to the browser, which scrolled
+      // the container while leaving the selection behind — so the selected row
+      // vanished off-screen and the next arrow key jumped back unexpectedly.
+      case 'Home': {
+        e.preventDefault();
+        this._selectAndScroll(visibleRows[0].ID, 0);
+        break;
+      }
+      case 'End': {
+        e.preventDefault();
+        const lastIdx = visibleRows.length - 1;
+        this._selectAndScroll(visibleRows[lastIdx].ID, lastIdx);
+        break;
+      }
+      case 'PageDown': {
+        e.preventDefault();
+        const page = Math.max(1, Math.floor(this._viewportHeight / this._rowH) - 1);
+        const idx = Math.min(Math.max(currentIdx, 0) + page, visibleRows.length - 1);
+        this._selectAndScroll(visibleRows[idx].ID, idx);
+        break;
+      }
+      case 'PageUp': {
+        e.preventDefault();
+        const page = Math.max(1, Math.floor(this._viewportHeight / this._rowH) - 1);
+        const idx = Math.max(Math.max(currentIdx, 0) - page, 0);
+        this._selectAndScroll(visibleRows[idx].ID, idx);
         break;
       }
       case ' ': {
@@ -1934,7 +2031,7 @@ export class DexTreeTable extends LitElement {
     if (e.key === 'Enter') {
       e.preventDefault();
       e.stopPropagation();
-      this._commitEdit();
+      this._commitEdit(e.currentTarget as HTMLElement | null);
       this._focusTable();
     } else if (e.key === 'Escape') {
       e.preventDefault();
@@ -1950,16 +2047,39 @@ export class DexTreeTable extends LitElement {
     });
   }
 
-  private _onEditBlur = (): void => {
+  private _onEditBlur = (e: Event): void => {
     if (this._editingCell) {
-      this._commitEdit();
+      this._commitEdit(e.currentTarget as HTMLElement | null);
     }
   };
 
-  private _commitEdit(): void {
+  // Does this editor element live in the cell for (rowId, columnId)? Walks up to
+  // the owning <td class="col-…"> / <tr data-row-id> pair rather than trusting a
+  // shadow-root query, so a commit can be matched to the cell it came from.
+  private _isEditorFor(input: HTMLElement, rowId: string, columnId: string): boolean {
+    const td = input.closest('td');
+    const tr = input.closest('tr');
+    // No enclosing cell (already detached, or a test-constructed editor): fall
+    // back to accepting it — there is nothing to mismatch against.
+    if (!td || !tr) return true;
+    return tr.getAttribute('data-row-id') === rowId && td.classList.contains(`col-${columnId}`);
+  }
+
+  // `source` is the editor element the event came from. Commit reads the value
+  // from THAT element, not from whatever `.edit-input` the shadow root currently
+  // holds: opening a second cell's editor blurs the first one, and a lookup by
+  // selector would then read the abandoned input's text and write it into the
+  // NEW cell — silently corrupting a different entry in the user's file.
+  private _commitEdit(source?: HTMLElement | null): void {
     if (!this._editingCell) return;
-    const input = this.shadowRoot?.querySelector('.edit-input') as HTMLInputElement | HTMLSelectElement;
+    const el = source ?? this.shadowRoot?.querySelector('.edit-input');
+    const input = el as HTMLInputElement | HTMLSelectElement | null;
     if (!input) return;
+    // Reject a commit from an editor that belongs to a DIFFERENT cell than the
+    // one now being edited. Opening a second editor blurs the first, and that
+    // blur arrives before Lit tears the old input down — so without this check
+    // the abandoned text would be written to the newly opened cell's entry.
+    if (!this._isEditorFor(input, this._editingCell.rowId, this._editingCell.columnId)) return;
     const newValue = input.value;
     const oldValue = this._editingCell.value;
     const { rowId, columnId } = this._editingCell;
@@ -2064,11 +2184,10 @@ export class DexTreeTable extends LitElement {
     }
 
     if (columnId === 'Value') {
-      const val =
-        typeof row.Value === 'object'
-          ? row.Value
-          : { text: String(row.Value || ''), editable: row._valueEditable ?? false };
-      const text = val.text || '';
+      const val = isCellObject(row.Value)
+        ? (row.Value as { text: string; editable?: boolean })
+        : { text: cellText(row.Value), editable: row._valueEditable ?? false };
+      const text = cellText(val);
       const linkTarget = (val as { linkTarget?: string }).linkTarget;
 
       if (isEditing) {
@@ -2102,7 +2221,7 @@ export class DexTreeTable extends LitElement {
     }
 
     if (columnId === 'DataType') {
-      const val = typeof row.DataType === 'object' ? (row.DataType as any) : { text: String(row.DataType || '') };
+      const val = isCellObject(row.DataType) ? (row.DataType as any) : { text: cellText(row.DataType) };
       if ('paramLinks' in val) {
         return html`${val.paramLinks.map(
           (p: { property: string; paramName: string; source: string; linkTarget: string }, i: number) =>
@@ -2134,17 +2253,17 @@ export class DexTreeTable extends LitElement {
     }
 
     if (columnId === 'Class') {
-      const val = typeof row.Class === 'object' ? row.Class.text : String(row.Class || '');
+      const val = cellText(row.Class);
       return html`<span class="readonly-cell">${this._highlight(val)}</span>`;
     }
 
     if (columnId === 'Kind') {
-      const val = typeof row.Kind === 'object' ? row.Kind.text : String(row.Kind || '');
+      const val = cellText(row.Kind);
       return html`<span class="readonly-cell">${this._highlight(val)}</span>`;
     }
 
     if (columnId === 'Description') {
-      const val = typeof row.Description === 'object' ? row.Description.text : String(row.Description || '');
+      const val = cellText(row.Description);
       if (isEditing) {
         return html`<input
           class="edit-input"
@@ -2158,7 +2277,7 @@ export class DexTreeTable extends LitElement {
 
     if (columnId === 'UsedBy') {
       if (!row.UsedBy) return html``;
-      const val = typeof row.UsedBy === 'object' ? row.UsedBy : { text: String(row.UsedBy || '') };
+      const val = isCellObject(row.UsedBy) ? (row.UsedBy as any) : { text: cellText(row.UsedBy) };
       if ('paramLinks' in val) {
         return html`${(val as any).paramLinks.map(
           (p: { property: string; paramName: string; source: string; linkTarget: string }, i: number) =>
@@ -2201,7 +2320,7 @@ export class DexTreeTable extends LitElement {
     }
 
     if (columnId === 'Status') {
-      const val = typeof row.Status === 'object' ? row.Status.text : String(row.Status || '');
+      const val = cellText(row.Status);
       return html`<span class="${val ? 'status-modified' : ''}">${val}</span>`;
     }
 
@@ -2357,7 +2476,7 @@ export class DexTreeTable extends LitElement {
       </div>
       <div
         class="table-container"
-        role="grid"
+        role="treegrid"
         aria-rowcount=${totalRows + 1}
         aria-colcount=${visibleCols.length}
         aria-label="Data entries"
@@ -2405,6 +2524,11 @@ export class DexTreeTable extends LitElement {
               </tr>
             </thead>
           </table>
+          ${totalRows === 0 && this._filterText
+            ? html`<div class="no-match-state" style="top: ${headerHeight}px">
+                No entries match "${this._filterText}"
+              </div>`
+            : nothing}
           <table class="rows-table" style="top: ${offsetTop}px; ${this._getTableWidth(visibleCols)}">
             <colgroup>
               ${visibleCols.map((col) => html`<col style="width: ${this._getColWidth(col, visibleCols.length)}" />`)}
@@ -2416,11 +2540,18 @@ export class DexTreeTable extends LitElement {
                 const isDragSource = this._dragSourceId === row.ID;
                 const isDropTarget = this._dropTargetId === row.ID;
                 const isSection = row.ID.indexOf('section:') === 0;
+                // Expose the hierarchy to assistive tech. The visual tree shows
+                // depth via indentation and ▶/▼ via a glyph, neither of which a
+                // screen reader can see, so without these a blind user cannot
+                // tell nesting level or whether a row can be expanded at all.
+                const hasChildren = this._childrenCache.has(row.ID);
                 return html`
                   <tr
                     role="row"
                     aria-rowindex=${startIdx + ri + 2}
                     aria-selected=${isSelected}
+                    aria-level=${(this._depthCache.get(row.ID) || 0) + 1}
+                    aria-expanded=${hasChildren ? this._expandedIds.has(row.ID) : nothing}
                     class="data-row ${isSection ? 'section-row' : ''} ${isSelected ? 'selected' : ''} ${clipMode === 'cut' ? 'cut' : ''} ${clipMode ===
                     'copy'
                       ? 'copied'

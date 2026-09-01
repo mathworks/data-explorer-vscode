@@ -228,3 +228,43 @@ describe('dropDecision — empty payload', () => {
     expect(d.cursor).toBe('no-drop');
   });
 });
+
+describe('dropDecision — a target with no allow-list is unrestricted', () => {
+  // SectionNode.allowsType treats an empty allowed-types list as "no restriction"
+  // (`allowed.length === 0 || …`), and sectionRules ships [] for any section that
+  // has no ALLOWED_TYPES entry. The predictor must mirror that, or the webview
+  // would show no-drop for a drop the host would happily accept — the exact
+  // drag/paste divergence this module exists to prevent.
+  const unrestricted = (docUri = 'a.sldd') => ({
+    docUri,
+    sectionName: 'custom',
+    sectionLabel: 'Custom Section',
+    isDerived: false,
+    allowedTypes: [] as string[],
+  });
+
+  it('accepts an object entry that no allow-list mentions', () => {
+    const d = dropDecision(designSource([param()], 'b.sldd'), unrestricted('a.sldd'), 'copy');
+    expect(d.canDrop).toBe(true);
+    expect(d.cursor).toBe('copy');
+  });
+
+  it('accepts a class that the restricted sections would both reject', () => {
+    // Simulink.ServiceBus has no home in Design Data; an unrestricted section
+    // still takes it.
+    const d = dropDecision(archSource([service()], 'b.sldd'), unrestricted('a.sldd'), 'move');
+    expect(d.canDrop).toBe(true);
+  });
+
+  it('still applies the Variable→Constant gate when unrestricted AND derived', () => {
+    // "No allow-list" only waives the CLASS check. A derived section must still
+    // reject a non-scalar variable, since it would become an invalid Constant.
+    const d = dropDecision(
+      designSource([nonScalarVar()], 'b.sldd'),
+      { ...unrestricted('a.sldd'), isDerived: true },
+      'copy',
+    );
+    expect(d.canDrop).toBe(false);
+    expect(d.tooltip).toBe('MATLAB Variable must be scalar and numeric to be a Constant');
+  });
+});

@@ -20,34 +20,40 @@ export interface NameRecord {
   kind: EntryKind;
 }
 
-// Entry names from an .sldd (JSON or binary/zip; both share the in-memory
-// __MW_TEXT_PARTS__ shape). Traversal mirrors usageGraph's slddSummary:
-// content.__MW_TEXT_PARTS__['__MW_TEXT_PART__/data/chunk0'].__MW_TEXT_content.entries[].name.
-export function namesFromSldd(content: Record<string, unknown>, sourceUri: string): NameRecord[] {
+// One record per named item, all sharing a source and kind. Items with an
+// empty/falsy name are dropped (an unnamed thing can't be searched for). Every
+// extractor below funnels through this; they differ only in what they iterate,
+// which field holds the name (`nameOf`), and which `kind` the records carry.
+function nameRecords<T>(
+  items: Iterable<T>,
+  nameOf: (item: T) => string | undefined,
+  sourceUri: string,
+  kind: EntryKind,
+): NameRecord[] {
   const label = uriBasename(sourceUri);
-  const parts = content?.__MW_TEXT_PARTS__ as Record<string, unknown> | undefined;
-  const chunk = parts?.['__MW_TEXT_PART__/data/chunk0'] as Record<string, unknown> | undefined;
-  const inner = chunk?.__MW_TEXT_content as Record<string, unknown> | undefined;
-  const entries = (inner?.entries as { name?: string }[] | undefined) ?? [];
   const records: NameRecord[] = [];
-  for (const entry of entries) {
-    const name = entry?.name;
-    if (!name) continue; // drop empty/falsy names
-    records.push({ name, sourceUri, sourceLabel: label, kind: 'sldd' });
+  for (const item of items) {
+    const name = nameOf(item);
+    if (!name) continue;
+    records.push({ name, sourceUri, sourceLabel: label, kind });
   }
   return records;
 }
 
+// Entry names from an .sldd (JSON or binary/zip; both share the in-memory
+// __MW_TEXT_PARTS__ shape). Traversal mirrors usageGraph's slddSummary:
+// content.__MW_TEXT_PARTS__['__MW_TEXT_PART__/data/chunk0'].__MW_TEXT_content.entries[].name.
+export function namesFromSldd(content: Record<string, unknown>, sourceUri: string): NameRecord[] {
+  const parts = content?.__MW_TEXT_PARTS__ as Record<string, unknown> | undefined;
+  const chunk = parts?.['__MW_TEXT_PART__/data/chunk0'] as Record<string, unknown> | undefined;
+  const inner = chunk?.__MW_TEXT_content as Record<string, unknown> | undefined;
+  const entries = (inner?.entries as { name?: string }[] | undefined) ?? [];
+  return nameRecords(entries, (entry) => entry?.name, sourceUri, 'sldd');
+}
+
 // Variable names from a parsed .mat.
 export function namesFromMat(parsed: { variables: { name?: string }[] }, sourceUri: string): NameRecord[] {
-  const label = uriBasename(sourceUri);
-  const records: NameRecord[] = [];
-  for (const v of parsed?.variables ?? []) {
-    const name = v?.name;
-    if (!name) continue; // drop empty/falsy names
-    records.push({ name, sourceUri, sourceLabel: label, kind: 'mat' });
-  }
-  return records;
+  return nameRecords(parsed?.variables ?? [], (v) => v?.name, sourceUri, 'mat');
 }
 
 // Model-workspace variable names (kind 'workspace') plus referenced block names
@@ -58,23 +64,13 @@ export function namesFromSlx(
   parsed: { workspace?: { name?: string }[]; blockParamUsages?: { blockName?: string }[] },
   sourceUri: string,
 ): NameRecord[] {
-  const label = uriBasename(sourceUri);
-  const records: NameRecord[] = [];
-
-  for (const v of parsed?.workspace ?? []) {
-    const name = v?.name;
-    if (!name) continue; // drop empty/falsy names
-    records.push({ name, sourceUri, sourceLabel: label, kind: 'workspace' });
-  }
-
-  const seenBlocks = new Set<string>();
+  // Dedupe first so the Set's insertion order keeps each block at its first use.
+  const blockNames = new Set<string>();
   for (const u of parsed?.blockParamUsages ?? []) {
-    const name = u?.blockName;
-    if (!name) continue; // drop empty/falsy names
-    if (seenBlocks.has(name)) continue; // one record per block within this file
-    seenBlocks.add(name);
-    records.push({ name, sourceUri, sourceLabel: label, kind: 'block' });
+    if (u?.blockName) blockNames.add(u.blockName);
   }
-
-  return records;
+  return [
+    ...nameRecords(parsed?.workspace ?? [], (v) => v?.name, sourceUri, 'workspace'),
+    ...nameRecords(blockNames, (name) => name, sourceUri, 'block'),
+  ];
 }

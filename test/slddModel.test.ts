@@ -1,12 +1,29 @@
 // Copyright 2026 The MathWorks, Inc.
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModelFromBytes, getModel, invalidate } from '../src/host/SlddModel.js';
+import { getModelFromBytes, getModel, getProjectModel, invalidate } from '../src/host/SlddModel.js';
 
 function bytes(name: string): ArrayBuffer {
   const b = readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
   return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+}
+
+// The relpath-keyed text map projectStore.readProjectStore builds from a .prj's
+// sibling resources/project/** tree — reproduced here with plain fs so the
+// project path is testable without vscode (readProjectStore is the only
+// vscode-coupled half).
+function projectStore(projectName: string): Record<string, string> {
+  const root = fileURLToPath(new URL(`./parity/artifacts/project/${projectName}/resources/project`, import.meta.url));
+  const files: Record<string, string> = {};
+  const walk = (dir: string, prefix: string): void => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) walk(`${dir}/${e.name}`, `${prefix}/${e.name}`);
+      else files[`${prefix}/${e.name}`] = readFileSync(`${dir}/${e.name}`, 'utf8');
+    }
+  };
+  walk(root, 'resources/project');
+  return files;
 }
 
 describe('getModelFromBytes', () => {
@@ -72,6 +89,28 @@ describe('getModelFromBytes', () => {
     expect(node).toBeTruthy();
     expect(Array.isArray(node.children)).toBe(true);
     expect(node.children.length).toBe(0); // no variables
+  });
+});
+
+describe('getProjectModel', () => {
+  it('parses a real .prj resource store into its four sections', () => {
+    const uri = 'test://LibProj.prj';
+    invalidate(uri);
+    const node: any = getProjectModel(uri, 'LibProj.prj', projectStore('LibProj'));
+    expect((node.children ?? []).map((c: any) => c.name)).toEqual(['files', 'path', 'labels', 'references']);
+    // The store must actually have been read, not silently dropped: a project
+    // with no parsed members renders as an empty tree, which is what a broken
+    // relpath convention (readProjectStore vs. parseProject) would look like.
+    expect(node.children.some((c: any) => c.children.length > 0)).toBe(true);
+  });
+
+  it('caches by uriString: a second call returns the same instance', () => {
+    // The .prj tree is re-read on every tree expand; without the cache each
+    // expansion would re-parse the whole resource store.
+    const uri = 'test://LibProj-cache.prj';
+    invalidate(uri);
+    const files = projectStore('LibProj');
+    expect(getProjectModel(uri, 'LibProj.prj', files)).toBe(getProjectModel(uri, 'LibProj.prj', files));
   });
 });
 

@@ -199,6 +199,20 @@ function payloadClassName(payload: Record<string, unknown>): string {
   return (value && typeof value === 'object' && (value._array_class as string)) || '';
 }
 
+// Reject a payload whose class has no home in the target section. Shared by the
+// single- and multi-paste paths, which differ only in WHEN they call it: paste
+// checks its one payload, drop checks every payload up front so a rejected
+// multi-drop leaves the document untouched. A classless payload (a plain MATLAB
+// variable) and a section with no allow-list are both unrestricted. Mirrors the
+// XML path's identical gate, so the two .sldd formats can't drift on what a
+// section accepts.
+function assertTypeAllowed(section: any, payload: Record<string, unknown>): void {
+  const className = payloadClassName(payload);
+  if (className && typeof section.allowsType === 'function' && !section.allowsType(className)) {
+    throw new Error(`A "${className}" entry is not allowed in ${section.displayName ?? section.name}.`);
+  }
+}
+
 /**
  * The authoritative Variable→Constant gate, shared by the JSON and XML paste
  * paths. A plain MATLAB variable pasted into a DERIVED section (Architectural
@@ -241,10 +255,7 @@ export function pasteEntry(
   section: any,
   payload: Record<string, unknown>,
 ): StructuralResult {
-  const className = payloadClassName(payload);
-  if (className && typeof section.allowsType === 'function' && !section.allowsType(className)) {
-    throw new Error(`A "${className}" entry is not allowed in ${section.displayName ?? section.name}.`);
-  }
+  assertTypeAllowed(section, payload);
 
   const raw = cloneForPaste(payload);
   const baseName = typeof raw.name === 'string' ? raw.name : 'Entry';
@@ -320,10 +331,7 @@ export function pasteEntries(
   // All-or-nothing allow-check up front: reject the whole drop before mutating
   // any text or the section, so a bad item can't leave a half-applied paste.
   for (const payload of payloads) {
-    const className = payloadClassName(payload);
-    if (className && typeof section.allowsType === 'function' && !section.allowsType(className)) {
-      throw new Error(`A "${className}" entry is not allowed in ${section.displayName ?? section.name}.`);
-    }
+    assertTypeAllowed(section, payload);
   }
   let currentText = text;
   const selectIds: string[] = [];
