@@ -13,9 +13,14 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
 import { buildRows } from '../src/host/rowBuilder.js';
-import { pasteEntries, deleteEntriesByName, resolveSectionForPaste } from '../src/host/structuralEdit.js';
+import {
+  pasteEntries,
+  deleteEntriesByName,
+  resolveSectionForPaste,
+  buildDragSnapshot,
+} from '../src/host/structuralEdit.js';
 import { sectionRules } from '../src/host/sectionRules.js';
-import { dropDecision, type DragItem } from '../src/webview/dropDecision.js';
+import { dropDecision, type DragSource } from '../src/webview/dropDecision.js';
 
 const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');
 
@@ -23,23 +28,31 @@ function model(uri: string, text = archText) {
   invalidate(uri);
   return getModel(uri, 'arch.sldd', text);
 }
+function rowIdOf(m: any, name: string) {
+  return buildRows(m).find((r: any) => r.Name?.label === name && !String(r.ID).startsWith('section:')).ID;
+}
 function entry(uri: string, m: any, name: string) {
-  const id = buildRows(m).find((r: any) => r.Name?.label === name && !String(r.ID).startsWith('section:')).ID;
-  return findNode(uri, id);
+  return findNode(uri, rowIdOf(m, name));
 }
 function sectionOf(m: any, name: string) {
   return m.children.find((s: any) => s.name === name);
 }
-// Build the DragItem the webview would see for a live node (mirrors applyDragStart).
-function dragItemOf(node: any): DragItem {
-  const payload = node.serialize() as any;
-  const arrayClass = (payload.value && typeof payload.value === 'object' && payload.value._array_class) || '';
+// The DragSource the webview would see, built through the SAME production code
+// applyDragStart runs (buildDragSnapshot) instead of a hand-rolled copy of it —
+// so if what a drag carries ever changes, these end-to-end cases move with it
+// rather than silently drifting. The section facts come from the snapshot too,
+// which is why the call sites no longer spell them out.
+function dragSourceOf(uri: string, m: any, ...names: string[]): DragSource {
+  const snap = buildDragSnapshot(
+    names.map((name) => rowIdOf(m, name)),
+    (rowId: string) => findNode(uri, rowId),
+  );
   return {
-    className: node.className ?? '',
-    arrayClass,
-    kind: node.kind ?? '',
-    isMatlabVariable: !arrayClass,
-    isScalarNumeric: node.isScalarNumeric === true,
+    docUri: uri,
+    sectionName: snap.sourceSection,
+    sectionLabel: snap.sourceSectionLabel,
+    isDerived: snap.sourceIsDerived,
+    items: snap.items,
   };
 }
 
@@ -54,7 +67,7 @@ describe('drop end-to-end — cross-section MOVE within one document', () => {
     const rules = sectionRules(m);
     const designRule = rules.find((r) => r.sectionName === 'design')!;
     const decision = dropDecision(
-      { docUri: uri, sectionName: 'arch', sectionLabel: 'Architectural Data', isDerived: true, items: [dragItemOf(src)] },
+      dragSourceOf(uri, m, 'DataInterface'),
       { docUri: uri, ...designRule },
       'move',
     );
@@ -144,11 +157,10 @@ describe('drop end-to-end — same-section move is a no-op', () => {
   it('dropDecision refuses a same-doc same-section move (no delete/re-add)', () => {
     const uri = 'test://e2e-noop.sldd';
     const m = model(uri);
-    const src = entry(uri, m, 'DataInterface');
     const rules = sectionRules(m);
     const archRule = rules.find((r) => r.sectionName === 'arch')!;
     const decision = dropDecision(
-      { docUri: uri, sectionName: 'arch', sectionLabel: 'Architectural Data', isDerived: true, items: [dragItemOf(src)] },
+      dragSourceOf(uri, m, 'DataInterface'),
       { docUri: uri, ...archRule },
       'move',
     );
@@ -161,11 +173,10 @@ describe('drop end-to-end — rejected drop is predicted and never performed', (
   it('a ServiceInterface dropped into design is rejected, and pasteEntries would throw', () => {
     const uri = 'test://e2e-reject.sldd';
     const m = model(uri);
-    const svc = entry(uri, m, 'ServiceInterface');
     const rules = sectionRules(m);
     const designRule = rules.find((r) => r.sectionName === 'design')!;
     const decision = dropDecision(
-      { docUri: uri, sectionName: 'arch', sectionLabel: 'Architectural Data', isDerived: true, items: [dragItemOf(svc)] },
+      dragSourceOf(uri, m, 'ServiceInterface'),
       { docUri: uri, ...designRule },
       'copy',
     );
@@ -174,6 +185,7 @@ describe('drop end-to-end — rejected drop is predicted and never performed', (
 
     // And the host transform agrees: it would refuse the paste.
     const design = sectionOf(m, 'design');
+    const svc = entry(uri, m, 'ServiceInterface');
     expect(() => pasteEntries(archText, design, [svc.serialize() as Record<string, unknown>])).toThrow();
   });
 });
