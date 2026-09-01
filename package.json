@@ -186,8 +186,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "compile:test": "node esbuild.test.mjs",
-    "pretest:integration": "npm run build && npm run compile:test",
-    "test:integration": "vscode-test",
+    "test:integration": "npm run build && npm run compile:test && vscode-test",
     "package": "vsce package"
   },
   "dependencies": {
