@@ -91,6 +91,11 @@ function reject(tooltip: string): DropDecision {
 }
 
 export function dropDecision(source: DragSource, target: DropTarget, mode: DragMode): DropDecision {
+  // PRECONDITION (untested): `source` is built from the host's DragDescriptor,
+  // whose `items` is always an array (dragState.dragDescriptor maps the register).
+  // The `?? []` covers a descriptor arriving over postMessage from a future host
+  // version that omits the field; a missing-items drag must read as "nothing to
+  // drop" rather than throw inside a dragover handler.
   const items = source.items ?? [];
   if (items.length === 0) return reject('Nothing to drop');
 

@@ -73,7 +73,10 @@ export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: Cli
       Name: { label: section.displayName || section.name, iconId: section.icon, editable: false, disabled: false, element: false },
       Value: '', Class: '', Kind: '', DataType: '', Status: '', UsedBy: '',
     });
-    // Entry rows (flatten each entry subtree so nested struct/bus children appear)
+    // Entry rows (flatten each entry subtree so nested struct/bus children appear).
+    // PRECONDITION (untested) for `|| []`: a parsed section always has a children
+    // array (empty when the section holds nothing), so the fallback never fires.
+    // Kept because a missing array here would blank the WHOLE table, not one row.
     for (const entry of (section.children || []) as any[]) {
       rows.push(...buildEntryRows(entry, section.name, modifiedNames, sectionMark));
     }

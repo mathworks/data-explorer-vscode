@@ -154,6 +154,25 @@ describe('buildEdges', () => {
     ]);
   });
 
+  it('links a multi-variable expression to its FIRST resolved variable', () => {
+    // `Kp*Ki` uses two dictionary variables. Both get a reverse edge (the Usage
+    // view must list the block under each), but the forward link can only carry
+    // one hyperlink target, and it has to be the first — clicking `Gain=Kp*Ki`
+    // otherwise jumped to whichever variable happened to be resolved last.
+    const two = new Map([['d.sldd', data('file:///w/d.sldd', ['Kp', 'Ki'])]]);
+    const m = model({
+      slddRefs: ['d.sldd'],
+      blockParams: [{ blockName: 'Gain1', property: 'Gain', value: 'Kp*Ki' }],
+    });
+    const g = buildEdges([m], two, mats);
+    expect(g.forward.get(`${m.uri}\nGain1`)).toEqual([
+      { property: 'Gain', paramName: 'Kp*Ki', source: 'd.sldd', linkTarget: 'Kp@file:///w/d.sldd' },
+    ]);
+    // Both variables still know about the block.
+    expect(g.reverse.get('file:///w/d.sldd\nKp')).toHaveLength(1);
+    expect(g.reverse.get('file:///w/d.sldd\nKi')).toHaveLength(1);
+  });
+
   it('dedupes repeated block/param edges', () => {
     const m = model({
       slddRefs: ['d.sldd'],

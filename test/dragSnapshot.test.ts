@@ -124,6 +124,19 @@ describe('buildDragSnapshot', () => {
     expect(buildDragSnapshot(['section:arch', 'section:design'], h.find).items).toEqual([]);
   });
 
+  it('skips a row that resolves to a SECTION node, not just one that resolves to nothing', () => {
+    // A section's own name-path id (`<uri>/design`, distinct from the table's
+    // `section:design`) DOES resolve — to the section node, whose `isEntry` is
+    // undefined. Relying on findNode returning null to filter sections out would
+    // let that node through, and serializing a section as an entry payload would
+    // paste the whole section as a single bogus entry on drop.
+    const uri = 'test://snap-section-node.sldd';
+    const h = harness(uri);
+    expect(h.find(`${uri}/design`)).toBeTruthy(); // it really does resolve
+    const snap = buildDragSnapshot([`${uri}/design`, h.id('arch', 'ValueType')], h.find);
+    expect(snap.items.map((i) => i.payload.name)).toEqual(['ValueType']);
+  });
+
   it('skips a row id that no longer resolves instead of abandoning the drag', () => {
     // A stale id can arrive if the model was rebuilt between drag start and this
     // call. The other dragged rows are still valid and must survive.

@@ -376,6 +376,32 @@ describe('RelGraph folder/project grouping', () => {
     expect(labels(g.roots())).toEqual(['Root', 'sub']); // 'sub' is a separate folder group
   });
 
+  it('resolves a .prj-owned reference globally, since a .prj is in no group', () => {
+    // .prj sources are group HEADERS, never members, so they are absent from the
+    // group map. Scoped resolution has to fall back to the global basename match
+    // for them — filtering by "same group as the referrer" would return nothing
+    // and every reference a project itself names would render as unresolved.
+    const g = new RelGraph([
+      src('proj/MyProj/MyProj.prj', { slddRefs: ['shared.sldd'] }),
+      src('data/shared.sldd'),
+    ]);
+    expect(g.referencedUriStrings().has('file:///data/shared.sldd')).toBe(true);
+  });
+
+  it('ignores a second .prj in one directory rather than splitting the group', () => {
+    // Two .prj files side by side is a real (if odd) layout — a renamed project
+    // left next to its replacement. The first one defines the group; the second
+    // must not create a rival group that steals half the folder's files, which
+    // would show the same workspace twice in the tree.
+    const g = new RelGraph([
+      src('proj/First.prj'),
+      src('proj/Second.prj'),
+      src('proj/top.slx'),
+    ]);
+    expect(labels(g.roots())).toEqual(['First']);
+    expect(labels(g.children(byLabel(g.roots(), 'First')))).toEqual(['top.slx']);
+  });
+
   it('referencedUriStrings reflects scoped (same-group) resolution', () => {
     const g = new RelGraph([
       src('binary/top.slx', { dataDictionary: 'util.sldd' }),

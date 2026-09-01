@@ -19,7 +19,7 @@ const ALIASES: Record<string, string> = {
   numericType: 'typeNumeric',
   aliasType: 'typeAlias',
   valueType: 'typeStruct',
-  variant: 'variantUI',
+  variant: 'wsVariant',
   configSet: 'settings',
   matlabVariable: 'wsParameters',
   matlabStruct: 'typeStruct',

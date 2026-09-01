@@ -1,5 +1,5 @@
 // Copyright 2026 The MathWorks, Inc.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type MenuRow, type ClipboardState } from '../src/webview/menuItems.js';
 
 const NO_CLIP: ClipboardState = { canPaste: false, mode: null };
@@ -85,6 +85,39 @@ describe('buildContextMenuItems', () => {
   it('includes three separators between the action groups', () => {
     const seps = buildContextMenuItems(ENTRY, NO_CLIP, true, true).filter((i) => i.separator);
     expect(seps).toHaveLength(3);
+  });
+
+  // The Delete shortcut label is the one item resolved per call rather than at
+  // import time, so it tracks the platform the webview is actually running on.
+  // It matters because the key is different, not just the glyph: on Windows/Linux
+  // the row-delete key is Del, and labeling it "⌫" there tells the user to press
+  // Backspace — which resolveShortcutAction does accept, but which in a text-edit
+  // context is the browser's "go back". Restore the global afterwards so the rest
+  // of the suite still sees the real platform.
+  describe('platform-specific Delete label', () => {
+    const realNavigator = globalThis.navigator;
+    const asPlatform = (platform: string) =>
+      Object.defineProperty(globalThis, 'navigator', { value: { platform }, configurable: true });
+    afterEach(() => {
+      Object.defineProperty(globalThis, 'navigator', { value: realNavigator, configurable: true });
+    });
+
+    it('labels row delete ⌫ on a Mac', () => {
+      asPlatform('MacIntel');
+      expect(byId(buildContextMenuItems(ENTRY, NO_CLIP, true, true))('delete').shortcut).toBe('⌫');
+    });
+
+    it('labels row delete Del on Windows/Linux', () => {
+      asPlatform('Win32');
+      expect(byId(buildContextMenuItems(ENTRY, NO_CLIP, true, true))('delete').shortcut).toBe('Del');
+    });
+
+    it('falls back to Del when the platform string is empty', () => {
+      // Chromium is deprecating navigator.platform; an empty value must not read
+      // as "Mac" (the check would then fall through to a Mac-only label on Linux).
+      asPlatform('');
+      expect(byId(buildContextMenuItems(ENTRY, NO_CLIP, true, true))('delete').shortcut).toBe('Del');
+    });
   });
 });
 

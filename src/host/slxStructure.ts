@@ -17,9 +17,14 @@ export function extractSlxStructure(buffer: ArrayBuffer, filename: string): SlxS
       dataDictionary: parsed.dataDictionary ?? null,
       // MATLAB stores model references by bare model name ("plant"); the file on
       // disk is "plant.slx". Normalize so basename resolution in RelGraph matches.
-      modelReferences: (parsed.modelReferences ?? []).map((r) =>
-        r.modelName.endsWith('.slx') ? r.modelName : r.modelName + '.slx',
-      ),
+      // A reference carrying no usable ModelName is DROPPED rather than named
+      // (a bare '.slx' resolves to nothing) or allowed to throw: reading its
+      // name unguarded would fall into the catch below and cost the file every
+      // other relationship it does have.
+      modelReferences: (parsed.modelReferences ?? [])
+        .map((r) => r.modelName)
+        .filter((n) => typeof n === 'string' && n.length > 0)
+        .map((n) => (n.endsWith('.slx') ? n : n + '.slx')),
       externalDataSources: parsed.externalDataSources ?? [],
     };
   } catch {

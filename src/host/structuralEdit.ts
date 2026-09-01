@@ -155,6 +155,10 @@ export function deleteChild(text: string, node: any): StructuralResult {
   if (!parent || typeof parent.canRemoveChild !== 'function' || !parent.canRemoveChild()) {
     throw new Error('This item cannot be deleted.');
   }
+  // PRECONDITION (untested): the canRemoveChild guard above already restricts
+  // `node` to a child of a container (Bus/Struct/Enum), and every container in a
+  // parsed model sits under a top-level entry — a SECTION has no canRemoveChild,
+  // so a section child can never reach here. Kept for a detached node.
   const entry = findOwningEntry(node);
   if (!entry) throw new Error('Could not locate the owning entry.');
 
@@ -174,9 +178,16 @@ export function addChild(text: string, node: any): StructuralResult {
   if (typeof node.canAddChild !== 'function' || !node.canAddChild()) {
     throw new Error('This item cannot have children added.');
   }
+  // PRECONDITION (untested): as in deleteChild, every container node in a parsed
+  // model has an owning entry — a SECTION's canAddChild() returns false, so the
+  // guard above already excludes the only node kind that has no entry above it.
   const entry = findOwningEntry(node);
   if (!entry) throw new Error('Could not locate the owning entry.');
 
+  // PRECONDITION (untested): every node type whose canAddChild() returns true
+  // (Bus, ConnectionBus, ServiceBus, Struct, EnumType) builds and returns a child
+  // unconditionally, so the guard above already excludes every node that could
+  // yield null here. Kept as a belt-and-braces net for a future container type.
   const child = node.addChildNode();
   if (!child) throw new Error('Failed to add a child element.');
 
@@ -260,19 +271,32 @@ export function pasteEntry(
   const raw = cloneForPaste(payload);
   const baseName = typeof raw.name === 'string' ? raw.name : 'Entry';
   raw.name = section._uniqueName(baseName);
-  if (raw.metadata && typeof raw.metadata === 'object') {
-    const md = raw.metadata as Record<string, unknown>;
-    // A pasted entry is a new object: give it its own uuid rather than
-    // duplicating the source's, matching the add-entry path (SectionNode).
-    md.uuid = generateUuid();
-    // Rebind the entry to the target section. Both fields matter: namespace
-    // routes it, and isderived is what actually distinguishes Arch from Design
-    // (they share NS_DESIGN), so this is what declassifies an arch paste.
-    const sectionMeta = getSectionMetadata(section.name);
-    md.namespace = sectionMeta.namespace;
-    md.isderived = sectionMeta.isderived;
-  }
+  // Rebind the entry to the target section UNCONDITIONALLY, creating the metadata
+  // object when the payload carries none. `metadata` is null for an entry whose
+  // source .sldd never declared one (e.g. hand-added in the text view), and
+  // skipping the rebind there left the pasted entry with no namespace at all — so
+  // getSectionKey fell through to its 'design' default and the reloaded file put
+  // the entry in Design Data no matter which section it was pasted into. Mirrors
+  // the XML path, so the two .sldd formats agree on where a paste lands.
+  const md = (raw.metadata && typeof raw.metadata === 'object' ? raw.metadata : {}) as Record<
+    string,
+    unknown
+  >;
+  // A pasted entry is a new object: give it its own uuid rather than
+  // duplicating the source's, matching the add-entry path (SectionNode).
+  md.uuid = generateUuid();
+  // Both fields matter: namespace routes it, and isderived is what actually
+  // distinguishes Arch from Design (they share NS_DESIGN), so this is what
+  // declassifies an arch paste.
+  const sectionMeta = getSectionMetadata(section.name);
+  md.namespace = sectionMeta.namespace;
+  md.isderived = sectionMeta.isderived;
+  raw.metadata = md;
 
+  // PRECONDITION (untested): parseEntry always returns a node — an unrecognized
+  // class becomes a plain ObjectNode and a valueless payload a MatlabVariableNode,
+  // so no payload reaching here (they are all serialize() output of a real entry,
+  // or clipboard JSON with a name) can make it null. Kept as a defensive net.
   const newNode = section.parseEntry(raw);
   if (!newNode) throw new Error('Failed to paste the entry.');
   assertConstantValueAllowed(section, newNode);
@@ -291,23 +315,25 @@ export function pasteEntry(
 /**
  * Source-side of a MOVE drop: remove the dragged entries from the SOURCE text by
  * name. Works purely on text so it applies to any document (the move source may
- * differ from the paste target). Each named top-level entry's array element is
- * spliced out; spans are removed high-offset-first so earlier removals don't
- * shift the offsets of later ones. Names not present are silently skipped, so an
+ * differ from the paste target). Names not present are silently skipped, so an
  * already-absent entry never throws (and an all-absent list returns the text
  * unchanged, byte-identical).
+ *
+ * Each span is re-found against the text produced by the previous removal rather
+ * than all being computed up front. Element spans DO overlap, so no ordering of
+ * pre-computed spans is safe: the last element's span starts at the END of its
+ * predecessor (to absorb the preceding comma), while the predecessor's own span
+ * runs forward to the next element's start — the comma between them belongs to
+ * both. Removing both stale spans deleted that overlap twice and ate the array's
+ * closing bracket, so moving the last two entries out of a document corrupted it
+ * into unparseable JSON. Re-finding also makes a duplicated name a no-op on the
+ * second pass instead of splicing out an innocent neighbour.
  */
 export function deleteEntriesByName(text: string, names: string[]): string {
-  const spans: { offset: number; length: number }[] = [];
-  for (const name of names) {
-    const span = findEntryElementSpan(text, name);
-    if (span) spans.push(span);
-  }
-  // Remove from the end so each splice leaves earlier offsets valid.
-  spans.sort((a, b) => b.offset - a.offset);
   let out = text;
-  for (const span of spans) {
-    out = out.slice(0, span.offset) + out.slice(span.offset + span.length);
+  for (const name of names) {
+    const span = findEntryElementSpan(out, name);
+    if (span) out = out.slice(0, span.offset) + out.slice(span.offset + span.length);
   }
   return out;
 }

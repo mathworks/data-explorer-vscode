@@ -16,9 +16,18 @@ export interface XmlSpan {
   length: number;
 }
 
-// Read the entry Name from a fragment via its Name P-node.
+// Read the entry Name from a fragment via its Name P-node. Attribute-agnostic
+// between `Name="Name"` and the closing `>`, because the PARSER is: it matches a
+// P-node on its Name attribute alone and never requires `Class="char"`. Demanding
+// that attribute here made the two layers disagree about what an entry is — a
+// writer that omits it still produced a visible table row, but every structural
+// edit on that row failed with "Could not locate entry" because the splicer could
+// not find the text the parser had just modelled. A Name P-node with no text
+// (`<P Name="Name" Class="char"/>`, how MATLAB writes an empty char) still yields
+// null, so such a fragment is SKIPPED rather than matched — otherwise a search
+// for a real entry name could land on it and splice over the wrong <Object>.
 function entryNameOf(fragment: string): string | null {
-  const m = fragment.match(/<P Name="Name" Class="char">([^<]*)<\/P>/);
+  const m = fragment.match(/<P Name="Name"[^>]*>([^<]*)<\/P>/);
   return m ? m[1] : null;
 }
 
@@ -68,7 +77,13 @@ export function findEntryInsertionPoint(xml: string): number | null {
   const candidates = [refIdx, dictIdx].filter((i) => i >= 0);
   if (candidates.length === 0) return null;
   const target = Math.min(...candidates);
-  // Back up to the start of that object's line so the inserted entry aligns.
+  // Back up to the start of that object's line so the inserted entry aligns —
+  // but ONLY when that line holds nothing but the object's indentation. In a
+  // single-line document (a real writer shape: two of the .sldd fixtures put the
+  // whole chunk on one line) there is no preceding newline, so the line start is
+  // offset 0 and backing up put the new entry BEFORE the `<?xml` prolog, writing
+  // a file that no longer opens. Same guard findEntryElementSpan already applies
+  // to its own line-start extension.
   const lineStart = xml.lastIndexOf('\n', target - 1) + 1;
-  return lineStart;
+  return xml.slice(lineStart, target).trim() === '' ? lineStart : target;
 }

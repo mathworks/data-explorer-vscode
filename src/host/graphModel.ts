@@ -110,7 +110,13 @@ export class RelGraph {
   // to the global basename match when the group has none.
   private resolveScoped(ref: string, referrer: string | undefined): string[] {
     const all = this.resolve(ref);
+    // PRECONDITION (untested): every call site passes a GraphSource's uriString,
+    // which the interface makes required, so `referrer` is never absent in
+    // practice. The optional parameter keeps the signature usable for a future
+    // referrer-less lookup, where global resolution is the right answer.
     if (!referrer) return all;
+    // A .prj IS reachable here and is deliberately absent from groupOf (it is a
+    // group header, not a member), so scoping must fall back to the global match.
     const g = this.groupOf.get(referrer);
     if (g == null) return all;
     const inScope = all.filter((t) => this.groupOf.get(t) === g);
@@ -187,12 +193,20 @@ export class RelGraph {
         if (!parent) return [];
         return this.dataLinkChildren(parent, node.ancestors);
       }
-      // project | folder group
+      // project | folder group. PRECONDITION (untested) for the null-groupKey and
+      // null-uriString arms just above: toGroupNode always sets groupKey, and the
+      // synthetic External Data node (the only group without one) is routed by the
+      // branch above it, so in practice only `!g` — a group from a PREVIOUS graph —
+      // is ever taken.
       const g = node.groupKey != null ? this.groups.get(node.groupKey) : undefined;
       if (!g) return [];
       return this.groupRoots(g).map((s) => this.toNode(s, new Set()));
     }
 
+    // PRECONDITION (untested): `missing` is the only node kind built without a
+    // uriString, and it returned above; every file node comes from toNode, which
+    // always sets it. Kept so an externally-constructed GraphNode degrades to an
+    // empty expansion instead of throwing into the tree view.
     if (!node.uriString) return [];
     const src = this.sources.get(node.uriString);
     if (!src) return [];

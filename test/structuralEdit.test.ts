@@ -123,7 +123,7 @@ describe('pasteEntry', () => {
     const payload = src.serialize() as Record<string, unknown>;
     const section = src.parent;
 
-    const { newText, selectId } = pasteEntry(fixtureText, section, payload, undefined);
+    const { newText, selectId } = pasteEntry(fixtureText, section, payload);
     expect(isValidJson(newText)).toBe(true);
     // Original still present; a uniquely-named copy now exists.
     const names = rowNames(uri, newText);
@@ -143,14 +143,36 @@ describe('pasteEntry', () => {
     const config = model.children.find((s: any) => s.name === 'config');
     expect(config).toBeTruthy();
 
-    const NS_CONFIG = 'a3b2532e-8e6e-47f5-94fb-b15daf666a84';
-    const { newText } = pasteEntry(fixtureText, config, payload, NS_CONFIG);
+    // The namespace is derived from the target section, not passed in.
+    const { newText } = pasteEntry(fixtureText, config, payload);
     expect(isValidJson(newText)).toBe(true);
     // After reparse the pasted entry is a child of config, not design.
     invalidate(uri);
     const reparsed = getModel(uri, 'data.sldd', newText);
     const configEntries = reparsed.children.find((s: any) => s.name === 'config').children.map((c: any) => c.name);
     expect(configEntries).toContain('Number');
+  });
+
+  it('rebinds the section even when the payload declares no metadata at all', () => {
+    // `metadata` is null for an entry whose source .sldd never declared one (a row
+    // hand-added in the text view round-trips as `"metadata": null`). Skipping the
+    // namespace rebind for those left the pasted entry with no namespace, so
+    // getSectionKey fell through to its 'design' default: pasting into
+    // Configurations put the entry in Design Data instead, as if the paste had
+    // gone to the wrong section entirely.
+    const uri = 'test://paste-nometa.sldd';
+    const model = freshModel(uri);
+    const config = model.children.find((s: any) => s.name === 'config');
+    expect(config).toBeTruthy();
+
+    const { newText } = pasteEntry(fixtureText, config, { name: 'Hand', value: 5 });
+    expect(isValidJson(newText)).toBe(true);
+
+    invalidate(uri);
+    const reparsed = getModel(uri, 'data.sldd', newText);
+    const sectionOf = (name: string) =>
+      reparsed.children.find((s: any) => s.children.some((c: any) => c.name === name))?.name;
+    expect(sectionOf('Hand')).toBe('config');
   });
 
   it('gives the pasted copy a fresh unique uuid, not the source uuid', () => {
@@ -161,7 +183,7 @@ describe('pasteEntry', () => {
     const sourceUuid = (payload.metadata as any).uuid as string;
     const section = src.parent;
 
-    const { newText } = pasteEntry(fixtureText, section, payload, undefined);
+    const { newText } = pasteEntry(fixtureText, section, payload);
     invalidate(uri);
     const reparsed = getModel(uri, 'data.sldd', newText);
     const copy = buildRows(reparsed)
@@ -204,10 +226,165 @@ describe('pasteEntry', () => {
     expect((back.serialize() as any).metadata.uuid).toBe(originalUuid);
   });
 
+  it('pastes into a dictionary whose entries array is EMPTY', () => {
+    // The first paste into an empty array must NOT be prefixed with a comma —
+    // `[,{...}]` is not JSON. Reachable two ways the user hits routinely: a
+    // freshly created dictionary, and one whose every entry was just deleted or
+    // moved out. Getting it wrong corrupts the file on the very first paste.
+    const uri = 'test://paste-into-empty.sldd';
+    const root = JSON.parse(fixtureText);
+    root.__MW_TEXT_PARTS__['__MW_TEXT_PART__/data/chunk0'].__MW_TEXT_content.entries = [];
+    const emptyText = JSON.stringify(root, null, 2);
+
+    invalidate(uri);
+    const empty = getModel(uri, 'data.sldd', emptyText);
+    expect(empty.children.every((s: any) => s.children.length === 0)).toBe(true);
+
+    const donor = freshModel('test://paste-into-empty-src.sldd');
+    const src = donor.children.flatMap((s: any) => s.children).find((e: any) => e.name === 'Number');
+    const { newText } = pasteEntry(emptyText, empty.getSection('design'), src.serialize());
+    expect(isValidJson(newText)).toBe(true);
+    expect(rowNames(uri, newText)).toEqual(['Number']);
+  });
+
   it('cloneForPaste produces an independent copy', () => {
     const original = { name: 'X', metadata: { uuid: '1' }, value: { a: 1 } };
     const clone = cloneForPaste(original);
     (clone.metadata as any).uuid = '2';
     expect((original.metadata as any).uuid).toBe('1');
+  });
+});
+
+// Every structural edit resolves its target by NAME in the live document text,
+// while the model it was handed came from an EARLIER read of that text. The two
+// can disagree: the user (or another extension) can edit the .sldd in the text
+// view, or on disk, between the table's last repaint and the click. The span
+// finders then return null, and these guards are what turn that into a readable
+// error message instead of a corrupt splice at offset 0 or a silent no-op.
+//
+// Each test asserts the MESSAGE too, because the message is the whole user-facing
+// product of the guard — SlddTextEditorProvider surfaces it verbatim as
+// "Failed to apply edit: <message>" in the table.
+describe('structural edits against text the model no longer matches', () => {
+  // The fixture with every mention of "Number" renamed — exactly what a rename in
+  // the text view produces while the table still holds the old model.
+  const renamed = (from: string, to: string) => fixtureText.replace(new RegExp(`"${from}"`, 'g'), `"${to}"`);
+
+  it('deleteEntry names the entry it could not find', () => {
+    const uri = 'test://stale-delete.sldd';
+    const model = freshModel(uri);
+    const entry = findNode(uri, buildRows(model).find((r: any) => r.Name?.label === 'Number').ID);
+    expect(() => deleteEntry(renamed('Number', 'NumberRenamed'), entry)).toThrow(
+      'Could not locate entry "Number" to delete.',
+    );
+  });
+
+  it('addChild names the entry whose text it could not find', () => {
+    // The owning entry is reserialized and spliced over its span, so a missing
+    // span here would otherwise overwrite the wrong bytes.
+    const uri = 'test://stale-add-child.sldd';
+    const node = structEntry(uri);
+    expect(() => addChild(fixtureText.replace('"name": "Struct"', '"name": "Renamed"'), node)).toThrow(
+      'Could not locate entry "Struct" text.',
+    );
+  });
+
+  it('deleteChild names the entry whose text it could not find', () => {
+    const uri = 'test://stale-del-child.sldd';
+    const parent = structEntry(uri);
+    expect(() =>
+      deleteChild(fixtureText.replace('"name": "Struct"', '"name": "Renamed"'), parent.children[0]),
+    ).toThrow('Could not locate entry "Struct" text.');
+  });
+
+  it('pasteEntry reports a missing entries array rather than inserting at offset 0', () => {
+    // A hand-edited or partially-written .sldd can be valid JSON yet not have the
+    // entries array at the expected path. Inserting anyway would write the entry
+    // into the middle of an unrelated object.
+    const uri = 'test://no-entries-array.sldd';
+    const model = freshModel(uri);
+    const src = findNode(uri, buildRows(model).find((r: any) => r.Name?.label === 'Number').ID);
+    const noEntries = fixtureText.replace('"entries"', '"entriesX"');
+    expect(isValidJson(noEntries)).toBe(true); // still parses — only the path is wrong
+    expect(() => pasteEntry(noEntries, src.parent, src.serialize() as Record<string, unknown>)).toThrow(
+      'Could not locate the entries array.',
+    );
+  });
+});
+
+// The paste gates. Both are reachable from an ordinary drag or Cmd+V — the
+// webview's dropDecision predicts them so the cursor already says no-drop, but
+// the host must enforce them anyway: a keyboard paste never consults the
+// predictor, and drop feedback alone is advisory.
+describe('pasteEntry rejects what the target section cannot hold', () => {
+  const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');
+  const archModel = (uri: string) => {
+    invalidate(uri);
+    return getModel(uri, 'arch.sldd', archText);
+  };
+
+  it('names both the class and the section when the class has no home there', () => {
+    // A Service Interface exists only in Architectural Data. Pasting one into
+    // Design Data would produce an entry Simulink cannot load.
+    const model = archModel('test://paste-disallowed.sldd');
+    const payload = {
+      name: 'Svc',
+      metadata: { uuid: 'u' },
+      value: { _array_class: 'Simulink.ServiceBus', _elements: [{ _properties: {} }] },
+    };
+    expect(() => pasteEntry(archText, model.getSection('design'), payload)).toThrow(
+      'A "Simulink.ServiceBus" entry is not allowed in Design Data.',
+    );
+  });
+
+  it('names the entry when a non-scalar variable would become an invalid Constant', () => {
+    // A plain MATLAB variable pasted into Architectural Data is reclassed to a
+    // Constant, which must be scalar-numeric — an array cannot be one. Without
+    // this the document would hold a Constant Simulink rejects.
+    const model = archModel('test://paste-nonscalar.sldd');
+    const payload = { name: 'Arr', metadata: { uuid: 'u' }, value: [1, 2, 3] };
+    expect(() => pasteEntry(archText, model.getSection('arch'), payload)).toThrow(
+      "The value for constant 'Arr' must be scalar and numeric.",
+    );
+  });
+});
+
+describe('deleteChild / addChild on a node that does not support it', () => {
+  it('refuses to add a child to a scalar with an actionable message', () => {
+    const uri = 'test://add-child-scalar-msg.sldd';
+    const model = freshModel(uri);
+    const scalar = findNode(uri, buildRows(model).find((r: any) => r.Name?.label === 'Number').ID);
+    expect(() => addChild(fixtureText, scalar)).toThrow('This item cannot have children added.');
+  });
+
+  it('refuses to delete a top-level entry through the nested-child path', () => {
+    // deleteChild's caller picks the path from node.isEntry; an entry routed here
+    // has a SECTION as its parent, which has no canRemoveChild.
+    const uri = 'test://del-child-entry.sldd';
+    const model = freshModel(uri);
+    const entry = findNode(uri, buildRows(model).find((r: any) => r.Name?.label === 'Number').ID);
+    expect(() => deleteChild(fixtureText, entry)).toThrow('This item cannot be deleted.');
+  });
+});
+
+// deleteEntry picks the row to select after the deletion: the previous sibling,
+// else the next, else the section header. The last arm only happens when the
+// deleted entry was the section's ONLY entry — the table would otherwise be told
+// to select a row that no longer exists, leaving the Property Inspector showing
+// the entry the user just deleted.
+describe('deleteEntry reselection', () => {
+  it('falls back to the section header when the section had a single entry', () => {
+    const uri = 'test://del-last-in-section.sldd';
+    const model = freshModel(uri);
+    // arch is empty in this fixture; paste one entry in so it holds exactly one.
+    const src = findNode(uri, buildRows(model).find((r: any) => r.Name?.label === 'Number').ID);
+    const arch = model.children.find((s: any) => s.name === 'arch');
+    const { newText } = pasteEntry(fixtureText, arch, src.serialize() as Record<string, unknown>);
+
+    invalidate(uri);
+    const reparsed = getModel(uri, 'data.sldd', newText);
+    const solo = reparsed.children.find((s: any) => s.name === 'arch').children[0];
+    expect(solo).toBeTruthy();
+    expect(deleteEntry(newText, solo).selectId).toBe('section:arch');
   });
 });

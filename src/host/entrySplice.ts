@@ -14,6 +14,10 @@ function getProperty(objectNode: Node | null | undefined, key: string): Node | n
       continue;
     }
     const keyNode = prop.children[0];
+    // PRECONDITION (untested) for the `type === 'string'` half: jsonc-parser only
+    // emits a `property` node when its key is a quoted string (an unquoted or
+    // numeric key parses to no property at all), so the type check never rejects.
+    // Kept so the value comparison cannot be reached with a non-string key.
     if (keyNode.type === 'string' && keyNode.value === key) {
       return prop.children[1] ?? null;
     }
@@ -123,6 +127,10 @@ export function findEntriesArrayInsertion(
 ): { offset: number; needsLeadingComma: boolean; elementIndent: string } | null {
   const entries = findEntriesArray(text);
   if (!entries) return null;
+  // PRECONDITION (untested) for `?? []`: findEntriesArray already rejects a node
+  // without `children`, and jsonc-parser always gives an array node one anyway —
+  // `[]` and even an unterminated `[` both yield an empty array. The fallback
+  // keeps the empty-array insert path below correct for a parser change.
   const elements = entries.children ?? [];
   if (elements.length > 0) {
     const last = elements[elements.length - 1];

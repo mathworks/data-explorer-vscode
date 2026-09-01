@@ -21,7 +21,11 @@ const MOD = navigatorIsMac() ? '⌘' : 'Ctrl+';
 const SHIFT = navigatorIsMac() ? '⇧' : 'Shift+';
 
 function navigatorIsMac(): boolean {
-  // Guarded for the node test env where navigator is absent.
+  // PRECONDITION (untested) for this first guard only: the webview always has a
+  // `navigator`. It exists because the module is also imported by node-side unit
+  // tests, where Node < 21 had no global navigator — deleting it would break them
+  // on an LTS downgrade. The platform test below IS live per call (see the Delete
+  // label in buildContextMenuItems) and is covered for both platforms.
   if (typeof navigator === 'undefined') return true;
   return /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
 }

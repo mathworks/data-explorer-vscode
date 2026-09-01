@@ -31,6 +31,39 @@ describe('findEntrySpan', () => {
   });
 });
 
+// All three finders share one tolerant walk down __MW_TEXT_PARTS__ → chunk0 →
+// __MW_TEXT_content → entries, and they are handed the LIVE document text. The
+// user can have that text open in a text view alongside the table, and VS Code
+// reports every keystroke — so these helpers are routinely called on text that is
+// mid-edit and not yet a well-formed .sldd. Each step must yield null (the
+// callers turn that into "Could not locate…"), never throw: an exception here
+// escapes as an unhandled rejection and the table stops responding to edits.
+describe('parse walk on text that is not a well-formed .sldd', () => {
+  it('returns null when the document root is not an object', () => {
+    // A truncated or hand-replaced file can be a bare array or scalar.
+    expect(findEntrySpan('[1, 2, 3]', 'X')).toBeNull();
+    expect(findEntryElementSpan('"just a string"', 'X')).toBeNull();
+    expect(findEntriesArrayInsertion('42')).toBeNull();
+  });
+
+  it('returns null for a property whose value has not been typed yet', () => {
+    // `{ "__MW_TEXT_PARTS__" }` is what the text view holds the moment after the
+    // key is typed and before the colon — jsonc-parser yields a property node
+    // with a key and no value, which the walk must skip rather than deref.
+    expect(findEntrySpan('{ "__MW_TEXT_PARTS__" }', 'X')).toBeNull();
+    expect(findEntriesArrayInsertion('{ "__MW_TEXT_PARTS__" }')).toBeNull();
+  });
+
+  it('does not match an element whose "name" is not a string', () => {
+    // A generated dictionary can carry a numeric name. Coercing it would let a
+    // delete of the entry named "999" splice out an element the model never
+    // pointed at, so a non-string name simply never matches.
+    const text = wrap('[ { "name": 999 }, { "name": "real" } ]');
+    expect(findEntrySpan(text, '999')).toBeNull();
+    expect(findEntrySpan(text, 'real')).not.toBeNull();
+  });
+});
+
 // Wrap an entries-array body in the nested .sldd structure the splice helpers
 // walk (__MW_TEXT_PARTS__ → chunk0 → __MW_TEXT_content → entries).
 function wrap(entriesBody: string): string {

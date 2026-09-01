@@ -143,11 +143,10 @@ export class DexPropertyInspector extends LitElement {
     }));
   }
 
+  // Renders the VALUE cell of a non-link row: render() peels off `type: 'link'`
+  // rows into their own template (the anchor goes on the NAME, and the value is a
+  // muted descriptor), so a link never reaches here.
   private _renderPropertyValue(prop: PropertyRow): unknown {
-    if (prop.type === 'link') {
-      const target = prop.linkTarget || prop.name;
-      return html`<a class="prop-link" href="#" @click=${(e: Event) => this._onLinkClick(e, target)}>${prop.value}</a>`;
-    }
     if (prop.editable) {
       return html`<input
         class="prop-input"

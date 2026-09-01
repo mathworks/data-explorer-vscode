@@ -59,6 +59,11 @@ export function findNode(uriString: string, nodeId: string): any | null {
   // model in DataModel under a prefixed srcId but NOT in this module's `cache`,
   // so gating on `cache.get(uriString)` here would wrongly drop their selections
   // (the Property Inspector would never render). Try the registry unconditionally.
+  // PRECONDITION (untested) for the `: null` arm: the pinned data-explorer-core
+  // always exports findNodeById on DataModel. The feature-detect exists because
+  // core is a git-pinned dependency bumped independently of this repo, so an older
+  // pin must degrade to the cache fallback below rather than throw on every
+  // selection; the `try` covers the same risk for a throwing implementation.
   try {
     const viaRegistry = (DataModel as any).findNodeById
       ? (DataModel as any).findNodeById(nodeId)

@@ -176,6 +176,64 @@ describe('cross-reference links', () => {
     const el = await makeInspector([{ title: 'G', properties: [{ name: 'Value', value: '42' }] }]);
     expect(el.shadowRoot!.querySelectorAll('.prop-link').length).toBe(0);
   });
+
+  it('never renders a link value as an input, even without a linkTarget', async () => {
+    // A link row takes a separate template from the value-cell renderer, so the
+    // editable/link precedence lives in exactly one place. If a link ever leaked
+    // into the value cell the user would get a text box over a cross-reference.
+    const el = await makeInspector([
+      { title: 'G', properties: [{ name: 'a.slx', value: 'Model', type: 'link', editable: true }] },
+    ]);
+    expect(el.shadowRoot!.querySelector('input')).toBeNull();
+    // The anchor is the name; the value stays a muted status string.
+    expect(el.shadowRoot!.querySelector('.prop-name .prop-link')!.textContent).toBe('a.slx');
+    expect(el.shadowRoot!.querySelector('.prop-value')!.textContent).toBe('Model');
+  });
+
+  it('omits the name tooltip on a link row, whose name is already the anchor text', async () => {
+    // The ellipsizing title= belongs to the plain-name template; a link row shows
+    // its name as clickable text instead, so it must not also carry the attribute.
+    const el = await makeInspector(GROUPS);
+    const linkName = el.shadowRoot!.querySelector('.prop-name .prop-link')!.closest('.prop-name')!;
+    expect(linkName.hasAttribute('title')).toBe(false);
+  });
+
+  it('routes each link to its own target when several are listed', async () => {
+    // A Usage group lists every referencing file; clicking the second must not
+    // navigate to the first (a stale closure over the wrong row).
+    const el = await makeInspector([
+      {
+        title: 'Usage',
+        properties: [
+          { name: 'a.slx', value: 'Model', type: 'link', linkTarget: 'slx:a' },
+          { name: 'b.slx', value: 'Model', type: 'link', linkTarget: 'slx:b' },
+        ],
+      },
+    ]);
+    const seen: unknown[] = [];
+    el.addEventListener('dex-pi-navigate', (e) => seen.push((e as CustomEvent).detail));
+    const links = el.shadowRoot!.querySelectorAll<HTMLElement>('.prop-link');
+    links[1].click();
+    links[0].click();
+    expect(seen).toEqual([{ sourceId: 'slx:b' }, { sourceId: 'slx:a' }]);
+  });
+
+  it('mixes link and text rows within one group in host order', async () => {
+    // piBuilder can emit both kinds in the same group; the two templates must not
+    // reorder or drop rows relative to each other.
+    const el = await makeInspector([
+      {
+        title: 'G',
+        properties: [
+          { name: 'Value', value: '42' },
+          { name: 'a.slx', value: 'Model', type: 'link', linkTarget: 'slx:a' },
+          { name: 'DataType', value: 'int8' },
+        ],
+      },
+    ]);
+    expect(rowTexts(el)).toEqual(['Value 42', 'a.slx Model', 'DataType int8']);
+    expect(el.shadowRoot!.querySelectorAll('.prop-link').length).toBe(1);
+  });
 });
 
 describe('editing a property', () => {
