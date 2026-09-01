@@ -147,15 +147,19 @@ export class DexErrorDialog extends LitElement {
     this.showRevert = opts.showRevert || false;
     this._open = true;
     this.setAttribute('open', '');
+    document.addEventListener('keydown', this._onKeyDown, true);
     this.updateComplete.then(() => {
-      const okBtn = this.shadowRoot?.querySelector('button');
-      okBtn?.focus();
+      // Focus OK, never Revert: Revert discards the user's edit, and an
+      // autofocused destructive button turns a reflex Enter/Space into data loss.
+      const buttons = this.shadowRoot?.querySelectorAll<HTMLButtonElement>('button');
+      buttons?.[buttons.length - 1]?.focus();
     });
   }
 
   hide(): void {
     this._open = false;
     this.removeAttribute('open');
+    document.removeEventListener('keydown', this._onKeyDown, true);
     const target = this._returnFocusTo;
     this._returnFocusTo = null;
     if (target && target.isConnected) {
@@ -183,10 +187,31 @@ export class DexErrorDialog extends LitElement {
     this.hide();
   }
 
-  private _onKeyDown(e: KeyboardEvent): void {
+  // Bound at the document level in capture while open, because Escape must
+  // dismiss the dialog wherever focus happens to be. Listening only on the
+  // dialog element left an unclosable modal whenever focus was outside it.
+  private _onKeyDown = (e: KeyboardEvent): void => {
+    if (!this._open) return;
     if (e.key === 'Escape') {
+      e.stopPropagation();
       this.hide();
+      return;
     }
+    if (e.key === 'Tab') this._trapTab(e);
+  };
+
+  // The dialog declares aria-modal, so Tab must cycle within it. Without this
+  // the user tabs straight back into the table behind a blocking overlay they
+  // can still see but no longer reach.
+  private _trapTab(e: KeyboardEvent): void {
+    const buttons = Array.from(this.shadowRoot?.querySelectorAll<HTMLButtonElement>('button') ?? []);
+    if (buttons.length === 0) return;
+    e.preventDefault();
+    const active = this.shadowRoot?.activeElement as HTMLButtonElement | null;
+    const at = active ? buttons.indexOf(active) : -1;
+    const step = e.shiftKey ? -1 : 1;
+    const next = (at + step + buttons.length) % buttons.length;
+    buttons[next].focus();
   }
 
   override connectedCallback(): void {
@@ -208,7 +233,6 @@ export class DexErrorDialog extends LitElement {
         class="dialog"
         role="alertdialog"
         aria-modal="true"
-        @keydown=${this._onKeyDown}
         @click=${(e: MouseEvent) => e.stopPropagation()}
       >
         <div class="title">${this.dialogTitle}</div>

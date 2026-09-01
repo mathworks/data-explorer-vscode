@@ -75,6 +75,12 @@ export class DexContextMenu extends LitElement {
       background: var(--dex-context-menu-hover, rgba(0, 0, 0, 0.04));
     }
 
+    /* Keyboard navigation must be visible on its own, without relying on
+       :focus-visible heuristics for programmatic focus. */
+    .item.focused:not(.disabled) {
+      background: var(--dex-context-menu-hover, rgba(0, 0, 0, 0.04));
+    }
+
     .item:active:not(.disabled) {
       background: var(--dex-context-menu-active, rgba(0, 0, 0, 0.06));
     }
@@ -226,7 +232,19 @@ export class DexContextMenu extends LitElement {
       if (idx >= items.length) idx = 0;
       attempts++;
     }
+    // Every item is disabled: leave focus where it was rather than parking the
+    // highlight (and DOM focus) on an item that cannot be activated.
+    if (items[idx].disabled) return;
     this._focusedIndex = idx;
+  }
+
+  // Move real DOM focus onto the keyboard-focused item. Tracking the index in
+  // component state alone leaves a screen reader silent as the user arrows
+  // through the menu, because nothing in the accessibility tree changes.
+  override updated(): void {
+    if (!this._open || this._focusedIndex < 0) return;
+    const items = this.shadowRoot?.querySelectorAll<HTMLElement>('.item');
+    items?.[this._focusedIndex]?.focus();
   }
 
   private _onItemClick(item: ContextMenuItem): void {
