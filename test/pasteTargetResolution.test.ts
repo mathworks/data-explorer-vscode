@@ -58,4 +58,16 @@ describe('resolveSectionForPaste', () => {
     const m = model(uri);
     expect(resolveSectionForPaste(m, null, 'section:nope')).toBeNull();
   });
+
+  it('returns null for a header row when there is no model to look the section up in', () => {
+    // Both table providers call this with the model they just built. A parse that
+    // produced no sections (an emptied or externally-truncated file re-read while
+    // the tab is open) must make the paste report "could not resolve the target
+    // section" — the callers' own error path — rather than throw out of the message
+    // handler, which in the extension host is an unhandled rejection the user only
+    // sees as a paste that did nothing.
+    for (const m of [null, undefined, {}, { children: null }] as any[]) {
+      expect(resolveSectionForPaste(m, null, 'section:design')).toBeNull();
+    }
+  });
 });

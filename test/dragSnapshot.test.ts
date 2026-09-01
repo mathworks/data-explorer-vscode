@@ -145,6 +145,39 @@ describe('buildDragSnapshot', () => {
     expect(snap.items.map((i) => i.payload.name)).toEqual(['ValueType']);
   });
 
+  // Every per-item fact is read straight off a data-explorer-core node, and the
+  // webview turns them into the drop cursor and the hover tooltip with no model of
+  // its own. A node type that stops exposing one of them must yield a blank, not
+  // the string "undefined" in the tooltip the user reads mid-drag ("undefined
+  // cannot be in Design Data"). Only a stub reaches this: every entry in a parsed
+  // dictionary declares all of them.
+  it('blanks a fact the node does not expose rather than leaking undefined into the tooltip', () => {
+    const bare = {
+      isEntry: true,
+      serialize: () => ({ name: 'Bare' }),
+      parent: { /* neither name nor displayName */ },
+    };
+    const snap = buildDragSnapshot(['bare'], () => bare);
+    expect(snap.items[0]).toMatchObject({
+      className: '',
+      arrayClass: '',
+      kind: '',
+      // No _array_class => a plain MATLAB variable, and isScalarNumeric is only
+      // true when the node says so explicitly.
+      isMatlabVariable: true,
+      isScalarNumeric: false,
+    });
+    expect(snap).toMatchObject({ sourceSection: '', sourceSectionLabel: '', sourceIsDerived: false });
+  });
+
+  it('falls back to the section name when the section declares no display name', () => {
+    // sourceSectionLabel names the source in the drop tooltip; a custom section
+    // with no displayName must read as its name rather than as nothing.
+    const bare = { isEntry: true, serialize: () => ({ name: 'X' }), parent: { name: 'custom' } };
+    const snap = buildDragSnapshot(['x'], () => bare);
+    expect(snap).toMatchObject({ sourceSection: 'custom', sourceSectionLabel: 'custom' });
+  });
+
   it('returns an empty snapshot for a non-array rowIds — the message is untrusted', () => {
     // rowIds arrives over postMessage from the webview, so it is `unknown` in
     // practice. Anything but an array means "nothing is being dragged".

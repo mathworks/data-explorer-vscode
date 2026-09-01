@@ -175,6 +175,40 @@ describe('opening an editor', () => {
     expect(select.value).toBe('ExportedGlobal');
     table.remove();
   });
+
+  // The Value column has its own render branch — it is not one of the generic
+  // schema columns — so its select editor is a second, separate implementation.
+  // An EnumType's Value is exactly this: a dropdown of the enumeral names, and
+  // choosing one sets which enumeral the enum defaults to. Rendering a text input
+  // here would let the user type a name that is not an enumeral at all.
+  it('a Value cell with a select editor opens a dropdown, not a text input', async () => {
+    const table = await mount([
+      makeRow('e', 'MyEnum', {
+        Value: { text: 'GREEN', editable: true, editor: 'select', options: ['RED', 'GREEN', 'BLUE'] } as any,
+      }),
+    ]);
+    dblClickCell(table, 'e', 'Value');
+    await table.updateComplete;
+
+    const select = table.shadowRoot!.querySelector('select.edit-input') as HTMLSelectElement;
+    expect(select).not.toBeNull();
+    expect(table.shadowRoot!.querySelector('input.edit-input')).toBeNull();
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(['RED', 'GREEN', 'BLUE']);
+    // Seeded with the enum's current default rather than the first option.
+    expect(select.value).toBe('GREEN');
+    table.remove();
+  });
+
+  it('a Value cell with no editor still opens a text input', async () => {
+    // The dropdown must be opt-in: an ordinary parameter value is free text, and
+    // constraining it to a fixed list would make it uneditable.
+    const table = await mount([makeRow('p', 'gain', { Value: { text: '3.14', editable: true } })]);
+    dblClickCell(table, 'p', 'Value');
+    await table.updateComplete;
+    expect(table.shadowRoot!.querySelector('select.edit-input')).toBeNull();
+    expect((table.shadowRoot!.querySelector('input.edit-input') as HTMLInputElement).value).toBe('3.14');
+    table.remove();
+  });
 });
 
 describe('committing an edit', () => {
@@ -299,6 +333,26 @@ describe('committing an edit', () => {
     expect(edits).toEqual([
       { rowId: 'a', columnId: 'storageClass', oldValue: 'Auto', newValue: 'ExportedGlobal' },
     ]);
+    table.remove();
+  });
+
+  it('changing a Value dropdown commits against the Value column', async () => {
+    // This writes an enum's DefaultValue. The payload's columnId is what the host
+    // applies the change to, so a Value dropdown that reported another column
+    // would silently rewrite a different property of the same entry.
+    const table = await mount([
+      makeRow('e', 'MyEnum', {
+        Value: { text: 'RED', editable: true, editor: 'select', options: ['RED', 'GREEN', 'BLUE'] } as any,
+      }),
+    ]);
+    const edits = recordEdits(table);
+    dblClickCell(table, 'e', 'Value');
+    await table.updateComplete;
+
+    const select = table.shadowRoot!.querySelector('select.edit-input') as HTMLSelectElement;
+    select.value = 'BLUE';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(edits).toEqual([{ rowId: 'e', columnId: 'Value', oldValue: 'RED', newValue: 'BLUE' }]);
     table.remove();
   });
 

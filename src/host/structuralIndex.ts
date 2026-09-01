@@ -3,7 +3,7 @@
 // the relationship graph. Dispatches by extension. vscode-free (callers read
 // files and pass bytes/text in).
 import type { GraphSource, SourceType } from './graphModel.js';
-import { extractReferences } from './slddRefs.js';
+import { extractReferences, normalizeRefNames } from './slddRefs.js';
 import { extractSlxStructure } from './slxStructure.js';
 import { isZipBytes } from './slddFormat.js';
 import { parseBinarySldd, parseProject } from 'data-explorer-core';
@@ -53,17 +53,15 @@ export function buildGraphSource(file: RawFile): GraphSource {
       }
       if (file.bytes) {
         if (isZipBytes(new Uint8Array(file.bytes))) {
-          // Compressed SLDD: parseBinarySldd currently yields empty references.
-          // Extract via the same JSON shape for forward-compatibility.
+          // Compressed SLDD: the references live in the parsed binary content
+          // under the same "Dictionary References" key the JSON footer uses, so
+          // normalise them through the same helper as the text path.
           const content = parseBinarySldd(file.bytes) as any;
           const refs =
             content?.__MW_TEXT_PARTS__?.['__MW_TEXT_PART__/data/chunk0']?.__MW_TEXT_content?.[
               'Dictionary References'
-            ] ?? [];
-          const names: string[] = Array.isArray(refs)
-            ? refs.map((r: any) => (typeof r === 'string' ? r : r?.file)).filter(Boolean)
-            : [];
-          return { ...base, slddRefs: names };
+            ];
+          return { ...base, slddRefs: normalizeRefNames(refs) };
         }
         // Fallback: treat bytes as UTF-8 JSON text.
         return { ...base, slddRefs: extractReferences(new TextDecoder().decode(file.bytes)) };

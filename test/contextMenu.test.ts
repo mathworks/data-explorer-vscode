@@ -96,6 +96,15 @@ describe('showing and dismissing the menu', () => {
     expect(el.hasAttribute('open')).toBe(false);
   });
 
+  it('a right-click ON the menu leaves it open', async () => {
+    // Right-clicking inside an open menu is not a request for a second menu; the
+    // dismiss-on-contextmenu handler is document-wide, so without the
+    // composedPath check it would tear down the menu the user is pointing at.
+    const el = await makeMenu(ITEMS);
+    itemEls(el)[0].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, composed: true }));
+    expect(el.hasAttribute('open')).toBe(true);
+  });
+
   it('scrolling the table dismisses the menu', async () => {
     // The menu is position:fixed; if it survived a scroll it would point at
     // whatever row happened to move under it.
@@ -250,6 +259,22 @@ describe('keyboard navigation', () => {
     expect(el.hasAttribute('open')).toBe(true);
   });
 
+  it('Enter does nothing when the focused index outlived a shorter item list', async () => {
+    // show() swaps _items synchronously but Lit re-renders on a microtask, so for
+    // one tick the OLD rows are still mounted with their old indices. A pointer
+    // resting over the previous menu while the host reopens a shorter one (a
+    // right-click on a different row) stamps an index the new list has no item
+    // at; Enter must then do nothing rather than dereference past the end.
+    const el = await makeMenu(ITEMS);
+    const ids = recordActions(el);
+    el.show(5, 5, [{ id: 'undo', label: 'Undo' }]);
+    itemEls(el)[3].dispatchEvent(new MouseEvent('mouseenter')); // stale row -> index 3
+    key('Enter');
+    expect(ids).toEqual([]);
+    await el.updateComplete;
+    expect(itemEls(el).map((i) => i.textContent!.trim())).toEqual(['Undo']);
+  });
+
   it('hovering an item makes it the keyboard-focused one', async () => {
     // Mouse and keyboard share one highlight, so a subsequent Enter acts on the
     // item the user is actually pointing at.
@@ -316,6 +341,33 @@ describe('positioning near the viewport edge', () => {
     await frame();
     expect(el.style.left).toBe(`${window.innerWidth - 200 - 8}px`);
     expect(el.style.top).toBe(`${window.innerHeight - 160 - 8}px`);
+  });
+
+  it('a menu closed before its first frame does not throw while positioning', async () => {
+    // show() defers clamping to a rAF, but close() does not cancel that frame —
+    // and a closed menu renders nothing, so there is no .menu left to measure.
+    // Reachable whenever something dismisses the menu in the same tick it opened
+    // (a synthesised right-click during a host-driven refresh).
+    //
+    // The deferred callback is captured rather than awaited: it runs inside a rAF,
+    // where a throw surfaces as an unhandled rejection that would NOT fail this
+    // test. Calling it directly is what makes the assertion real.
+    const realRaf = globalThis.requestAnimationFrame;
+    let deferred: FrameRequestCallback | undefined;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => { deferred = cb; return 1; }) as typeof realRaf;
+    try {
+      menu = new DexContextMenu();
+      document.body.appendChild(menu);
+      menu.show(10, 10, ITEMS);
+      menu.close();
+      await menu.updateComplete;
+      expect(menu.shadowRoot!.querySelector('.menu')).toBeNull();
+      expect(deferred).toBeTypeOf('function');
+      expect(() => deferred!(0)).not.toThrow();
+    } finally {
+      globalThis.requestAnimationFrame = realRaf;
+    }
+    expect(menu!.hasAttribute('open')).toBe(false);
   });
 
   it('never positions the menu off the top-left edge', async () => {

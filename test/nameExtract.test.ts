@@ -55,6 +55,16 @@ describe('namesFromMat', () => {
     ]);
     expect(namesFromMat({ variables: [] }, 'file:///w/d.mat')).toEqual([]);
   });
+
+  it('contributes nothing for a parse that yielded no variables array at all', () => {
+    // nameIndex feeds this whatever parseMat returned for every .mat in the
+    // workspace, and parseMat comes from the separately versioned
+    // data-explorer-core. One .mat missing the field must cost that file its names,
+    // not abort the scan and leave the WHOLE Used By column empty.
+    for (const parsed of [{}, null, undefined] as any[]) {
+      expect(namesFromMat(parsed, 'file:///w/d.mat')).toEqual([]);
+    }
+  });
 });
 
 describe('namesFromSlx', () => {

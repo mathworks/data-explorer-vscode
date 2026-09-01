@@ -390,11 +390,16 @@ describe('the Columns dropdown', () => {
   it('clicking the row label toggles it too, without closing the menu', async () => {
     // Toggling several columns in one visit is the normal case; closing on each
     // click would force the user to reopen the menu every time.
+    //
+    // The event must be a MouseEvent, not a bare Event: a row is a <label>, and
+    // only a real click activates the checkbox it wraps — which is what performs
+    // the toggle. A synthetic Event skips that forwarding entirely and so cannot
+    // tell a working row from a broken one.
     const table = await mount();
     menuButton(table).click();
     await table.updateComplete;
     const items = Array.from(table.shadowRoot!.querySelectorAll('.column-menu-item')) as HTMLElement[];
-    items[HOST_COLUMNS.indexOf('Status')].dispatchEvent(new Event('click', { bubbles: true }));
+    items[HOST_COLUMNS.indexOf('Status')].dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await table.updateComplete;
 
     expect((table as any)._visibleColumns).not.toContain('Status');

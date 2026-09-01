@@ -145,11 +145,17 @@ export class RelGraph {
     return referenced;
   }
 
+  // Projects first, then folders; alphabetical within each. Ranked rather than
+  // compared pairwise so the ordering does not depend on which way round the sort
+  // happens to hand the two groups over.
+  private static groupRank(g: Group): number {
+    return g.kind === 'project' ? 0 : 1;
+  }
+
   roots(): GraphNode[] {
-    const groups = [...this.groups.values()].sort((a, b) => {
-      if (a.kind !== b.kind) return a.kind === 'project' ? -1 : 1;
-      return a.label.localeCompare(b.label);
-    });
+    const groups = [...this.groups.values()].sort(
+      (a, b) => RelGraph.groupRank(a) - RelGraph.groupRank(b) || a.label.localeCompare(b.label),
+    );
     return groups.map((g) => this.toGroupNode(g));
   }
 

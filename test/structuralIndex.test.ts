@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { zipSync, strToU8 } from 'fflate';
 import { buildGraphSource, type RawFile } from '../src/host/structuralIndex.js';
 
 function raw(name: string): RawFile {
@@ -10,6 +11,22 @@ function raw(name: string): RawFile {
     uriString: `file:///${name}`,
     path: `/${name}`,
     bytes: b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength),
+  };
+}
+
+// A real compressed .sldd: the zip layout parseBinarySldd reads, carrying only
+// what the reference scan needs. Built here rather than checked in as a fixture
+// so the reference list is visible next to the assertion.
+function binarySldd(refs: string[]): RawFile {
+  const objects = refs
+    .map((r) => `<Object Class="DD.DICTIONARYREFERENCE"><P Name="Subdictionary">${r}</P></Object>`)
+    .join('');
+  const xml = `<?xml version="1.0"?><DataSource FormatVersion="1">${objects}</DataSource>`;
+  const z = zipSync({ 'data/chunk0.xml': strToU8(xml) });
+  return {
+    uriString: 'file:///bin.sldd',
+    path: '/bin.sldd',
+    bytes: z.buffer.slice(z.byteOffset, z.byteOffset + z.byteLength) as ArrayBuffer,
   };
 }
 
@@ -23,9 +40,34 @@ describe('buildGraphSource', () => {
   });
 
   it('treats a compressed .sldd as an sldd node with no references', () => {
+    // This fixture declares none; a compressed .sldd that DOES is covered below.
     const s = buildGraphSource(raw('compressed.sldd'));
     expect(s.type).toBe('sldd');
-    expect(s.slddRefs).toEqual([]); // parseBinarySldd hardcodes empty refs (known limitation)
+    expect(s.slddRefs).toEqual([]);
+  });
+
+  it('extracts dictionary references from a COMPRESSED .sldd, not just a JSON one', () => {
+    // The zip path reads the references out of a different shape than the text
+    // path (the parsed binary content's __MW_TEXT_PARTS__ chunk, not a regex over
+    // JSON). A binary dictionary whose refs came back empty would draw its
+    // referenced dictionaries nowhere in the Sections tree even though the file
+    // names them — the same file saved as JSON text would show them.
+    const s = buildGraphSource(binarySldd(['base.sldd', 'shared/common.sldd']));
+    expect(s.type).toBe('sldd');
+    expect(s.slddRefs).toEqual(['base.sldd', 'shared/common.sldd']);
+  });
+
+  it('a compressed .sldd with a broken chunk yields an empty node, not a throw', () => {
+    // parseBinarySldd throws on a zip with no data/chunk0.xml; the whole workspace
+    // scan runs through buildGraphSource, so one unreadable file must not abort it.
+    const z = zipSync({ 'metadata/mwcoreProperties.xml': strToU8('<x/>') });
+    const s = buildGraphSource({
+      uriString: 'file:///nochunk.sldd',
+      path: '/nochunk.sldd',
+      bytes: z.buffer.slice(z.byteOffset, z.byteOffset + z.byteLength) as ArrayBuffer,
+    });
+    expect(s.type).toBe('sldd');
+    expect(s.slddRefs).toEqual([]);
   });
 
   it('treats a JSON .sldd via its text', () => {

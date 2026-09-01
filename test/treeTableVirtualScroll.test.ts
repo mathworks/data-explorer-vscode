@@ -12,7 +12,7 @@
 // component is written for exactly that case — it falls back to the tracked
 // height when the container has not been laid out — but a genuine end-to-end
 // check of painted geometry needs a real browser.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
 
 const ROW_H = 26; // DEFAULT_ROW_HEIGHT; the header occupies one row of the same height
@@ -298,5 +298,99 @@ describe('the panel is remeasured as it resizes', () => {
     await table.updateComplete;
     expect((table as any)._resizeObserver).toBe(first);
     table.remove();
+  });
+
+  // What the observer DOES when it fires. happy-dom's ResizeObserver never
+  // delivers a callback and does not expose the one it was given, so the global is
+  // swapped for a recorder that hands the callback back — the component's own
+  // callback still runs, against a container whose height is stubbed in (happy-dom
+  // has no layout, so clientHeight is otherwise always 0).
+  describe('when the observer fires', () => {
+    let restore: typeof globalThis.ResizeObserver;
+    let fire: (() => void) | null;
+
+    beforeEach(() => {
+      restore = globalThis.ResizeObserver;
+      fire = null;
+      globalThis.ResizeObserver = class {
+        constructor(cb: () => void) {
+          fire = cb;
+        }
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      } as unknown as typeof globalThis.ResizeObserver;
+    });
+
+    afterEach(() => {
+      globalThis.ResizeObserver = restore;
+    });
+
+    function setHeight(table: DexTreeTable, h: number): void {
+      Object.defineProperty((table as any)._container, 'clientHeight', { value: h, configurable: true });
+    }
+
+    it('adopts the measured height and renders a window that fills it', async () => {
+      const table = await mountLarge(300, 0);
+      expect(fire).not.toBeNull();
+      setHeight(table, 520); // 20 rows of 26px
+      fire!();
+      await table.updateComplete;
+      expect((table as any)._viewportHeight).toBe(520);
+      // The window is the visible rows plus the overscan buffer, so a taller panel
+      // renders strictly more rows — the point of remeasuring at all.
+      expect(renderedIds(table).length).toBeGreaterThan(520 / ROW_H);
+      table.remove();
+    });
+
+    it('ignores a zero height, so a collapsed panel does not shrink the window', async () => {
+      // A hidden or collapsing panel measures 0. Adopting that would leave the
+      // window empty, and it would stay empty after the panel came back if no
+      // further resize arrived.
+      const table = await mountLarge(300, 0);
+      setHeight(table, 400);
+      fire!();
+      await table.updateComplete;
+      setHeight(table, 0);
+      fire!();
+      await table.updateComplete;
+      expect((table as any)._viewportHeight).toBe(400);
+      table.remove();
+    });
+
+    it('a resize to the same height does not re-render', async () => {
+      // The observer fires on any layout pass, not only on real size changes;
+      // reassigning the same height would request a render every time.
+      const table = await mountLarge(300, 0);
+      setHeight(table, 400);
+      fire!();
+      await table.updateComplete;
+      let renders = 0;
+      const original = (table as any).requestUpdate.bind(table);
+      (table as any).requestUpdate = (...args: unknown[]): void => {
+        renders++;
+        original(...args);
+      };
+      fire!();
+      await table.updateComplete;
+      expect(renders).toBe(0);
+      table.remove();
+    });
+
+    it('a fire while the grid is gone is a no-op rather than a throw', async () => {
+      // The empty state renders no `.table-container` at all, so the queried
+      // container really does become null — and the observer is still live and
+      // still observing the element it was given. A callback that arrives in that
+      // window (the file reloads to zero entries, the panel reflows) must not
+      // throw: an exception here escapes into the ResizeObserver callback, where
+      // nothing in the webview can report it.
+      const table = await mountLarge(300, 0);
+      setHeight(table, 400);
+      table.rows = [];
+      await table.updateComplete;
+      expect((table as any)._container).toBeFalsy();
+      expect(() => fire!()).not.toThrow();
+      table.remove();
+    });
   });
 });

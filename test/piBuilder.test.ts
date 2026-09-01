@@ -167,3 +167,121 @@ describe('buildPropertyGroups', () => {
     expect(all.every((p) => p.type === 'text' && p.linkTarget === undefined)).toBe(true);
   });
 });
+
+// buildPropertyGroups consumes a plain object graph, not a typed one: the node
+// classes that produce it live upstream in data-explorer-core and evolve
+// independently, and their input is a parsed file. A missing groups/items/objects
+// array or a group item naming a property that was never declared is therefore
+// reachable without any bug here — and this runs in the EXTENSION HOST, where a
+// throw is an unhandled rejection rather than a broken panel. Every one of these
+// shapes must degrade to fewer rows, never to an exception.
+//
+// A hand-built stub is the only way to reach these: a real node always emits a
+// complete, self-consistent sheet.
+describe('buildPropertyGroups tolerates a malformed property sheet', () => {
+  function stub(raw: unknown): any {
+    return { toPIObject: () => raw };
+  }
+
+  it('returns [] when there is no sheet at all', () => {
+    expect(buildPropertyGroups(stub(null))).toEqual([]);
+    expect(buildPropertyGroups(stub({}))).toEqual([]);
+  });
+
+  it('returns [] for a sheet with no groups', () => {
+    expect(buildPropertyGroups(stub({ propertySheet: {} }))).toEqual([]);
+  });
+
+  it('yields an empty group when its items are missing', () => {
+    // The group still renders — as a titled, empty section — rather than the
+    // panel losing every group after it.
+    const groups = buildPropertyGroups(
+      stub({ propertySheet: { groups: [{ name: 'GeneralGroup', displayName: 'General' }] } }),
+    );
+    expect(groups).toEqual([{ title: 'General', properties: [] }]);
+  });
+
+  it('titles a group by its name when it has no display name', () => {
+    const groups = buildPropertyGroups(stub({ propertySheet: { groups: [{ name: 'OtherGroup', items: [] }] } }));
+    expect(groups[0].title).toBe('OtherGroup');
+  });
+
+  it('skips a non-property item, such as a nested group', () => {
+    const groups = buildPropertyGroups(
+      stub({
+        propertySheet: {
+          groups: [{ displayName: 'G', items: [{ name: 'sub', type: 'group' }, { name: 'p', type: 'property' }] }],
+          properties: [{ name: 'p', displayName: 'P' }],
+        },
+        objects: [{ p: 'v' }],
+      }),
+    );
+    expect(groups[0].properties.map((r) => r.name)).toEqual(['P']);
+  });
+
+  it('skips an item whose property was never declared', () => {
+    // The item/property lists are cross-referenced by name; a dangling reference
+    // must drop that one row, not abort the group.
+    const groups = buildPropertyGroups(
+      stub({
+        propertySheet: {
+          groups: [{ displayName: 'G', items: [{ name: 'ghost', type: 'property' }, { name: 'p', type: 'property' }] }],
+          properties: [{ name: 'p', displayName: 'P' }],
+        },
+        objects: [{ p: 'v' }],
+      }),
+    );
+    expect(groups[0].properties.map((r) => r.name)).toEqual(['P']);
+  });
+
+  it('drops every row when the properties list is missing entirely', () => {
+    const groups = buildPropertyGroups(
+      stub({ propertySheet: { groups: [{ displayName: 'G', items: [{ name: 'p', type: 'property' }] }] } }),
+    );
+    expect(groups).toEqual([{ title: 'G', properties: [] }]);
+  });
+
+  it('falls back to the property name when it declares no display name', () => {
+    const groups = buildPropertyGroups(
+      stub({
+        propertySheet: { groups: [{ displayName: 'G', items: [{ name: 'p', type: 'property' }] }], properties: [{ name: 'p' }] },
+        objects: [{ p: 'v' }],
+      }),
+    );
+    expect(groups[0].properties[0]).toMatchObject({ name: 'p', value: 'v' });
+  });
+
+  it('renders empty values when the object bag is missing or empty', () => {
+    // No `objects` array at all: the sheet still describes which rows exist, so
+    // the panel shows the property names with blank values rather than nothing.
+    for (const raw of [
+      { propertySheet: { groups: [{ displayName: 'G', items: [{ name: 'p', type: 'property' }] }], properties: [{ name: 'p', displayName: 'P' }] } },
+      { propertySheet: { groups: [{ displayName: 'G', items: [{ name: 'p', type: 'property' }] }], properties: [{ name: 'p', displayName: 'P' }] }, objects: [] },
+    ]) {
+      const groups = buildPropertyGroups(stub(raw));
+      expect(groups[0].properties).toEqual([{ name: 'P', value: '', editable: false, type: 'text', linkTarget: undefined }]);
+    }
+  });
+
+  it('carries a link target through as a link row', () => {
+    // No .sldd node emits `link` today, but the row type and the webview's anchor
+    // rendering exist for it; this pins the mapping so a future linking node does
+    // not have to rediscover it.
+    const groups = buildPropertyGroups(
+      stub({
+        propertySheet: {
+          groups: [{ displayName: 'G', items: [{ name: 'p', type: 'property' }] }],
+          properties: [{ name: 'p', displayName: 'P', link: 'entry:Other' }],
+        },
+        objects: [{ p: 'Other' }],
+      }),
+    );
+    expect(groups[0].properties[0]).toEqual({
+      name: 'P',
+      value: 'Other',
+      editable: false,
+      type: 'link',
+      linkTarget: 'entry:Other',
+    });
+  });
+});

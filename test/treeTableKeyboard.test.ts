@@ -161,6 +161,63 @@ describe('keyboard selection ranges', () => {
     table.remove();
   });
 
+  // ArrowUp is a separate branch of the same switch, so it can drift from
+  // ArrowDown: an upward extend that replaced the selection instead of adding to
+  // it would silently drop rows the user had already gathered.
+  //
+  // Ctrl accumulates in the order the user visited the rows, the same as
+  // Ctrl+click — NOT in document order. A multi-row drag pastes in this order, so
+  // it is observable, and re-sorting here would make the keyboard and the mouse
+  // disagree about it.
+  it('Ctrl+ArrowUp adds rows upward without dropping the earlier ones', async () => {
+    const table = await mount(FLAT);
+    table.selectedRowIds = ['d'];
+    (table as any)._lastClickedId = 'd';
+    await table.updateComplete;
+
+    press(table, 'ArrowUp', { ctrlKey: true });
+    press(table, 'ArrowUp', { ctrlKey: true });
+    expect(table.selectedRowIds).toEqual(['d', 'c', 'b']);
+    table.remove();
+  });
+
+  // Shift, by contrast, replaces the selection with the anchor-to-cursor span, so
+  // it IS in document order however the user got there.
+  it('Shift+ArrowUp grows the range upward from the anchor', async () => {
+    const table = await mount(FLAT);
+    table.selectedRowIds = ['c'];
+    (table as any)._lastClickedId = 'c';
+    await table.updateComplete;
+
+    press(table, 'ArrowUp', { shiftKey: true });
+    expect(table.selectedRowIds).toEqual(['b', 'c']);
+    table.remove();
+  });
+
+  it('Cmd+ArrowUp extends too, for macOS', async () => {
+    const table = await mount(FLAT);
+    table.selectedRowIds = ['c'];
+    (table as any)._lastClickedId = 'c';
+    await table.updateComplete;
+
+    press(table, 'ArrowUp', { metaKey: true });
+    expect(table.selectedRowIds).toEqual(['c', 'b']);
+    table.remove();
+  });
+
+  it('Ctrl+ArrowUp at the first row does not wrap around to the last', async () => {
+    // clamping, not wrapping: an extend that wrapped would add the far end of the
+    // table to a selection the user was building at the top.
+    const table = await mount(FLAT);
+    table.selectedRowIds = ['a'];
+    (table as any)._lastClickedId = 'a';
+    await table.updateComplete;
+
+    press(table, 'ArrowUp', { ctrlKey: true });
+    expect(table.selectedRowIds).toEqual(['a']);
+    table.remove();
+  });
+
   it('Ctrl+A selects every visible row, and only visible ones', async () => {
     // Selecting rows hidden in a collapsed subtree would make a following Delete
     // remove entries the user never saw.

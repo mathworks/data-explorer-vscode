@@ -7,7 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { extractReferences, refBasename } from '../src/host/slddRefs.js';
+import { extractReferences, normalizeRefNames, refBasename } from '../src/host/slddRefs.js';
 
 function fixturePath(name: string): string {
   return fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
@@ -62,6 +62,29 @@ describe('extractReferences', () => {
   it('mixes bare-string and object references in order', () => {
     const text = '{ "Dictionary References": ["a.sldd", {"file": "b.sldd"}] }';
     expect(extractReferences(text)).toEqual(['a.sldd', 'b.sldd']);
+  });
+});
+
+// normalizeRefNames is the shared normalisation extractReferences runs on the
+// parsed array. The COMPRESSED .sldd path (structuralIndex) calls it directly on
+// whatever the binary parser produced — no JSON text and no regex in between —
+// so it must tolerate a non-array as well as the element shapes above. Both .sldd
+// formats route through this one function precisely so they cannot disagree about
+// what a dictionary reference is.
+describe('normalizeRefNames', () => {
+  it('returns [] for anything that is not an array', () => {
+    // A dictionary whose "Dictionary References" is a lone string or an object
+    // (or absent entirely, as in a compressed file with no references) must read
+    // as "no references", not crash the workspace scan that walks every file.
+    for (const notAnArray of [undefined, null, 'common.sldd', { file: 'common.sldd' }, 42]) {
+      expect(normalizeRefNames(notAnArray)).toEqual([]);
+    }
+  });
+
+  it('normalises both element shapes and drops the unusable ones', () => {
+    expect(
+      normalizeRefNames(['a.sldd', { file: 'b.sldd' }, { uuid: 'x' }, '', { file: '' }, 7, null]),
+    ).toEqual(['a.sldd', 'b.sldd']);
   });
 });
 

@@ -342,3 +342,188 @@ describe('grouped column picker', () => {
     (table as any).remove();
   });
 });
+
+// The tests above drive the handlers directly, which proves the reordering
+// arithmetic but not that the menu is wired to it: a template binding on the
+// wrong event, or a checkbox whose click is not contained, is invisible to them
+// and breaks the picker for the user. These go through real DOM events instead.
+//
+// happy-dom has no layout engine, so getBoundingClientRect() is all zeros and the
+// top/bottom midpoint test always resolves to 'bottom'. Dropping above a column
+// therefore can't be exercised this way; the 'top' side is covered by the direct
+// handler tests above.
+describe('the column menu responds to real DOM events', () => {
+  async function openMenu(): Promise<DexTreeTable> {
+    const table = makeTable();
+    (table as any)._hiddenColumns = new Set<string>();
+    (table as any)._columnMenuOpen = true;
+    document.body.appendChild(table);
+    await table.updateComplete;
+    return table;
+  }
+
+  // The visible label, not the item's textContent — that also picks up the drag
+  // grip glyph and the checkbox.
+  function menuItem(table: DexTreeTable, col: string): HTMLElement {
+    const items = Array.from(table.shadowRoot!.querySelectorAll('.column-menu-item')) as HTMLElement[];
+    const found = items.find((el) => (el.querySelector('.col-label') as HTMLElement).textContent!.trim() === col);
+    if (!found) throw new Error(`no column-menu item for ${col}`);
+    return found;
+  }
+
+  function drag(item: HTMLElement, type: string, dataTransfer: DataTransfer): void {
+    item.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer }));
+  }
+
+  it('a drag-and-drop through the DOM reorders the columns', async () => {
+    const table = await openMenu();
+    const dt = new DataTransfer();
+    drag(menuItem(table, 'Status'), 'dragstart', dt);
+    expect((table as any)._menuDragCol).toBe('Status');
+
+    drag(menuItem(table, 'Value'), 'dragover', dt);
+    expect((table as any)._menuDragOverCol).toBe('Value');
+
+    drag(menuItem(table, 'Value'), 'drop', dt);
+    const order = (table as any)._orderedColumns as string[];
+    expect(order.indexOf('Status')).toBe(order.indexOf('Value') + 1); // dropped below
+    expect(order[0]).toBe('Name');
+    // The drop clears the drag state, so a stale highlight cannot linger.
+    expect((table as any)._menuDragCol).toBeNull();
+    expect((table as any)._menuDragOverCol).toBeNull();
+    table.remove();
+  });
+
+  it('the drop is accepted by preventing the default, or the browser would discard it', async () => {
+    const table = await openMenu();
+    const dt = new DataTransfer();
+    drag(menuItem(table, 'Status'), 'dragstart', dt);
+    const over = new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt });
+    menuItem(table, 'Value').dispatchEvent(over);
+    // An un-prevented dragover means "not a drop target": no drop event ever
+    // fires and the reorder silently never happens.
+    expect(over.defaultPrevented).toBe(true);
+    table.remove();
+  });
+
+  it('dragging Name is refused at dragstart', async () => {
+    const table = await openMenu();
+    const start = new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() });
+    menuItem(table, 'Name').dispatchEvent(start);
+    expect(start.defaultPrevented).toBe(true);
+    expect((table as any)._menuDragCol).toBeNull();
+    table.remove();
+  });
+
+  it('dragging away from an item clears its drop highlight', async () => {
+    const table = await openMenu();
+    const dt = new DataTransfer();
+    drag(menuItem(table, 'Status'), 'dragstart', dt);
+    drag(menuItem(table, 'Value'), 'dragover', dt);
+    expect((table as any)._menuDragOverCol).toBe('Value');
+    menuItem(table, 'Value').dispatchEvent(new DragEvent('dragleave', { bubbles: true }));
+    expect((table as any)._menuDragOverCol).toBeNull();
+    table.remove();
+  });
+
+  it('a drag abandoned outside the menu leaves no drag state behind', async () => {
+    // Without this the next plain click on a menu item would be treated as the
+    // drop of a drag the user already gave up on.
+    const table = await openMenu();
+    const dt = new DataTransfer();
+    drag(menuItem(table, 'Status'), 'dragstart', dt);
+    menuItem(table, 'Status').dispatchEvent(new DragEvent('dragend', { bubbles: true }));
+    expect((table as any)._menuDragCol).toBeNull();
+    expect((table as any)._menuDragOverSide).toBeNull();
+    table.remove();
+  });
+
+  // A menu row is a <label> wrapping a checkbox, so the browser forwards a click
+  // on ANY part of the row to that checkbox. A row that also toggled on its own
+  // click would therefore toggle twice per click — and two toggles cancel out.
+  // REGRESSION: that is what happened, and it left clicking a column's name or
+  // its drag grip doing nothing; only a direct hit on the small checkbox worked.
+  function toggles(table: DexTreeTable): string[] {
+    const seen: string[] = [];
+    const original = (table as any)._toggleColumnVisibility.bind(table);
+    (table as any)._toggleColumnVisibility = (col: string): void => {
+      seen.push(col);
+      original(col);
+    };
+    return seen;
+  }
+
+  it('clicking the checkbox toggles the column exactly once', async () => {
+    const table = await openMenu();
+    const seen = toggles(table);
+    const box = menuItem(table, 'Status').querySelector('input[type=checkbox]') as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    box.click();
+    await table.updateComplete;
+    expect(seen).toEqual(['Status']);
+    expect((table as any)._visibleColumns).not.toContain('Status');
+    table.remove();
+  });
+
+  it("REGRESSION: clicking a column's name toggles it exactly once", async () => {
+    const table = await openMenu();
+    const seen = toggles(table);
+    (menuItem(table, 'Status').querySelector('.col-label') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+    await table.updateComplete;
+    expect(seen).toEqual(['Status']);
+    expect((table as any)._visibleColumns).not.toContain('Status');
+    table.remove();
+  });
+
+  it('REGRESSION: clicking the row background toggles it exactly once', async () => {
+    const table = await openMenu();
+    const seen = toggles(table);
+    menuItem(table, 'Status').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await table.updateComplete;
+    expect(seen).toEqual(['Status']);
+    expect((table as any)._visibleColumns).not.toContain('Status');
+    table.remove();
+  });
+
+  it('a second click shows the column again', async () => {
+    // The user's undo for a mis-click. With the double toggle this looked like it
+    // worked, because both clicks were no-ops.
+    const table = await openMenu();
+    const label = menuItem(table, 'Status').querySelector('.col-label') as HTMLElement;
+    label.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await table.updateComplete;
+    expect((table as any)._visibleColumns).not.toContain('Status');
+    (menuItem(table, 'Status').querySelector('.col-label') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true }),
+    );
+    await table.updateComplete;
+    expect((table as any)._visibleColumns).toContain('Status');
+    table.remove();
+  });
+
+  it("clicking Name's row leaves it visible", async () => {
+    // Name is pinned: its checkbox is disabled, so the forwarded click produces
+    // no change event and nothing toggles.
+    const table = await openMenu();
+    const seen = toggles(table);
+    menuItem(table, 'Name').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await table.updateComplete;
+    expect(seen).toEqual([]);
+    expect((table as any)._visibleColumns).toContain('Name');
+    table.remove();
+  });
+
+  it('a click inside the menu does not reach the document handler that closes it', async () => {
+    // The menu closes on any click outside itself. Toggling a column is inside,
+    // so the menu must stay open for the user to toggle a second column.
+    const table = await openMenu();
+    (menuItem(table, 'Status').querySelector('.col-label') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true, composed: true }),
+    );
+    await table.updateComplete;
+    expect((table as any)._columnMenuOpen).toBe(true);
+    table.remove();
+  });
+});

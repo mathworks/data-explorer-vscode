@@ -296,6 +296,94 @@ describe('links navigate rather than following an href', () => {
     expect(clicked).toEqual(['m:A']);
     table.remove();
   });
+
+  // Each list shape binds its own click closure over the link it rendered, so an
+  // anchor being present is not evidence that clicking it navigates anywhere —
+  // one closure that captured the wrong element sends the user to another entry,
+  // and the only way to catch that is to click every shape and read the target.
+  it('every link shape reports the target of the link actually clicked', async () => {
+    const table = await mount([
+      makeRow('dp', 'dp', {
+        DataType: {
+          paramLinks: [
+            { property: 'DataType', paramName: 'dtA', source: 'S1', linkTarget: 'dt:A' },
+            { property: 'Min', paramName: 'dtB', source: '', linkTarget: 'dt:B' },
+          ],
+        } as any,
+      }),
+      makeRow('dl', 'dl', {
+        DataType: {
+          links: [
+            { text: 'busA', linkTarget: 'bus:A' },
+            { text: 'busB', linkTarget: 'bus:B' },
+          ],
+        } as any,
+      }),
+      makeRow('up', 'up', {
+        UsedBy: {
+          paramLinks: [
+            { property: 'Gain', paramName: 'pA', source: 'Blk', linkTarget: 'p:A' },
+            { property: 'Bias', paramName: 'pB', source: '', linkTarget: 'p:B' },
+          ],
+        } as any,
+      }),
+      makeRow('ub', 'ub', {
+        UsedBy: {
+          blockLinks: [
+            { blockName: 'Gain1', modelName: 'top', linkTarget: 'b:A' },
+            { blockName: 'Gain2', modelName: 'sub', linkTarget: 'b:B' },
+          ],
+        } as any,
+      }),
+      makeRow('ul', 'ul', {
+        UsedBy: {
+          links: [
+            { text: 'modelA', linkTarget: 'm:A' },
+            { text: 'modelB', linkTarget: 'm:B' },
+          ],
+        } as any,
+      }),
+    ]);
+    const clicked: string[] = [];
+    table.addEventListener('dex-link-clicked', (e) => clicked.push((e as CustomEvent).detail.target));
+
+    // Click the SECOND link of every list: a closure that captured the list
+    // rather than the item would report the first target for both.
+    for (const [rowId, col] of [
+      ['dp', 'DataType'],
+      ['dl', 'DataType'],
+      ['up', 'UsedBy'],
+      ['ub', 'UsedBy'],
+      ['ul', 'UsedBy'],
+    ] as const) {
+      const links = cell(table, rowId, col).querySelectorAll('a.value-link');
+      expect(links.length, `${rowId}/${col}`).toBe(2);
+      const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+      links[1].dispatchEvent(ev);
+      // href="#" would otherwise navigate the whole webview away from the table.
+      expect(ev.defaultPrevented, `${rowId}/${col}`).toBe(true);
+    }
+    expect(clicked).toEqual(['dt:B', 'bus:B', 'p:B', 'b:B', 'm:B']);
+    table.remove();
+  });
+
+  it('a link click does not bubble out of the table as a plain click', async () => {
+    // The host listens for clicks to move the inspector; a navigation click that
+    // kept bubbling would retarget the inspector at the same time as the jump.
+    const table = await mount([makeRow('dl', 'dl', { DataType: { links: [{ text: 'busA', linkTarget: 'bus:A' }] } as any })]);
+    let bubbled = 0;
+    const count = (): void => {
+      bubbled++;
+    };
+    document.body.addEventListener('click', count);
+    try {
+      (cell(table, 'dl', 'DataType').querySelector('a.value-link') as HTMLElement).click();
+      expect(bubbled).toBe(0);
+    } finally {
+      document.body.removeEventListener('click', count);
+      table.remove();
+    }
+  });
 });
 
 describe('cell text for sorting and searching', () => {
@@ -343,6 +431,76 @@ describe('cell text for sorting and searching', () => {
   it('an unknown column name yields empty text rather than throwing', async () => {
     const table = await mount([makeRow('a', 'A')]);
     expect((table as any)._getCellText(table.rows[0], 'NoSuchColumn')).toBe('');
+    table.remove();
+  });
+
+  // DataType has its own link shapes (a signal's type resolves to a Bus, or to
+  // the parameters that set it), and `type:` search plus header sorting both read
+  // this text. Falling through to cellText() on those shapes yields "" or
+  // "[object Object]" — the column then sorts arbitrarily and `type:bus` finds
+  // nothing, with no error to indicate why.
+  it('DataType links flatten to comma-joined text for search and sort', async () => {
+    const table = await mount([
+      makeRow('a', 'A', {
+        DataType: {
+          links: [
+            { text: 'busA', linkTarget: 'x' },
+            { text: 'busB', linkTarget: 'y' },
+          ],
+        } as any,
+      }),
+    ]);
+    expect((table as any)._getCellText(table.rows[0], 'DataType')).toBe('busA, busB');
+    table.remove();
+  });
+
+  it('DataType paramLinks flatten to "property=name(source)" text', async () => {
+    const table = await mount([
+      makeRow('a', 'A', {
+        DataType: {
+          paramLinks: [
+            { property: 'DataType', paramName: 'dt', source: 'Blk', linkTarget: 'x' },
+            { property: 'Min', paramName: 'lo', source: '', linkTarget: 'y' },
+          ],
+        } as any,
+      }),
+    ]);
+    // The second has no source, so it must not gain an empty "()" — the text is
+    // what a `type:` search matches against.
+    expect((table as any)._getCellText(table.rows[0], 'DataType')).toBe('DataType=dt(Blk), Min=lo');
+    table.remove();
+  });
+
+  it('a type: search finds an entry through its DataType link text', async () => {
+    // The end the flattening exists for: the user searches for the bus name they
+    // can see in the column, and the row must match.
+    const table = await mount([
+      makeRow('a', 'A', { DataType: { links: [{ text: 'myBus', linkTarget: 'x' }] } as any }),
+      makeRow('b', 'B', { DataType: 'double' }),
+    ]);
+    const input = table.shadowRoot!.querySelector('.filter-input') as HTMLInputElement;
+    input.value = 'type:myBus';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await table.updateComplete;
+    expect(
+      Array.from(table.shadowRoot!.querySelectorAll('tr.data-row')).map((r) => r.getAttribute('data-row-id')),
+    ).toEqual(['a']);
+    table.remove();
+  });
+
+  it('sorting by Data Type with a link cell keeps the table rendered', async () => {
+    const table = await mount([
+      makeRow('a', 'A', { DataType: { links: [{ text: 'zBus', linkTarget: 'x' }] } as any }),
+      makeRow('b', 'B', { DataType: { paramLinks: [{ property: 'P', paramName: 'aParam', source: '', linkTarget: 'y' }] } as any }),
+    ]);
+    const th = Array.from(table.shadowRoot!.querySelectorAll('th')).find((el) =>
+      /data ?type/i.test(el.textContent || ''),
+    ) as HTMLElement;
+    th.click();
+    await table.updateComplete;
+    expect(
+      Array.from(table.shadowRoot!.querySelectorAll('tr.data-row')).map((r) => r.getAttribute('data-row-id')),
+    ).toEqual(['b', 'a']); // "P=aParam" sorts before "zBus"
     table.remove();
   });
 });

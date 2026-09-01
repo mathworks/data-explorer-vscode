@@ -227,6 +227,21 @@ describe('dropDecision — empty payload', () => {
     expect(d.canDrop).toBe(false);
     expect(d.cursor).toBe('no-drop');
   });
+
+  it('a descriptor with no items list at all reads as nothing to drop', () => {
+    // The descriptor arrives over postMessage from the host, so its shape is not
+    // guaranteed by this module's types. This runs inside a dragover handler,
+    // where a throw would leave the cursor stuck mid-drag with no way to cancel;
+    // "nothing to drop" is the answer that keeps the drag cancellable.
+    const d = dropDecision(
+      { docUri: 'b.sldd', sectionName: 'design', sectionLabel: 'Design Data', isDerived: false } as any,
+      archTarget('a.sldd'),
+      'copy',
+    );
+    expect(d.canDrop).toBe(false);
+    expect(d.cursor).toBe('no-drop');
+    expect(d.tooltip).toBe('Nothing to drop');
+  });
 });
 
 describe('dropDecision — a target with no allow-list is unrestricted', () => {

@@ -87,6 +87,15 @@ describe('what the dialog tells the user', () => {
     expect(rows).toEqual(['Entered: oops']);
   });
 
+  it('shows only the previous value when the rejected edit was empty', async () => {
+    // Clearing a required cell submits ''. The values block still has something
+    // worth showing — what the cell was put back to — and rendering the Entered
+    // row for an empty string would just read "Entered:" with nothing after it.
+    const el = await makeDialog({ validValue: 'int8' });
+    const rows = Array.from(el.shadowRoot!.querySelectorAll('.row')).map((r) => r.textContent!.replace(/\s+/g, ' ').trim());
+    expect(rows).toEqual(['Previous: int8']);
+  });
+
   it('renders the optional detail block (e.g. an underlying parser message)', async () => {
     const el = await makeDialog({ reason: 'Bad value', detail: 'at line 12, column 4' });
     expect(text(el, '.detail')).toBe('at line 12, column 4');
@@ -176,6 +185,34 @@ describe('dismissing the dialog', () => {
     expect(el.hasAttribute('open')).toBe(true);
   });
 
+  it('a click that merely bubbles up to the host does not close it', async () => {
+    // Content clicks are kept in by two independent guards: .dialog stops
+    // propagation (covered above) and the host handler dismisses only when the
+    // host — the backdrop itself — is the target. This covers the second one, so
+    // that adding a slot or dropping the inner stopPropagation cannot silently
+    // turn every click on the message into a dismissal.
+    const el = await makeDialog({ reason: 'x' });
+    const child = document.createElement('span');
+    el.appendChild(child);
+    child.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(el.hasAttribute('open')).toBe(true);
+    child.remove();
+  });
+
+  it('leaves keys other than Escape and Tab alone', async () => {
+    // The key handler is bound on the document in CAPTURE while the dialog is
+    // open, so it sees every keystroke in the webview before anything else does.
+    // Anything it does not own must pass straight through — swallowing Ctrl/Cmd+C
+    // would stop the user copying the value the dialog is complaining about.
+    const el = await makeDialog({ reason: 'x', invalidValue: 'int9' });
+    for (const init of [{ key: 'c', ctrlKey: true }, { key: 'c', metaKey: true }, { key: 'ArrowDown' }, { key: 'Enter' }]) {
+      const ev = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+      document.dispatchEvent(ev);
+      expect(ev.defaultPrevented).toBe(false);
+      expect(el.hasAttribute('open')).toBe(true);
+    }
+  });
+
   it('ignores Escape once already closed', async () => {
     const el = await makeDialog({ reason: 'x' });
     el.hide();
@@ -240,6 +277,37 @@ describe('keyboard focus', () => {
     const el = await makeDialog({ reason: 'x', showRevert: true });
     key('Tab', { shiftKey: true });
     expect(focusedButton(el)).toBe('Revert');
+  });
+
+  it('Tab pulls focus back in after it has been dropped inside the dialog', async () => {
+    // Clicking the message text (which deliberately does NOT dismiss) leaves the
+    // dialog open with nothing focused inside it. Tab must then land on a button
+    // rather than doing nothing — with no focus to advance from, "nowhere" is
+    // exactly the state a keyboard user has to escape.
+    const el = await makeDialog({ reason: 'x', showRevert: true });
+    (el.shadowRoot!.activeElement as HTMLElement).blur();
+    expect(focusedButton(el)).toBeUndefined();
+    key('Tab');
+    expect(focusedButton(el)).toBe('Revert');
+  });
+
+  it('Tab is a no-op in the gap between show() and the first render', async () => {
+    // show() flips _open and installs the document key listener SYNCHRONOUSLY,
+    // but Lit renders the buttons on a microtask. A Tab that arrives in that gap
+    // finds an empty shadow root; it must return rather than index into nothing.
+    // Reachable in practice because show() runs from a host message while the
+    // user may already be holding Tab.
+    dialog = new DexErrorDialog();
+    document.body.appendChild(dialog);
+    dialog.show({ reason: 'x' });
+    expect(dialog.shadowRoot!.querySelectorAll('button').length).toBe(0);
+    const ev = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    expect(() => document.dispatchEvent(ev)).not.toThrow();
+    // Not swallowed: there is nothing in the dialog to trap focus on yet.
+    expect(ev.defaultPrevented).toBe(false);
+    await dialog.updateComplete;
+    await Promise.resolve();
+    expect(focusedButton(dialog)).toBe('OK');
   });
 
   it('returns focus to the cell the user was editing when it closes', async () => {

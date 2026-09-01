@@ -2667,8 +2667,12 @@ export class DexTreeTable extends LitElement {
               @drop=${(e: DragEvent) => this._onMenuDrop(col, e)}
               @dragend=${() => this._onMenuDragEnd()}
               @click=${(e: Event) => {
+                // Only keep the click inside the menu. The toggle itself belongs
+                // to the checkbox's @change: a click anywhere in a <label> is
+                // forwarded to the control it labels, so toggling here as well
+                // would run twice per click and cancel itself out — which left
+                // clicking a column's NAME doing nothing at all.
                 e.stopPropagation();
-                if (!isName) this._toggleColumnVisibility(col);
               }}
             >
               <span class="col-grip" title="Drag to reorder">⋮⋮</span>

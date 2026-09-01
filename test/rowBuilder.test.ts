@@ -186,6 +186,16 @@ describe('buildRows branch coverage', () => {
     expect(rows[0].parent).toBeNull();
   });
 
+  it('still emits the section row when the section carries no children array', () => {
+    // The sections come from the separately versioned data-explorer-core. A
+    // section missing its children array must cost that section its ENTRIES, not
+    // blank the whole table — every later section's rows are built in the same
+    // loop, so a throw here would leave the user an empty grid for a file that
+    // parsed fine.
+    const rows = buildRows({ children: [{ name: 'design' }, section('other', [entry('keep')])] });
+    expect(rows.map((r) => r.ID)).toEqual(['section:design', 'section:other', 'keep']);
+  });
+
   it('emits a section row then its entry rows, reparenting top-level entries', () => {
     const rows = buildRows({ children: [section('design', [entry('e1')], { displayName: 'Design Data', icon: 'databaseFolderDesign' })] });
     const sec = rows.find((r) => r.ID === 'section:design');
