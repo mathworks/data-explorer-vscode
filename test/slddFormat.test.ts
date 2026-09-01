@@ -9,9 +9,12 @@ import {
   isEditableJsonSlddBytes,
   exceedsTextSyncLimit,
   exceedsStringDecodeLimit,
+  parsesAsJson,
   TEXT_SYNC_LIMIT,
   STRING_DECODE_LIMIT,
 } from '../src/host/slddFormat.js';
+import { findEntryElementSpan } from '../src/host/entrySplice.js';
+import { deleteEntriesByName } from '../src/host/structuralEdit.js';
 
 function bytesOf(relPath: string): Uint8Array {
   return new Uint8Array(readFileSync(fileURLToPath(new URL(relPath, import.meta.url))));
@@ -84,5 +87,60 @@ describe('exceedsStringDecodeLimit (undecodable-file routing guard)', () => {
     // Above V8's limit, a real decode would throw; isEditableJsonSlddBytes must
     // short-circuit to false instead of throwing. Fake the length cheaply.
     expect(isEditableJsonSlddBytes({ length: STRING_DECODE_LIMIT + 1 } as Uint8Array)).toBe(false);
+  });
+});
+
+// Every JSON .sldd write path gates on this before splicing. It is the strict
+// counterpart to the tolerant jsonc-parser walk the splice helpers use: they will
+// happily recover a span out of half-typed text, and a splice against that text
+// writes back a file that is still invalid and now missing a chunk too.
+describe('parsesAsJson (the strict gate in front of every write)', () => {
+  const fixtureText = readFileSync(
+    fileURLToPath(new URL('../test-integration/fixtures/workspace/data.sldd', import.meta.url)),
+    'utf8',
+  );
+
+  // Mid-edit states a text view really produces, keyed by what the user did.
+  const MIDEDIT: Record<string, string> = {
+    'closing brace deleted': fixtureText.slice(0, fixtureText.length - 1),
+    'tail cut off mid-entry': fixtureText.slice(0, fixtureText.indexOf('"CellMatrix"') + 20),
+    'key typed, value not yet': fixtureText.replace('"name": "Array1"', '"name": "Array1", "newKey"'),
+    'stray character inside an entry': fixtureText.replace('"name": "Array1"', '"name": "Array1"x'),
+    'doubled comma left by a deletion': fixtureText.replace('"name": "Array1",', '"name": "Array1",,'),
+  };
+
+  it('accepts the real fixture and rejects every mid-edit state of it', () => {
+    expect(parsesAsJson(fixtureText)).toBe(true);
+    for (const [label, text] of Object.entries(MIDEDIT)) {
+      expect(parsesAsJson(text), label).toBe(false);
+    }
+  });
+
+  it('accepts a bare scalar or array, since JSON.parse does', () => {
+    // The gate answers "is this parseable JSON", not "is this a .sldd" — the
+    // structural walk is what rejects a document of the wrong shape.
+    expect(parsesAsJson('42')).toBe(true);
+    expect(parsesAsJson('[1, 2]')).toBe(true);
+    expect(parsesAsJson('')).toBe(false);
+  });
+
+  it('REGRESSION: is the only thing standing between the splice and a broken write', () => {
+    // Why the gate exists rather than trusting the splice to fail safe: the
+    // tolerant walk still LOCATES the entry in text that does not parse, so the
+    // delete goes through and returns text that also does not parse. Left
+    // ungated, a cross-document move deleted an entry out of a source file the
+    // user had mid-edit, leaving a file too broken to reopen as a table.
+    for (const [label, text] of Object.entries(MIDEDIT)) {
+      expect(findEntryElementSpan(text, 'Array1'), label).not.toBeNull();
+      const trimmed = deleteEntriesByName(text, ['Array1']);
+      expect(trimmed, label).not.toBe(text);
+      expect(trimmed.includes('"Array1"'), label).toBe(false);
+    }
+    // Two of those spliced results do not even parse afterwards — the write would
+    // have made an invalid file invalid AND shorter.
+    const broken = Object.values(MIDEDIT).filter(
+      (t) => !parsesAsJson(deleteEntriesByName(t, ['Array1'])),
+    );
+    expect(broken.length).toBeGreaterThan(0);
   });
 });

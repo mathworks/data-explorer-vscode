@@ -30,6 +30,26 @@ export function exceedsStringDecodeLimit(bytes: Uint8Array): boolean {
 }
 
 /**
+ * True if `text` is well-formed JSON.
+ *
+ * Every JSON .sldd write is a text splice, and the splice helpers parse with
+ * jsonc-parser, which is deliberately tolerant: it recovers from a missing brace
+ * or a stray character and still reports an entry span. That tolerance is right
+ * for READING text the user is mid-way through typing, but a splice computed
+ * against a recovered parse writes back text that was never valid and now has a
+ * chunk cut out of it. So each write path checks the document parses strictly
+ * FIRST, and reports rather than edits when it does not.
+ */
+export function parsesAsJson(text: string): boolean {
+  try {
+    JSON.parse(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * True if the bytes are an editable JSON .sldd: not a zip archive AND valid
  * JSON. Binary/zip .sldd and non-JSON content return false (→ read-only view).
  * Content too large to decode also returns false (→ handled upstream), so this
@@ -39,9 +59,9 @@ export function isEditableJsonSlddBytes(bytes: Uint8Array): boolean {
   if (isZipBytes(bytes)) return false;
   if (exceedsStringDecodeLimit(bytes)) return false;
   try {
-    JSON.parse(new TextDecoder().decode(bytes));
-    return true;
+    return parsesAsJson(new TextDecoder().decode(bytes));
   } catch {
+    // decode itself can throw on malformed input; treat that as not-JSON.
     return false;
   }
 }

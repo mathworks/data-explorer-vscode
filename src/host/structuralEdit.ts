@@ -19,6 +19,7 @@ import {
   findEntriesArrayInsertion,
   detectIndent,
 } from './entrySplice.js';
+import { entrySelectorOf, type EntrySelector } from './entrySelector.js';
 import { generateUuid, getSectionMetadata } from 'data-explorer-core';
 import { buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
 import type { DragRegisterItem } from './dragState.js';
@@ -143,7 +144,10 @@ export function deleteEntry(text: string, entry: any): StructuralResult {
   const section = entry.parent;
   const siblings = (section?.children ?? []) as any[];
   const selectId = reselectAfterRemoval(siblings, entry, buildSectionRowId(section?.name ?? ''));
-  const span = findEntryElementSpan(text, entry.name);
+  // By selector, not name: the node the user right-clicked is a specific entry,
+  // and another section's namespace may hold a different entry with the same
+  // name. See entrySelector.ts.
+  const span = findEntryElementSpan(text, entrySelectorOf(entry));
   if (!span) throw new Error(`Could not locate entry "${entry.name}" to delete.`);
   const newText = text.slice(0, span.offset) + text.slice(span.offset + span.length);
   return { newText, selectId };
@@ -167,7 +171,7 @@ export function deleteChild(text: string, node: any): StructuralResult {
 
   const indent = detectIndent(text);
   const entryText = reserializeEntry(entry, indent);
-  const span = findEntrySpan(text, entry.name);
+  const span = findEntrySpan(text, entrySelectorOf(entry));
   if (!span) throw new Error(`Could not locate entry "${entry.name}" text.`);
   const newText = text.slice(0, span.offset) + entryText + text.slice(span.offset + span.length);
   return { newText, selectId };
@@ -193,7 +197,7 @@ export function addChild(text: string, node: any): StructuralResult {
 
   const indent = detectIndent(text);
   const entryText = reserializeEntry(entry, indent);
-  const span = findEntrySpan(text, entry.name);
+  const span = findEntrySpan(text, entrySelectorOf(entry));
   if (!span) throw new Error(`Could not locate entry "${entry.name}" text.`);
   const newText = text.slice(0, span.offset) + entryText + text.slice(span.offset + span.length);
   return { newText, selectId: child.id };
@@ -313,11 +317,13 @@ export function pasteEntry(
 }
 
 /**
- * Source-side of a MOVE drop: remove the dragged entries from the SOURCE text by
- * name. Works purely on text so it applies to any document (the move source may
- * differ from the paste target). Names not present are silently skipped, so an
- * already-absent entry never throws (and an all-absent list returns the text
- * unchanged, byte-identical).
+ * Source-side of a MOVE drop: remove the dragged entries from the SOURCE text.
+ * Works purely on text so it applies to any document (the move source may differ
+ * from the paste target). Targets are selectors — `entrySelectorOf(payload)` when
+ * the caller has the serialized entry, or a bare name when it only has that (see
+ * entrySelector.ts). Targets not present are silently skipped, so an already-
+ * absent entry never throws (and an all-absent list returns the text unchanged,
+ * byte-identical).
  *
  * Each span is re-found against the text produced by the previous removal rather
  * than all being computed up front. Element spans DO overlap, so no ordering of
@@ -326,13 +332,13 @@ export function pasteEntry(
  * runs forward to the next element's start — the comma between them belongs to
  * both. Removing both stale spans deleted that overlap twice and ate the array's
  * closing bracket, so moving the last two entries out of a document corrupted it
- * into unparseable JSON. Re-finding also makes a duplicated name a no-op on the
+ * into unparseable JSON. Re-finding also makes a duplicated target a no-op on the
  * second pass instead of splicing out an innocent neighbour.
  */
-export function deleteEntriesByName(text: string, names: string[]): string {
+export function deleteEntriesByName(text: string, targets: (string | EntrySelector)[]): string {
   let out = text;
-  for (const name of names) {
-    const span = findEntryElementSpan(out, name);
+  for (const target of targets) {
+    const span = findEntryElementSpan(out, target);
     if (span) out = out.slice(0, span.offset) + out.slice(span.offset + span.length);
   }
   return out;

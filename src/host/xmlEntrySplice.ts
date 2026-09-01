@@ -6,6 +6,8 @@
 // (nested objects serialize as <Element Class="...">), so a linear scan of the
 // entry open/close tags is unambiguous. Never throws; returns null when not found.
 
+import { toEntrySelector, type EntrySelector } from './entrySelector.js';
+
 const ENTRY_OPEN = '<Object Class="DD.ENTRY">';
 const OBJECT_CLOSE = '</Object>';
 const DICT_OPEN = '<Object Class="DD.Dictionary">';
@@ -31,18 +33,42 @@ function entryNameOf(fragment: string): string | null {
   return m ? m[1] : null;
 }
 
-/** Byte span of the <Object Class="DD.ENTRY">…</Object> whose Name equals entryName. */
-export function findEntryObjectSpan(xml: string, entryName: string): XmlSpan | null {
+// The entry's UUID P-node, or null when the fragment declares none. Attribute-
+// agnostic for the same reason entryNameOf is: BinarySlddParser matches a P-node
+// on its Name attribute alone.
+function entryUuidOf(fragment: string): string | null {
+  const m = fragment.match(/<P Name="UUID"[^>]*>([^<]*)<\/P>/);
+  return m ? m[1] : null;
+}
+
+/**
+ * Byte span of the <Object Class="DD.ENTRY">…</Object> the selector identifies
+ * (a bare string means "whichever entry has this name").
+ *
+ * Names are matched first and the UUID breaks a tie, exactly as on the JSON side
+ * — a binary .sldd has the same per-namespace name scoping, so `Kp` in Design and
+ * `Kp` in Other Data are two entries the name alone cannot tell apart. Without
+ * the tiebreak the linear scan returned the FIRST `Kp`, so deleting the second
+ * spliced out the first. A selector with no uuid, or one no candidate matches,
+ * keeps the historical first-match behaviour.
+ */
+export function findEntryObjectSpan(xml: string, target: string | EntrySelector): XmlSpan | null {
+  const selector = toEntrySelector(target);
+  let firstMatch: XmlSpan | null = null;
   let pos = 0;
   for (;;) {
     const start = xml.indexOf(ENTRY_OPEN, pos);
-    if (start < 0) return null;
+    if (start < 0) return firstMatch;
     const end = xml.indexOf(OBJECT_CLOSE, start);
-    if (end < 0) return null;
+    if (end < 0) return firstMatch;
     const endExclusive = end + OBJECT_CLOSE.length;
     const fragment = xml.slice(start, endExclusive);
-    if (entryNameOf(fragment) === entryName) {
-      return { offset: start, length: endExclusive - start };
+    if (entryNameOf(fragment) === selector.name) {
+      const span = { offset: start, length: endExclusive - start };
+      // No uuid to discriminate on: first name match wins, as before.
+      if (!selector.uuid) return span;
+      if (entryUuidOf(fragment) === selector.uuid) return span;
+      firstMatch ??= span;
     }
     pos = endExclusive;
   }
@@ -53,8 +79,8 @@ export function findEntryObjectSpan(xml: string, entryName: string): XmlSpan | n
  * its line (so the line is removed cleanly) through the newline after </Object>.
  * Removing this leaves the surrounding entries/dictionary well-formed.
  */
-export function findEntryElementSpan(xml: string, entryName: string): XmlSpan | null {
-  const span = findEntryObjectSpan(xml, entryName);
+export function findEntryElementSpan(xml: string, target: string | EntrySelector): XmlSpan | null {
+  const span = findEntryObjectSpan(xml, target);
   if (!span) return null;
   // Extend start back to the beginning of the line (indentation).
   let start = span.offset;

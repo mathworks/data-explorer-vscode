@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModelFromBytes, getModel, getProjectModel, invalidate } from '../src/host/SlddModel.js';
+import { getModelFromBytes, getModel, getProjectModel, invalidate, findNode } from '../src/host/SlddModel.js';
 
 function bytes(name: string): ArrayBuffer {
   const b = readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
@@ -126,5 +126,68 @@ describe('getModel (JSON text path, unchanged)', () => {
     });
     const node: any = getModel('test://json.sldd', 'json.sldd', json);
     expect(Array.isArray(node.children)).toBe(true);
+  });
+});
+
+// Every provider re-reads a file by calling invalidate() then getModel() on the
+// SAME uri, which re-registers one srcId in DataModel. findNode then answers a
+// webview selection out of DataModel's global id registry, so what that registry
+// holds after a re-read is a host-visible contract, not a core detail.
+describe('re-reading a uri leaves no node from the discarded tree resolvable', () => {
+  const uri = 'test://reread.sldd';
+  const fixtureText = readFileSync(
+    fileURLToPath(new URL('../test-integration/fixtures/workspace/data.sldd', import.meta.url)),
+    'utf8',
+  );
+
+  // The same file with one named entry removed — an external edit, or our own
+  // save, followed by the re-read the document-change handler triggers.
+  function without(name: string): string {
+    const root = JSON.parse(fixtureText);
+    const content = root.__MW_TEXT_PARTS__['__MW_TEXT_PART__/data/chunk0'].__MW_TEXT_content;
+    content.entries = content.entries.filter((e: { name: string }) => e.name !== name);
+    return JSON.stringify(root, null, 2);
+  }
+
+  const entry = (model: any, name: string): any =>
+    model.flatten().find((n: any) => n.name === name);
+
+  it('stops resolving an entry the re-read file no longer contains', () => {
+    // The registry is keyed by node id, and a re-registration used to add the new
+    // tree's ids without removing the old tree's — so a deleted entry stayed
+    // resolvable forever. A selection or a queued edit aimed at that id then found
+    // a live-looking node in a tree nothing else referenced: the edit applied to
+    // the orphan, reported success, and was absent from the saved file.
+    invalidate(uri);
+    const before = getModel(uri, 'reread.sldd', fixtureText);
+    const removed = entry(before, 'Array1');
+    expect(removed).toBeTruthy();
+
+    invalidate(uri);
+    getModel(uri, 'reread.sldd', without('Array1'));
+
+    expect(findNode(uri, removed.id)).toBeNull();
+  });
+
+  // Guards the ORDER of the fix rather than the original symptom: de-indexing the
+  // outgoing tree has to happen before indexing the incoming one, or removing the
+  // old ids would also remove the identical ids the new tree just registered and
+  // every surviving entry would stop resolving.
+  it('resolves a surviving entry to the new tree, not the discarded one', () => {
+    invalidate(uri);
+    const before = getModel(uri, 'reread.sldd', fixtureText);
+    const kept = entry(before, 'Array');
+
+    invalidate(uri);
+    const after: any = getModel(uri, 'reread.sldd', without('Array1'));
+    expect(after).not.toBe(before);
+
+    const resolved = findNode(uri, kept.id);
+    expect(resolved).not.toBeNull();
+    // Same id, different object: the node the id now names belongs to the tree the
+    // table is actually showing.
+    expect(resolved).not.toBe(kept);
+    expect(after.flatten()).toContain(resolved);
+    expect(before.flatten()).not.toContain(resolved);
   });
 });

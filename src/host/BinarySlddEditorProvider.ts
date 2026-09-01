@@ -45,6 +45,7 @@ import {
   broadcastDragState,
   deleteFromSource,
 } from './editorHub.js';
+import { entrySelectorOf } from './entrySelector.js';
 import { basename } from '../common/pathUtil.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import type { TableToHostMessage } from '../common/protocol.js';
@@ -196,9 +197,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // source-delete via a format-appropriate edit (an in-memory chunkXml splice
     // pushed onto this document's own undo stack, then a repaint).
     registerWebview(webview, post);
-    registerSourceDeleter(uriString, (names) => {
+    registerSourceDeleter(uriString, (targets) => {
       const before = document.chunkXml;
-      const after = deleteEntriesByNameXml(before, names);
+      const after = deleteEntriesByNameXml(before, targets);
       if (after === before) return;
       document.pushEdit('Move (remove source)', before, after);
       post();
@@ -241,7 +242,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           webview.postMessage({ type: 'error', message: 'Could not locate the owning entry in the model.' });
           return;
         }
-        const entryNameForLookup = entry.name;
+        // Snapshot the identity BEFORE the mutation: a rename changes `name`, so
+        // the span lookup must use the entry as the XML still spells it. The uuid
+        // half also keeps it off a same-named entry in another namespace.
+        const entrySelectorForLookup = entrySelectorOf(entry);
         const result = node.setProperty(msg.columnId, msg.newValue);
         if (result && typeof result === 'object' && result.error) {
           webview.postMessage({
@@ -255,7 +259,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         }
         const before = document.chunkXml;
         const frag = serializeEntryToXml(entry).replace(/\n$/, '');
-        const span = findEntryObjectSpan(before, entryNameForLookup);
+        const span = findEntryObjectSpan(before, entrySelectorForLookup);
         if (!span) {
           webview.postMessage({ type: 'error', message: 'Could not locate the entry text to update.' });
           return;
@@ -307,7 +311,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         }
         const isCut = clip.mode === 'cut';
         const sameDoc = clip.sourceDocUri === uriString;
-        const srcName = (clip.payload.name as string) || '';
+        // Identity from the payload the clipboard snapped at cut time, so the
+        // source-delete can't hit a same-named entry in another namespace.
+        const srcSelector = entrySelectorOf(clip.payload);
+        const srcName = srcSelector.name;
 
         // A cut into the SAME section is a no-op move: just clear the mark.
         if (isCut && sameDoc && clip.sourceSection === section.name) {
@@ -320,7 +327,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // A same-document cut deletes the source first, then re-parses so the
         // paste's uniqueness check sees the post-delete namespace.
         if (isCut && sameDoc && srcName) {
-          before = deleteEntriesByNameXml(before, [srcName]);
+          before = deleteEntriesByNameXml(before, [srcSelector]);
           DataModel.removeDataSource(document.srcId);
           DataModel.addDataSource(document.srcId, parseBinarySlddParts(before, document.zipMeta), { path: name });
         }
@@ -334,7 +341,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // document's own format-appropriate deleter (JSON or binary), a second
         // native undo step — exactly a cut in one file + paste in another.
         if (isCut && !sameDoc && clip.sourceDocUri && srcName) {
-          await deleteFromSource(clip.sourceDocUri, [srcName]);
+          await deleteFromSource(clip.sourceDocUri, [srcSelector]);
         }
         if (isCut) {
           clearClipboard();
@@ -385,9 +392,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         const payloads = drag.items.map((it) => it.payload);
         const isMove = msg.mode === 'move';
         const sameDoc = drag.sourceDocUri === uriString;
-        const sourceNames = drag.items
-          .map((it) => (it.payload.name as string) || '')
-          .filter((n) => n.length > 0);
+        // Selectors, not bare names: a dragged entry's name is unique only within
+        // its namespace, so deleting by name alone could splice out a same-named
+        // entry in another section. See entrySelector.ts.
+        const sourceTargets = drag.items
+          .map((it) => entrySelectorOf(it.payload))
+          .filter((s) => s.name.length > 0);
 
         const before = document.chunkXml;
         let working = before;
@@ -395,8 +405,8 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // keep their names, then re-parses so the paste's uniqueness check sees
         // the post-delete namespace. A copy, or a cross-document move, leaves this
         // document's originals untouched here.
-        if (isMove && sameDoc && sourceNames.length) {
-          working = deleteEntriesByNameXml(working, sourceNames);
+        if (isMove && sameDoc && sourceTargets.length) {
+          working = deleteEntriesByNameXml(working, sourceTargets);
         }
         DataModel.removeDataSource(document.srcId);
         DataModel.addDataSource(document.srcId, parseBinarySlddParts(working, document.zipMeta), { path: name });
@@ -416,7 +426,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // Cross-document move: remove the originals from the SOURCE document via
         // its own deleter (a second native undo step on that document).
         if (isMove && !sameDoc) {
-          await deleteFromSource(drag.sourceDocUri, sourceNames);
+          await deleteFromSource(drag.sourceDocUri, sourceTargets);
         }
 
         clearDrag();

@@ -19,6 +19,10 @@
 import * as vscode from 'vscode';
 import { clipboardState } from './clipboard.js';
 import { dragDescriptor } from './dragState.js';
+import type { EntrySelector } from './entrySelector.js';
+
+/** What a cross-document move asks the source document to remove. */
+export type DeleteTarget = string | EntrySelector;
 
 // Live table webviews → their repaint callback. A repaint (not just a state
 // post) is needed because a lazy cut makes no document edit, yet its source row
@@ -28,7 +32,7 @@ const liveWebviews = new Map<vscode.Webview, () => void>();
 // Each open editable document registers how to delete named entries from ITSELF,
 // in its own format. Present for every view that can be a drag source (the source
 // view is always open during a drag), so a cross-document move never has to guess.
-const sourceDeleters = new Map<string, (names: string[]) => Promise<void> | void>();
+const sourceDeleters = new Map<string, (targets: DeleteTarget[]) => Promise<void> | void>();
 
 export function registerWebview(wv: vscode.Webview, repaint: () => void): void {
   liveWebviews.set(wv, repaint);
@@ -38,7 +42,10 @@ export function unregisterWebview(wv: vscode.Webview): void {
   liveWebviews.delete(wv);
 }
 
-export function registerSourceDeleter(uriString: string, fn: (names: string[]) => Promise<void> | void): void {
+export function registerSourceDeleter(
+  uriString: string,
+  fn: (targets: DeleteTarget[]) => Promise<void> | void,
+): void {
   sourceDeleters.set(uriString, fn);
 }
 
@@ -72,7 +79,7 @@ export function broadcastDragState(): void {
 // registered; dispatch to it. If none is registered (defensive — should not
 // happen during a live drag), the move's source is left intact rather than
 // risking a wrong-format edit on the file.
-export async function deleteFromSource(uriString: string, names: string[]): Promise<void> {
+export async function deleteFromSource(uriString: string, targets: DeleteTarget[]): Promise<void> {
   const fn = sourceDeleters.get(uriString);
-  if (fn) await fn(names);
+  if (fn) await fn(targets);
 }

@@ -15,6 +15,7 @@ import {
   broadcastClipboardState,
   broadcastDragState,
   deleteFromSource,
+  type DeleteTarget,
 } from './editorHub.js';
 import { sectionRules } from './sectionRules.js';
 import {
@@ -32,6 +33,8 @@ import {
 } from './structuralEdit.js';
 import { annotateDataRows } from './usageGraph.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
+import { parsesAsJson } from './slddFormat.js';
+import { entrySelectorOf } from './entrySelector.js';
 import { basename } from '../common/pathUtil.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 
@@ -146,7 +149,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // Register how to delete named entries from THIS document, so a cross-
     // document move whose SOURCE is this .sldd can complete its source-delete
     // via a format-appropriate edit (here: a full-text WorkspaceEdit).
-    registerSourceDeleter(uriString, (names) => deleteFromSourceDocument(uriString, names));
+    registerSourceDeleter(uriString, (targets) => deleteFromSourceDocument(uriString, targets));
 
     // Apply new full text to the TextDocument via a WorkspaceEdit. This feeds
     // VS Code's native undo stack (so undo/redo + dirty are automatic) and fires
@@ -165,17 +168,13 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // (a mid-edit state). Returns true when the current text parses; otherwise
     // posts an error banner and returns false so the caller can bail.
     const ensureValidJson = (): boolean => {
-      try {
-        JSON.parse(document.getText());
-        return true;
-      } catch {
-        webview.postMessage({
-          type: 'error',
-          message:
-            "Can't apply edit — the document has invalid JSON (likely mid-edit in the text view). Fix the text, then retry.",
-        });
-        return false;
-      }
+      if (parsesAsJson(document.getText())) return true;
+      webview.postMessage({
+        type: 'error',
+        message:
+          "Can't apply edit — the document has invalid JSON (likely mid-edit in the text view). Fix the text, then retry.",
+      });
+      return false;
     };
 
     // --- Value edit / rename (byte-scoped entry-span splice) --------------------
@@ -203,7 +202,11 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           webview.postMessage({ type: 'error', message: 'Could not locate the owning entry in the model.' });
           return;
         }
-        const entryNameForLookup: string = entry.name;
+        // Snapshot the entry's selector BEFORE the mutation: a rename changes
+        // `name`, and the span lookup has to find the entry as the text still
+        // spells it. The uuid half is rename-stable, and is what keeps the lookup
+        // off a same-named entry in another namespace (see entrySelector.ts).
+        const entrySelectorForLookup = entrySelectorOf(entry);
         const isRename = msg.columnId === 'Name';
 
         const result = node.setProperty(msg.columnId, msg.newValue);
@@ -228,7 +231,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         const indent = detectIndent(currentText);
         const entryText = reserializeEntry(entry, indent);
 
-        const span = findEntrySpan(currentText, entryNameForLookup);
+        const span = findEntrySpan(currentText, entrySelectorForLookup);
         if (!span) {
           webview.postMessage({ type: 'error', message: 'Could not locate the entry text to update.' });
           return;
@@ -345,7 +348,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           webview.postMessage({ type: 'error', message: 'Could not locate the owning entry in the model.' });
           return;
         }
-        const span = findEntrySpan(currentText, entry.name);
+        const span = findEntrySpan(currentText, entrySelectorOf(entry));
         if (!span) {
           webview.postMessage({ type: 'error', message: `Could not locate "${entry.name}" in the text.` });
           return;
@@ -394,7 +397,11 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
         const isCut = clip.mode === 'cut';
         const sameDoc = clip.sourceDocUri === uriString;
-        const srcName = (clip.payload.name as string) || '';
+        // The cut entry's identity, carried on the payload the clipboard snapped
+        // at cut time — so the source-delete removes the entry the user actually
+        // cut, not a same-named entry in another section's namespace.
+        const srcSelector = entrySelectorOf(clip.payload);
+        const srcName = srcSelector.name;
 
         // A cut pasted back into the very section it came from is a no-op:
         // deleting then re-adding the same entry would just churn the document.
@@ -409,7 +416,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // the trimmed model. This makes the whole move ONE WorkspaceEdit = one
         // undo step (mirrors the same-document drag-move).
         if (isCut && sameDoc && srcName) {
-          currentText = deleteEntriesByName(currentText, [srcName]);
+          currentText = deleteEntriesByName(currentText, [srcSelector]);
           invalidate(uriString);
           model = getModel(uriString, name, currentText);
           node = findNode(uriString, msg.rowId);
@@ -429,7 +436,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // .sldd), a second native undo step — exactly a cut in one file + paste
         // in another. The hub dispatches to whichever provider owns the source.
         if (isCut && !sameDoc && clip.sourceDocUri && srcName) {
-          await deleteFromSource(clip.sourceDocUri, [srcName]);
+          await deleteFromSource(clip.sourceDocUri, [srcSelector]);
         }
 
         // The cut is now consumed; a copy stays on the clipboard for re-paste.
@@ -491,16 +498,19 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         const payloads = drag.items.map((it) => it.payload);
         const isMove = msg.mode === 'move';
         const sameDoc = drag.sourceDocUri === uriString;
-        const sourceNames = drag.items
-          .map((it) => (it.payload.name as string) || '')
-          .filter((n) => n.length > 0);
+        // Selectors, not names: a multi-select move must remove the exact entries
+        // that were dragged, and one of them may share a name with an entry in a
+        // different namespace of the source document (see entrySelector.ts).
+        const sourceTargets = drag.items
+          .map((it) => entrySelectorOf(it.payload))
+          .filter((s) => s.name.length > 0);
 
         let currentText = document.getText();
         // A same-document move removes the originals first so the pasted copies
         // keep their names (mirrors cut-then-paste). A copy, or a cross-document
         // move, leaves this document's originals untouched here.
         if (isMove && sameDoc) {
-          currentText = deleteEntriesByName(currentText, sourceNames);
+          currentText = deleteEntriesByName(currentText, sourceTargets);
         }
 
         invalidate(uriString);
@@ -521,7 +531,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // a second native undo step — exactly like a cut in one file + paste in
         // another. The hub dispatches to whichever provider owns the source.
         if (isMove && !sameDoc) {
-          await deleteFromSource(drag.sourceDocUri, sourceNames);
+          await deleteFromSource(drag.sourceDocUri, sourceTargets);
         }
 
         clearDrag();
@@ -534,11 +544,30 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // Remove named entries from a document that is NOT this webview's, for a
     // cross-file move. Opens the target document (whether or not its table is
     // open) and applies a full-text replace as one WorkspaceEdit.
-    const deleteFromSourceDocument = async (sourceUri: string, names: string[]): Promise<void> => {
+    //
+    // The strict-JSON gate matters more here than on the paths that edit THIS
+    // document: the source is a different file, so nothing the user did in this
+    // table tells them what state it is in — it may be open in a text view with
+    // half-typed JSON, or have been left invalid by an external tool. The splice
+    // is tolerant enough to still find and remove a span in that text, which
+    // writes back a file that was already broken and is now missing an entry too
+    // (and, because it is invalid, no longer openable as a table to see that).
+    // Refusing leaves the source untouched; the move's paste half has already
+    // succeeded, so the user is left with a copy rather than a mangled original.
+    const deleteFromSourceDocument = async (sourceUri: string, targets: DeleteTarget[]): Promise<void> => {
       const uri = vscode.Uri.parse(sourceUri);
       const srcDoc = await vscode.workspace.openTextDocument(uri);
       const srcText = srcDoc.getText();
-      const trimmed = deleteEntriesByName(srcText, names);
+      if (!parsesAsJson(srcText)) {
+        webview.postMessage({
+          type: 'error',
+          message:
+            `Moved the entries here, but couldn't remove them from ${basename(uri.path)} — that file has invalid JSON. ` +
+            'Fix it, then delete the originals.',
+        });
+        return;
+      }
+      const trimmed = deleteEntriesByName(srcText, targets);
       if (trimmed === srcText) return;
       const edit = new vscode.WorkspaceEdit();
       edit.replace(uri, new vscode.Range(srcDoc.positionAt(0), srcDoc.positionAt(srcText.length)), trimmed);

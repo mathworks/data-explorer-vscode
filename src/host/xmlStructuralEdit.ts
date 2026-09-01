@@ -15,6 +15,7 @@ import {
   findEntryInsertionPoint,
 } from './xmlEntrySplice.js';
 import { findOwningEntry, cloneForPaste, assertConstantValueAllowed, type StructuralResult } from './structuralEdit.js';
+import { entrySelectorOf, type EntrySelector } from './entrySelector.js';
 
 export type { StructuralResult };
 
@@ -54,7 +55,7 @@ function assertTypeAllowed(section: any, payload: Record<string, unknown>): void
 // Replace the owning entry's fragment in-place with its reserialized form.
 function spliceEntry(text: string, entry: any, selectId: string | null): StructuralResult {
   const frag = reserializeEntryXml(entry);
-  const span = findEntryObjectSpan(text, entry.name);
+  const span = findEntryObjectSpan(text, entrySelectorOf(entry));
   if (!span) throw new Error(`Could not locate entry "${entry.name}" text.`);
   const newText = text.slice(0, span.offset) + frag + text.slice(span.offset + span.length);
   return { newText, selectId };
@@ -74,7 +75,8 @@ export function deleteEntryXml(text: string, entry: any): StructuralResult {
   const section = entry.parent;
   const siblings = (section?.children ?? []) as any[];
   const selectId = reselectAfterRemoval(siblings, entry, buildSectionRowId(section?.name ?? ''));
-  const span = findEntryElementSpan(text, entry.name);
+  // By selector, not name — see entrySelector.ts and the JSON path's deleteEntry.
+  const span = findEntryElementSpan(text, entrySelectorOf(entry));
   if (!span) throw new Error(`Could not locate entry "${entry.name}" to delete.`);
   const newText = text.slice(0, span.offset) + text.slice(span.offset + span.length);
   return { newText, selectId };
@@ -175,16 +177,17 @@ export function pasteEntriesXml(
 }
 
 /**
- * Remove many entries by name. Each span is re-found against the text the
- * previous removal produced, mirroring the JSON path: a name listed twice (the
- * same entry reaching the move list from two selected rows) would otherwise be
- * spliced twice from stale offsets, deleting an innocent neighbouring entry's
- * fragment and leaving unbalanced <Object> tags. Absent names are skipped.
+ * Remove many entries, each identified by a selector or a bare name (see
+ * entrySelector.ts). Each span is re-found against the text the previous removal
+ * produced, mirroring the JSON path: a target listed twice (the same entry
+ * reaching the move list from two selected rows) would otherwise be spliced twice
+ * from stale offsets, deleting an innocent neighbouring entry's fragment and
+ * leaving unbalanced <Object> tags. Absent targets are skipped.
  */
-export function deleteEntriesByNameXml(text: string, names: string[]): string {
+export function deleteEntriesByNameXml(text: string, targets: (string | EntrySelector)[]): string {
   let out = text;
-  for (const name of names) {
-    const span = findEntryElementSpan(out, name);
+  for (const target of targets) {
+    const span = findEntryElementSpan(out, target);
     if (span) out = out.slice(0, span.offset) + out.slice(span.offset + span.length);
   }
   return out;

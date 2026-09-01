@@ -1,5 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 import { parseTree, type Node } from 'jsonc-parser';
+import { toEntrySelector, type EntrySelector } from './entrySelector.js';
 
 /**
  * Read the value node of a named property from an object node.
@@ -54,44 +55,64 @@ function findEntriesArray(text: string): Node | null {
   return entries;
 }
 
-// Index within the entries array of the element whose "name" is `entryName`, or
-// -1. Non-object elements can never match, so they are skipped.
-function indexOfEntryElement(elements: Node[], entryName: string): number {
-  return elements.findIndex(
-    (el) => el.type === 'object' && getStringProperty(el, 'name') === entryName,
-  );
+/** The metadata uuid of an entry element, or null when it declares none. */
+function elementUuid(el: Node): string | null {
+  return getStringProperty(getProperty(el, 'metadata'), 'uuid');
+}
+
+// Index within the entries array of the element the selector names, or -1.
+// Non-object elements can never match, so they are skipped.
+//
+// Names are matched first, and the uuid is consulted ONLY to break a tie: entry
+// names are unique per namespace, not per file, so `Array` in Design and `Array`
+// in Other Data are two entries with one name. Keying on the name alone made a
+// same-named pair resolve to whichever came first in the array, so deleting the
+// SECOND one spliced out the first — the user watched the row they had not
+// touched disappear while the one they deleted stayed. When the selector carries
+// no uuid (a bare-name caller), or no candidate matches it, the first name match
+// stands, which is what a file with no duplicate always yields.
+function indexOfEntryElement(elements: Node[], selector: EntrySelector): number {
+  const matches: number[] = [];
+  elements.forEach((el, i) => {
+    if (el.type === 'object' && getStringProperty(el, 'name') === selector.name) matches.push(i);
+  });
+  if (matches.length === 0) return -1;
+  if (matches.length === 1 || !selector.uuid) return matches[0];
+  const exact = matches.find((i) => elementUuid(elements[i]) === selector.uuid);
+  return exact ?? matches[0];
 }
 
 /**
- * Locate the `{...}` span of the entry object whose "name" equals `entryName`.
+ * Locate the `{...}` span of the entry object the selector identifies (see
+ * entrySelector.ts — a bare string means "whichever entry has this name").
  *
  * Returns the element object node's offset/length, or null if the entries array
  * is missing or no element matches. Never throws.
  */
 export function findEntrySpan(
   text: string,
-  entryName: string,
+  target: string | EntrySelector,
 ): { offset: number; length: number } | null {
   const elements = findEntriesArray(text)?.children ?? [];
-  const idx = indexOfEntryElement(elements, entryName);
+  const idx = indexOfEntryElement(elements, toEntrySelector(target));
   if (idx < 0) return null;
   const { offset, length } = elements[idx];
   return { offset, length };
 }
 
 /**
- * Locate the text span to REMOVE to delete the entry named `entryName` from the
- * entries array — the element object plus the one comma that joins it to its
- * siblings (the preceding comma when it's the last element, otherwise the
+ * Locate the text span to REMOVE to delete the entry the selector identifies
+ * from the entries array — the element object plus the one comma that joins it
+ * to its siblings (the preceding comma when it's the last element, otherwise the
  * following comma), and the whitespace between. Removing this span leaves valid
  * JSON. Returns null if the array or element is not found.
  */
 export function findEntryElementSpan(
   text: string,
-  entryName: string,
+  target: string | EntrySelector,
 ): { offset: number; length: number } | null {
   const elements = findEntriesArray(text)?.children ?? [];
-  const idx = indexOfEntryElement(elements, entryName);
+  const idx = indexOfEntryElement(elements, toEntrySelector(target));
   if (idx < 0) return null;
   const el = elements[idx];
 
