@@ -65,6 +65,31 @@ export function removeFile(uriString: string): void {
   index?.delete(uriString);
 }
 
+// The file's CURRENT bytes, preferring an open document's unsaved buffer over
+// what is on disk.
+//
+// This matters because reindexFile is driven by onDidChangeTextDocument, which
+// fires per keystroke on an UNSAVED buffer. Reading disk there re-derives the
+// names the file had before the edit, so renaming an entry in an open .sldd left
+// search offering the OLD name (which no longer resolves to a row) and never the
+// new one, until the file was saved. The reindex looked like it worked, because
+// it did run — it just re-read the wrong bytes.
+//
+// A dirty document is only ever text: VS Code cannot mirror a compressed-binary
+// .sldd as a TextDocument, and the writable binary editor keeps its edits in its
+// own edit stack rather than a TextDocument, so `isDirty` here always implies the
+// JSON format and encoding the string back to bytes is lossless. A clean (or
+// unopened) document has no in-memory state worth preferring, so it reads disk —
+// which also keeps the full build() unaffected.
+async function readCurrentBytes(uri: vscode.Uri): Promise<ArrayBuffer> {
+  const uriString = uri.toString();
+  const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uriString);
+  if (open?.isDirty) {
+    return toArrayBuffer(new TextEncoder().encode(open.getText()));
+  }
+  return toArrayBuffer(await vscode.workspace.fs.readFile(uri));
+}
+
 async function build(): Promise<void> {
   const map = new Map<string, NameRecord[]>();
   let uris: vscode.Uri[];
@@ -88,7 +113,7 @@ async function build(): Promise<void> {
 async function recordsForFile(uri: vscode.Uri): Promise<NameRecord[]> {
   let ab: ArrayBuffer;
   try {
-    ab = toArrayBuffer(await vscode.workspace.fs.readFile(uri));
+    ab = await readCurrentBytes(uri);
   } catch {
     return [];
   }
