@@ -85,6 +85,27 @@ const DEFAULT_COLUMN_ORDER = [
 ];
 const DEFAULT_HIDDEN_COLUMNS = ['Kind', 'Class', 'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit', 'storageClass', 'headerFile', 'alignment', 'lastModified', 'lastModifiedBy'];
 
+// Search prefixes that mean "substring-match this ONE column", and the column
+// each names. `type:` deliberately reads DataType — the prefix is what the user
+// types, the column is what the table calls it, and they are not the same word.
+//
+// `value:` is absent on purpose: it is the only prefix with its own grammar
+// (exact `value:"..."` and numeric `value:>10` comparisons), so it stays a
+// separate branch rather than being forced into this table.
+//
+// A Map, not an object literal: a plain object inherits from Object.prototype, so
+// a lookup of `constructor:` or `toString:` returns an inherited function instead
+// of undefined and the search would treat those words as real column prefixes.
+// Unknown prefixes must fall through to a whole-token text search — `constructor:`
+// is ordinary text a user may well be looking for in a .sldd.
+const SUBSTRING_FILTER_COLUMNS = new Map<string, string>([
+  ['name', 'Name'],
+  ['type', 'DataType'],
+  ['class', 'Class'],
+  ['kind', 'Kind'],
+  ['status', 'Status'],
+]);
+
 // The display text of a cell value, which the host emits either as a plain
 // string or as an object carrying `text`.
 //
@@ -1363,31 +1384,10 @@ export class DexTreeTable extends LitElement {
         const prefix = token.slice(0, colonIdx).toLowerCase();
         const rawValue = token.slice(colonIdx + 1);
 
-        if (prefix === 'name') {
+        const column = SUBSTRING_FILTER_COLUMNS.get(prefix);
+        if (column) {
           const term = unquote(rawValue).toLowerCase();
-          predicates.push((row) => {
-            return this._getCellText(row, 'Name').toLowerCase().includes(term);
-          });
-        } else if (prefix === 'type') {
-          const term = unquote(rawValue).toLowerCase();
-          predicates.push((row) => {
-            return this._getCellText(row, 'DataType').toLowerCase().includes(term);
-          });
-        } else if (prefix === 'class') {
-          const term = unquote(rawValue).toLowerCase();
-          predicates.push((row) => {
-            return this._getCellText(row, 'Class').toLowerCase().includes(term);
-          });
-        } else if (prefix === 'kind') {
-          const term = unquote(rawValue).toLowerCase();
-          predicates.push((row) => {
-            return this._getCellText(row, 'Kind').toLowerCase().includes(term);
-          });
-        } else if (prefix === 'status') {
-          const term = unquote(rawValue).toLowerCase();
-          predicates.push((row) => {
-            return this._getCellText(row, 'Status').toLowerCase().includes(term);
-          });
+          predicates.push((row) => this._getCellText(row, column).toLowerCase().includes(term));
         } else if (prefix === 'value') {
           if (rawValue.startsWith('"') && rawValue.endsWith('"')) {
             const exact = rawValue.slice(1, -1);

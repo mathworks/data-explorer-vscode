@@ -181,6 +181,24 @@ describe('field-prefixed searches', () => {
     table.remove();
   });
 
+  it('a prefix that names an Object.prototype member is still ordinary text', async () => {
+    // The known prefixes are looked up in a table keyed by prefix name. A plain
+    // object literal there inherits from Object.prototype, so `constructor:` /
+    // `toString:` would resolve to an inherited function, be mistaken for a real
+    // column prefix, and match against a column named after a function — matching
+    // nothing at all. These are searchable words in a .sldd (a struct field, a
+    // MATLAB class member), so they have to behave like any unknown prefix.
+    const rows = [
+      makeRow('c', null, 'constructor:init'),
+      makeRow('t', null, 'toString:helper'),
+      makeRow('d', null, 'other'),
+    ];
+    const table = await mount(rows);
+    expect(await search(table, 'constructor:init')).toEqual(['c']);
+    expect(await search(table, 'toString:helper')).toEqual(['t']);
+    table.remove();
+  });
+
   it('a leading colon is not read as an empty prefix', async () => {
     const table = await mount([makeRow('c', null, ':leading'), makeRow('d', null, 'other')]);
     expect(await search(table, ':leading')).toEqual(['c']);

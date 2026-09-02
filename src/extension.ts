@@ -11,7 +11,12 @@ import { isEditableJsonSlddBytes, exceedsTextSyncLimit, isZipBytes } from './hos
 import { handleNavigate, requestSelect } from './host/navigate.js';
 import { invalidateUsageGraph } from './host/usageGraph.js';
 import { searchDataSources } from './host/searchSources.js';
-import { listEntries, reindexFile, removeFile } from './host/nameIndex.js';
+import {
+  listEntries,
+  reindexFile,
+  removeFile,
+  invalidate as invalidateNameIndex,
+} from './host/nameIndex.js';
 import { isSectionRowId } from './common/sectionRowId.js';
 
 const SUPPORTED_RE = /\.(sldd|mat|slx|prj)$/;
@@ -200,6 +205,22 @@ export function activate(context: vscode.ExtensionContext): void {
     // outside the workspace folder, so invalidate on tab changes too.
     vscode.window.tabGroups.onDidChangeTabs(() => {
       invalidateUsageGraph();
+    }),
+    // Adding or removing a workspace folder changes which files exist as far as
+    // every workspace-wide cache is concerned — the tree graph, the usage graph,
+    // and the name index all build off `findFiles`, which only ever searches the
+    // current folder set. The file watcher CANNOT stand in for this: its glob is
+    // relative to that same folder set, and a folder being added is not a file
+    // create event, so attaching a folder of pre-existing .sldd files fires
+    // nothing at all. Without this the caches keep answering from the old folder
+    // set for the rest of the session.
+    //
+    // The name index needs the wholesale `invalidate()` rather than the
+    // per-file ops the watcher uses: a folder change adds and removes whole sets
+    // of files at once, and there is no single uri to reindex or drop.
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      invalidateNameIndex();
+      refreshAll();
     }),
     // Saving clears the dirty state → update the modified badge.
     vscode.workspace.onDidSaveTextDocument((doc) => {
