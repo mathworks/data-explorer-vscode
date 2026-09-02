@@ -875,18 +875,30 @@ export class DexTreeTable extends LitElement {
     return this._orderedColumns.filter((c) => !this._hiddenColumns.has(c));
   }
 
+  // Column widths are ALWAYS relative, so the table tracks the panel in both
+  // directions. `_columnWidths` holds pixels because that is what a drag produces
+  // (mouse deltas and offsetWidth are pixels), but a pixel width in the CSS would
+  // pin the column to the size the panel happened to have at the moment of the
+  // drag: the table then neither grew into a widened window (dead space right of
+  // the last column) nor shrank with a narrowed one (overflow and a scrollbar).
+  // Projecting each pinned width as its share of their total keeps the ratios the
+  // user dragged while leaving the table itself fluid — one sizing mode, not a
+  // fluid one that latches into a fixed one on first resize.
   private _getColWidth(col: string, visibleCount: number): string {
-    if (this._columnWidths.has(col)) {
-      return `${this._columnWidths.get(col)}px`;
+    const even = `${100 / visibleCount}%`;
+    const pinned = this._columnWidths.get(col);
+    if (pinned === undefined) return even;
+    // Only the columns rendered right now count toward the total; a hidden or
+    // since-removed column's width must not claim a share of the table.
+    let total = 0;
+    for (const c of this._visibleColumns) {
+      total += this._columnWidths.get(c) ?? 0;
     }
-    return `${100 / visibleCount}%`;
-  }
-
-  private _getTableWidth(visibleCols: string[]): string {
-    const allPixel = visibleCols.every((c) => this._columnWidths.has(c));
-    if (!allPixel) return 'width: 100%;';
-    const total = visibleCols.reduce((sum, c) => sum + (this._columnWidths.get(c) || 0), 0);
-    return `width: ${total}px;`;
+    // A collapsed or not-yet-laid-out panel measures every header as 0. Dividing by
+    // that total would emit `NaN%` for every column, leaving a table with no visible
+    // columns and no way for the user to recover them.
+    if (total <= 0) return even;
+    return `${(pinned / total) * 100}%`;
   }
 
   // --- Column Resizing ---
@@ -2521,7 +2533,7 @@ export class DexTreeTable extends LitElement {
         @contextmenu=${this._onContainerContextMenu}
       >
         <div class="virtual-spacer" style="height: ${totalHeight + headerHeight}px;">
-          <table style="${this._getTableWidth(visibleCols)}">
+          <table>
             <colgroup>
               ${visibleCols.map((col) => html`<col style="width: ${this._getColWidth(col, visibleCols.length)}" />`)}
             </colgroup>
@@ -2564,7 +2576,7 @@ export class DexTreeTable extends LitElement {
                 No entries match "${this._filterText}"
               </div>`
             : nothing}
-          <table class="rows-table" style="top: ${offsetTop}px; ${this._getTableWidth(visibleCols)}">
+          <table class="rows-table" style="top: ${offsetTop}px;">
             <colgroup>
               ${visibleCols.map((col) => html`<col style="width: ${this._getColWidth(col, visibleCols.length)}" />`)}
             </colgroup>

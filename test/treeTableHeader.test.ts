@@ -214,18 +214,78 @@ describe('resizing a column', () => {
     table.remove();
   });
 
-  it('the table falls back to a percentage layout until every column is pinned', async () => {
-    // Mixing pixel and percentage widths in a fixed-layout table makes the columns
-    // jump around; the component only switches to pixels once all are known.
+  it('an unpinned column takes an even share, and pinned ones stay relative', async () => {
+    // Widths are always relative, whether or not the user has resized anything:
+    // mixing pixel and percentage columns in a fixed-layout table makes them jump
+    // around, and a pixel column is what stopped the table following the panel.
     const table = await mount();
     const cols = (table as any)._visibleColumns as string[];
-    expect((table as any)._getTableWidth(cols)).toBe('width: 100%;');
     expect((table as any)._getColWidth('Value', cols.length)).toBe(`${100 / cols.length}%`);
 
+    // Equal pinned widths are the same layout as no pinned widths at all.
     const widths = new Map<string, number>(cols.map((c) => [c, 120]));
     (table as any)._columnWidths = widths;
-    expect((table as any)._getTableWidth(cols)).toBe(`width: ${120 * cols.length}px;`);
-    expect((table as any)._getColWidth('Value', cols.length)).toBe('120px');
+    expect((table as any)._getColWidth('Value', cols.length)).toBe(`${100 / cols.length}%`);
+    table.remove();
+  });
+
+  it('a resized column is stored as a share of the table, not a frozen pixel width', async () => {
+    // Regression: resizing snapshots EVERY visible column to pixels, which used to
+    // switch the table from `width: 100%` to `width: <total>px` — the total measured
+    // at the instant the handle was grabbed. Nothing revisited it, so from the first
+    // resize on the table no longer tracked the panel in EITHER direction: widening
+    // the window left dead space to the right of the last column, and narrowing it
+    // made the table overflow and scroll. Pixels cannot follow a panel, so the
+    // pinned widths are rendered as normalized shares instead. The drag arithmetic
+    // stays in pixels (mouse deltas are pixels); only the projection into CSS is
+    // relative, which is what makes the table fluid again.
+    const table = await mount();
+    const cols = (table as any)._visibleColumns as string[];
+    // Name is dragged to 4x the width of every other visible column, so its share
+    // is 4/(4 + n-1) of the table and each of the others is 1/(4 + n-1).
+    const widths = new Map<string, number>(cols.map((c) => [c, 100]));
+    widths.set('Name', 400);
+    (table as any)._columnWidths = widths;
+
+    const units = 4 + (cols.length - 1);
+    expect((table as any)._getColWidth('Name', cols.length)).toBe(`${(4 / units) * 100}%`);
+    expect((table as any)._getColWidth('Value', cols.length)).toBe(`${(1 / units) * 100}%`);
+
+    // Every column is relative, so nothing anchors the table to a pixel size.
+    const all = cols.map((c) => (table as any)._getColWidth(c, cols.length) as string);
+    expect(all.every((w) => w.endsWith('%'))).toBe(true);
+    const sum = all.reduce((s, w) => s + parseFloat(w), 0);
+    expect(sum).toBeCloseTo(100, 6);
+    table.remove();
+  });
+
+  it('neither table carries an inline pixel width, so both track the panel', async () => {
+    // The sticky header is a separate <table> from the rows. An inline pixel width
+    // on either one is what pinned it to a stale size; the stylesheet's width:100%
+    // is now the only thing sizing them, so they cannot disagree.
+    const table = await mount();
+    const cols = (table as any)._visibleColumns as string[];
+    (table as any)._columnWidths = new Map<string, number>(cols.map((c) => [c, 120]));
+    await table.updateComplete;
+
+    const tables = Array.from(table.shadowRoot!.querySelectorAll('table')) as HTMLElement[];
+    expect(tables.length).toBe(2);
+    for (const t of tables) {
+      expect(t.style.width).toBe('');
+      expect(t.style.minWidth).toBe('');
+    }
+    table.remove();
+  });
+
+  it('a zero-width measurement falls back to an even split instead of NaN', async () => {
+    // Column widths are snapshotted from offsetWidth. A collapsed or not-yet-laid-out
+    // panel measures every header as 0, which would make the share computation divide
+    // by zero and emit `NaN%` for every column — a table with no visible columns at
+    // all, and no way for the user to get them back.
+    const table = await mount();
+    const cols = (table as any)._visibleColumns as string[];
+    (table as any)._columnWidths = new Map<string, number>(cols.map((c) => [c, 0]));
+    expect((table as any)._getColWidth('Value', cols.length)).toBe(`${100 / cols.length}%`);
     table.remove();
   });
 
