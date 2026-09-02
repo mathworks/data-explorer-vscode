@@ -138,6 +138,61 @@ describe('RelGraph roots selection', () => {
     // leaf.sldd is referenced (not a root); lonely.mat is a root but a leaf.
     expect(byLabel(roots, 'lonely.mat').hasChildren).toBe(false);
   });
+
+  // hasChildren is what the tree draws a twisty from; children() is what an
+  // expansion actually returns. They are separate code paths over the same
+  // GraphSource, and a disagreement is silent either way — a twisty that expands
+  // to nothing, or references the user cannot reach at all. This walks every node
+  // reachable from every root and asserts the two agree, so a future ref kind
+  // added to one path and not the other fails here rather than in the UI.
+  it('hasChildren agrees with children() for every reachable node', () => {
+    const g = new RelGraph([
+      // A model with model refs AND data links, so both legs of the model branch
+      // are live; a dictionary chain; a leaf .mat; a broken ref (renders as a
+      // `missing` node, so the referrer IS expandable); and a 2-cycle, whose
+      // second visit is marked cycle and must NOT claim children.
+      src('top.slx', { modelRefs: ['sub.slx'], dataDictionary: 'params.sldd', dataSources: ['bp.mat'] }),
+      src('sub.slx', { dataSources: ['ghost.sldd'] }),
+      src('params.sldd', { slddRefs: ['common.sldd'] }),
+      src('common.sldd', { slddRefs: ['params.sldd'] }), // cycles back
+      src('bp.mat'),
+      src('lonely.mat'),
+      src('proj/App.prj'),
+    ]);
+
+    const seen = new Set<string>();
+    const walk = (nodes: GraphNode[]): void => {
+      for (const n of nodes) {
+        const children = g.children(n);
+        expect(n.hasChildren, `${n.label} (${n.kind}) hasChildren`).toBe(children.length > 0);
+        // Guard against an infinite walk on the cycle: a cycle node reports no
+        // children, so recursion ends there, but key on identity anyway.
+        const key = `${n.ancestors.size}:${n.kind}:${n.label}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        walk(children);
+      }
+    };
+    walk(g.roots());
+    // The walk must have actually gone somewhere, or this passes vacuously.
+    expect(seen.size).toBeGreaterThan(5);
+  });
+
+  it('a node revisited as a CYCLE offers no twisty even though it has refs', () => {
+    // params.sldd -> common.sldd -> params.sldd. The second params.sldd has the
+    // same refs as the first, so only the cycle flag can suppress its twisty.
+    const g = new RelGraph([
+      src('params.sldd', { slddRefs: ['common.sldd'] }),
+      src('common.sldd', { slddRefs: ['params.sldd'] }),
+    ]);
+    const first = byLabel(topRoots(g), 'params.sldd');
+    expect(first.hasChildren).toBe(true);
+    const common = byLabel(g.children(first), 'common.sldd');
+    const revisited = byLabel(g.children(common), 'params.sldd');
+    expect(revisited.cycle).toBe(true);
+    expect(revisited.hasChildren).toBe(false);
+    expect(g.children(revisited)).toEqual([]);
+  });
 });
 
 describe('RelGraph shared targets (graph-as-tree duplication)', () => {

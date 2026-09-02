@@ -248,6 +248,23 @@ export class RelGraph {
     return src.dataSources.length > 0 || src.dataDictionary != null;
   }
 
+  // Whether expanding this source would yield anything — i.e. whether the tree
+  // should draw a twisty on it. This MUST agree with what children() actually
+  // builds for the same source, and the two are separate code paths: children()
+  // renders modelRefs plus the synthetic External Data group for a model, and
+  // slddRefs for a dictionary, while this predicate is what the TreeItem's
+  // collapsible state is computed from. A disagreement is silent and both
+  // directions are user-visible — a twisty that expands to nothing, or a file
+  // whose references cannot be reached at all. Note an UNRESOLVED ref still
+  // counts: refToNodes renders it as a `missing` node, so a broken link is
+  // expandable and shows the name that could not be found.
+  private hasExpandableRefs(src: GraphSource): boolean {
+    if (src.type === 'model') return src.modelRefs.length > 0 || this.hasDataLinks(src);
+    if (src.type === 'sldd') return src.slddRefs.length > 0;
+    // mat: no outbound links. project: never rendered as a file node at all.
+    return false;
+  }
+
   private dataLinkChildren(src: GraphSource, ancestors: ReadonlySet<string>): GraphNode[] {
     const path = new Set(ancestors);
     path.add(src.uriString);
@@ -270,14 +287,10 @@ export class RelGraph {
   }
 
   private toNode(src: GraphSource, ancestors: ReadonlySet<string>): GraphNode {
+    // A cycle node is rendered but never expanded (children() returns [] for it),
+    // so it must not offer a twisty regardless of its refs.
     const cycle = ancestors.has(src.uriString);
-    const hasChildren =
-      !cycle &&
-      (src.type === 'model'
-        ? src.modelRefs.length > 0 || this.hasDataLinks(src)
-        : src.type === 'sldd'
-          ? src.slddRefs.length > 0
-          : false);
+    const hasChildren = !cycle && this.hasExpandableRefs(src);
     return {
       kind: src.type,
       uriString: src.uriString,

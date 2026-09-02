@@ -92,12 +92,11 @@ async function readCurrentBytes(uri: vscode.Uri): Promise<ArrayBuffer> {
 
 async function build(): Promise<void> {
   const map = new Map<string, NameRecord[]>();
-  let uris: vscode.Uri[];
+  let uris: vscode.Uri[] = [];
   try {
     uris = await vscode.workspace.findFiles('**/*.{slx,sldd,mat}');
   } catch {
-    index = map;
-    return;
+    /* no workspace folder open — nothing to scan; the index is legitimately empty */
   }
   await Promise.all(
     uris.map(async (uri) => {
@@ -105,6 +104,11 @@ async function build(): Promise<void> {
       if (records.length > 0) map.set(uri.toString(), records);
     }),
   );
+  // Assigned on exactly ONE path, deliberately. `index` non-null is what marks
+  // the build as done: reindexFile no-ops while it is null, and listEntries reads
+  // through it. A failure path that resolved buildPromise WITHOUT setting it
+  // would leave the module permanently half-built — ensureIndex() satisfied, so
+  // no rebuild is ever attempted, while every query returns nothing.
   index = map;
 }
 
