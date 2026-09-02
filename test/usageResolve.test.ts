@@ -93,6 +93,60 @@ describe('resolveParam — workspace -> sldd -> mat, first found wins', () => {
     expect(resolveParam(model({ slddRefs: ['a.sldd'] }), 'Kp', chained, new Map())).toBeNull();
   });
 
+  // The keys of these maps are FILENAMES; the refs in slddRefs/matRefs/dictRefs
+  // are strings a model recorded, which MATLAB stores as the user typed them. So
+  // the two sides routinely differ in case for the same file. usageGraph now keys
+  // and looks up through refBasename (lower-cased) for exactly this reason — the
+  // sections tree already resolved refs case-insensitively (RelGraph.byBasename),
+  // so a case-sensitive match here made the SAME reference resolve in the tree and
+  // silently not in the Usage column, showing a used parameter as unused.
+  //
+  // These pin the resolver's half of that contract: it must not re-introduce any
+  // case-sensitive comparison of its own, which would defeat the normalisation.
+  describe('case-insensitive reference matching', () => {
+    it('resolves a differently-cased .sldd reference', () => {
+      const m = model({ slddRefs: ['params.sldd'] });
+      const lower = new Map([['params.sldd', data('file:///w/Params.sldd', ['Kp'])]]);
+      expect(resolveParam(m, 'Kp', lower, new Map())).toEqual({ kind: 'sldd', uri: 'file:///w/Params.sldd' });
+    });
+
+    it('resolves a differently-cased .mat reference', () => {
+      const m = model({ matRefs: ['tuning.mat'] });
+      const lower = new Map([['tuning.mat', data('file:///w/Tuning.MAT', ['Mv'])]]);
+      expect(resolveParam(m, 'Mv', new Map(), lower)).toEqual({ kind: 'mat', uri: 'file:///w/Tuning.MAT' });
+    });
+
+    it('chases a differently-cased chained dictionary reference', () => {
+      // The chained refs come from a DIFFERENT file than the model, so this leg
+      // has its own normalisation and its own chance to be missed.
+      const chained = new Map([
+        ['a.sldd', data('file:///w/A.sldd', [], ['b.sldd'])],
+        ['b.sldd', data('file:///w/B.SLDD', ['Deep'])],
+      ]);
+      expect(resolveParam(model({ slddRefs: ['a.sldd'] }), 'Deep', chained, new Map())).toEqual({
+        kind: 'sldd',
+        uri: 'file:///w/B.SLDD',
+      });
+    });
+
+    it('builds usage edges through a differently-cased reference', () => {
+      // The end-to-end consequence: without normalisation this block's Gain shows
+      // no source and no link at all, which reads as "this parameter is unused".
+      const m = model({
+        slddRefs: ['params.sldd'],
+        blockParams: [{ blockName: 'plant/Gain', property: 'Gain', value: 'Kp' }],
+      });
+      const sldds2 = new Map([['params.sldd', data('file:///w/Params.sldd', ['Kp'])]]);
+      const g = buildEdges([m], sldds2, new Map());
+      expect(g.forward.get(`${m.uri}\nplant/Gain`)).toEqual([
+        { property: 'Gain', paramName: 'Kp', source: 'Params.sldd', linkTarget: 'Kp@file:///w/Params.sldd' },
+      ]);
+      expect(g.reverse.get('file:///w/Params.sldd\nKp')).toEqual([
+        { blockName: 'plant/Gain', modelName: 'plant', modelUri: m.uri },
+      ]);
+    });
+  });
+
   it('does not loop on cyclic dictionary references', () => {
     const cyclic = new Map([
       ['a.sldd', data('file:///w/a.sldd', [], ['b.sldd'])],

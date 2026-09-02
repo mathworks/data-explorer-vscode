@@ -17,7 +17,7 @@
 import * as vscode from 'vscode';
 import { parseSlx, parseMat, parseBinarySldd } from 'data-explorer-core';
 import { isZipBytes } from './slddFormat.js';
-import { normalizeRefNames } from './slddRefs.js';
+import { normalizeRefNames, refBasename } from './slddRefs.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import {
   basename,
@@ -71,9 +71,9 @@ function slddSummary(uri: string, content: Record<string, unknown>): DataSummary
     }
     // Shared normalisation (a ref is a bare string or a { file } object), so the
     // usage graph, the sections tree, and the compressed-.sldd index all agree on
-    // what a dictionary reference is. Basenamed here because the graph matches
-    // refs against workspace files by name.
-    dictRefs.push(...normalizeRefNames(inner['Dictionary References']).map(basename));
+    // what a dictionary reference is. refBasename'd here because the graph matches
+    // refs against workspace files by name, case-insensitively (see slddByBase).
+    dictRefs.push(...normalizeRefNames(inner['Dictionary References']).map(refBasename));
   }
   return { uri, varNames, dictRefs };
 }
@@ -107,6 +107,15 @@ async function buildGraph(): Promise<ResolvedGraph> {
 
   const models: ModelSummary[] = [];
   // basename -> data summary (first match wins; ambiguous basenames are rare).
+  //
+  // Keyed by refBasename (basename LOWER-CASED), because the keys are filenames
+  // and the lookups are references authored inside a model — MATLAB records those
+  // as the user typed them, so `Params.sldd` in a model legitimately refers to
+  // `params.sldd` on disk. The sections tree already resolves refs this way
+  // (RelGraph.byBasename); matching case-sensitively here made the SAME reference
+  // resolve in the tree and silently not in the Usage column, leaving parameters
+  // that are plainly used looking unused. Every key and every lookup below must
+  // use refBasename or the map half-matches.
   const slddByBase = new Map<string, DataSummary>();
   const matByBase = new Map<string, DataSummary>();
 
@@ -118,12 +127,16 @@ async function buildGraph(): Promise<ResolvedGraph> {
       try {
         if (path.endsWith('.slx')) {
           const parsed = parseSlx(ab, basename(path));
+          // Sorted by extension case-insensitively for the same reason the map is
+          // keyed that way: these strings are whatever the model recorded, so a
+          // `.SLDD` link is a real dictionary link and must not be dropped (which
+          // would silently classify it as neither .sldd nor .mat).
           const externals = parsed.externalDataSources ?? [];
           const slddRefs = [
-            ...(parsed.dataDictionary ? [basename(parsed.dataDictionary)] : []),
-            ...externals.filter((e) => e.endsWith('.sldd')).map(basename),
+            ...(parsed.dataDictionary ? [refBasename(parsed.dataDictionary)] : []),
+            ...externals.filter((e) => /\.sldd$/i.test(e)).map(refBasename),
           ];
-          const matRefs = externals.filter((e) => e.endsWith('.mat')).map(basename);
+          const matRefs = externals.filter((e) => /\.mat$/i.test(e)).map(refBasename);
           models.push({
             uri: uri.toString(),
             label: labelOf(path),
@@ -138,7 +151,7 @@ async function buildGraph(): Promise<ResolvedGraph> {
           });
         } else if (path.endsWith('.mat')) {
           const parsed = parseMat(ab);
-          matByBase.set(basename(path), {
+          matByBase.set(refBasename(path), {
             uri: uri.toString(),
             varNames: new Set(parsed.variables.map((v) => v.name).filter(Boolean)),
             dictRefs: [],
@@ -148,7 +161,7 @@ async function buildGraph(): Promise<ResolvedGraph> {
           const content = isZipBytes(bytes)
             ? (parseBinarySldd(ab) as Record<string, unknown>)
             : (JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>);
-          slddByBase.set(basename(path), slddSummary(uri.toString(), content));
+          slddByBase.set(refBasename(path), slddSummary(uri.toString(), content));
         }
       } catch {
         /* unreadable/corrupt file contributes nothing */
