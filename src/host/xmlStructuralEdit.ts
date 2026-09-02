@@ -3,18 +3,30 @@
 // Pure (VS-Code-free) XML text transforms for structural edits on a binary .sldd's
 // data/chunk0.xml — the XML analog of structuralEdit.ts. Each edit regenerates the
 // WHOLE touched entry's <Object> fragment (via serializeEntryToXml) and byte-splices
-// it, so untouched sibling entries stay byte-identical. Model-node helpers
-// (findOwningEntry, resolveSectionForPaste, cloneForPaste) are shared with the JSON
-// path — imported, not duplicated.
+// it, so untouched sibling entries stay byte-identical.
+//
+// Only the SPLICING is format-specific. Everything that decides what an edit MEANS
+// — which node owns a row, what a section will accept, what a pasted entry becomes,
+// where the selection goes after a delete, the all-or-nothing multi-paste fold — is
+// imported from the JSON path, not duplicated. Those rules had been copied here
+// once, each copy commented "mirrors the JSON path", and that is exactly the drift
+// this repo has already shipped bugs from: a rule fixed on one side leaves the other
+// .sldd format classifying entries differently.
 
-import { serializeEntryToXml, generateUuid, getSectionMetadata } from 'data-explorer-core';
+import { serializeEntryToXml } from 'data-explorer-core';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 import {
   findEntryObjectSpan,
   findEntryElementSpan,
   findEntryInsertionPoint,
 } from './xmlEntrySplice.js';
-import { findOwningEntry, cloneForPaste, assertConstantValueAllowed, type StructuralResult } from './structuralEdit.js';
+import {
+  findOwningEntry,
+  reselectAfterRemoval,
+  prepareEntryForPaste,
+  foldPasteEntries,
+  type StructuralResult,
+} from './structuralEdit.js';
 import { entrySelectorOf, type EntrySelector } from './entrySelector.js';
 
 export type { StructuralResult };
@@ -23,33 +35,6 @@ export type { StructuralResult };
 // in-place span replacement.
 export function reserializeEntryXml(entry: any): string {
   return serializeEntryToXml(entry).replace(/\n$/, '');
-}
-
-// The row id to select after removing `node` from `siblings`: the previous
-// sibling if any, else the next, else the fallback id.
-function reselectAfterRemoval(siblings: any[], node: any, fallbackId: string): string {
-  const idx = siblings.indexOf(node);
-  if (idx > 0) return siblings[idx - 1].id;
-  if (idx >= 0 && idx < siblings.length - 1) return siblings[idx + 1].id;
-  return fallbackId;
-}
-
-/** The Simulink class name of a serialized entry payload, or '' if none. */
-function payloadClassName(payload: Record<string, unknown>): string {
-  const value = payload.value as Record<string, unknown> | undefined;
-  return (value && typeof value === 'object' && (value._array_class as string)) || '';
-}
-
-// Reject a payload whose class has no home in the target section. Shared by the
-// single- and multi-paste paths, which differ only in WHEN they call it: paste
-// checks its one payload, drop checks every payload up front so a rejected
-// multi-drop leaves the document untouched. A classless payload (a plain MATLAB
-// variable) and a section with no allow-list are both unrestricted.
-function assertTypeAllowed(section: any, payload: Record<string, unknown>): void {
-  const className = payloadClassName(payload);
-  if (className && typeof section.allowsType === 'function' && !section.allowsType(className)) {
-    throw new Error(`A "${className}" entry is not allowed in ${section.displayName ?? section.name}.`);
-  }
 }
 
 // Replace the owning entry's fragment in-place with its reserialized form.
@@ -121,59 +106,27 @@ export function addEntryXml(text: string, section: any, className: string): Stru
   return insertNewEntry(text, node);
 }
 
-/** Paste a serialized entry payload as a new entry (mirrors structuralEdit.pasteEntry). */
+/**
+ * Paste a serialized entry payload as a new entry. Every rule about what the
+ * pasted entry BECOMES (allow-check, unique name, section rebind, fresh uuid,
+ * Constant value gate) is prepareEntryForPaste, shared with the JSON path; only
+ * the fragment insert below is XML-specific.
+ */
 export function pasteEntryXml(
   text: string,
   section: any,
   payload: Record<string, unknown>,
 ): StructuralResult {
-  assertTypeAllowed(section, payload);
-  const raw = cloneForPaste(payload);
-  const baseName = typeof raw.name === 'string' ? raw.name : 'Entry';
-  raw.name = section._uniqueName(baseName);
-  // Rebind the entry to the target section UNCONDITIONALLY, creating the metadata
-  // when the payload carries none. `metadata` is null for an entry whose source
-  // .sldd never declared one (hand-added in the text view), and skipping the
-  // rebind in that case left the new entry with no namespace at all — so the
-  // reload classified it as Design (the fallback) no matter where it was dropped.
-  // Pasting such a row into Configurations or Architectural Data made it appear
-  // in Design Data instead, as if the paste had gone to the wrong place.
-  const md = (raw.metadata && typeof raw.metadata === 'object' ? raw.metadata : {}) as Record<string, unknown>;
-  md.uuid = generateUuid();
-  const sectionMeta = getSectionMetadata(section.name);
-  md.namespace = sectionMeta.namespace;
-  md.isderived = sectionMeta.isderived;
-  raw.metadata = md;
-  // PRECONDITION (untested): parseEntry always returns a node — an unrecognized
-  // class becomes a plain ObjectNode and a valueless payload a MatlabVariableNode
-  // — so no clipboard/drag payload reaching here can make it null.
-  const newNode = section.parseEntry(raw);
-  if (!newNode) throw new Error('Failed to paste the entry.');
-  assertConstantValueAllowed(section, newNode);
-  return insertNewEntry(text, newNode);
+  return insertNewEntry(text, prepareEntryForPaste(section, payload));
 }
 
-/**
- * Paste MANY payloads into `section` in one edit (multi-select drop). All-or-
- * nothing allow-check up front, then a fold over pasteEntryXml so each dropped
- * entry gets a distinct unique name from the growing namespace.
- */
+/** Multi-paste for a binary .sldd (multi-select drop). See foldPasteEntries. */
 export function pasteEntriesXml(
   text: string,
   section: any,
   payloads: Record<string, unknown>[],
 ): { newText: string; selectIds: string[] } {
-  for (const payload of payloads) {
-    assertTypeAllowed(section, payload);
-  }
-  let currentText = text;
-  const selectIds: string[] = [];
-  for (const payload of payloads) {
-    const { newText, selectId } = pasteEntryXml(currentText, section, payload);
-    currentText = newText;
-    if (selectId) selectIds.push(selectId);
-  }
-  return { newText: currentText, selectIds };
+  return foldPasteEntries(text, section, payloads, pasteEntryXml);
 }
 
 /**

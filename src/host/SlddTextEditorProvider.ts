@@ -5,7 +5,7 @@ import { getModel, invalidate, findNode } from './SlddModel.js';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
 import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { captureBaseline, computeModified, clearBaseline } from './slddBaseline.js';
-import { setClipboard, getClipboard, clearClipboard, clipboardState } from './clipboard.js';
+import { getClipboard, clearClipboard, clipboardState } from './clipboard.js';
 import { setDrag, getDrag, clearDrag } from './dragState.js';
 import {
   registerWebview,
@@ -31,6 +31,7 @@ import {
   buildDragSnapshot,
   type StructuralResult,
 } from './structuralEdit.js';
+import { copyEntryToClipboard } from './clipboardAction.js';
 import { annotateDataRows } from './usageGraph.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { parsesAsJson } from './slddFormat.js';
@@ -254,27 +255,19 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     };
 
     // --- Copy (read-only; snapshots the entry into the host clipboard) ----------
-    const applyCopy = (msg: { rowId: string }, mode: 'cut' | 'copy'): boolean => {
-      try {
-        const currentText = document.getText();
-        invalidate(uriString);
-        getModel(uriString, name, currentText);
-        const node = findNode(uriString, msg.rowId);
-        if (!node) return false;
-        const entry = findOwningEntry(node);
-        if (!entry) return false;
-        const payload = entry.serialize() as Record<string, unknown>;
-        const sectionName: string = entry.parent?.name ?? '';
-        // Record which document this came from: a lazy cut defers the source
-        // delete to paste time, and the paste may land in another .sldd tab.
-        setClipboard(payload, mode, sectionName, uriString);
-        // Broadcast so every open table (not just this one) enables Paste and
-        // repaints — the cut/copied source row shows its affordance.
-        broadcastClipboardState();
-        return true;
-      } catch {
-        return false;
-      }
+    // Shared with the binary provider, which is what makes a failed copy report
+    // the same way in both formats (it used to be silent here).
+    const applyCopy = (msg: { rowId: string }, mode: 'cut' | 'copy'): void => {
+      copyEntryToClipboard(msg.rowId, mode, uriString, {
+        resolveNode: (rowId) => {
+          const currentText = document.getText();
+          invalidate(uriString);
+          getModel(uriString, name, currentText);
+          return findNode(uriString, rowId);
+        },
+        post: (message) => webview.postMessage(message),
+        broadcast: broadcastClipboardState,
+      });
     };
 
     // --- Shared skeleton for structural mutations (delete/addChild/paste) -------
@@ -321,11 +314,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // same-document move becomes a single combined WorkspaceEdit (one undo step)
     // and the cut source row can show its dimmed affordance until pasted. This
     // mirrors data explorer's ClipboardService, whose cut() marks only.
-    const applyCut = (msg: { rowId: string }): void => {
-      if (!applyCopy(msg, 'cut')) {
-        webview.postMessage({ type: 'error', message: 'Could not cut the selected item.' });
-      }
-    };
+    const applyCut = (msg: { rowId: string }): void => applyCopy(msg, 'cut');
 
     // --- Location in Text (reveal the row's entry in the plain-text view) -------
     // Resolve the right-clicked row to its owning top-level entry, locate that

@@ -131,8 +131,10 @@ export function reserializeEntry(entry: any, indent: string): string {
 }
 
 // The row id to select after removing `node` from `siblings`: the previous
-// sibling if any, else the next, else the fallback (parent/section) id.
-function reselectAfterRemoval(siblings: any[], node: any, fallbackId: string): string {
+// sibling if any, else the next, else the fallback (parent/section) id. Shared
+// with the XML path, so a delete leaves the selection in the same place whichever
+// .sldd format the row came from.
+export function reselectAfterRemoval(siblings: any[], node: any, fallbackId: string): string {
   const idx = siblings.indexOf(node);
   if (idx > 0) return siblings[idx - 1].id;
   if (idx >= 0 && idx < siblings.length - 1) return siblings[idx + 1].id;
@@ -218,10 +220,10 @@ function payloadClassName(payload: Record<string, unknown>): string {
 // single- and multi-paste paths, which differ only in WHEN they call it: paste
 // checks its one payload, drop checks every payload up front so a rejected
 // multi-drop leaves the document untouched. A classless payload (a plain MATLAB
-// variable) and a section with no allow-list are both unrestricted. Mirrors the
-// XML path's identical gate, so the two .sldd formats can't drift on what a
-// section accepts.
-function assertTypeAllowed(section: any, payload: Record<string, unknown>): void {
+// variable) and a section with no allow-list are both unrestricted. Shared with
+// the XML path too, so the two .sldd formats can't drift on what a section
+// accepts.
+export function assertTypeAllowed(section: any, payload: Record<string, unknown>): void {
   const className = payloadClassName(payload);
   if (className && typeof section.allowsType === 'function' && !section.allowsType(className)) {
     throw new Error(`A "${className}" entry is not allowed in ${section.displayName ?? section.name}.`);
@@ -250,48 +252,52 @@ export function assertConstantValueAllowed(section: any, newNode: any): void {
 }
 
 /**
- * Paste a serialized entry as a NEW top-level entry in `section`. The name is
- * made unique across the section's whole namespace (Design and Architectural
- * Data share one), the entry gets a freshly generated uuid so it is a distinct
- * object (never a duplicate of the source's), and its metadata namespace AND
- * isderived flag are rewritten to the target section's — so an Arch entry
- * pasted into Design becomes a genuine, editable Design entry (the section split
- * is purely `isderived`). Rejects a payload whose class has no home in the
- * target section (e.g. a Simulink.ServiceBus into Design). Inserts the element
- * into the entries array, preserving sibling bytes.
+ * Everything a paste does BEFORE it touches text: gate the payload, clone it,
+ * rename it, rebind it to the target section, build the node, and gate its value.
+ * Returns the new node, already added to the live `section`.
  *
- * Pasting into Architectural Data is allowed: the new entry gets a fresh uuid
- * the ArchitecturePart / SystemComposer mapping simply does not reference yet,
- * which leaves every existing (referenced) entry intact - the same benign
- * desync already accepted for add-child. It never corrupts existing references.
+ * Shared by the JSON and XML paste paths, which differ ONLY in how they splice
+ * the resulting node into their document. This ran as two copies whose comments
+ * each said "mirrors the other path" — the drift they were worried about is what
+ * this removes, because every rule below decides where a pasted entry LANDS and a
+ * one-sided fix would silently reclassify entries in one format only.
+ *
+ * The rules, in order:
+ *  - The class must have a home in the target section (a Simulink.ServiceBus
+ *    cannot go into Design).
+ *  - The payload is deep-cloned, so a repeated paste of one clipboard entry does
+ *    not alias (and then mutate) the same object.
+ *  - The name is made unique across the section's whole NAMESPACE, not just the
+ *    section — Design and Architectural Data share one.
+ *  - The entry is rebound to the target section UNCONDITIONALLY, creating the
+ *    metadata object when the payload carries none. `metadata` is null for an
+ *    entry whose source .sldd never declared one (e.g. hand-added in the text
+ *    view), and skipping the rebind there left the pasted entry with no namespace
+ *    at all — so getSectionKey fell through to its 'design' default and the
+ *    reloaded file put the entry in Design Data no matter which section it was
+ *    pasted into.
+ *  - It gets a FRESH uuid rather than the source's, so it is a distinct object,
+ *    matching the add-entry path (SectionNode). Pasting into Architectural Data
+ *    is still allowed: the new uuid is simply one the ArchitecturePart /
+ *    SystemComposer mapping does not reference yet, which leaves every existing
+ *    (referenced) entry intact — the same benign desync already accepted for
+ *    add-child. It never corrupts existing references.
+ *  - Both metadata fields matter: `namespace` routes the entry, and `isderived`
+ *    is what actually distinguishes Arch from Design (they share NS_DESIGN), so
+ *    rewriting it is what declassifies an arch paste into a genuine, editable
+ *    Design entry.
  */
-export function pasteEntry(
-  text: string,
-  section: any,
-  payload: Record<string, unknown>,
-): StructuralResult {
+export function prepareEntryForPaste(section: any, payload: Record<string, unknown>): any {
   assertTypeAllowed(section, payload);
 
   const raw = cloneForPaste(payload);
   const baseName = typeof raw.name === 'string' ? raw.name : 'Entry';
   raw.name = section._uniqueName(baseName);
-  // Rebind the entry to the target section UNCONDITIONALLY, creating the metadata
-  // object when the payload carries none. `metadata` is null for an entry whose
-  // source .sldd never declared one (e.g. hand-added in the text view), and
-  // skipping the rebind there left the pasted entry with no namespace at all — so
-  // getSectionKey fell through to its 'design' default and the reloaded file put
-  // the entry in Design Data no matter which section it was pasted into. Mirrors
-  // the XML path, so the two .sldd formats agree on where a paste lands.
   const md = (raw.metadata && typeof raw.metadata === 'object' ? raw.metadata : {}) as Record<
     string,
     unknown
   >;
-  // A pasted entry is a new object: give it its own uuid rather than
-  // duplicating the source's, matching the add-entry path (SectionNode).
   md.uuid = generateUuid();
-  // Both fields matter: namespace routes it, and isderived is what actually
-  // distinguishes Arch from Design (they share NS_DESIGN), so this is what
-  // declassifies an arch paste.
   const sectionMeta = getSectionMetadata(section.name);
   md.namespace = sectionMeta.namespace;
   md.isderived = sectionMeta.isderived;
@@ -304,6 +310,20 @@ export function pasteEntry(
   const newNode = section.parseEntry(raw);
   if (!newNode) throw new Error('Failed to paste the entry.');
   assertConstantValueAllowed(section, newNode);
+  return newNode;
+}
+
+/**
+ * Paste a serialized entry as a NEW top-level entry in `section`, inserting the
+ * element into the entries array and preserving sibling bytes. See
+ * prepareEntryForPaste for every rule about what the pasted entry becomes.
+ */
+export function pasteEntry(
+  text: string,
+  section: any,
+  payload: Record<string, unknown>,
+): StructuralResult {
+  const newNode = prepareEntryForPaste(section, payload);
 
   const indent = detectIndent(text);
   const entryText = reserializeEntry(newNode, indent);
@@ -346,31 +366,46 @@ export function deleteEntriesByName(text: string, targets: (string | EntrySelect
 
 /**
  * Drop-completion transform: paste MANY payloads into `section` in one edit —
- * exactly what a multi-select drop needs. It is a fold over pasteEntry: each
- * paste re-inserts into the text produced by the previous one AND adds the new
- * node to the live `section`, so `_uniqueName` sees the growing namespace and
- * every dropped entry gets a distinct name (a first Bus becomes Bus1, a second
- * Bus2). The allow-check is all-or-nothing: any disallowed payload throws before
- * any text changes, so a rejected multi-drop leaves the document untouched. A
- * move deletes the sources separately (the host, via deleteEntry) — this side
+ * exactly what a multi-select drop needs. Shared by both .sldd formats, which
+ * supply their own single-entry paste (`pasteOne`) and differ in nothing else.
+ *
+ * It is a fold: each paste re-inserts into the text produced by the previous one
+ * AND adds the new node to the live `section`, so `_uniqueName` sees the growing
+ * namespace and every dropped entry gets a distinct name (a first Bus becomes
+ * Bus1, a second Bus2).
+ *
+ * The allow-check is all-or-nothing and runs BEFORE the fold: any disallowed
+ * payload throws before any text changes, so a rejected multi-drop leaves the
+ * document untouched rather than half-applied. That ordering is the whole reason
+ * this is shared rather than written per format.
+ *
+ * A move deletes the sources separately (the host, via deleteEntry) — this side
  * is purely the paste, identical to how drop mirrors copy/cut + paste.
  */
-export function pasteEntries(
+export function foldPasteEntries(
   text: string,
   section: any,
   payloads: Record<string, unknown>[],
+  pasteOne: (text: string, section: any, payload: Record<string, unknown>) => StructuralResult,
 ): { newText: string; selectIds: string[] } {
-  // All-or-nothing allow-check up front: reject the whole drop before mutating
-  // any text or the section, so a bad item can't leave a half-applied paste.
   for (const payload of payloads) {
     assertTypeAllowed(section, payload);
   }
   let currentText = text;
   const selectIds: string[] = [];
   for (const payload of payloads) {
-    const { newText, selectId } = pasteEntry(currentText, section, payload);
+    const { newText, selectId } = pasteOne(currentText, section, payload);
     currentText = newText;
     if (selectId) selectIds.push(selectId);
   }
   return { newText: currentText, selectIds };
+}
+
+/** Multi-paste for a JSON .sldd. See foldPasteEntries. */
+export function pasteEntries(
+  text: string,
+  section: any,
+  payloads: Record<string, unknown>[],
+): { newText: string; selectIds: string[] } {
+  return foldPasteEntries(text, section, payloads, pasteEntry);
 }

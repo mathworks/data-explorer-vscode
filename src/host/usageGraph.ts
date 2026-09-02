@@ -17,6 +17,7 @@
 import * as vscode from 'vscode';
 import { parseSlx, parseMat, parseBinarySldd } from 'data-explorer-core';
 import { isZipBytes } from './slddFormat.js';
+import { normalizeRefNames } from './slddRefs.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import {
   basename,
@@ -68,10 +69,11 @@ function slddSummary(uri: string, content: Record<string, unknown>): DataSummary
       const name = entry?.name as string | undefined;
       if (name) varNames.add(name);
     }
-    for (const ref of (inner['Dictionary References'] as unknown[]) ?? []) {
-      const r = typeof ref === 'string' ? ref : (ref as Record<string, unknown>)?.file;
-      if (typeof r === 'string') dictRefs.push(basename(r));
-    }
+    // Shared normalisation (a ref is a bare string or a { file } object), so the
+    // usage graph, the sections tree, and the compressed-.sldd index all agree on
+    // what a dictionary reference is. Basenamed here because the graph matches
+    // refs against workspace files by name.
+    dictRefs.push(...normalizeRefNames(inner['Dictionary References']).map(basename));
   }
   return { uri, varNames, dictRefs };
 }

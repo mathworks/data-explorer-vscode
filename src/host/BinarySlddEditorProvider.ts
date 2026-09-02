@@ -23,6 +23,7 @@ import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from 
 import { sectionRules } from './sectionRules.js';
 import { parseBinarySlddParts, serializeEntryToXml, DataModel } from 'data-explorer-core';
 import { findOwningEntry, resolveSectionForPaste, buildDragSnapshot } from './structuralEdit.js';
+import { copyEntryToClipboard } from './clipboardAction.js';
 import { captureBaseline, computeModified, clearBaseline } from './slddBaseline.js';
 import {
   deleteEntryXml,
@@ -34,7 +35,7 @@ import {
   type StructuralResult,
 } from './xmlStructuralEdit.js';
 import { findEntryObjectSpan } from './xmlEntrySplice.js';
-import { setClipboard, getClipboard, clearClipboard, clipboardState } from './clipboard.js';
+import { getClipboard, clearClipboard, clipboardState } from './clipboard.js';
 import { setDrag, getDrag, clearDrag } from './dragState.js';
 import {
   registerWebview,
@@ -273,26 +274,16 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       }
     };
 
+    // Shared with the JSON provider so both formats report an identical failure.
     const applyCopy = (rowId: string, mode: 'cut' | 'copy') => {
-      try {
-        buildModel();
-        const node = findNode(rowId);
-        if (!node) {
-          webview.postMessage({ type: 'error', message: `Could not ${mode} the selected item.` });
-          return;
-        }
-        const entry = findOwningEntry(node);
-        if (!entry) {
-          webview.postMessage({ type: 'error', message: 'Could not locate the owning entry in the model.' });
-          return;
-        }
-        setClipboard(entry.serialize() as Record<string, unknown>, mode, entry.parent?.name ?? '', uriString);
-        // Broadcast so every other open .sldd table (JSON or binary) enables
-        // Paste and this view repaints to show the cut/copied affordance.
-        broadcastClipboardState();
-      } catch (err) {
-        webview.postMessage({ type: 'error', message: `Failed to ${mode}: ${(err as Error).message}` });
-      }
+      copyEntryToClipboard(rowId, mode, uriString, {
+        resolveNode: (id) => {
+          buildModel();
+          return findNode(id);
+        },
+        post: (message) => webview.postMessage(message),
+        broadcast: broadcastClipboardState,
+      });
     };
 
     const applyPaste = async (rowId: string) => {
