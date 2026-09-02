@@ -967,7 +967,7 @@ export class DexTreeTable extends LitElement {
   // --- Column Reordering ---
 
   private _onHeaderDragStart(col: string, e: DragEvent): void {
-    if (this._resizingCol) {
+    if (this._resizingCol || col === 'Name') {
       e.preventDefault();
       return;
     }
@@ -979,7 +979,7 @@ export class DexTreeTable extends LitElement {
   }
 
   private _onHeaderDragOver(col: string, e: DragEvent): void {
-    if (!this._dragColId || this._dragColId === col) return;
+    if (!this._dragColId || this._dragColId === col || col === 'Name') return;
     e.preventDefault();
     if (e.dataTransfer) {
       e.dataTransfer.dropEffect = 'move';
@@ -1000,7 +1000,14 @@ export class DexTreeTable extends LitElement {
 
   private _onHeaderDrop(col: string, e: DragEvent): void {
     e.preventDefault();
-    if (!this._dragColId || this._dragColId === col) {
+    // Name is pinned first and can neither move nor be displaced — same rule the
+    // column-menu reorder enforces. It is the only column that renders the tree
+    // affordances (the depth indent and the expand/collapse toggle), so anywhere
+    // but first leaves the hierarchy indenting mid-table with no spine on the
+    // left. Guarded on all three of dragstart/dragover/drop, because each is
+    // independently reachable: a drop handler still fires for a drag that began
+    // on another column.
+    if (!this._dragColId || this._dragColId === col || this._dragColId === 'Name' || col === 'Name') {
       this._dragColId = null;
       this._dragOverColId = null;
       this._dragOverSide = null;
@@ -2498,7 +2505,7 @@ export class DexTreeTable extends LitElement {
                       role="columnheader"
                       aria-colindex=${ci + 1}
                       aria-sort=${this._getAriaSortValue(col)}
-                      draggable="true"
+                      draggable=${col === 'Name' ? 'false' : 'true'}
                       class="${this._dragOverColId === col && this._dragOverSide === 'left'
                         ? 'drag-over-left'
                         : ''} ${this._dragOverColId === col && this._dragOverSide === 'right' ? 'drag-over-right' : ''}"

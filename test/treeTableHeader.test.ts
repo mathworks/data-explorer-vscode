@@ -321,6 +321,49 @@ describe('reordering columns by dragging a header', () => {
     expect(dt.getData('text/plain')).toBe('Value');
     table.remove();
   });
+
+  // Name is pinned first, and the column menu enforces that in three places. The
+  // header path is the SAME reordering rule reached by a different gesture, and it
+  // had none of the guards — so the pin held in the picker and not on the header
+  // the user is more likely to grab. Name is the only column that draws the tree
+  // affordances (depth indent + expand/collapse toggle), so moving it leaves rows
+  // indenting mid-table with no spine on the left, and the toggle stranded in a
+  // column whose header says something else.
+  it('Name cannot be dragged out of first position from the header', async () => {
+    const table = await mount();
+    const { ev } = fireHeader(table, 'Name', 'dragstart');
+    expect(ev.defaultPrevented).toBe(true);
+    expect((table as any)._dragColId).toBeNull();
+    table.remove();
+  });
+
+  it('Name cannot be displaced by dropping another column onto it', async () => {
+    // The other half of the pin: refusing the drag is not enough, because Name
+    // loses first position just as well if something else lands to its left.
+    const table = await mount();
+    fireHeader(table, 'Status', 'dragstart');
+    expect((table as any)._dragColId).toBe('Status');
+
+    // Not a drop target: an un-prevented dragover is how the browser is told so.
+    const { ev } = fireHeader(table, 'Name', 'dragover');
+    expect(ev.defaultPrevented).toBe(false);
+    expect((table as any)._dragOverColId).toBeNull();
+
+    // And the drop itself is refused, since it is independently reachable.
+    fireHeader(table, 'Name', 'drop');
+    expect((table as any)._orderedColumns[0]).toBe('Name');
+    table.remove();
+  });
+
+  it('the Name header does not advertise itself as draggable', async () => {
+    // The menu row already sets draggable=false for Name; without the same on the
+    // header the cell shows a drag cursor and lifts a ghost image for a gesture
+    // that is then refused.
+    const table = await mount();
+    expect(headerFor(table, 'Name').getAttribute('draggable')).toBe('false');
+    expect(headerFor(table, 'Value').getAttribute('draggable')).toBe('true');
+    table.remove();
+  });
 });
 
 describe('the Columns dropdown', () => {
