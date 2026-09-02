@@ -1014,21 +1014,38 @@ export class DexTreeTable extends LitElement {
       return;
     }
 
-    const order = [...this._columnOrder];
-    const fromIdx = order.indexOf(this._dragColId);
-    if (fromIdx < 0) return;
-
-    order.splice(fromIdx, 1);
-    let toIdx = order.indexOf(col);
-    if (this._dragOverSide === 'right') {
-      toIdx += 1;
-    }
-    order.splice(toIdx, 0, this._dragColId);
-
-    this._columnOrder = order;
+    const dragged = this._dragColId;
+    const side = this._dragOverSide;
     this._dragColId = null;
     this._dragOverColId = null;
     this._dragOverSide = null;
+
+    // Splice `_orderedColumns`, NOT the raw `_columnOrder` — the same array the
+    // menu reorder edits. The raw order can be missing a column the user just
+    // dragged: it is whatever was persisted (possibly by an older version, or by
+    // a document with a different column set), while `_orderedColumns` is what
+    // the header row actually renders. Using the raw array made both indexOf
+    // lookups able to miss, and neither miss was benign — `fromIdx < 0` made the
+    // drop a silent no-op (every header reorder dead in a .prj view, whose
+    // columns are Type/Location/Labels), and `toIdx < 0` MISPLACED the column,
+    // since splice(-1, 0, x) inserts before the last element and the 'right'
+    // side turns -1 into 0, landing it ahead of the pinned Name. The bad order
+    // was then persisted, so it followed the user into every later session.
+    const order = [...this._orderedColumns];
+    const fromIdx = order.indexOf(dragged);
+    const toIdx0 = order.indexOf(col);
+    // Both are present by construction (only rendered headers are draggable and
+    // droppable); kept as a guard so a future caller can't reintroduce a -1.
+    if (fromIdx < 0 || toIdx0 < 0) return;
+
+    order.splice(fromIdx, 1);
+    let toIdx = order.indexOf(col);
+    if (side === 'right') {
+      toIdx += 1;
+    }
+    order.splice(toIdx, 0, dragged);
+
+    this._columnOrder = order;
     this._persistOrder();
   }
 

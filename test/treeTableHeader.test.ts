@@ -364,6 +364,95 @@ describe('reordering columns by dragging a header', () => {
     expect(headerFor(table, 'Value').getAttribute('draggable')).toBe('true');
     table.remove();
   });
+
+  // The host decides the column set per document, and it need not be the built-in
+  // default order: a .prj project view posts Name/Type/Location/Labels, none of
+  // whose last three appear in DEFAULT_COLUMN_ORDER. `_orderedColumns` handles
+  // that by appending the unknown columns, so they render and are draggable — but
+  // the reorder used to splice the raw persisted order, where they are absent.
+  // Both indexOf misses were reachable and neither was benign, so both are pinned
+  // here.
+  describe('with host columns outside the default order', () => {
+    async function mountProject(): Promise<DexTreeTable> {
+      const table = new DexTreeTable();
+      table.columns = ['Name', 'Type', 'Location', 'Labels'];
+      document.body.appendChild(table);
+      table.rows = [makeRow('a'), makeRow('b')];
+      await table.updateComplete;
+      return table;
+    }
+
+    it('reordering works at all when no dragged column is in the saved order', async () => {
+      // fromIdx missed for every draggable column here, so the drop returned
+      // early: header reordering was entirely dead in a project view, with the
+      // grab cursor and drop indicator still inviting the gesture.
+      const table = await mountProject();
+      expect((table as any)._orderedColumns).toEqual(['Name', 'Type', 'Location', 'Labels']);
+
+      fireHeader(table, 'Labels', 'dragstart');
+      fireHeader(table, 'Type', 'dragover', { clientX: -10 });
+      fireHeader(table, 'Type', 'drop', { clientX: -10 });
+      await table.updateComplete;
+      expect((table as any)._orderedColumns).toEqual(['Name', 'Labels', 'Type', 'Location']);
+      table.remove();
+    });
+
+    it('a column absent from the saved order is not misplaced ahead of Name', async () => {
+      // toIdx missed when the DROP TARGET is the unknown column. splice(-1, 0, x)
+      // inserts before the last element, and a 'right' drop turns -1 into 0 —
+      // putting the dragged column ahead of the pinned Name, which then persists.
+      const table = await mountProject();
+      // Seed a saved order that knows Value but not Type/Location/Labels, so the
+      // dragged column resolves and the target does not.
+      (table as any)._columnOrder = ['Name', 'Value', 'Type'];
+      table.columns = ['Name', 'Value', 'Location'];
+      await table.updateComplete;
+      expect((table as any)._orderedColumns).toEqual(['Name', 'Value', 'Location']);
+
+      fireHeader(table, 'Value', 'dragstart');
+      fireHeader(table, 'Location', 'dragover', { clientX: 10 });
+      fireHeader(table, 'Location', 'drop', { clientX: 10 });
+      await table.updateComplete;
+      expect((table as any)._orderedColumns).toEqual(['Name', 'Location', 'Value']);
+      expect((table as any)._orderedColumns[0]).toBe('Name');
+      table.remove();
+    });
+
+    it('a drop target that disappears mid-drag is refused, not misplaced', async () => {
+      // A drag is not instantaneous, and the host can re-post `columns` while one
+      // is in flight (a file-change event re-renders the table). If the TARGET is
+      // gone by the time drop fires, an unguarded indexOf yields -1, and a
+      // right-side drop turns that into 0 — landing the dragged column ahead of
+      // the pinned Name, then persisting it.
+      const table = await mountProject();
+
+      // The dragged column survives the re-post and the target does not, so
+      // `fromIdx` resolves and only `toIdx` misses. The drop is dispatched
+      // directly because the target header no longer exists to receive an event.
+      fireHeader(table, 'Type', 'dragstart');
+      fireHeader(table, 'Location', 'dragover', { clientX: 10 });
+      expect((table as any)._dragOverSide).toBe('right');
+
+      table.columns = ['Name', 'Type', 'Location'];
+      await table.updateComplete;
+      (table as any)._onHeaderDrop('Labels', new Event('drop', { cancelable: true }));
+      await table.updateComplete;
+      expect((table as any)._orderedColumns).toEqual(['Name', 'Type', 'Location']);
+      table.remove();
+    });
+
+    it('a refused drop still clears the drag state', async () => {
+      // The early return happens after the reset now. Leaving _dragColId set
+      // would make the NEXT click-drag on any header resume the abandoned drag.
+      const table = await mountProject();
+      fireHeader(table, 'Type', 'dragstart');
+      fireHeader(table, 'Name', 'drop');
+      expect((table as any)._dragColId).toBeNull();
+      expect((table as any)._dragOverColId).toBeNull();
+      expect((table as any)._dragOverSide).toBeNull();
+      table.remove();
+    });
+  });
 });
 
 describe('the Columns dropdown', () => {
