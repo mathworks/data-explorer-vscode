@@ -59,14 +59,19 @@ export function resolveShortcutAction(e: KeyboardEvent): ShortcutAction | null {
 // Document-level (table) readonly controls the editor and the context menu.
 // It is DISTINCT from the row-level `Name.editable` flag, which only controls
 // cell text color (gray for derived array-child names like `Var(1)`, normal
-// otherwise). Read-only documents (.mat/.slx/.prj, binary/zip .sldd) have no
-// write-back path, so both interactions below are suppressed — but per-row
-// coloring must stay intact, so we never touch the row-level flags.
+// otherwise). Read-only documents — .mat/.slx/.prj, and a JSON .sldd too large
+// for VS Code to mirror as a TextDocument — have no write-back path, so both
+// interactions below are suppressed. Per-row coloring must stay intact, so we
+// never touch the row-level flags.
+//
+// BOTH .sldd formats are editable and send `editable: true`: JSON via the
+// text-backed provider, compressed-binary via its own writable custom editor.
+// What separates them is `hasTextView`, not editability.
 
 /**
  * Whether a right-click should open the context menu at all. Read-only
- * documents get NO menu — the binary view has no copy/paste/mutation handlers,
- * so an all-disabled menu would be dead UI. Only editable JSON .sldd shows one.
+ * documents get NO menu — the read-only byte-backed view has no copy/paste/
+ * mutation handlers, so an all-disabled menu would be dead UI.
  */
 export function shouldShowContextMenu(editable: boolean): boolean {
   return editable;
