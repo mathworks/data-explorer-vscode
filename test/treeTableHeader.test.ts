@@ -69,10 +69,58 @@ describe('resizing a column', () => {
     // 100px default; seed both columns explicitly to make the delta meaningful.
     (table as any)._resizeStartWidth = 150;
     (table as any)._resizeNextStartWidth = 150;
-    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 240 }));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 240, buttons: 1 }));
     expect((table as any)._columnWidths.get('Value')).toBe(190);
     expect((table as any)._columnWidths.get('DataType')).toBe(110);
     document.dispatchEvent(new MouseEvent('mouseup'));
+    table.remove();
+  });
+
+  it('releasing the button outside the window ends the resize', async () => {
+    // onUp is the ONLY thing that clears _resizingCol and detaches the move
+    // listener, and it listens on this document's mouseup. Release the button over
+    // another application and that mouseup never arrives, so the resize stays
+    // armed: the column keeps following the pointer with no button held. Worse,
+    // _resizingCol gates both header sorting and header reordering, so both stay
+    // dead for the rest of the session. The next move reports buttons === 0, which
+    // is the proof the button is up.
+    const table = await mount();
+    const handle = headerFor(table, 'Value').querySelector('.resize-handle') as HTMLElement;
+    handle.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: 200 }));
+    (table as any)._resizeStartWidth = 150;
+    (table as any)._resizeNextStartWidth = 150;
+    expect((table as any)._resizingCol).toBe('Value');
+
+    // Button still held: the resize applies normally.
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 240, buttons: 1 }));
+    expect((table as any)._columnWidths.get('Value')).toBe(190);
+
+    // Released off-window, then the pointer comes back over the table.
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 300, buttons: 0 }));
+    expect((table as any)._resizingCol).toBeNull();
+    // That stray move must not have resized anything on its way out.
+    expect((table as any)._columnWidths.get('Value')).toBe(190);
+
+    // And the listener is gone, so later moves are inert.
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 400, buttons: 1 }));
+    expect((table as any)._columnWidths.get('Value')).toBe(190);
+    table.remove();
+  });
+
+  it('a resize ended by leaving the window does not leave sorting dead', async () => {
+    // The user-visible consequence of the stuck flag: _onHeaderClick returns early
+    // while _resizingCol is set, so every later click on any header does nothing.
+    const table = await mount();
+    const handle = headerFor(table, 'Value').querySelector('.resize-handle') as HTMLElement;
+    handle.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: 200 }));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 300, buttons: 0 }));
+
+    // onUp also arms the click-suppression flag; consume it the way the trailing
+    // click after a real resize would, then sorting must work again.
+    headerFor(table, 'DataType').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    headerFor(table, 'DataType').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    await table.updateComplete;
+    expect((table as any)._sortState).toEqual([{ column: 'DataType', direction: 'asc' }]);
     table.remove();
   });
 
@@ -85,7 +133,7 @@ describe('resizing a column', () => {
     (table as any)._resizeStartWidth = 150;
     (table as any)._resizeNextStartWidth = 150;
 
-    document.dispatchEvent(new MouseEvent('mousemove', { clientX: -5000 }));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: -5000, buttons: 1 }));
     expect((table as any)._columnWidths.get('Value')).toBe(40);
     document.dispatchEvent(new MouseEvent('mouseup'));
     table.remove();
@@ -98,7 +146,7 @@ describe('resizing a column', () => {
     (table as any)._resizeStartWidth = 150;
     (table as any)._resizeNextStartWidth = 150;
 
-    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 5000 }));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 5000, buttons: 1 }));
     expect((table as any)._columnWidths.get('DataType')).toBe(40);
     expect((table as any)._columnWidths.get('Value')).toBe(260);
     document.dispatchEvent(new MouseEvent('mouseup'));
@@ -114,7 +162,7 @@ describe('resizing a column', () => {
     expect((table as any)._resizeNextCol).toBeNull();
     (table as any)._resizeStartWidth = 100;
 
-    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 900 }));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 900, buttons: 1 }));
     expect((table as any)._columnWidths.get(last)).toBe(1000);
     document.dispatchEvent(new MouseEvent('mouseup'));
     table.remove();
@@ -128,11 +176,11 @@ describe('resizing a column', () => {
     handle.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: 200 }));
     (table as any)._resizeStartWidth = 150;
     (table as any)._resizeNextStartWidth = 150;
-    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 240 }));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 240, buttons: 1 }));
     document.dispatchEvent(new MouseEvent('mouseup'));
 
     const after = (table as any)._columnWidths.get('Value');
-    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 900 }));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 900, buttons: 1 }));
     expect((table as any)._columnWidths.get('Value')).toBe(after);
     expect((table as any)._resizingCol).toBeNull();
     table.remove();

@@ -925,6 +925,17 @@ export class DexTreeTable extends LitElement {
 
     const onMove = (me: MouseEvent) => {
       if (!this._resizingCol) return;
+      // The button was released somewhere we never heard about — outside the
+      // browser window, or over another application — so no mouseup reached this
+      // document and onUp never ran. Without this the resize stays armed: moving
+      // the mouse back over the table keeps resizing the column with no button
+      // held, and because `_resizingCol` gates them, header sorting and header
+      // reordering are both dead for the rest of the session. End it here, on the
+      // first move that proves the button is up, before applying any delta.
+      if (me.buttons === 0) {
+        onUp();
+        return;
+      }
       const delta = me.clientX - this._resizeStartX;
       const maxDelta = this._resizeNextCol ? this._resizeNextStartWidth - 40 : Infinity;
       const clampedDelta = Math.min(Math.max(-this._resizeStartWidth + 40, delta), maxDelta);
