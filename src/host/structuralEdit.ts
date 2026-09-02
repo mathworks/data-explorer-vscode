@@ -130,6 +130,19 @@ export function reserializeEntry(entry: any, indent: string): string {
   return lines.map((line, i) => (i === 0 ? line : indent.repeat(5) + line)).join('\n');
 }
 
+// Replace the owning entry's text in-place with its reserialized form — the
+// within-entry edit shape described at the top of this file. Both callers below
+// had this same four-step body (detect indent, reserialize, find span, splice),
+// and its XML counterpart is xmlStructuralEdit.spliceEntry, which the two XML
+// callers already share.
+function spliceEntry(text: string, entry: any, selectId: string | null): StructuralResult {
+  const entryText = reserializeEntry(entry, detectIndent(text));
+  const span = findEntrySpan(text, entrySelectorOf(entry));
+  if (!span) throw new Error(`Could not locate entry "${entry.name}" text.`);
+  const newText = text.slice(0, span.offset) + entryText + text.slice(span.offset + span.length);
+  return { newText, selectId };
+}
+
 // The row id to select after removing `node` from `siblings`: the previous
 // sibling if any, else the next, else the fallback (parent/section) id. Shared
 // with the XML path, so a delete leaves the selection in the same place whichever
@@ -170,13 +183,7 @@ export function deleteChild(text: string, node: any): StructuralResult {
 
   const selectId = reselectAfterRemoval(parent.children ?? [], node, parent.id);
   parent.removeChildNode(node);
-
-  const indent = detectIndent(text);
-  const entryText = reserializeEntry(entry, indent);
-  const span = findEntrySpan(text, entrySelectorOf(entry));
-  if (!span) throw new Error(`Could not locate entry "${entry.name}" text.`);
-  const newText = text.slice(0, span.offset) + entryText + text.slice(span.offset + span.length);
-  return { newText, selectId };
+  return spliceEntry(text, entry, selectId);
 }
 
 /** Add a child to a container node (struct/bus/enum), reserialize its owning entry. */
@@ -196,13 +203,7 @@ export function addChild(text: string, node: any): StructuralResult {
   // yield null here. Kept as a belt-and-braces net for a future container type.
   const child = node.addChildNode();
   if (!child) throw new Error('Failed to add a child element.');
-
-  const indent = detectIndent(text);
-  const entryText = reserializeEntry(entry, indent);
-  const span = findEntrySpan(text, entrySelectorOf(entry));
-  if (!span) throw new Error(`Could not locate entry "${entry.name}" text.`);
-  const newText = text.slice(0, span.offset) + entryText + text.slice(span.offset + span.length);
-  return { newText, selectId: child.id };
+  return spliceEntry(text, entry, child.id);
 }
 
 /** Deep-clone a clipboard payload so repeated pastes don't alias the same object. */
