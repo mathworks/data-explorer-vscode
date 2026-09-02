@@ -328,15 +328,21 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         document.pushEdit('Paste', document.chunkXml, newText);
         post();
         if (selectId) webview.postMessage({ type: 'selectRow', rowId: selectId });
-        // A cross-document cut removes the source from ITS document via that
-        // document's own format-appropriate deleter (JSON or binary), a second
-        // native undo step — exactly a cut in one file + paste in another.
-        if (isCut && !sameDoc && clip.sourceDocUri && srcName) {
-          await deleteFromSource(clip.sourceDocUri, [srcSelector]);
-        }
-        if (isCut) {
-          clearClipboard();
-          broadcastClipboardState();
+        try {
+          // A cross-document cut removes the source from ITS document via that
+          // document's own format-appropriate deleter (JSON or binary), a second
+          // native undo step — exactly a cut in one file + paste in another.
+          if (isCut && !sameDoc && clip.sourceDocUri && srcName) {
+            await deleteFromSource(clip.sourceDocUri, [srcSelector]);
+          }
+        } finally {
+          // Cleared even if the source-delete throws: the paste above already
+          // succeeded, so leaving the cut live means the next paste duplicates the
+          // entry again. Matches the JSON provider.
+          if (isCut) {
+            clearClipboard();
+            broadcastClipboardState();
+          }
         }
       } catch (err) {
         webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });

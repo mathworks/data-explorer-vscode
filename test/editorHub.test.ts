@@ -115,4 +115,35 @@ describe('editorHub — cross-document source delete dispatch', () => {
       unregisterSourceDeleter('mem://async');
     }
   });
+
+  it('propagates a deleter that rejects rather than swallowing it', async () => {
+    // A source-delete CAN fail: it opens another document and applies a
+    // WorkspaceEdit, either of which can reject (the file was deleted or is
+    // locked). The hub deliberately does not catch — the caller must decide, and
+    // both providers do: they clear the cut in a `finally`, because the paste half
+    // already succeeded, so a surviving cut would duplicate the entry on the next
+    // paste. Swallowing here would silently report a completed move.
+    registerSourceDeleter('mem://boom', () => {
+      throw new Error('source vanished');
+    });
+    try {
+      await expect(deleteFromSource('mem://boom', ['A'])).rejects.toThrow('source vanished');
+    } finally {
+      unregisterSourceDeleter('mem://boom');
+    }
+  });
+
+  it('propagates an async deleter that rejects', async () => {
+    // The realistic shape: applyEdit returns a rejected promise rather than
+    // throwing synchronously.
+    registerSourceDeleter('mem://boom-async', async () => {
+      await new Promise((r) => setTimeout(r, 1));
+      throw new Error('applyEdit failed');
+    });
+    try {
+      await expect(deleteFromSource('mem://boom-async', ['A'])).rejects.toThrow('applyEdit failed');
+    } finally {
+      unregisterSourceDeleter('mem://boom-async');
+    }
+  });
 });

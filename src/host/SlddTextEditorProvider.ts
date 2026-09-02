@@ -420,18 +420,27 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         await replaceAll(newText);
         if (selectId) webview.postMessage({ type: 'selectRow', rowId: selectId });
 
-        // A cross-document cut removes the source from ITS document via that
-        // document's own format-appropriate deleter (the source may be a binary
-        // .sldd), a second native undo step — exactly a cut in one file + paste
-        // in another. The hub dispatches to whichever provider owns the source.
-        if (isCut && !sameDoc && clip.sourceDocUri && srcName) {
-          await deleteFromSource(clip.sourceDocUri, [srcSelector]);
-        }
-
-        // The cut is now consumed; a copy stays on the clipboard for re-paste.
-        if (isCut) {
-          clearClipboard();
-          broadcastClipboardState();
+        try {
+          // A cross-document cut removes the source from ITS document via that
+          // document's own format-appropriate deleter (the source may be a binary
+          // .sldd), a second native undo step — exactly a cut in one file + paste
+          // in another. The hub dispatches to whichever provider owns the source.
+          if (isCut && !sameDoc && clip.sourceDocUri && srcName) {
+            await deleteFromSource(clip.sourceDocUri, [srcSelector]);
+          }
+        } finally {
+          // The cut is consumed by the paste that already succeeded above, so it
+          // is cleared even if the source-delete throws — otherwise the clipboard
+          // keeps a live cut of an entry that now also exists here, and the next
+          // paste duplicates it again. deleteFromSourceDocument's invalid-JSON
+          // path already returns (rather than throws) and clears the clipboard,
+          // reporting a copy the user must finish by hand; a throw is the same
+          // situation and must not behave differently. A copy stays on the
+          // clipboard for re-paste.
+          if (isCut) {
+            clearClipboard();
+            broadcastClipboardState();
+          }
         }
       } catch (err) {
         webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
