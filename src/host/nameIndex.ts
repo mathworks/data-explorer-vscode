@@ -13,8 +13,8 @@
 // This module does the vscode file I/O + parser dispatch; the pure
 // name-extraction core lives in nameExtract.ts (unit-tested).
 import * as vscode from 'vscode';
-import { parseSlx, parseMat, parseBinarySldd } from 'data-explorer-core';
-import { isZipBytes } from './slddFormat.js';
+import { parseSlx, parseMat } from 'data-explorer-core';
+import { readSlddContent } from './slddContent.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import { basename } from '../common/pathUtil.js';
 import { namesFromSldd, namesFromMat, namesFromSlx, type NameRecord } from './nameExtract.js';
@@ -129,11 +129,7 @@ async function recordsForFile(uri: vscode.Uri): Promise<NameRecord[]> {
       return namesFromMat(parsed, uriString);
     }
     if (path.endsWith('.sldd')) {
-      const bytes = new Uint8Array(ab);
-      const content = isZipBytes(bytes)
-        ? (parseBinarySldd(ab) as Record<string, unknown>)
-        : (JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>);
-      return namesFromSldd(content, uriString);
+      return namesFromSldd(readSlddContent(ab), uriString);
     }
   } catch {
     /* unreadable/corrupt file contributes nothing */

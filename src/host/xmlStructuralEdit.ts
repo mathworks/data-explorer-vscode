@@ -21,8 +21,9 @@ import {
   findEntryInsertionPoint,
 } from './xmlEntrySplice.js';
 import {
-  findOwningEntry,
   reselectAfterRemoval,
+  removeChildFromModel,
+  addChildToModel,
   prepareEntryForPaste,
   foldPasteEntries,
   type StructuralResult,
@@ -69,34 +70,14 @@ export function deleteEntryXml(text: string, entry: any): StructuralResult {
 
 /** Delete a nested child: mutate model, reserialize the owning entry, splice it. */
 export function deleteChildXml(text: string, node: any): StructuralResult {
-  const parent = node.parent;
-  if (!parent || typeof parent.canRemoveChild !== 'function' || !parent.canRemoveChild()) {
-    throw new Error('This item cannot be deleted.');
-  }
-  // PRECONDITION (untested), mirroring the JSON path: canRemoveChild restricts
-  // `node` to a container's child, and every container sits under a top-level
-  // entry (a SECTION has no canRemoveChild). Kept for a detached node.
-  const entry = findOwningEntry(node);
-  if (!entry) throw new Error('Could not locate the owning entry.');
-  const selectId = reselectAfterRemoval(parent.children ?? [], node, parent.id);
-  parent.removeChildNode(node);
+  const { entry, selectId } = removeChildFromModel(node);
   return spliceEntry(text, entry, selectId);
 }
 
 /** Add a child to a container node, reserialize its owning entry, splice it. */
 export function addChildXml(text: string, node: any): StructuralResult {
-  if (typeof node.canAddChild !== 'function' || !node.canAddChild()) {
-    throw new Error('This item cannot have children added.');
-  }
-  // PRECONDITION (untested): as in deleteChildXml, every node whose canAddChild()
-  // is true sits under a top-level entry (a SECTION's returns false), and every
-  // such container's addChildNode() builds a child unconditionally. Both guards
-  // are belt-and-braces nets for a future container type.
-  const entry = findOwningEntry(node);
-  if (!entry) throw new Error('Could not locate the owning entry.');
-  const child = node.addChildNode();
-  if (!child) throw new Error('Failed to add a child element.');
-  return spliceEntry(text, entry, child.id);
+  const { entry, selectId } = addChildToModel(node);
+  return spliceEntry(text, entry, selectId);
 }
 
 /**

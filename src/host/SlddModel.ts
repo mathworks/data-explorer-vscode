@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
-import { DataModel, parseBinarySldd } from 'data-explorer-core';
-import { isZipBytes } from './slddFormat.js';
+import { DataModel } from 'data-explorer-core';
+import { readSlddContent } from './slddContent.js';
 
 const cache = new Map<string, any>(); // uriString -> SlddNode
 
@@ -25,14 +25,8 @@ export function getModelFromBytes(uriString: string, name: string, bytes: ArrayB
   } else if (name.endsWith('.mat')) {
     node = DataModel.addMatSource(uriString, bytes, { path: name });
   } else {
-    // .sldd — compressed (zip) vs JSON-as-bytes.
-    if (isZipBytes(new Uint8Array(bytes))) {
-      const content = parseBinarySldd(bytes);
-      node = DataModel.addDataSource(uriString, content, { path: name });
-    } else {
-      const content = JSON.parse(new TextDecoder().decode(bytes));
-      node = DataModel.addDataSource(uriString, content, { path: name });
-    }
+    // .sldd — compressed (zip) vs JSON-as-bytes; readSlddContent dispatches.
+    node = DataModel.addDataSource(uriString, readSlddContent(bytes), { path: name });
   }
   cache.set(uriString, node);
   return node;

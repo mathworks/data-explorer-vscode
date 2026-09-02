@@ -168,8 +168,14 @@ export function deleteEntry(text: string, entry: any): StructuralResult {
   return { newText, selectId };
 }
 
-/** Delete a nested child: remove it from its parent, reserialize the owning entry. */
-export function deleteChild(text: string, node: any): StructuralResult {
+/**
+ * Remove a nested child from the in-memory model, reporting the entry whose text
+ * has to be reserialized and where the selection should land. This is the part of
+ * a nested delete that decides what the edit MEANS — which nodes may be removed,
+ * which entry owns the row, where the selection goes — so both .sldd formats
+ * share it and only the splicing differs (see the header of xmlStructuralEdit.ts).
+ */
+export function removeChildFromModel(node: any): { entry: any; selectId: string } {
   const parent = node.parent;
   if (!parent || typeof parent.canRemoveChild !== 'function' || !parent.canRemoveChild()) {
     throw new Error('This item cannot be deleted.');
@@ -183,17 +189,21 @@ export function deleteChild(text: string, node: any): StructuralResult {
 
   const selectId = reselectAfterRemoval(parent.children ?? [], node, parent.id);
   parent.removeChildNode(node);
-  return spliceEntry(text, entry, selectId);
+  return { entry, selectId };
 }
 
-/** Add a child to a container node (struct/bus/enum), reserialize its owning entry. */
-export function addChild(text: string, node: any): StructuralResult {
+/**
+ * Add a child to a container node in the in-memory model, reporting the owning
+ * entry and the new child's id (which the caller selects). Shared by both .sldd
+ * formats, for the same reason as removeChildFromModel.
+ */
+export function addChildToModel(node: any): { entry: any; selectId: string } {
   if (typeof node.canAddChild !== 'function' || !node.canAddChild()) {
     throw new Error('This item cannot have children added.');
   }
-  // PRECONDITION (untested): as in deleteChild, every container node in a parsed
-  // model has an owning entry — a SECTION's canAddChild() returns false, so the
-  // guard above already excludes the only node kind that has no entry above it.
+  // PRECONDITION (untested): as in removeChildFromModel, every container node in
+  // a parsed model has an owning entry — a SECTION's canAddChild() returns false,
+  // so the guard above already excludes the only node kind with no entry above it.
   const entry = findOwningEntry(node);
   if (!entry) throw new Error('Could not locate the owning entry.');
 
@@ -203,7 +213,19 @@ export function addChild(text: string, node: any): StructuralResult {
   // yield null here. Kept as a belt-and-braces net for a future container type.
   const child = node.addChildNode();
   if (!child) throw new Error('Failed to add a child element.');
-  return spliceEntry(text, entry, child.id);
+  return { entry, selectId: child.id };
+}
+
+/** Delete a nested child: remove it from its parent, reserialize the owning entry. */
+export function deleteChild(text: string, node: any): StructuralResult {
+  const { entry, selectId } = removeChildFromModel(node);
+  return spliceEntry(text, entry, selectId);
+}
+
+/** Add a child to a container node (struct/bus/enum), reserialize its owning entry. */
+export function addChild(text: string, node: any): StructuralResult {
+  const { entry, selectId } = addChildToModel(node);
+  return spliceEntry(text, entry, selectId);
 }
 
 /** Deep-clone a clipboard payload so repeated pastes don't alias the same object. */

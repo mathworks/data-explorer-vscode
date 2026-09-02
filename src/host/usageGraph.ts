@@ -15,8 +15,8 @@
 // uriStrings (not basenames), so a click resolves to an exact file even when two
 // same-named files exist.
 import * as vscode from 'vscode';
-import { parseSlx, parseMat, parseBinarySldd } from 'data-explorer-core';
-import { isZipBytes } from './slddFormat.js';
+import { parseSlx, parseMat } from 'data-explorer-core';
+import { readSlddContent } from './slddContent.js';
 import { normalizeRefNames, refBasename } from './slddRefs.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import {
@@ -157,11 +157,7 @@ async function buildGraph(): Promise<ResolvedGraph> {
             dictRefs: [],
           });
         } else if (path.endsWith('.sldd')) {
-          const bytes = new Uint8Array(ab);
-          const content = isZipBytes(bytes)
-            ? (parseBinarySldd(ab) as Record<string, unknown>)
-            : (JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>);
-          slddByBase.set(refBasename(path), slddSummary(uri.toString(), content));
+          slddByBase.set(refBasename(path), slddSummary(uri.toString(), readSlddContent(ab)));
         }
       } catch {
         /* unreadable/corrupt file contributes nothing */
