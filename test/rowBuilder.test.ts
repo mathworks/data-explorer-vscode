@@ -114,10 +114,9 @@ describe('buildEntryRows capability flags (for the context menu)', () => {
     };
   }
 
-  it('marks a plain entry as an entry: copyable + deletable, not add-child', () => {
+  it('marks a plain entry as copyable + deletable, not add-child', () => {
     const entry = node('e', { isEntry: true });
     const [row] = buildEntryRows(entry, 'design');
-    expect(row._isEntry).toBe(true);
     expect(row._canCopy).toBe(true);
     expect(row._canDelete).toBe(true);   // entries are always removable from a section
     expect(row._canAddChild).toBe(false); // canAddChild undefined -> false

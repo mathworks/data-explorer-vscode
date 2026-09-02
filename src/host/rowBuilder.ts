@@ -89,19 +89,18 @@ export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: Cli
 // data. Every method is called defensively: canAddChild/canRemoveChild only
 // exist on some node types, so we guard with typeof before invoking.
 function capabilityFlags(n: any): {
-  _isEntry: boolean;
   _canCopy: boolean;
   _canDelete: boolean;
   _canAddChild: boolean;
 } {
-  const isEntry = !!n.isEntry;
   // An entry is removable from its section; a nested child is removable only if
   // its parent container permits it (bus/struct/enum expose canRemoveChild).
   const parent = n.parent;
   const canDelete =
-    isEntry || !!(parent && typeof parent.canRemoveChild === 'function' && parent.canRemoveChild());
+    !!n.isEntry ||
+    !!(parent && typeof parent.canRemoveChild === 'function' && parent.canRemoveChild());
   const canAddChild = typeof n.canAddChild === 'function' && n.canAddChild();
-  return { _isEntry: isEntry, _canCopy: true, _canDelete: canDelete, _canAddChild: canAddChild };
+  return { _canCopy: true, _canDelete: canDelete, _canAddChild: canAddChild };
 }
 
 // Build the rows for a single entry subtree (the entry plus its flattened

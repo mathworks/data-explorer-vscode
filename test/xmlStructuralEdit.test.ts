@@ -10,7 +10,6 @@ import {
   deleteEntryXml,
   deleteChildXml,
   addChildXml,
-  addEntryXml,
   pasteEntryXml,
   deleteEntriesByNameXml,
 } from '../src/host/xmlStructuralEdit.js';
@@ -127,18 +126,6 @@ describe('reserializeEntryXml', () => {
   });
 });
 
-describe('addEntryXml', () => {
-  it('inserts a new entry before the DD.Dictionary and keeps it parseable', () => {
-    const { model, xml } = load('mem://xse3');
-    const design = model.getSection('design');
-    const { newText, selectId } = addEntryXml(xml, design, 'Simulink.Parameter');
-    expect(selectId).toBeTruthy();
-    const dictIdx = newText.indexOf('<Object Class="DD.Dictionary">');
-    const lastEntryIdx = newText.lastIndexOf('<Object Class="DD.ENTRY">');
-    expect(lastEntryIdx).toBeLessThan(dictIdx);
-  });
-});
-
 describe('deleteEntriesByNameXml', () => {
   it('removes multiple named entries, absent names are ignored', () => {
     const { model, xml } = load('mem://xse4');
@@ -235,52 +222,25 @@ describe('XML structural edits against text the model no longer matches', () => 
   });
 });
 
-// addEntryXml / pasteEntryXml both insert a NEW entry, which needs a place to put
-// it: the offset just before the trailing DD.DICTIONARYREFERENCE / DD.Dictionary
-// objects. A chunk0.xml missing both is what a truncated or partially-written
-// file looks like — it still parses into a full model, so nothing upstream
-// notices, and inserting at a guessed offset would corrupt the document.
+// pasteEntryXml inserts a NEW entry, which needs a place to put it: the offset
+// just before the trailing DD.DICTIONARYREFERENCE / DD.Dictionary objects. A
+// chunk0.xml missing both is what a truncated or partially-written file looks
+// like — it still parses into a full model, so nothing upstream notices, and
+// inserting at a guessed offset would corrupt the document.
 describe('XML insert path with no insertion point', () => {
-  // Both trailing structural objects stripped. The entries themselves are intact,
-  // so the file still yields a complete model — the failure is insert-only.
-  const stripTrailing = (xml: string) =>
-    xml
-      .replace(/[ \t]*<Object Class="DD\.DICTIONARYREFERENCE">[\s\S]*?<\/Object>\n?/g, '')
-      .replace(/[ \t]*<Object Class="DD\.Dictionary">[\s\S]*?<\/Object>\n?/g, '');
-
-  it('addEntryXml reports the missing insertion point', () => {
-    const { model, xml } = load('mem://xse-noins-add');
-    const stripped = stripTrailing(xml);
-    // Precondition: the entries survived, so this is genuinely insert-only.
-    expect(reparse('mem://xse-noins-add2', stripped).length).toBe(entryNames(model).length);
-    expect(() => addEntryXml(stripped, model.getSection('design'), 'Simulink.Parameter')).toThrow(
-      'Could not locate the insertion point.',
-    );
-  });
-
   it('pasteEntryXml reports the missing insertion point', () => {
     const { model, xml } = load('mem://xse-noins-paste');
+    // Both trailing structural objects stripped. The entries themselves are
+    // intact — asserted below — so the file still yields a complete model and
+    // the failure is genuinely insert-only.
+    const stripped = xml
+      .replace(/[ \t]*<Object Class="DD\.DICTIONARYREFERENCE">[\s\S]*?<\/Object>\n?/g, '')
+      .replace(/[ \t]*<Object Class="DD\.Dictionary">[\s\S]*?<\/Object>\n?/g, '');
+    expect(reparse('mem://xse-noins-reparse', stripped).length).toBe(entryNames(model).length);
+
     const payload = firstEntry(model).serialize() as Record<string, unknown>;
-    expect(() => pasteEntryXml(stripTrailing(xml), model.getSection('design'), payload)).toThrow(
+    expect(() => pasteEntryXml(stripped, model.getSection('design'), payload)).toThrow(
       'Could not locate the insertion point.',
-    );
-  });
-});
-
-describe('addEntryXml with a class the section cannot hold', () => {
-  it('names the class when it has no default for this section', () => {
-    // Registered classes are section-scoped: Simulink.ServiceBus belongs to
-    // Architectural Data, so Design Data has no default to create.
-    const { model, xml } = load('mem://xse-badclass');
-    expect(() => addEntryXml(xml, model.getSection('design'), 'Simulink.ServiceBus')).toThrow(
-      'Could not add a "Simulink.ServiceBus" entry.',
-    );
-  });
-
-  it('names an unrecognized class rather than inserting an empty entry', () => {
-    const { model, xml } = load('mem://xse-bogus');
-    expect(() => addEntryXml(xml, model.getSection('design'), 'Not.A.Class')).toThrow(
-      'Could not add a "Not.A.Class" entry.',
     );
   });
 });

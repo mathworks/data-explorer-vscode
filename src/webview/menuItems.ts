@@ -6,7 +6,6 @@ import type { ContextMenuItem } from './components/dex-context-menu.js';
 // falsy), which correctly disables mutating actions on a section header.
 export interface MenuRow {
   ID: string;
-  _isEntry?: boolean;
   _canCopy?: boolean;
   _canDelete?: boolean;
   _canAddChild?: boolean;

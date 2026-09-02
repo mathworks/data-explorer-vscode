@@ -99,13 +99,6 @@ export function addChildXml(text: string, node: any): StructuralResult {
   return spliceEntry(text, entry, child.id);
 }
 
-/** Add a brand-new default entry of a class into a section. */
-export function addEntryXml(text: string, section: any, className: string): StructuralResult {
-  const node = section.addEntry(className);
-  if (!node) throw new Error(`Could not add a "${className}" entry.`);
-  return insertNewEntry(text, node);
-}
-
 /**
  * Paste a serialized entry payload as a new entry. Every rule about what the
  * pasted entry BECOMES (allow-check, unique name, section rebind, fresh uuid,

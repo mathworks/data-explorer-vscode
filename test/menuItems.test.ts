@@ -10,8 +10,8 @@ function byId(items: ReturnType<typeof buildContextMenuItems>) {
   return (id: string) => map.get(id)!;
 }
 
-const ENTRY: MenuRow = { ID: 'section:design/E', _isEntry: true, _canCopy: true, _canDelete: true, _canAddChild: false };
-const STRUCT: MenuRow = { ID: 'section:design/S', _isEntry: true, _canCopy: true, _canDelete: true, _canAddChild: true };
+const ENTRY: MenuRow = { ID: 'section:design/E', _canCopy: true, _canDelete: true, _canAddChild: false };
+const STRUCT: MenuRow = { ID: 'section:design/S', _canCopy: true, _canDelete: true, _canAddChild: true };
 const LOCKED_CHILD: MenuRow = { ID: 'section:design/S/f', _canCopy: true, _canDelete: false, _canAddChild: false };
 
 describe('buildContextMenuItems', () => {
