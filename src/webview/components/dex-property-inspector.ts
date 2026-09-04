@@ -3,6 +3,8 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
+import './dex-matrix-open.js';
+import type { MatrixPayload } from './dex-matrix-grid.js';
 
 export interface PropertyGroup {
   title: string;
@@ -15,6 +17,9 @@ export interface PropertyRow {
   editable?: boolean;
   type?: 'text' | 'link';
   linkTarget?: string;
+  // Set by piBuilder for a matrix-valued Value row. Opens the same popover the
+  // table's Value cell opens, via the same dex-matrix-open glyph.
+  matrix?: MatrixPayload;
 }
 
 @customElement('dex-property-inspector')
@@ -153,6 +158,14 @@ export class DexPropertyInspector extends LitElement {
         .value=${live(prop.value)}
         @change=${(e: Event) => this._onPropertyChange(prop.name, (e.target as HTMLInputElement).value, prop.value)}
       />`;
+    }
+    // The glyph FOLLOWS the value text — the same affordance, event and icon the
+    // table's Value cell renders, so there is exactly one way to open a grid. An
+    // editable row returned above, so an inline <input> never grows a glyph: the
+    // same rule the table applies while a cell is being edited.
+    if (prop.matrix) {
+      return html`<span>${prop.value}</span
+        ><dex-matrix-open .matrix=${prop.matrix}></dex-matrix-open>`;
     }
     return html`<span>${prop.value}</span>`;
   }

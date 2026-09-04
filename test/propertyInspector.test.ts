@@ -338,3 +338,66 @@ describe('host-supplied strings are never markup', () => {
     expect(el.shadowRoot!.querySelectorAll('img').length).toBe(0);
   });
 });
+
+describe('the Value row shows the Variable Editor glyph', () => {
+  const MAT = { name: 'ParamMat.Value', className: 'double', dims: [2, 3], cells: ['1', '2', '3', '4', '5', '6'] };
+
+  const rows = (el: DexPropertyInspector) => Array.from(el.shadowRoot!.querySelectorAll('.prop-row'));
+
+  it('renders the glyph beside the value text, not instead of it', async () => {
+    const el = await makeInspector([
+      {
+        title: 'Attributes',
+        properties: [
+          { name: 'Value', value: '[1 2 3; 4 5 6]', editable: false, type: 'text', matrix: MAT },
+          { name: 'DataType', value: 'double', editable: false, type: 'text' },
+        ],
+      },
+    ]);
+    const [valueRow, typeRow] = rows(el);
+    expect(valueRow.textContent).toContain('[1 2 3; 4 5 6]');
+    expect(valueRow.querySelector('dex-matrix-open')).not.toBeNull();
+    expect(typeRow.querySelector('dex-matrix-open')).toBeNull();
+  });
+
+  it('hands the glyph the payload and no row id', async () => {
+    // The PI has no rows to write back to, so rowId is deliberately absent — the
+    // event detail's rowId is optional for exactly this surface.
+    const el = await makeInspector([
+      { title: 'Attributes', properties: [{ name: 'Value', value: '[1 2 3; 4 5 6]', editable: false, type: 'text', matrix: MAT }] },
+    ]);
+    const g = rows(el)[0].querySelector('dex-matrix-open') as any;
+    expect(g.matrix).toBe(MAT);
+    expect(g.rowId).toBeUndefined();
+  });
+
+  it('renders no glyph on a row without a payload', async () => {
+    const el = await makeInspector([
+      { title: 'Attributes', properties: [{ name: 'Value', value: '7', editable: false, type: 'text' }] },
+    ]);
+    expect(rows(el)[0].querySelector('dex-matrix-open')).toBeNull();
+  });
+
+  it('renders no inline grid — the popover is the only grid', async () => {
+    // Guards the design decision made explicitly during brainstorming: one grid
+    // implementation, opened the same way from both surfaces.
+    const el = await makeInspector([
+      { title: 'Attributes', properties: [{ name: 'Value', value: '[1 2 3; 4 5 6]', editable: false, type: 'text', matrix: MAT }] },
+    ]);
+    expect(el.shadowRoot!.querySelector('dex-matrix-grid')).toBeNull();
+    expect(el.shadowRoot!.querySelector('[role="grid"]')).toBeNull();
+  });
+
+  it('drops the glyph when a new selection has no matrix', async () => {
+    // The payload lives on the row, so a re-push is the only thing that can
+    // clear it. Nothing caches per-inspector state.
+    const el = await makeInspector([
+      { title: 'Attributes', properties: [{ name: 'Value', value: '[1 2 3; 4 5 6]', editable: false, type: 'text', matrix: MAT }] },
+    ]);
+    expect(rows(el)[0].querySelector('dex-matrix-open')).not.toBeNull();
+    await setGroups(el, [
+      { title: 'Attributes', properties: [{ name: 'Value', value: '7', editable: false, type: 'text' }] },
+    ]);
+    expect(rows(el)[0].querySelector('dex-matrix-open')).toBeNull();
+  });
+});

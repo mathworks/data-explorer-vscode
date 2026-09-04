@@ -63,3 +63,29 @@ describe('table webview overlays are created in code, not declared in markup', (
     expect(read('src/webview/table-main.ts')).not.toContain('errorDialog?.');
   });
 });
+
+// The Property Inspector is a second webview with a second shell, and it grew the
+// same overlay for the same reason. It has only one provider today, which is
+// exactly how the table's shells started out.
+describe('the Property Inspector creates its overlay in code too', () => {
+  const PI_SHELLS = ['src/host/PropertiesViewProvider.ts', 'src/webview/pi.html'];
+
+  it.each(PI_SHELLS)('%s declares no overlay element', (shell) => {
+    for (const tag of OVERLAYS) {
+      expect(read(shell)).not.toContain(`<${tag}>`);
+    }
+  });
+
+  it('pi-main.ts creates the Variable Editor itself', () => {
+    const src = read('src/webview/pi-main.ts');
+    expect(src).toContain("document.createElement('dex-variable-editor')");
+    expect(src).toContain('installMatrixOpen(pi, ');
+  });
+
+  it('still takes the inspector element from markup', () => {
+    expect(read('src/webview/pi-main.ts')).toContain("document.querySelector('dex-property-inspector')");
+    for (const shell of PI_SHELLS) {
+      expect(read(shell)).toContain('<dex-property-inspector');
+    }
+  });
+});

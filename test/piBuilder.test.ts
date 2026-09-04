@@ -285,3 +285,50 @@ describe('buildPropertyGroups tolerates a malformed property sheet', () => {
     });
   });
 });
+
+describe('the Value property row carries the matrix payload', () => {
+  it('attaches the payload to Value and to no other property', () => {
+    const root = load('pi://all.sldd', 'mcos/all.sldd');
+    const paramMat = descend(root).find((n) => n.name === 'ParamMat');
+    const rows = buildPropertyGroups(paramMat).flatMap((g) => g.properties);
+    const withMatrix = rows.filter((r) => r.matrix);
+    expect(withMatrix.map((r) => r.name)).toEqual(['Value']);
+    // Qualified, exactly as the table row's payload is: the popover title has to
+    // say WHICH property it is showing, not just "Value".
+    expect(withMatrix[0].matrix!.name).toBe('ParamMat.Value');
+    expect(withMatrix[0].matrix!.dims).toEqual([2, 3]);
+    expect(withMatrix[0].matrix!.cells).toEqual(['1', '2', '3', '4', '5', '6']);
+  });
+
+  it('leaves the Value row’s own text exactly as it was', () => {
+    // The PI still reads as the literal; the glyph is an addition, not a swap.
+    const root = load('pi://all2.sldd', 'mcos/all.sldd');
+    const paramMat = descend(root).find((n) => n.name === 'ParamMat');
+    const value = buildPropertyGroups(paramMat)
+      .flatMap((g) => g.properties)
+      .find((r) => r.name === 'Value')!;
+    expect(value.value).toBe('[1 2 3; 4 5 6]');
+    expect(value.editable).toBe(false);
+    expect(value.type).toBe('text');
+  });
+
+  it('attaches nothing when the Value is a scalar', () => {
+    // A minimal node rather than a fixture hunt: the only thing under test is
+    // that a non-griddable Value gets no payload.
+    const scalar = {
+      children: [
+        { name: 'Value', className: 'double', dims: [1, 1], displayName: 'Value', displayValue: '7', children: [] },
+      ],
+      toPIObject: () => ({
+        propertySheet: {
+          groups: [{ name: 'Attributes', items: [{ type: 'property', name: 'Value' }] }],
+          properties: [{ name: 'Value', displayName: 'Value' }],
+        },
+        objects: [{ Value: '7' }],
+      }),
+    };
+    const rows = buildPropertyGroups(scalar).flatMap((g) => g.properties);
+    expect(rows.map((r) => r.name)).toEqual(['Value']);
+    expect(rows.filter((r) => r.matrix)).toEqual([]);
+  });
+});
