@@ -2,6 +2,7 @@
 
 import { ModelBlockNode, schemaColumnLabels } from 'data-explorer-core';
 import { buildSectionRowId } from '../common/sectionRowId.js';
+import { stampMatrix } from './matrixPayload.js';
 
 // Columns shown across the dictionary tree (union that fits all sections), in
 // display order: the ungrouped core columns first, then the grouped columns
@@ -149,8 +150,10 @@ export function buildEntryRows(entry: any, sectionName: string, modifiedNames?: 
         row = { ...row, Name: { ...row.Name, clipboardMode: clipMark.mode } };
       }
     }
-    // Context-menu capability flags (consumed by the webview menu builder).
-    out.push({ ...row, ...capabilityFlags(n) });
+    // Context-menu capability flags (consumed by the webview menu builder), then
+    // the grid-view payload if this node's value is a griddable matrix. Both are
+    // stamps over the node's own row; neither rewrites the row's columns.
+    out.push(stampMatrix({ ...row, ...capabilityFlags(n) }, n));
   }
   return out;
 }
