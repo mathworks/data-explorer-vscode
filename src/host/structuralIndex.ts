@@ -8,6 +8,7 @@ import { extractSlxStructure } from './slxStructure.js';
 import { isZipBytes } from './slddFormat.js';
 import { parseBinarySldd, parseProject } from 'data-explorer-core';
 import { basename } from '../common/pathUtil.js';
+import { isModelPath } from '../common/fileTypes.js';
 
 export interface RawFile {
   uriString: string;
@@ -20,7 +21,10 @@ export interface RawFile {
 }
 
 function typeOf(path: string): SourceType {
-  if (path.endsWith('.slx')) return 'model';
+  // Both model containers are the same SourceType: a `.mdl` is a Simulink model,
+  // so it gets the model icon, the model row builder, and the model relationship
+  // extraction — not the `.sldd` fallback this used to drop it into.
+  if (isModelPath(path)) return 'model';
   if (path.endsWith('.mat')) return 'mat';
   if (path.endsWith('.prj')) return 'project';
   return 'sldd';

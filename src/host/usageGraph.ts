@@ -15,10 +15,11 @@
 // uriStrings (not basenames), so a click resolves to an exact file even when two
 // same-named files exist.
 import * as vscode from 'vscode';
-import { parseSlx, parseMat } from 'data-explorer-core';
+import { parseModel, parseMat } from 'data-explorer-core';
 import { readSlddContent } from './slddContent.js';
 import { normalizeRefNames, refBasename } from './slddRefs.js';
 import { toArrayBuffer } from '../common/bytes.js';
+import { GRAPH_FILE_RE, GRAPH_GLOB, isModelPath, stripModelExt } from '../common/fileTypes.js';
 import {
   basename,
   buildEdges,
@@ -45,7 +46,10 @@ export function ensureUsageGraph(): Promise<ResolvedGraph> {
 }
 
 function labelOf(uriPath: string): string {
-  return basename(uriPath).replace(/\.slx$/i, '');
+  // The bare model name MATLAB uses internally, whichever container the file is
+  // in — a `.mdl` left labelled `engine.mdl` would not match the `engine` that
+  // block paths and reference records name.
+  return stripModelExt(basename(uriPath));
 }
 
 async function readBytes(uri: vscode.Uri): Promise<ArrayBuffer | null> {
@@ -78,8 +82,6 @@ function slddSummary(uri: string, content: Record<string, unknown>): DataSummary
   return { uri, varNames, dictRefs };
 }
 
-const GRAPH_FILE_RE = /\.(slx|sldd|mat)$/i;
-
 // Supported files currently open in an editor tab. Custom-editor and text tab
 // inputs both expose `.uri`. Included in the graph so a single file opened via
 // Cmd+O (no workspace folder → findFiles returns nothing) still resolves its own
@@ -94,7 +96,7 @@ function openTabUris(): vscode.Uri[] {
 async function buildGraph(): Promise<ResolvedGraph> {
   let found: vscode.Uri[] = [];
   try {
-    found = await vscode.workspace.findFiles('**/*.{slx,sldd,mat}');
+    found = await vscode.workspace.findFiles(GRAPH_GLOB);
   } catch {
     /* no workspace folder open — fall back to open tabs only */
   }
@@ -125,8 +127,8 @@ async function buildGraph(): Promise<ResolvedGraph> {
       const ab = await readBytes(uri);
       if (!ab) return;
       try {
-        if (path.endsWith('.slx')) {
-          const parsed = parseSlx(ab, basename(path));
+        if (isModelPath(path)) {
+          const parsed = parseModel(ab, basename(path));
           // Sorted by extension case-insensitively for the same reason the map is
           // keyed that way: these strings are whatever the model recorded, so a
           // `.SLDD` link is a real dictionary link and must not be dropped (which

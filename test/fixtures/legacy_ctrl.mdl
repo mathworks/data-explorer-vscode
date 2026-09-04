@@ -1,0 +1,28 @@
+Model {
+  Name                    "legacy_ctrl"
+  Version                 7.8
+  Creator                 "fixture"
+  LastModifiedDate        "Fri Sep 04 10:15:32 2026"
+  DataDictionary          "params.sldd"
+  WSDataSource            "MAT-File"
+  WSSourceFileName        "signals.mat"
+  GraphicalInterface {
+    NumModelReferences      1
+    ModelReference {
+      ModelRefBlockPath       "legacy_ctrl/Plant|plant"
+    }
+  }
+  System {
+    Name                    "legacy_ctrl"
+    Block {
+      BlockType               Gain
+      Name                    "Gain1"
+      Gain                    "Kp"
+    }
+    Block {
+      BlockType               Constant
+      Name                    "Setpoint"
+      Value                   "Uo"
+    }
+  }
+}

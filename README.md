@@ -1,6 +1,6 @@
 # Simulink Data Explorer Extension for Visual Studio Code
 
-**Explore Simulink&reg; models, data dictionaries, and projects directly in Visual Studio Code — no MATLAB&reg; or Simulink installation required.** Simulink Data Explorer reads `.slx`, `.sldd`, `.mat`, and `.prj` files directly, so you can browse their contents and relationships anywhere VS Code runs.
+**Explore Simulink&reg; models, data dictionaries, and projects directly in Visual Studio Code — no MATLAB&reg; or Simulink installation required.** Simulink Data Explorer reads `.slx`, `.mdl`, `.sldd`, `.mat`, and `.prj` files directly, so you can browse their contents and relationships anywhere VS Code runs.
 
 It adds a native experience for Simulink file types — a **Simulink Data Explorer sidebar** that maps how your models, dictionaries, and projects relate, a **table editor** to browse the contents of each file, and a **Properties panel** to inspect the selected entry — without leaving your editor. `.sldd` data dictionaries are **editable** directly in the table; other formats open read-only.
 
@@ -8,7 +8,7 @@ It adds a native experience for Simulink file types — a **Simulink Data Explor
 
 ## Why Simulink Data Explorer?
 
-- **Read Simulink files without MATLAB or Simulink** — inspect `.slx`, `.sldd`, `.mat`, and `.prj` files anywhere VS Code runs, including on machines and CI agents with no MATLAB install.
+- **Read Simulink files without MATLAB or Simulink** — inspect `.slx`, `.mdl`, `.sldd`, `.mat`, and `.prj` files anywhere VS Code runs, including on machines and CI agents with no MATLAB install.
 - **See how your project fits together** — a relationship tree maps every model, dictionary, and MAT-file and how they reference each other, with at-a-glance health badges for cycles, orphans, and missing references.
 - **Click through references like hyperlinks** — jump from a model to the models, dictionaries, and MAT-files it depends on in one click.
 - **Edit data dictionaries in place** — change values, add elements, and cut/copy/paste entries in a spreadsheet-style table, with undo/redo and save. Works for both textual (JSON) and compressed-binary `.sldd`.
@@ -25,7 +25,7 @@ It adds a native experience for Simulink file types — a **Simulink Data Explor
 ### Browse & edit file contents
 
 - **Table editor** — open a model, dictionary, MAT-file, or project in a spreadsheet-style, tree-structured table. Sections are always shown (e.g. a dictionary's Design Data, Architectural Data, Configurations, Other Data), even when empty.
-- **Editing for `.sldd`** — edit a data dictionary directly in the table: change entry values and names, add child elements, and cut/copy/paste/delete entries via the right-click context menu, with **undo/redo, a dirty indicator, and save**. Both textual (JSON) and compressed-binary `.sldd` are editable; `.slx`, `.mat`, and `.prj` open read-only.
+- **Editing for `.sldd`** — edit a data dictionary directly in the table: change entry values and names, add child elements, and cut/copy/paste/delete entries via the right-click context menu, with **undo/redo, a dirty indicator, and save**. Both textual (JSON) and compressed-binary `.sldd` are editable; `.slx`, `.mdl`, `.mat`, and `.prj` open read-only.
 - **Live two-way sync (textual `.sldd`)** — because a textual (JSON) `.sldd` is backed by its JSON text document, edits in the table and edits in the JSON text editor update each other instantly, and there is a single shared undo history across both views.
 - **Properties panel** — a selection-following webview that shows the full properties of the entry selected in the table. It lives in its own view container and can be docked in the secondary sidebar.
 - **Variable Editor for matrix values** — a value with two or more dimensions stays a short descriptor in its cell (`<2x3x2 double>`) with a grid glyph beside it; clicking the glyph opens the whole array in a floating spreadsheet-style grid, laid out the way MATLAB displays it. Anything above rank 2 gets a `(:,:,k)` page selector to step through its trailing dimensions. Available from both the table and the Properties panel; view-only.
@@ -50,7 +50,7 @@ It adds a native experience for Simulink file types — a **Simulink Data Explor
    **Install from VSIX…**.
 2. Open a folder or workspace that contains Simulink files.
 3. Click the **Simulink Data Explorer** icon in the activity bar to see the relationship tree.
-4. Open any supported file (`.slx`, `.sldd`, `.mat`, `.prj`) — it opens in the Data Explorer table by default. Select a row to inspect it in the Properties panel.
+4. Open any supported file (`.slx`, `.mdl`, `.sldd`, `.mat`, `.prj`) — it opens in the Data Explorer table by default. Select a row to inspect it in the Properties panel.
 
 For a textual `.sldd`, you can switch to the raw JSON via **View: Reopen Editor With… → Text Editor** (or right-click the editor tab → **Reopen Editor With…**).
 
@@ -62,7 +62,7 @@ For a textual `.sldd`, you can switch to the raw JSON via **View: Reopen Editor 
 
 **Viewing (read-only):**
 
-- **Simulink models** — `.slx`
+- **Simulink models** — `.slx` and `.mdl` (both the modern text format and the classic pre-R2012 format)
 - **MAT-files** — `.mat`
 - **MATLAB Projects** — `.prj`
 
@@ -74,7 +74,7 @@ No MATLAB&reg; or Simulink installation is required to view or edit files — Si
 
 ## Known Limitations
 
-- Editing is supported for **`.sldd`** data dictionaries. `.slx`, `.mat`, and `.prj` are read-only.
+- Editing is supported for **`.sldd`** data dictionaries. `.slx`, `.mdl`, `.mat`, and `.prj` are read-only.
 - Large textual (JSON) `.sldd` files are limited by size. Above **50 MB**, the file opens as a **read-only** table (VS Code cannot mirror a document that large for editing). Above **512 MB**, it cannot be rendered as a table at all and opens in VS Code's built-in **text editor** instead.
 - Paste creates a new top-level entry in the target section; pasting as a child of a struct/bus is not yet supported.
 - Reference resolution matches files by name (basename), preferring the referrer's own project or folder. Two `.prj` files in the same directory are not supported.
@@ -86,10 +86,10 @@ No MATLAB&reg; or Simulink installation is required to view or edit files — Si
 No. Simulink Data Explorer reads (and, for `.sldd`, writes) the files directly, so it works anywhere VS Code runs — including machines and CI agents with no MATLAB or Simulink installation.
 
 **Which file types can I open?**
-`.slx` (Simulink models), `.sldd` (data dictionaries), `.mat` (MAT-files), and `.prj` (MATLAB Projects). `.sldd` files are editable; the rest open read-only.
+`.slx` and `.mdl` (Simulink models), `.sldd` (data dictionaries), `.mat` (MAT-files), and `.prj` (MATLAB Projects). `.sldd` files are editable; the rest open read-only.
 
 **Can I edit files, or is this view-only?**
-You can edit **`.sldd`** dictionaries directly in the table — values, names, child elements, and cut/copy/paste/delete — with undo/redo and save. This works for both textual (JSON) and compressed-binary `.sldd`. `.slx`, `.mat`, and `.prj` are read-only.
+You can edit **`.sldd`** dictionaries directly in the table — values, names, child elements, and cut/copy/paste/delete — with undo/redo and save. This works for both textual (JSON) and compressed-binary `.sldd`. `.slx`, `.mdl`, `.mat`, and `.prj` are read-only.
 
 **A reference link doesn't open anything — why?**
 Links resolve by file name against your open workspace. Make sure the referenced file is inside the folder or workspace you have open in VS Code; a reference to a file that isn't present shows as unresolved (and is badged in the relationship tree).

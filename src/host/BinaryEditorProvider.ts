@@ -17,6 +17,7 @@ import { annotateDataRows, annotateModelRows } from './usageGraph.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
+import { isModelPath } from '../common/fileTypes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 
 // viewType of the editable text-backed table (SlddTextEditorProvider). Declared
@@ -188,10 +189,10 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
         const node = getModelFromBytes(uriString, name, ab);
         const rows = name.endsWith('.mat') ? buildMatRows(node) : buildRows(node);
         // Fill the Usage column from the shared workspace usage graph (lazy +
-        // cached). A model (.slx) resolves its blocks' params to source files
+        // cached). A model (.slx/.mdl) resolves its blocks' params to source files
         // and its workspace vars to the blocks that use them; a .mat/.sldd data
         // view resolves its variables to the blocks that use them.
-        if (name.endsWith('.slx')) {
+        if (isModelPath(name)) {
           await annotateModelRows(uriString, rows).catch(() => false);
         } else if (name.endsWith('.mat') || name.endsWith('.sldd')) {
           await annotateDataRows(uriString, rows).catch(() => false);

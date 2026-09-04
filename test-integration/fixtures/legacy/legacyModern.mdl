@@ -1,0 +1,13 @@
+# MathWorks OPC Text Package
+Model {
+  Name                    "legacyModern"
+  Version                 25.0
+}
+__MWOPC_PACKAGE_BEGIN__
+__MWOPC_PART_BEGIN__ /simulink/blockDiagram.json
+{"BlockDiagram":{"DataDictionary":"legacyParams.sldd","ModelUUID":"uuid-legacy-modern","System":{"Ref":"system_root"}}}
+__MWOPC_PART_BEGIN__ /simulink/systems/system_root.xml
+<?xml version="1.0" encoding="utf-8"?><System><Block BlockType="Gain" Name="ModernGain" SID="1"><P Name="Gain">Kp</P></Block></System>
+__MWOPC_PART_BEGIN__ /metadata/coreProperties.xml BASE64
+PD94bWwgdmVyc2lvbj0iMS4wIj8+PGNvcmVQcm9wZXJ0aWVzPjx2ZXJzaW9uPlIyMDI2YjwvdmVyc2lvbj48L2NvcmVQcm9wZXJ0aWVzPg==
+__MWOPC_PACKAGE_END__

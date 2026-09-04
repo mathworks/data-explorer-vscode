@@ -214,4 +214,104 @@ writeFileSync(
   ]),
 );
 
-console.log('wrote model_with_refs.slx, compressed.sldd, object_array_binary.sldd, nd_numeric.mat');
+// --- model_with_refs.mdl: the MODERN `.mdl` — a text OPC package ---
+//
+// The SAME parts as model_with_refs.slx above, deliberately: a modern `.mdl` and a
+// `.slx` of one model carry a byte-identical part set and differ only in framing
+// (delimiter lines instead of a zip). Sharing `slxParts` is what makes the two
+// fixtures genuine twins, so a test can assert both files open to the same
+// relationships and be testing the FRAMING rather than two hand-written models
+// that happen to agree.
+//
+// metadata/coreProperties.xml is written BASE64 to cover the binary-part path: in a
+// real `.mdl` the .mxarray model workspace is encoded that way to survive a text
+// file. If the decode were wrong, `release` would come back empty rather than
+// R2026b, which is exactly what the test asserts.
+const BASE64_PARTS = new Set(['metadata/coreProperties.xml']);
+
+function opcTextPackage(parts, modelName) {
+  const enc = new TextEncoder();
+  const chunks = [
+    // A banner and a small legacy Model stub precede the package marker, so that a
+    // tool expecting the classic format finds something it can read rather than
+    // binary noise. The parser skips both.
+    enc.encode(
+      `# MathWorks OPC Text Package\nModel {\n  Name                    "${modelName}"\n  Version                 25.0\n}\n__MWOPC_PACKAGE_BEGIN__\n`,
+    ),
+  ];
+  for (const path of Object.keys(parts)) {
+    const b64 = BASE64_PARTS.has(path);
+    // The header names the part with a LEADING slash, and flags an encoded one with
+    // a trailing ` BASE64`.
+    chunks.push(enc.encode(`__MWOPC_PART_BEGIN__ /${path}${b64 ? ' BASE64' : ''}\n`));
+    chunks.push(b64 ? enc.encode(Buffer.from(parts[path]).toString('base64')) : parts[path]);
+    // Exactly ONE newline after the content: it introduces the next marker and
+    // belongs to the framing, not to the part. A second one would be read as the
+    // part's own trailing byte and corrupt the JSON parts.
+    chunks.push(enc.encode('\n'));
+  }
+  chunks.push(enc.encode('__MWOPC_PACKAGE_END__\n'));
+  const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+  let at = 0;
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.length;
+  }
+  return out;
+}
+writeFileSync(here('model_with_refs.mdl'), opcTextPackage(slxParts, 'model_with_refs'));
+
+// --- legacy_ctrl.mdl: the CLASSIC (pre-R2012) `.mdl` — nested braces ---
+//
+// A model that was never migrated, and what `ExportToVersion 'R2011b'` still writes.
+// It shares no framing with anything above: properties are `Name value` lines and
+// children are `Name { ... }` blocks.
+//
+// Chosen to carry one of each relationship the sections tree draws, so the graph can
+// be asserted on a legacy file:
+//   DataDictionary        → the linked dictionary edge
+//   GraphicalInterface    → a model reference, named WITHOUT an extension, which is
+//                           what forces the parent-extension rule (it must resolve
+//                           to plant.mdl, not plant.slx)
+//   WSDataSource MAT-File → an external data source edge
+//   System/Block          → a block parameter usage (Gain "Kp")
+//
+// NOT covered here: the model workspace, which a classic `.mdl` stores as a
+// UUENCODED mxarray in a MatData record. That needs real MATLAB output to be
+// meaningful and is covered by the parity suite in the core repo, not by a
+// hand-written fixture.
+const classicMdl = `Model {
+  Name                    "legacy_ctrl"
+  Version                 7.8
+  Creator                 "fixture"
+  LastModifiedDate        "Fri Sep 04 10:15:32 2026"
+  DataDictionary          "params.sldd"
+  WSDataSource            "MAT-File"
+  WSSourceFileName        "signals.mat"
+  GraphicalInterface {
+    NumModelReferences      1
+    ModelReference {
+      ModelRefBlockPath       "legacy_ctrl/Plant|plant"
+    }
+  }
+  System {
+    Name                    "legacy_ctrl"
+    Block {
+      BlockType               Gain
+      Name                    "Gain1"
+      Gain                    "Kp"
+    }
+    Block {
+      BlockType               Constant
+      Name                    "Setpoint"
+      Value                   "Uo"
+    }
+  }
+}
+`;
+writeFileSync(here('legacy_ctrl.mdl'), strToU8(classicMdl));
+
+console.log(
+  'wrote model_with_refs.slx, model_with_refs.mdl, legacy_ctrl.mdl, compressed.sldd, ' +
+    'object_array_binary.sldd, nd_numeric.mat',
+);

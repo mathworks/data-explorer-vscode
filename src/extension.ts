@@ -18,8 +18,7 @@ import {
   invalidate as invalidateNameIndex,
 } from './host/nameIndex.js';
 import { isSectionRowId } from './common/sectionRowId.js';
-
-const SUPPORTED_RE = /\.(sldd|mat|slx|prj)$/;
+import { SUPPORTED_RE, SUPPORTED_GLOB } from './common/fileTypes.js';
 
 function isSlddUri(uri: vscode.Uri | undefined): boolean {
   return !!uri && uri.path.endsWith('.sldd');
@@ -134,7 +133,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Watch the workspace for supported files so the tree stays in sync with
   // create/delete/change events regardless of which tab is focused.
-  const watcher = vscode.workspace.createFileSystemWatcher('**/*.{sldd,mat,slx,prj}');
+  const watcher = vscode.workspace.createFileSystemWatcher(SUPPORTED_GLOB);
 
   context.subscriptions.push(
     vscode.window.registerCustomEditorProvider(

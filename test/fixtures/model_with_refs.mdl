@@ -1,0 +1,15 @@
+# MathWorks OPC Text Package
+Model {
+  Name                    "model_with_refs"
+  Version                 25.0
+}
+__MWOPC_PACKAGE_BEGIN__
+__MWOPC_PART_BEGIN__ /simulink/blockDiagram.json
+{"BlockDiagram":{"DataDictionary":"params.sldd","ModelUUID":"uuid-1"}}
+__MWOPC_PART_BEGIN__ /simulink/graphicalInterface.json
+{"ModelReferences":[{"BlockPath":"ctrl/plant","ModelName":"plant.slx"}]}
+__MWOPC_PART_BEGIN__ /simulink/ExternalDataSourceSettings.xml
+<?xml version="1.0"?><ExternalDataSourceSettings><ExplicitExternalBrokerSources><fullPathToSource>signals.mat</fullPathToSource></ExplicitExternalBrokerSources></ExternalDataSourceSettings>
+__MWOPC_PART_BEGIN__ /metadata/coreProperties.xml BASE64
+PD94bWwgdmVyc2lvbj0iMS4wIj8+PGNvcmVQcm9wZXJ0aWVzPjx2ZXJzaW9uPlIyMDI2YjwvdmVyc2lvbj48L2NvcmVQcm9wZXJ0aWVzPg==
+__MWOPC_PACKAGE_END__

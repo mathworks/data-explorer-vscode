@@ -1,6 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 import { DataModel } from 'data-explorer-core';
 import { readSlddContent } from './slddContent.js';
+import { isModelPath } from '../common/fileTypes.js';
 
 const cache = new Map<string, any>(); // uriString -> SlddNode
 
@@ -14,13 +15,17 @@ export function getModel(uriString: string, name: string, text: string): any {
   return node;
 }
 
-// Binary formats (.slx, .mat, compressed .sldd) parsed from bytes.
+// Byte-backed formats (.slx, .mdl, .mat, compressed .sldd) parsed from bytes.
 export function getModelFromBytes(uriString: string, name: string, bytes: ArrayBuffer): any {
   const cached = cache.get(uriString);
   if (cached) return cached;
 
   let node: any;
-  if (name.endsWith('.slx')) {
+  // Both model containers go to the same adder. A `.mdl` is not necessarily binary
+  // — both of its flavours are text — but it arrives here as bytes like the rest,
+  // and core's addModelSource sniffs the actual format rather than trusting the
+  // extension.
+  if (isModelPath(name)) {
     node = DataModel.addModelSource(uriString, bytes, { path: name });
   } else if (name.endsWith('.mat')) {
     node = DataModel.addMatSource(uriString, bytes, { path: name });

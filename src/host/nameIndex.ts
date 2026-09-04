@@ -13,10 +13,11 @@
 // This module does the vscode file I/O + parser dispatch; the pure
 // name-extraction core lives in nameExtract.ts (unit-tested).
 import * as vscode from 'vscode';
-import { parseSlx, parseMat } from 'data-explorer-core';
+import { parseModel, parseMat } from 'data-explorer-core';
 import { readSlddContent } from './slddContent.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import { basename } from '../common/pathUtil.js';
+import { GRAPH_GLOB, isModelPath } from '../common/fileTypes.js';
 import { namesFromSldd, namesFromMat, namesFromSlx, type NameRecord } from './nameExtract.js';
 
 export type { EntryKind, NameRecord } from './nameExtract.js';
@@ -94,7 +95,7 @@ async function build(): Promise<void> {
   const map = new Map<string, NameRecord[]>();
   let uris: vscode.Uri[] = [];
   try {
-    uris = await vscode.workspace.findFiles('**/*.{slx,sldd,mat}');
+    uris = await vscode.workspace.findFiles(GRAPH_GLOB);
   } catch {
     /* no workspace folder open — nothing to scan; the index is legitimately empty */
   }
@@ -124,8 +125,8 @@ async function recordsForFile(uri: vscode.Uri): Promise<NameRecord[]> {
   const path = uri.path;
   const uriString = uri.toString();
   try {
-    if (path.endsWith('.slx')) {
-      const parsed = parseSlx(ab, basename(path));
+    if (isModelPath(path)) {
+      const parsed = parseModel(ab, basename(path));
       return namesFromSlx(parsed, uriString);
     }
     if (path.endsWith('.mat')) {

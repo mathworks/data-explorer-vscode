@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { SUPPORTED_EXTS } from '../src/common/fileTypes.js';
 
 const pkg = JSON.parse(
   readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'),
@@ -40,7 +41,7 @@ describe('customEditors: text-backed table for JSON .sldd + byte-backed binary e
     expect(view.priority).toBe('option');
   });
 
-  it('the byte-backed binary editor is DEFAULT for all four formats incl *.sldd', () => {
+  it('the byte-backed binary editor is DEFAULT for every supported format incl *.sldd', () => {
     // binaryView must be the default for *.sldd because it can open ANY bytes —
     // a CustomTextEditorProvider (tableView) cannot open binary/zip .sldd (it
     // fails to load as a TextDocument: "cannot open as text"). binaryView opens
@@ -48,8 +49,19 @@ describe('customEditors: text-backed table for JSON .sldd + byte-backed binary e
     const binary = editors.find((e) => e.viewType === BINARY_VIEW)!;
     expect(binary, 'the binaryView editor must be declared').toBeTruthy();
     const patterns = binary.selector.map((s) => s.filenamePattern);
-    expect(patterns).toEqual(expect.arrayContaining(['*.sldd', '*.slx', '*.mat', '*.prj']));
+    expect(patterns).toEqual(expect.arrayContaining(SUPPORTED_EXTS.map((e) => `*.${e}`)));
     expect(binary.priority).toBe('default');
+  });
+
+  // Derived from SUPPORTED_EXTS rather than a second hand-written list, because
+  // the manifest is the one consumer of that list which no import can reach: the
+  // host code can be updated for a new format and typecheck clean while the
+  // selector here still omits it — the file then opens in VS Code's default
+  // (hex/text) editor and the extension appears simply not to support it.
+  it('declares no supported format the host does not know about, and omits none', () => {
+    const binary = editors.find((e) => e.viewType === BINARY_VIEW)!;
+    const declared = binary.selector.map((s) => s.filenamePattern.replace(/^\*\./, '')).sort();
+    expect(declared).toEqual([...SUPPORTED_EXTS].sort());
   });
 
   it('the editable table view owns *.sldd at priority option (reached via redirect / Reopen With)', () => {

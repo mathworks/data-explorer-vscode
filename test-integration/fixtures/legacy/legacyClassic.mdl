@@ -1,0 +1,27 @@
+# Classic MDL fixture, hand-authored
+Model {
+  Name                    "legacyClassic"
+  Version                 7.8
+  Creator                 "fixture"
+  LastModifiedDate        "Fri Sep 04 10:15:32 2026"
+  DataDictionary          "legacyParams.sldd"
+  GraphicalInterface {
+    NumModelReferences      1
+    ModelReference {
+      ModelRefBlockPath       "legacyClassic/Plant|plant"
+    }
+  }
+  System {
+    Name                    "legacyClassic"
+    Block {
+      BlockType               Gain
+      Name                    "ClassicGain"
+      Gain                    "Kp"
+    }
+    Block {
+      BlockType               Constant
+      Name                    "ClassicConst"
+      Value                   "Uo"
+    }
+  }
+}

@@ -7,6 +7,7 @@ import { readProjectStore } from './projectStore.js';
 import { encode, type HealthState } from './health.js';
 import { isZipBytes } from './slddFormat.js';
 import { toArrayBuffer } from '../common/bytes.js';
+import { SUPPORTED_GLOB } from '../common/fileTypes.js';
 
 // The Data Explorer tree is a cross-format relationship graph (model->model,
 // model->sldd/mat, sldd->sldd), rendered as an expansion tree. Structural
@@ -112,7 +113,7 @@ export class SectionsTreeProvider implements vscode.TreeDataProvider<SlddTreeNod
   }
 
   private async buildGraph(): Promise<RelGraph> {
-    const uris = await vscode.workspace.findFiles('**/*.{sldd,mat,slx,prj}');
+    const uris = await vscode.workspace.findFiles(SUPPORTED_GLOB);
     this.uris = new Map();
     const sources = await Promise.all(
       uris.map(async (uri): Promise<GraphSource> => {
