@@ -20,10 +20,15 @@ const vscode = acquireVsCodeApi();
 const table = document.querySelector('dex-tree-table') as any;
 const contextMenu = document.querySelector('dex-context-menu') as any;
 const errorDialog = document.querySelector('dex-error-dialog') as any;
-const variableEditor = document.querySelector('dex-variable-editor') as any;
-
 // The Variable Editor: a glyph in a matrix Value cell asks for a grid. The table
 // is the event source because the glyph lives inside its shadow tree.
+//
+// The element is CREATED here rather than declared in markup: the webview shell
+// is built by three separate host providers, so any tag we require in HTML is a
+// rule spread over three paths that a fourth provider can silently miss. This is
+// the one path.
+const variableEditor = document.createElement('dex-variable-editor') as any;
+document.body.appendChild(variableEditor);
 const matrixOpen = installMatrixOpen(table, variableEditor);
 
 // Menu state cached from host messages so the menu builds synchronously on

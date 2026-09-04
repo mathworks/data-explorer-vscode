@@ -410,6 +410,25 @@ describe('installMatrixOpen is the whole wiring, for both webviews', () => {
     source.remove();
   });
 
+  // Regression: the first cut of this wiring took the editor from a tag in
+  // src/webview/table.html — but that file is only vite's dev entry. The real
+  // webview HTML is assembled by three host providers, none of which had the tag,
+  // so the element was null, close() threw inside the setRows handler, and the
+  // table came up EMPTY for every file. The handle must be inert instead: a
+  // missing editor costs the glyph, never the rows.
+  it('is inert when there is no editor element, so setRows cannot throw', () => {
+    const source = document.createElement('div');
+    document.body.appendChild(source);
+    const handle = installMatrixOpen(source, null);
+    expect(() => handle.close()).not.toThrow();
+    expect(() => source.dispatchEvent(new CustomEvent('dex-matrix-open', {
+      detail: { matrix: payload(), anchorEl: makeAnchor() },
+      bubbles: true, composed: true,
+    }))).not.toThrow();
+    expect(() => handle.dispose()).not.toThrow();
+    source.remove();
+  });
+
   it('stops listening after dispose', async () => {
     const source = document.createElement('div');
     document.body.appendChild(source);

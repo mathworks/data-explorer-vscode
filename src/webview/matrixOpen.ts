@@ -20,7 +20,18 @@ export interface MatrixOpenHandle {
   dispose(): void;
 }
 
-export function installMatrixOpen(source: EventTarget, editor: MatrixEditorLike): MatrixOpenHandle {
+// `editor` is nullable on purpose. The webview shell is assembled by three
+// different host providers, so an editor element can legitimately be absent —
+// and the handle is called from the setRows/showProps message handlers, where an
+// exception would abort the handler and leave the table EMPTY. A missing editor
+// must cost the glyph, never the rows.
+export function installMatrixOpen(
+  source: EventTarget,
+  editor: MatrixEditorLike | null | undefined,
+): MatrixOpenHandle {
+  if (!editor) {
+    return { close: () => {}, dispose: () => {} };
+  }
   const onOpen = (e: Event) => {
     const detail = (e as CustomEvent<Partial<MatrixOpenDetail>>).detail;
     if (!detail?.matrix || !detail.anchorEl) {
