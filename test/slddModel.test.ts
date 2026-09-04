@@ -99,6 +99,27 @@ describe('getModelFromBytes', () => {
     expect(Array.isArray(node.children)).toBe(true);
     expect(node.children.length).toBe(0); // no variables
   });
+
+  it('throws on a -v7.3 .mat rather than opening it as an empty one', () => {
+    // The pair to the test above, and the reason it cannot pass vacuously: an empty
+    // MAT and a `-v7.3` MAT used to produce the SAME node with no children, because a
+    // v7.3 file is HDF5 carrying this same 128-byte header in its userblock and every
+    // framing check passed it. `-v7.3` is not exotic — MATLAB requires it above 2 GB,
+    // and `matfile()` writing a new file produces one — so the file a user could not
+    // read was reported to them as a file with nothing in it.
+    //
+    // Guarded upstream as of core v1.2.2, on the header's version prefix. The host's
+    // stake is only this: the exception reaches BinaryEditorProvider, which turns it
+    // into the "Failed to parse" banner.
+    const buf = new Uint8Array(512);
+    const header = 'MATLAB 7.3 MAT-file, Platform: MACA64, Created on: Fri Sep 04 2026';
+    for (let i = 0; i < header.length; i++) buf[i] = header.charCodeAt(i);
+    buf[124] = 0x00; buf[125] = 0x02; // version 2, as a v7.3 file records it
+    buf[126] = 0x49; buf[127] = 0x4d; // still a genuine little-endian 'IM'
+    const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    invalidate('test://v73.mat');
+    expect(() => getModelFromBytes('test://v73.mat', 'v73.mat', ab)).toThrow(/7\.3/);
+  });
 });
 
 describe('getProjectModel', () => {

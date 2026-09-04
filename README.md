@@ -63,7 +63,7 @@ For a textual `.sldd`, you can switch to the raw JSON via **View: Reopen Editor 
 **Viewing (read-only):**
 
 - **Simulink models** — `.slx` and `.mdl` (both the modern text format and the classic pre-R2012 format)
-- **MAT-files** — `.mat`
+- **MAT-files** — `.mat` (Level 5, i.e. `-v6`/`-v7`; see Known Limitations for `-v7.3`)
 - **MATLAB Projects** — `.prj`
 
 ## Requirements
@@ -75,6 +75,7 @@ No MATLAB&reg; or Simulink installation is required to view or edit files — Si
 ## Known Limitations
 
 - Editing is supported for **`.sldd`** data dictionaries. `.slx`, `.mdl`, `.mat`, and `.prj` are read-only.
+- `.mat` support covers the Level 5 format (`-v6`, `-v7`). **`-v7.3`** files, which are HDF5 and are what MATLAB requires for variables above 2 GB, are reported as unsupported rather than opened.
 - Large textual (JSON) `.sldd` files are limited by size. Above **50 MB**, the file opens as a **read-only** table (VS Code cannot mirror a document that large for editing). Above **512 MB**, it cannot be rendered as a table at all and opens in VS Code's built-in **text editor** instead.
 - Paste creates a new top-level entry in the target section; pasting as a child of a struct/bus is not yet supported.
 - Reference resolution matches files by name (basename), preferring the referrer's own project or folder. Two `.prj` files in the same directory are not supported.
