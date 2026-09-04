@@ -581,3 +581,74 @@ describe('section header rows', () => {
     table.remove();
   });
 });
+
+describe('a matrix Value cell carries the Variable Editor glyph', () => {
+  const MAT = { name: 'Mat', className: 'double', dims: [2, 2], cells: ['1', '2', '3', '4'] };
+
+  const glyph = (table: DexTreeTable, rowId: string) =>
+    cell(table, rowId, 'Value').querySelector('dex-matrix-open');
+
+  it('renders the glyph only on the row that owns a matrix', async () => {
+    const table = await mount([
+      makeRow('m', 'Mat', { Value: '[1 2; 3 4]', _matrix: MAT }),
+      makeRow('s', 'Scalar', { Value: '7' }),
+    ]);
+    expect(glyph(table, 'm')).not.toBeNull();
+    expect(glyph(table, 's')).toBeNull();
+    table.remove();
+  });
+
+  it('keeps the value literal beside the glyph, unchanged', async () => {
+    // The grid is an addition to the cell, not a replacement for it: the row must
+    // still read as the matrix it is when the editor is closed.
+    const table = await mount([makeRow('m', 'Mat', { Value: '[1 2; 3 4]', _matrix: MAT })]);
+    expect(text(table, 'm', 'Value')).toBe('[1 2; 3 4]');
+    table.remove();
+  });
+
+  it('hands the glyph the payload and the row id', async () => {
+    const table = await mount([makeRow('m', 'Mat', { Value: '[1 2; 3 4]', _matrix: MAT })]);
+    const g = glyph(table, 'm') as any;
+    expect(g.matrix).toBe(MAT);
+    expect(g.rowId).toBe('m');
+    table.remove();
+  });
+
+  it('adds no text, so sorting and filtering still see the literal only', async () => {
+    // _getCellText feeds sort and filter. An icon that contributed text would
+    // silently reorder the table.
+    const table = await mount([makeRow('m', 'Mat', { Value: '[1 2; 3 4]', _matrix: MAT })]);
+    expect((table as any)._getCellText(table.rows[0], 'Value')).toBe('[1 2; 3 4]');
+    table.remove();
+  });
+
+  it('renders on the object cell shape too, not just the plain string', async () => {
+    const table = await mount([
+      makeRow('m', 'Mat', { Value: { text: '[1 2; 3 4]', editable: false }, _matrix: MAT }),
+    ]);
+    expect(glyph(table, 'm')).not.toBeNull();
+    expect(text(table, 'm', 'Value')).toBe('[1 2; 3 4]');
+    table.remove();
+  });
+
+  it('renders beside a link value too, so the rule does not depend on the branch', async () => {
+    const table = await mount([
+      makeRow('m', 'Mat', { Value: { text: '[1 2; 3 4]', linkTarget: 'x' }, _matrix: MAT }),
+    ]);
+    expect(cell(table, 'm', 'Value').querySelector('a.value-link')).not.toBeNull();
+    expect(glyph(table, 'm')).not.toBeNull();
+    table.remove();
+  });
+
+  it('is gone while the cell is being edited', async () => {
+    // An inline editor replaces the cell contents entirely; a glyph floating over
+    // an <input> would open a grid of the pre-edit value.
+    const table = await mount([makeRow('m', 'Mat', { Value: { text: '[1 2; 3 4]', editable: true }, _matrix: MAT })]);
+    (table as any)._editingCell = { rowId: 'm', columnId: 'Value' };
+    table.requestUpdate();
+    await table.updateComplete;
+    expect(cell(table, 'm', 'Value').querySelector('input')).not.toBeNull();
+    expect(glyph(table, 'm')).toBeNull();
+    table.remove();
+  });
+});

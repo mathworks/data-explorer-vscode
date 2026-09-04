@@ -5,6 +5,8 @@ import { customElement, property, state, query } from 'lit/decorators.js';
 import { highContrastStyles } from './styles/high-contrast.styles.js';
 import { dragModeFromModifiers, type DragMode } from './dragMode.js';
 import './dex-icon.js';
+import './dex-matrix-open.js';
+import type { MatrixPayload } from './dex-matrix-grid.js';
 
 export interface TreeTableRow {
   ID: string;
@@ -14,6 +16,9 @@ export interface TreeTableRow {
     | { text: string; editable?: boolean; clipboardMode?: string; linkTarget?: string; editor?: string; options?: string[] }
     | string;
   _valueEditable?: boolean;
+  // Present only when this row's value is a griddable matrix (host: matrixPayload.ts).
+  // Its presence IS the decision — the cell renders the glyph and asks nothing else.
+  _matrix?: MatrixPayload;
   DataType: { text: string; clipboardMode?: string; linkTarget?: string } | string;
   Class?: { text: string; clipboardMode?: string } | string;
   Kind?: { text: string; clipboardMode?: string } | string;
@@ -2188,6 +2193,14 @@ export class DexTreeTable extends LitElement {
     return html`${before}<mark>${match}</mark>${after}`;
   }
 
+  // The Variable Editor affordance. Appended after the value text in every
+  // non-editing Value branch, so "this row has a matrix" renders identically
+  // whether the value arrived as a plain string, an object, or a link.
+  private _renderMatrixGlyph(row: TreeTableRow) {
+    if (!row._matrix) return nothing;
+    return html`<dex-matrix-open .matrix=${row._matrix} .rowId=${row.ID}></dex-matrix-open>`;
+  }
+
   private _renderCellValue(row: TreeTableRow, columnId: string): unknown {
     const isEditing = this._editingCell?.rowId === row.ID && this._editingCell?.columnId === columnId;
 
@@ -2259,12 +2272,13 @@ export class DexTreeTable extends LitElement {
 
       if (linkTarget) {
         return html`<a class="value-link" href="#" @click=${(e: Event) => this._onLinkClick(linkTarget, e)}
-          >${this._highlight(text)}</a
-        >`;
+            >${this._highlight(text)}</a
+          >${this._renderMatrixGlyph(row)}`;
       }
 
       const isObject = text.startsWith('<') && text.endsWith('>');
-      return html`<span class="${isObject ? 'value-object' : ''}">${this._highlight(text)}</span>`;
+      return html`<span class="${isObject ? 'value-object' : ''}">${this._highlight(text)}</span
+        >${this._renderMatrixGlyph(row)}`;
     }
 
     if (columnId === 'DataType') {
