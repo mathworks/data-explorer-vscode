@@ -13,6 +13,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { DexVariableEditor } from '../src/webview/components/dex-variable-editor.js';
 import type { MatrixPayload } from '../src/webview/components/dex-matrix-grid.js';
 import { DexMatrixGrid } from '../src/webview/components/dex-matrix-grid.js';
+import { DexMatrixOpen } from '../src/webview/components/dex-matrix-open.js';
 
 const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
@@ -246,5 +247,103 @@ describe('positioning is below-left of the anchor, clamped into the viewport', (
     window.dispatchEvent(new Event('scroll'));
     await el.updateComplete;
     expect(el.hasAttribute('open')).toBe(false);
+  });
+});
+
+describe('the glyph is an affordance, not an opener', () => {
+  let glyph: DexMatrixOpen | null = null;
+
+  afterEach(() => {
+    glyph?.remove();
+    glyph = null;
+  });
+
+  async function makeGlyph(over: Partial<MatrixPayload> = {}, rowId?: string): Promise<DexMatrixOpen> {
+    glyph = new DexMatrixOpen();
+    glyph.matrix = payload(over);
+    if (rowId !== undefined) {
+      glyph.rowId = rowId;
+    }
+    document.body.appendChild(glyph);
+    await glyph.updateComplete;
+    return glyph;
+  }
+
+  function events(el: DexMatrixOpen): any[] {
+    const seen: any[] = [];
+    el.addEventListener('dex-matrix-open', (e) => seen.push((e as CustomEvent).detail));
+    return seen;
+  }
+
+  it('renders nothing without a payload, so a non-matrix row costs no DOM', async () => {
+    glyph = new DexMatrixOpen();
+    document.body.appendChild(glyph);
+    await glyph.updateComplete;
+    expect(glyph.shadowRoot!.querySelector('a')).toBeNull();
+  });
+
+  it('renders the wsTable icon inside a focusable control', async () => {
+    const el = await makeGlyph();
+    const a = el.shadowRoot!.querySelector<HTMLAnchorElement>('a')!;
+    expect(a.tabIndex).toBe(0);
+    expect(a.getAttribute('aria-label')).toBe('Open A in the Variable Editor');
+    expect(el.shadowRoot!.querySelector('dex-icon')!.iconId).toBe('wsTable');
+  });
+
+  it('dispatches the payload, itself as the anchor, and the row id', async () => {
+    const el = await makeGlyph({ name: 'Mat' }, 'row-7');
+    const seen = events(el);
+    el.shadowRoot!.querySelector<HTMLAnchorElement>('a')!.click();
+    expect(seen.length).toBe(1);
+    expect(seen[0].matrix.name).toBe('Mat');
+    expect(seen[0].anchorEl).toBe(el);
+    expect(seen[0].rowId).toBe('row-7');
+  });
+
+  it('omits rowId when there is none — the PI has no rows', async () => {
+    const el = await makeGlyph();
+    const seen = events(el);
+    el.shadowRoot!.querySelector<HTMLAnchorElement>('a')!.click();
+    expect(seen[0].rowId).toBeUndefined();
+  });
+
+  it('bubbles and crosses the shadow boundary, so one listener per webview suffices', async () => {
+    const el = await makeGlyph();
+    const seen: any[] = [];
+    document.addEventListener('dex-matrix-open', (e) => seen.push((e as CustomEvent).detail), { once: true });
+    el.shadowRoot!.querySelector<HTMLAnchorElement>('a')!.click();
+    expect(seen.length).toBe(1);
+  });
+
+  it('swallows the click so the table does not also select or start an edit', async () => {
+    // The glyph sits inside a Value cell whose dblclick/Enter start editing and
+    // whose click selects the row. Both must stay unaware of this click.
+    const el = await makeGlyph();
+    let reachedParent = false;
+    document.body.addEventListener('click', () => { reachedParent = true; }, { once: true });
+    const ev = new MouseEvent('click', { bubbles: true, composed: true, cancelable: true });
+    el.shadowRoot!.querySelector<HTMLAnchorElement>('a')!.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(reachedParent).toBe(false);
+  });
+
+  it('opens on Enter and on Space, and ignores other keys', async () => {
+    const el = await makeGlyph();
+    const seen = events(el);
+    const a = el.shadowRoot!.querySelector<HTMLAnchorElement>('a')!;
+    for (const key of ['Enter', ' ']) {
+      a.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, composed: true, cancelable: true }));
+    }
+    expect(seen.length).toBe(2);
+    a.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, composed: true, cancelable: true }));
+    expect(seen.length).toBe(2);
+  });
+
+  it('forwards focus() to its inner control, so the shell can hand focus back', async () => {
+    // close() calls anchorEl.focus(). Without this override that focuses the
+    // host, which is not focusable, and focus would land on <body>.
+    const el = await makeGlyph();
+    el.focus();
+    expect(el.shadowRoot!.activeElement).toBe(el.shadowRoot!.querySelector('a'));
   });
 });
