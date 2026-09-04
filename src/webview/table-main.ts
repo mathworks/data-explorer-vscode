@@ -4,6 +4,8 @@ import './vscode-theme.css';
 import './components/dex-tree-table.js';
 import './components/dex-context-menu.js';
 import './components/dex-error-dialog.js';
+import './components/dex-variable-editor.js';
+import { installMatrixOpen } from './matrixOpen.js';
 import { nextExpandedIds } from './rowUpdates.js';
 import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from './menuItems.js';
 import { dropDecision, type DragMode, type DropTarget, type DragSource } from './dropDecision.js';
@@ -18,6 +20,11 @@ const vscode = acquireVsCodeApi();
 const table = document.querySelector('dex-tree-table') as any;
 const contextMenu = document.querySelector('dex-context-menu') as any;
 const errorDialog = document.querySelector('dex-error-dialog') as any;
+const variableEditor = document.querySelector('dex-variable-editor') as any;
+
+// The Variable Editor: a glyph in a matrix Value cell asks for a grid. The table
+// is the event source because the glyph lives inside its shadow tree.
+const matrixOpen = installMatrixOpen(table, variableEditor);
 
 // Menu state cached from host messages so the menu builds synchronously on
 // right-click (no round-trip): whether the doc is editable, and clipboard state.
@@ -176,6 +183,10 @@ window.addEventListener('message', (event: MessageEvent) => {
   if (msg.type === 'setRows') {
     hideLoading();
     clearError();
+    // Every row is about to be replaced, so an open grid describes a payload the
+    // user can no longer see the source of — and its anchor glyph may not survive
+    // the repaint. Close it rather than leave it floating over new data.
+    matrixOpen.close();
     // Persistent read-only notice (size-limited JSON .sldd). Undefined for the
     // editable table view and for expected-read-only binary .sldd, so it hides.
     setNotice(typeof msg.notice === 'string' ? msg.notice : undefined);

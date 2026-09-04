@@ -14,6 +14,7 @@ import { DexVariableEditor } from '../src/webview/components/dex-variable-editor
 import type { MatrixPayload } from '../src/webview/components/dex-matrix-grid.js';
 import { DexMatrixGrid } from '../src/webview/components/dex-matrix-grid.js';
 import { DexMatrixOpen } from '../src/webview/components/dex-matrix-open.js';
+import { installMatrixOpen } from '../src/webview/matrixOpen.js';
 
 const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
@@ -345,5 +346,84 @@ describe('the glyph is an affordance, not an opener', () => {
     const el = await makeGlyph();
     el.focus();
     expect(el.shadowRoot!.activeElement).toBe(el.shadowRoot!.querySelector('a'));
+  });
+});
+
+describe('installMatrixOpen is the whole wiring, for both webviews', () => {
+  it('opens the editor on the event, anchored on the glyph that fired it', async () => {
+    const source = document.createElement('div');
+    document.body.appendChild(source);
+    editor = new DexVariableEditor();
+    document.body.appendChild(editor);
+    await editor.updateComplete;
+    const handle = installMatrixOpen(source, editor);
+
+    const a = makeAnchor();
+    source.dispatchEvent(new CustomEvent('dex-matrix-open', {
+      detail: { matrix: payload({ name: 'Mat' }), anchorEl: a },
+      bubbles: true,
+      composed: true,
+    }));
+    await frame();
+    await editor.updateComplete;
+    expect(editor.hasAttribute('open')).toBe(true);
+    expect(editor.shadowRoot!.querySelector('.title')!.textContent!.trim()).toBe('Mat — 2x2 double');
+
+    handle.dispose();
+    source.remove();
+  });
+
+  it('exposes close(), which is what setRows/showProps call', async () => {
+    const source = document.createElement('div');
+    document.body.appendChild(source);
+    editor = new DexVariableEditor();
+    document.body.appendChild(editor);
+    await editor.updateComplete;
+    const handle = installMatrixOpen(source, editor);
+    source.dispatchEvent(new CustomEvent('dex-matrix-open', {
+      detail: { matrix: payload(), anchorEl: makeAnchor() },
+      bubbles: true, composed: true,
+    }));
+    await frame();
+    handle.close();
+    await editor.updateComplete;
+    expect(editor.hasAttribute('open')).toBe(false);
+    handle.dispose();
+    source.remove();
+  });
+
+  it('ignores an event with no payload rather than opening an empty editor', async () => {
+    const source = document.createElement('div');
+    document.body.appendChild(source);
+    editor = new DexVariableEditor();
+    document.body.appendChild(editor);
+    await editor.updateComplete;
+    const handle = installMatrixOpen(source, editor);
+    source.dispatchEvent(new CustomEvent('dex-matrix-open', {
+      detail: { anchorEl: makeAnchor() },
+      bubbles: true, composed: true,
+    }));
+    await frame();
+    await editor.updateComplete;
+    expect(editor.hasAttribute('open')).toBe(false);
+    handle.dispose();
+    source.remove();
+  });
+
+  it('stops listening after dispose', async () => {
+    const source = document.createElement('div');
+    document.body.appendChild(source);
+    editor = new DexVariableEditor();
+    document.body.appendChild(editor);
+    await editor.updateComplete;
+    installMatrixOpen(source, editor).dispose();
+    source.dispatchEvent(new CustomEvent('dex-matrix-open', {
+      detail: { matrix: payload(), anchorEl: makeAnchor() },
+      bubbles: true, composed: true,
+    }));
+    await frame();
+    await editor.updateComplete;
+    expect(editor.hasAttribute('open')).toBe(false);
+    source.remove();
   });
 });

@@ -94,4 +94,34 @@ describe('read-only cell-editor gate (capture-phase interception)', () => {
     shadowCell.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, composed: true }));
     expect(navigated).toBe(1);
   });
+
+  // The Variable Editor is a VIEW. table-main swallows dblclick and Enter on a
+  // read-only document to stop the inline editor opening; the glyph must survive
+  // that, because there is nothing to edit. The gate is keyed on the GESTURE, and
+  // the glyph's gesture is a single click on a control — not a dblclick — so the
+  // two never collide.
+  describe('the read-only gate does not reach the Variable Editor glyph', () => {
+    it('leaves the inline editor gated while a plain click stays available', () => {
+      expect(shouldOpenCellEditor(false)).toBe(false);
+      expect(shouldOpenCellEditor(true)).toBe(true);
+    });
+
+    it('read-only: a single click still crosses the host, so the glyph can fire', () => {
+      let clicked = 0;
+      shadowCell.addEventListener('click', () => clicked++);
+      installGuards(false);
+      shadowCell.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+      expect(clicked).toBe(1);
+    });
+
+    it('read-only: the glyph’s own dex-matrix-open event is not gated either', () => {
+      // It is dispatched from inside the glyph's shadow root, on neither of the
+      // two gated gestures, so nothing on the host swallows it.
+      let opened = 0;
+      host.addEventListener('dex-matrix-open', () => opened++);
+      installGuards(false);
+      shadowCell.dispatchEvent(new CustomEvent('dex-matrix-open', { bubbles: true, composed: true }));
+      expect(opened).toBe(1);
+    });
+  });
 });

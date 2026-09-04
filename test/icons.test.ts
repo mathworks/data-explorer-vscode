@@ -55,7 +55,15 @@ const DATA_NODE_ICONS = [
   'variant_wsParameters',    // Simulink.VariantVariable
 ];
 
-const ALL_REQUIRED = [...new Set([...TREE_KIND_ICONS, ...SLDD_ICONS, ...MODEL_ICONS, ...DATA_NODE_ICONS])];
+// Icons the webview components name directly, rather than through a row's
+// iconId. A missing asset here is a blank glyph, not a fallback.
+const WEBVIEW_GLYPH_ICONS = [
+  'wsTable',                 // dex-matrix-open: open the Variable Editor
+];
+
+const ALL_REQUIRED = [
+  ...new Set([...TREE_KIND_ICONS, ...SLDD_ICONS, ...MODEL_ICONS, ...DATA_NODE_ICONS, ...WEBVIEW_GLYPH_ICONS]),
+];
 
 describe('icon assets', () => {
   it.each(ALL_REQUIRED)('media/icons/%s.svg exists', (id) => {
