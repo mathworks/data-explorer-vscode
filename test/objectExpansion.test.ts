@@ -249,12 +249,12 @@ describe('issue#3 object expansion — binary .sldd', () => {
   });
 });
 
-// .mat is read-only and its MCOS binary encoding cannot reliably recover the value
-// of a MATLAB `string`-typed property (see docs), so a custom class object saved to
-// a .mat is expanded as fully as possible: every property NAME is surfaced, every
-// non-string value is correct, and an unrecoverable `string` value shows the honest
-// sentinel "<not available>" rather than corrupted text. Known Simulink classes
-// keep their schema-driven typed presentation and are untouched by this path.
+// .mat is read-only, and a custom class object saved to one is expanded as fully
+// as possible: every property NAME is surfaced and every value is decoded from the
+// MCOS binary encoding, including MATLAB `string`-typed properties, which core
+// learned to recover in v1.0.0 (before that they showed a "<not available>"
+// sentinel). Known Simulink classes keep their schema-driven typed presentation and
+// are untouched by this path.
 describe('issue#3 object expansion — .mat (custom class, best-effort)', () => {
   function matRows() {
     return buildMatRows(matNode('mcos/object_props.mat', 'object_props.mat'));
@@ -317,21 +317,37 @@ describe('issue#3 object expansion — .mat (custom class, best-effort)', () => 
     expect(elemVals).toEqual(["'suv'", "'electric'"]);
   });
 
-  it('shows "<not available>" for an unrecoverable MATLAB string property value', () => {
+  it('decodes a MATLAB string property out of the MCOS binary encoding', () => {
+    // This used to be the one property kind the .mat path could not recover, and
+    // it rendered a "<not available>" sentinel. Core v1.0.0 reads it, so the row
+    // now carries the real text — quoted, the way MATLAB spells a string scalar,
+    // and distinct from the single-quoted char form.
     const vId = idOf(rows, 'v', null)!;
     const name = rows.find((r) => r.parent === vId && (typeof r.Name === 'object' ? r.Name.label : r.Name) === 'Name');
-    expect(String(name.Value)).toContain('<not available>');
+    expect(String(name.Value)).toBe('"Model-X"');
+    expect(name.Class).toBe('string');
   });
 
-  it('renders the "<not available>" sentinel as a non-editable placeholder, not a quoted string', () => {
-    // It must follow the `<1x1 class_name>` presentation: bare angle-bracket text
-    // (which the table styles gray/italic and gives no editor), NOT the quoted
-    // char form `'<not available>'` that would look and behave like an editable
-    // string literal.
+  it('recovers string properties at every depth, not just on the top-level object', () => {
+    // The decoder runs per property bag, so a nested object (Engine.Label) and a
+    // second top-level object (Fleet.FleetName) exercise separate call sites. A fix
+    // that only reached the first object would leave the others on the sentinel.
+    const base = 'object_props.mat';
+    expect(String(rowById(rows, `${base}/v/Engine/Label`).Value)).toBe('"V8"');
+    expect(String(rowById(rows, `${base}/f/FleetName`).Value)).toBe('"east"');
+    expect(String(rowById(rows, `${base}/f/Lead/Location`).Value)).toBe('"Boston"');
+  });
+
+  it('still withholds the editor from an angle-bracket summary value', () => {
+    // The `<1x1 class_name>` presentation is what marks a value the user cannot
+    // type: the table styles it gray/italic and offers no editor. Recovering the
+    // strings must not have made every value look typeable.
     const vId = idOf(rows, 'v', null)!;
-    const name = rows.find((r) => r.parent === vId && (typeof r.Name === 'object' ? r.Name.label : r.Name) === 'Name');
-    expect(String(name.Value)).toBe('<not available>');
-    expect(name._valueEditable).toBe(false);
+    const specs = rows.find(
+      (r) => r.parent === vId && (typeof r.Name === 'object' ? r.Name.label : r.Name) === 'Specs',
+    );
+    expect(String(specs.Value)).toBe('<1x1 struct>');
+    expect(specs._valueEditable).toBe(false);
   });
 
   it('surfaces a property left at its class default (Fleet.Notes) that lives outside the instance block', () => {
