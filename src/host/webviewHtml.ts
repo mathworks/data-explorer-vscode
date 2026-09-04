@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 import { getNonce } from './nonce.js';
 import { renderShell } from './webviewShell.js';
+import { SHARED_STYLESHEET } from '../common/webviewAssets.js';
 
 // Shared loading overlay for the three table views (table.js). Starts hidden:
 // the webview only reveals it if the first payload hasn't arrived after a short
@@ -31,7 +32,9 @@ export function renderWebviewHtml(
   return renderShell(
     {
       scriptUri: webview.asWebviewUri(vscode.Uri.joinPath(distRoot, options.scriptFile)).toString(),
-      styleUri: webview.asWebviewUri(vscode.Uri.joinPath(distRoot, 'assets', 'property.css')).toString(),
+      styleUri: webview
+        .asWebviewUri(vscode.Uri.joinPath(distRoot, 'assets', SHARED_STYLESHEET))
+        .toString(),
       baseUri: webview.asWebviewUri(distRoot).toString(),
       cspSource: webview.cspSource,
       nonce: getNonce(),

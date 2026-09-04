@@ -1,5 +1,29 @@
 import { defineConfig } from 'vite';
 import { resolve } from 'path';
+import { SHARED_STYLESHEET } from './src/common/webviewAssets.js';
+
+// Every webview links exactly one stylesheet, under a name the host hardcodes.
+// Left to vite, that name follows whichever chunk the CSS is hoisted into, so it
+// changes whenever the module graph does — see webviewAssets.ts. Pin it, and fail
+// the build loudly if a second, different CSS source ever appears, because with a
+// fixed name the second one would silently overwrite the first.
+let cssSource: string | undefined;
+
+function assetName(info: { names?: string[]; name?: string }): string {
+  const name = info.names?.[0] ?? info.name ?? '';
+  if (!name.endsWith('.css')) {
+    return 'assets/[name][extname]';
+  }
+  if (cssSource !== undefined && cssSource !== name) {
+    throw new Error(
+      `The webview build now emits two stylesheets (${cssSource}, ${name}), but the host links ` +
+        `exactly one (${SHARED_STYLESHEET}). Give them distinct names and teach webviewHtml.ts ` +
+        `about the second, rather than letting one overwrite the other.`,
+    );
+  }
+  cssSource = name;
+  return `assets/${SHARED_STYLESHEET}`;
+}
 
 export default defineConfig({
   base: './',
@@ -15,7 +39,7 @@ export default defineConfig({
       },
       output: {
         entryFileNames: '[name].js',
-        assetFileNames: 'assets/[name][extname]',
+        assetFileNames: assetName,
       },
     },
   },
