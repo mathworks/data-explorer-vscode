@@ -661,9 +661,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       title: 'Data Explorer',
       body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
     <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>
-${LOADING_OVERLAY_HTML}
-    <dex-context-menu></dex-context-menu>
-    <dex-error-dialog></dex-error-dialog>`,
+${LOADING_OVERLAY_HTML}`,
     });
   }
 }

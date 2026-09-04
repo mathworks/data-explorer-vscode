@@ -284,8 +284,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
     <div id="dex-notice" role="status" style="display:none;position:absolute;top:0;left:0;right:0;z-index:2;box-sizing:border-box;padding:6px 10px;font-family:var(--vscode-font-family,sans-serif);font-size:12px;color:var(--vscode-inputValidation-infoForeground,var(--vscode-foreground));background:var(--vscode-inputValidation-infoBackground,rgba(100,148,237,0.12));border-bottom:1px solid var(--vscode-inputValidation-infoBorder,#4084d0);"></div>
     <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>
-${LOADING_OVERLAY_HTML}
-    <dex-context-menu></dex-context-menu>`,
+${LOADING_OVERLAY_HTML}`,
     });
   }
 }

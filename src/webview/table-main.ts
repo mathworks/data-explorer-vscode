@@ -17,18 +17,31 @@ import type { HostToTableMessage } from '../common/protocol.js';
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
 const vscode = acquireVsCodeApi();
 
+// Markup owns the CONTENT element, because only the shell knows where the table
+// sits on screen. This module owns every OVERLAY, because none of them has a
+// place in the shell's layout — each is a self-positioning, initially hidden
+// popover appended to <body>.
+//
+// This split is not a style preference. The webview HTML is assembled as a string
+// by three separate host providers (SlddTextEditorProvider,
+// BinarySlddEditorProvider, BinaryEditorProvider), so any tag required in markup
+// is one rule spread over three paths — and a provider that misses it produces a
+// null here, i.e. a crash or a silently dead feature in that view only.
+// BinaryEditorProvider had exactly that: no <dex-error-dialog>, so save errors
+// never surfaced there. Creating them here makes the shells interchangeable.
 const table = document.querySelector('dex-tree-table') as any;
-const contextMenu = document.querySelector('dex-context-menu') as any;
-const errorDialog = document.querySelector('dex-error-dialog') as any;
+
+function overlay(tag: string): any {
+  const el = document.createElement(tag);
+  document.body.appendChild(el);
+  return el as any;
+}
+
+const contextMenu = overlay('dex-context-menu');
+const errorDialog = overlay('dex-error-dialog');
 // The Variable Editor: a glyph in a matrix Value cell asks for a grid. The table
 // is the event source because the glyph lives inside its shadow tree.
-//
-// The element is CREATED here rather than declared in markup: the webview shell
-// is built by three separate host providers, so any tag we require in HTML is a
-// rule spread over three paths that a fourth provider can silently miss. This is
-// the one path.
-const variableEditor = document.createElement('dex-variable-editor') as any;
-document.body.appendChild(variableEditor);
+const variableEditor = overlay('dex-variable-editor');
 const matrixOpen = installMatrixOpen(table, variableEditor);
 
 // Menu state cached from host messages so the menu builds synchronously on
@@ -246,7 +259,7 @@ window.addEventListener('message', (event: MessageEvent) => {
     // Invalid cell edit: modal scoped to this webview (not the whole window).
     // The host has already re-posted setRows, so the cell reverted to its
     // previous value before this dialog appears.
-    errorDialog?.show({
+    errorDialog.show({
       title: 'Invalid Value',
       reason: msg.reason,
       invalidValue: msg.invalidValue,
