@@ -195,7 +195,7 @@
   },
   "dependencies": {
     "@lit/context": "^1.1.6",
-    "data-explorer-core": "github:mathworks/data-explorer-core#v1.1.0",
+    "data-explorer-core": "github:mathworks/data-explorer-core#v1.2.1",
     "fast-xml-parser": "^5.8.0",
     "fflate": "^0.8.3",
     "highlight.js": "^11.11.1",
