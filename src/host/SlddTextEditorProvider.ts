@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
-import { renderWebviewHtml, LOADING_OVERLAY_HTML } from './webviewHtml.js';
+import { renderWebviewHtml, LOADING_OVERLAY_HTML, BANNERS_HTML } from './webviewHtml.js';
 import { getModel, invalidate, findNode } from './SlddModel.js';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
 import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
@@ -33,6 +33,7 @@ import {
 } from './structuralEdit.js';
 import { copyEntryToClipboard } from './clipboardAction.js';
 import { annotateDataRows } from './usageGraph.js';
+import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { parsesAsJson } from './slddFormat.js';
 import { entrySelectorOf } from './entrySelector.js';
@@ -127,6 +128,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
               editable: true,
               // Backed by a TextDocument, so "Location in Text" has a target.
               hasTextView: true,
+              // Recomputed on every repaint, which for this view means on every
+              // keystroke in the plain-text editor: a dictionary the user is midway
+              // through fixing should stop warning the moment it reads whole.
+              warnings: warningBanner(sourceWarnings(node)),
             });
             // Ship this document's section drop-rules so the webview can predict
             // a drop (dropDecision) live on dragover without a host round-trip.
@@ -660,6 +665,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       scriptFile: 'table.js',
       title: 'Data Explorer',
       body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
+${BANNERS_HTML}
     <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>
 ${LOADING_OVERLAY_HTML}`,
     });

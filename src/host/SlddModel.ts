@@ -1,16 +1,41 @@
 // Copyright 2026 The MathWorks, Inc.
-import { DataModel } from 'data-explorer-core';
+import { DataModel, type ParseWarning } from 'data-explorer-core';
 import { readSlddContent } from './slddContent.js';
+import { refuseIfUnreadable, sourceWarnings } from './parseWarnings.js';
 import { isModelPath } from '../common/fileTypes.js';
 
 const cache = new Map<string, any>(); // uriString -> SlddNode
+
+// Every source this module registers passes through here, which is the point: the
+// "a source the reader could not read is not passed on as an empty one" rule has to
+// hold for a model and a project exactly as it does for a dictionary, and the four
+// adders above reach it by four different routes. `.sldd` is refused twice over —
+// once inside readSlddContent, on the parser's own sink, and once here on whatever
+// the node layer added — which costs a find over a list that is empty in the normal
+// case and removes the chance of a format being wired to only one of the two.
+//
+// A refused source is DE-REGISTERED first. Core attaches the warnings to a node it
+// has already put in the session, so throwing while it is still there would leave
+// the session holding a tree the provider then reports as failed-to-parse: the
+// Property Inspector would resolve selections into it, and re-opening the file would
+// hit `deindexSource` on a tree nothing else references.
+function registered(srcId: string, node: any): any {
+  const warnings = sourceWarnings(node);
+  try {
+    refuseIfUnreadable(warnings);
+  } catch (err) {
+    DataModel.removeDataSource(srcId);
+    throw err;
+  }
+  return node;
+}
 
 export function getModel(uriString: string, name: string, text: string): any {
   const cached = cache.get(uriString);
   if (cached) return cached;
   const content = JSON.parse(text);
   // Use a per-URI srcId so multiple open .sldd don't collide in DataModel.
-  const node = DataModel.addDataSource(uriString, content, { path: name });
+  const node = registered(uriString, DataModel.addDataSource(uriString, content, { path: name }));
   cache.set(uriString, node);
   return node;
 }
@@ -30,9 +55,16 @@ export function getModelFromBytes(uriString: string, name: string, bytes: ArrayB
   } else if (name.endsWith('.mat')) {
     node = DataModel.addMatSource(uriString, bytes, { path: name });
   } else {
-    // .sldd — compressed (zip) vs JSON-as-bytes; readSlddContent dispatches.
-    node = DataModel.addDataSource(uriString, readSlddContent(bytes), { path: name });
+    // .sldd — compressed (zip) vs JSON-as-bytes; readSlddContent dispatches. The
+    // sink is threaded through both halves of the read so the dictionary's warnings
+    // arrive as ONE list on the node: the zip parser fills it, then SlddNode.parse
+    // appends to the same array. Passing nothing here would silently drop every
+    // binary-part warning, since the node layer would start a fresh list.
+    const warnings: ParseWarning[] = [];
+    const content = readSlddContent(bytes, warnings);
+    node = DataModel.addDataSource(uriString, content, { path: name }, warnings);
   }
+  node = registered(uriString, node);
   cache.set(uriString, node);
   return node;
 }
@@ -42,7 +74,7 @@ export function getModelFromBytes(uriString: string, name: string, bytes: ArrayB
 export function getProjectModel(uriString: string, name: string, files: Record<string, string>): any {
   const cached = cache.get(uriString);
   if (cached) return cached;
-  const node = DataModel.addProjectSource(uriString, files, { path: name });
+  const node = registered(uriString, DataModel.addProjectSource(uriString, files, { path: name }));
   cache.set(uriString, node);
   return node;
 }

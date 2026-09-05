@@ -19,6 +19,7 @@
 import type { SectionRule } from '../host/sectionRules.js';
 import type { DragDescriptor } from '../host/dragState.js';
 import type { ClipboardMode } from '../host/clipboard.js';
+import type { WarningBanner } from '../host/parseWarnings.js';
 
 // --- Host -> Webview (table view: table-main.ts) ------------------------------
 
@@ -32,6 +33,15 @@ export interface SetRowsMessage {
   editable: boolean;
   /** Persistent read-only banner text (e.g. size-limited JSON .sldd). */
   notice?: string;
+  /**
+   * What the parse could not read, when it could not read something — absent for a
+   * clean read, so a view that never sets it shows no banner.
+   *
+   * Separate from `notice` because they answer different questions: `notice` explains
+   * the MODE this view is in (read-only, and why), while this says the DATA is short.
+   * A file can be both, and folding them into one string would force a choice.
+   */
+  warnings?: WarningBanner;
   /**
    * Whether this document is backed by a plain-text view the "Location in Text"
    * action can reveal a row in. True for JSON .sldd (a TextDocument); false/absent

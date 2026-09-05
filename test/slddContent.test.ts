@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync, zipSync } from 'fflate';
+import type { ParseWarning } from 'data-explorer-core';
 import { readSlddContent, readSlddParts } from '../src/host/slddContent.js';
 
 function bytes(relpath: string): ArrayBuffer {
@@ -11,6 +12,21 @@ function bytes(relpath: string): ArrayBuffer {
 }
 function encode(text: string): ArrayBuffer {
   return new TextEncoder().encode(text).buffer as ArrayBuffer;
+}
+
+// The rt_bin fixture with a DD.DICTIONARYREFERENCE spliced in that names no
+// Subdictionary: the file says it inherits entries from a dictionary it cannot name,
+// so those entries are missing from the tree and only a warning says so.
+function danglingReference(): ArrayBuffer {
+  const zip = unzipSync(new Uint8Array(bytes('./fixtures/rt_bin.sldd')));
+  const entries: Record<string, Uint8Array> = {};
+  for (const [k, v] of Object.entries(zip)) entries[k] = v;
+  const xml = new TextDecoder().decode(zip['data/chunk0.xml']);
+  entries['data/chunk0.xml'] = new TextEncoder().encode(
+    xml.replace('</DataSource>', '    <Object Class="DD.DICTIONARYREFERENCE"/>\n</DataSource>'),
+  );
+  const out = zipSync(entries, { level: 6 });
+  return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer;
 }
 
 // The one shape both formats deserialize to; every downstream consumer (the
@@ -77,6 +93,27 @@ describe('readSlddContent', () => {
     expect(() => readSlddContent(ab)).toThrow();
   });
 
+  it('reports a part-level loss into the caller’s sink and still returns the content', () => {
+    // The sink is what makes a recoverable loss visible. Both callers pass the SAME
+    // array on to DataModel.addDataSource, where SlddNode.parse appends its own
+    // findings — so this array is the whole file's report, and a caller that let it
+    // default (or passed a fresh one at the second step) would silently drop
+    // everything the zip reader found. The file opens either way, so nothing else
+    // would show it.
+    const warnings: ParseWarning[] = [];
+    const content = readSlddContent(danglingReference(), warnings);
+    expect(warnings.map((w) => w.code)).toEqual(['part-unreadable']);
+    // Not refused: the dictionary's own entries all read, and refusing the file for
+    // one lost inheritance would lose them too.
+    expect(entryNames(content).length).toBeGreaterThan(0);
+  });
+
+  it('leaves a clean read’s sink empty', () => {
+    const warnings: ParseWarning[] = [];
+    readSlddContent(bytes('./fixtures/rt_bin.sldd'), warnings);
+    expect(warnings).toEqual([]);
+  });
+
   it('accepts JSON that is valid but not dictionary-shaped', () => {
     // Shape validation belongs to the consumers (they read through optional
     // chaining and tolerate a missing __MW_TEXT_PARTS__); this function only
@@ -106,6 +143,20 @@ describe('readSlddParts', () => {
   it('throws for a chunk that is not markup, rather than answering an empty dictionary', () => {
     const { meta } = parts('./fixtures/rt_bin.sldd');
     expect(() => readSlddParts('not markup', meta)).toThrow();
+  });
+
+  it('reports a part-level loss into the caller’s sink here too', () => {
+    // The writable binary editor rebuilds its model on every paint and mid-transform,
+    // all through this one function, so the sink has to work on this path as well: a
+    // dictionary that warns on open and stops warning after an unrelated edit would
+    // be reporting on the edit rather than on the file.
+    const { meta } = parts('./fixtures/rt_bin.sldd');
+    const xml = new TextDecoder().decode(
+      unzipSync(new Uint8Array(danglingReference()))['data/chunk0.xml'],
+    );
+    const warnings: ParseWarning[] = [];
+    expect(entryNames(readSlddParts(xml, meta, warnings)).length).toBeGreaterThan(0);
+    expect(warnings.map((w) => w.code)).toEqual(['part-unreadable']);
   });
 
   it('throws for well-formed XML whose root is not <DataSource>', () => {

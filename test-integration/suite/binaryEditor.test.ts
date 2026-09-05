@@ -81,6 +81,34 @@ suite('BinaryEditorProvider', () => {
     }
   });
 
+  test('the rendered shell declares the banner strip the webview paints into', async () => {
+    // #dex-notice and #dex-warning are LAYOUT, not overlays: the table's top is
+    // offset by their measured height, so table-main.ts cannot append them to <body>
+    // the way it does the popovers, and they have to be in each shell's markup. The
+    // vitest suite scans the sources for agreement between the four shells; this
+    // checks the string a REAL webview was handed, which is what the renderer sees.
+    // An absent element makes renderBanners a no-op — a file that opened short then
+    // says so nowhere.
+    const uri = wsUri('model.slx');
+    const token = new vscode.CancellationTokenSource().token;
+    const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token);
+    const panel = makePanel();
+    try {
+      await provider.resolveCustomEditor(doc, panel, token);
+      const html = panel.webview.html;
+      for (const id of ['dex-banners', 'dex-notice', 'dex-warning', 'dex-warning-headline', 'dex-warning-details']) {
+        assert.ok(html.includes(`id="${id}"`), `the shell declares #${id}`);
+      }
+      // Hidden until a payload carries one, so a clean file keeps the whole panel.
+      assert.ok(
+        /id="dex-notice"[^>]*display:none/.test(html) && /id="dex-warning"[^>]*display:none/.test(html),
+        'both banners start hidden',
+      );
+    } finally {
+      panel.dispose();
+    }
+  });
+
   test('resolving a binary (zip) .sldd redirects to the writable binary-sldd view and disposes the binary panel', async () => {
     const uri = wsUri('binary.sldd');
     const token = new vscode.CancellationTokenSource().token;

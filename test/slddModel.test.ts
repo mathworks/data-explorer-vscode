@@ -2,11 +2,34 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { unzipSync, zipSync } from 'fflate';
+import { DataModel } from 'data-explorer-core';
 import { getModelFromBytes, getModel, getProjectModel, invalidate, findNode } from '../src/host/SlddModel.js';
+import { sourceWarnings, warningBanner } from '../src/host/parseWarnings.js';
 
 function bytes(name: string): ArrayBuffer {
   const b = readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
   return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+}
+
+function encodeJson(value: unknown): ArrayBuffer {
+  const b = new TextEncoder().encode(JSON.stringify(value));
+  return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
+}
+
+// The rt_bin.sldd fixture with one damaged object spliced into its chunk: a
+// DD.DICTIONARYREFERENCE whose Subdictionary property is gone, which is the file
+// saying it inherits entries from a dictionary it can no longer name.
+function withDanglingReference(): ArrayBuffer {
+  const zip = unzipSync(new Uint8Array(bytes('rt_bin.sldd')));
+  const entries: Record<string, Uint8Array> = {};
+  for (const [k, v] of Object.entries(zip)) entries[k] = v;
+  const xml = new TextDecoder().decode(zip['data/chunk0.xml']);
+  entries['data/chunk0.xml'] = new TextEncoder().encode(
+    xml.replace('</DataSource>', '    <Object Class="DD.DICTIONARYREFERENCE"/>\n</DataSource>'),
+  );
+  const rezipped = zipSync(entries, { level: 6 });
+  return rezipped.buffer.slice(rezipped.byteOffset, rezipped.byteOffset + rezipped.byteLength) as ArrayBuffer;
 }
 
 // The relpath-keyed text map projectStore.readProjectStore builds from a .prj's
@@ -219,5 +242,108 @@ describe('re-reading a uri leaves no node from the discarded tree resolvable', (
     expect(resolved).not.toBe(kept);
     expect(after.flatten()).toContain(resolved);
     expect(before.flatten()).not.toContain(resolved);
+  });
+});
+
+// Core's readers no longer throw on a source they cannot read: they recover, answer
+// an EMPTY result, and report `source-unreadable` — right where they live, so a bad
+// file in a workspace scan does not take the scan down. Every registration in this
+// host therefore passes through one gate that turns that back into a failure, and
+// these are the two halves of that gate.
+//
+// It is one gate for every format on purpose. The rule shipped for `.sldd` alone at
+// first, which is the bug class this repo keeps producing: `.mdl` and `.prj` recover
+// the same way, so a model that read as nothing opened as a model with five empty
+// sections and reported success.
+describe('a source the reader could not read is refused, not registered', () => {
+  // A modern `.mdl` is an OPC package in TEXT framing. Truncated after the package
+  // marker, all that is left is the legacy `Model { Version }` stub every modern
+  // `.mdl` opens with for the benefit of old tools — which parses fine, which is why
+  // this file used to open as a valid, empty model.
+  function truncatedMdl(): ArrayBuffer {
+    const b = new TextEncoder().encode('__MWOPC_PACKAGE_BEGIN__\n\nModel {\n  Version 12.0\n}\n');
+    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
+  }
+
+  it('throws for a .mdl whose package holds no readable part', () => {
+    invalidate('test://trunc.mdl');
+    expect(() => getModelFromBytes('test://trunc.mdl', 'trunc.mdl', truncatedMdl())).toThrow(
+      /OPC text package/,
+    );
+  });
+
+  it('leaves nothing registered for the refused source', () => {
+    // Order matters, and this is the half that is easy to miss: core attaches the
+    // warnings to a node it has ALREADY indexed, so the gate has to de-register
+    // before it throws. Otherwise the session keeps a five-empty-section tree for a
+    // file the provider just told the user it could not parse — and findNode, the
+    // Property Inspector, and the cross-file usage scan all read that registry.
+    const uri = 'test://leftover.mdl';
+    invalidate(uri);
+    expect(() => getModelFromBytes(uri, 'leftover.mdl', truncatedMdl())).toThrow();
+    expect(DataModel.hasDataSource(uri)).toBe(false);
+    expect(findNode(uri, 'anything')).toBeNull();
+  });
+
+  it('still registers a source that only lost a part', () => {
+    // The line the gate draws: `part-unreadable` is one piece of a source whose other
+    // pieces are all there, so refusing the file for it would lose more than it
+    // reports. The .slx fixture is whole, so this also proves the gate is not simply
+    // refusing everything.
+    const uri = 'test://whole.slx';
+    invalidate(uri);
+    getModelFromBytes(uri, 'whole.slx', bytes('model_with_refs.slx'));
+    expect(DataModel.hasDataSource(uri)).toBe(true);
+  });
+});
+
+// What a registered-but-short source hands the providers. The banner is built from
+// node.warnings in all three table views, so this is the payload behind it.
+describe('a source that opened short carries its warnings to the view', () => {
+  it('warns for a .prj whose store holds no readable entry', () => {
+    // `source-empty` is NOT refused — nothing was found to read, as opposed to
+    // something found and refused — so this opens, and core's own sentence about the
+    // whole file becomes the banner's headline.
+    const uri = 'test://empty.prj';
+    invalidate(uri);
+    const node: any = getProjectModel(uri, 'empty.prj', {});
+    expect(sourceWarnings(node).map((w) => w.code)).toEqual(['source-empty']);
+    expect(warningBanner(sourceWarnings(node))!.headline).toMatch(/reads as empty/);
+  });
+
+  it('warns for a JSON .sldd with no dictionary content part', () => {
+    // Valid JSON, and not a dictionary. The four sections come from the constructor,
+    // so this opened as an ordinary empty dictionary — indistinguishable from one the
+    // user had just created. The warning is the whole difference.
+    const uri = 'test://nocontent.sldd';
+    invalidate(uri);
+    const node: any = getModelFromBytes(uri, 'nocontent.sldd', encodeJson({ unexpected: true }));
+    expect(sourceWarnings(node).map((w) => w.code)).toEqual(['source-empty']);
+  });
+
+  it('reports both halves of a binary .sldd read in ONE list', () => {
+    // The zip reader fills the warnings array, then SlddNode.parse APPENDS to the
+    // same one, so the sink has to be threaded through both halves — a fresh array at
+    // the second step silently drops everything the first found, and the file still
+    // opens, so nothing else would show it. Here the zip half is the one reporting:
+    // a DD.DICTIONARYREFERENCE with no readable Subdictionary means every entry
+    // inherited from that dictionary is missing from the tree.
+    const uri = 'test://dangling.sldd';
+    invalidate(uri);
+    const node: any = getModelFromBytes(uri, 'dangling.sldd', withDanglingReference());
+    expect(sourceWarnings(node).map((w) => w.code)).toEqual(['part-unreadable']);
+    // Registered, not refused — the dictionary's own entries all read.
+    expect(node.children.some((c: any) => c.children.length > 0)).toBe(true);
+  });
+
+  it('says nothing at all for a file that read whole', () => {
+    // The other side of the contract, and the one that makes the banner mean
+    // something: `warnings` is ABSENT on a clean read, so a clean file shows no
+    // banner rather than an empty one.
+    const uri = 'test://clean.sldd';
+    invalidate(uri);
+    const node: any = getModelFromBytes(uri, 'clean.sldd', bytes('rt_bin.sldd'));
+    expect(node.warnings).toBeUndefined();
+    expect(warningBanner(sourceWarnings(node))).toBeUndefined();
   });
 });

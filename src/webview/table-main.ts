@@ -6,6 +6,7 @@ import './components/dex-context-menu.js';
 import './components/dex-error-dialog.js';
 import './components/dex-variable-editor.js';
 import { installMatrixOpen } from './matrixOpen.js';
+import { renderBanners } from './banners.js';
 import { nextExpandedIds } from './rowUpdates.js';
 import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from './menuItems.js';
 import { dropDecision, type DragMode, type DropTarget, type DragSource } from './dropDecision.js';
@@ -172,30 +173,6 @@ function clearError(): void {
   if (el) { el.textContent = ''; el.style.display = 'none'; }
 }
 
-// Persistent, informational read-only banner (e.g. a JSON .sldd too large to
-// edit). Distinct from the transient red #dex-error. The table fills the panel
-// (position:absolute;inset:0), so when the banner is shown we offset the table's
-// top by the banner's measured height — measured, not hardcoded, so it stays
-// correct when the message wraps at narrow widths. Only the read-only binary
-// view renders #dex-notice; in the editable table view it's absent and this
-// no-ops.
-function setNotice(message: string | undefined): void {
-  const el = document.getElementById('dex-notice');
-  if (!el) return;
-  if (message) {
-    el.textContent = message;
-    el.style.display = 'block';
-    // Offset after layout so offsetHeight reflects the (possibly wrapped) banner.
-    requestAnimationFrame(() => {
-      table.style.top = el.offsetHeight + 'px';
-    });
-  } else {
-    el.textContent = '';
-    el.style.display = 'none';
-    table.style.top = '';
-  }
-}
-
 window.addEventListener('message', (event: MessageEvent) => {
   const msg = event.data as HostToTableMessage;
   if (msg.type === 'setRows') {
@@ -205,9 +182,14 @@ window.addEventListener('message', (event: MessageEvent) => {
     // user can no longer see the source of — and its anchor glyph may not survive
     // the repaint. Close it rather than leave it floating over new data.
     matrixOpen.close();
-    // Persistent read-only notice (size-limited JSON .sldd). Undefined for the
-    // editable table view and for expected-read-only binary .sldd, so it hides.
-    setNotice(typeof msg.notice === 'string' ? msg.notice : undefined);
+    // The banner strip: the persistent read-only notice (size-limited JSON .sldd)
+    // and what the parse could not read. Passed together because they stack in one
+    // container whose total height the table is offset by; either can be absent,
+    // and a payload carrying neither clears the strip.
+    renderBanners(table, {
+      notice: typeof msg.notice === 'string' ? msg.notice : undefined,
+      warnings: msg.warnings,
+    });
     const rows = msg.rows ?? [];
     editable = !!msg.editable;
     hasTextView = !!msg.hasTextView;

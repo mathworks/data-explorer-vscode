@@ -18,14 +18,15 @@
 // cached model of the same file.
 import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
-import { renderWebviewHtml, LOADING_OVERLAY_HTML } from './webviewHtml.js';
+import { renderWebviewHtml, LOADING_OVERLAY_HTML, BANNERS_HTML } from './webviewHtml.js';
 import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { sectionRules } from './sectionRules.js';
-import { serializeEntryToXml, DataModel } from 'data-explorer-core';
+import { serializeEntryToXml, DataModel, type ParseWarning } from 'data-explorer-core';
 // Never parseBinarySlddParts directly: readSlddParts is the same read plus the rule
 // that a dictionary this host could not read is not passed on as an empty one, which
 // the reader itself no longer enforces (it recovers and warns instead).
 import { readSlddParts } from './slddContent.js';
+import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { findOwningEntry, resolveSectionForPaste, buildDragSnapshot } from './structuralEdit.js';
 import { copyEntryToClipboard } from './clipboardAction.js';
 import { captureBaseline, computeModified, clearBaseline } from './slddBaseline.js';
@@ -154,12 +155,21 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // this flag (not a one-shot in openCustomDocument) guards the first capture.
     let initialized = false;
 
-    // Rebuild the model from the live chunkXml (+ pass-through parts).
-    const buildModel = () => {
+    // Register `xml` as this document's source and answer the tree. Every rebuild in
+    // this provider goes through here — paint, the two mid-transform rebuilds — so
+    // that a source registered halfway through a cut/paste is the same shape as the
+    // one paint builds, warnings included. The sink is threaded rather than left to
+    // default because the two halves of the read report separately: the zip parser
+    // fills this array, then SlddNode.parse appends to the same one, and a fresh list
+    // at the second step would drop everything the first found.
+    const registerModel = (xml: string) => {
       DataModel.removeDataSource(document.srcId);
-      const content = readSlddParts(document.chunkXml, document.zipMeta);
-      return DataModel.addDataSource(document.srcId, content, { path: name });
+      const warnings: ParseWarning[] = [];
+      const content = readSlddParts(xml, document.zipMeta, warnings);
+      return DataModel.addDataSource(document.srcId, content, { path: name }, warnings);
     };
+    // Rebuild the model from the live chunkXml (+ pass-through parts).
+    const buildModel = () => registerModel(document.chunkXml);
     const findNode = (rowId: string): any => {
       const found = (DataModel as any).findNodeById?.(rowId);
       return found ?? null;
@@ -186,6 +196,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           columnLabels: COLUMN_LABELS,
           columnGroups: COLUMN_GROUPS,
           editable: true,
+          // What the read of this dictionary could not read. Rebuilt with the model on
+          // every repaint rather than captured on open, because an edit rewrites
+          // chunkXml and the answer is about the chunk as it stands — a warning that
+          // outlived the part it was about would be worse than none.
+          warnings: warningBanner(sourceWarnings(node)),
         });
         webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
         webview.postMessage({ type: 'clipboardState', ...clipboardState() });
@@ -323,8 +338,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // paste's uniqueness check sees the post-delete namespace.
         if (isCut && sameDoc && srcName) {
           before = deleteEntriesByNameXml(before, [srcSelector]);
-          DataModel.removeDataSource(document.srcId);
-          DataModel.addDataSource(document.srcId, readSlddParts(before, document.zipMeta), { path: name });
+          registerModel(before);
         }
         const freshModel = (DataModel as any).getDataSource?.(document.srcId) ?? model;
         const freshSection = resolveSectionForPaste(freshModel, findNode(rowId), rowId) ?? section;
@@ -409,8 +423,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         if (isMove && sameDoc && sourceTargets.length) {
           working = deleteEntriesByNameXml(working, sourceTargets);
         }
-        DataModel.removeDataSource(document.srcId);
-        DataModel.addDataSource(document.srcId, readSlddParts(working, document.zipMeta), { path: name });
+        registerModel(working);
         const model = (DataModel as any).getDataSource?.(document.srcId);
         const section = resolveSectionForPaste(model, findNode(msg.rowId), msg.rowId);
         if (!section) {
@@ -467,6 +480,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       scriptFile: 'table.js',
       title: 'Data Explorer',
       body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
+${BANNERS_HTML}
     <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>
 ${LOADING_OVERLAY_HTML}`,
     });
@@ -536,10 +550,16 @@ ${LOADING_OVERLAY_HTML}`,
   private reBaseline(document: BinarySlddDocument): void {
     try {
       DataModel.removeDataSource(document.srcId);
+      // The sink is threaded here too, though nothing reads it on this path: this
+      // re-registration is what the session holds until the next post(), and a node
+      // that carries its warnings on one route into the session and not on another is
+      // how a source silently stops reporting.
+      const warnings: ParseWarning[] = [];
       const node = DataModel.addDataSource(
         document.srcId,
-        readSlddParts(document.chunkXml, document.zipMeta),
+        readSlddParts(document.chunkXml, document.zipMeta, warnings),
         { path: basename(document.uri.path) || 'document' },
+        warnings,
       );
       captureBaseline(document.uri.toString(), node);
     } catch {

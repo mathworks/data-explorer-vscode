@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
-import { renderWebviewHtml, LOADING_OVERLAY_HTML } from './webviewHtml.js';
+import { renderWebviewHtml, LOADING_OVERLAY_HTML, BANNERS_HTML } from './webviewHtml.js';
 import { getModelFromBytes, getProjectModel, invalidate } from './SlddModel.js';
 import {
   buildRows,
@@ -14,6 +14,7 @@ import { buildMatRows } from './matRowBuilder.js';
 import { readProjectStore } from './projectStore.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, exceedsStringDecodeLimit, isZipBytes } from './slddFormat.js';
 import { annotateDataRows, annotateModelRows } from './usageGraph.js';
+import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
@@ -176,6 +177,10 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
             columns: PROJECT_COLUMNS,
             columnLabels: PROJECT_COLUMN_LABELS,
             editable: false,
+            // A project is the format this matters most for: its store is read by
+            // convention with no schema, so a document that did not survive its trip
+            // costs whatever entity it described and leaves a table that looks whole.
+            warnings: warningBanner(sourceWarnings(node)),
           });
           drainNavigateSelect(webview, uriString);
           return;
@@ -205,6 +210,11 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           columnGroups: COLUMN_GROUPS,
           editable: false,
           notice,
+          // Independent of `notice`: that one explains why this view is read-only,
+          // this one says the file is not all here. A large JSON dictionary that also
+          // read short shows both, which is why they are two fields and not one
+          // string — see renderBanners in the webview.
+          warnings: warningBanner(sourceWarnings(node)),
         });
         drainNavigateSelect(webview, uriString);
       } catch (err) {
@@ -283,7 +293,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       scriptFile: 'table.js',
       title: 'Data Explorer',
       body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
-    <div id="dex-notice" role="status" style="display:none;position:absolute;top:0;left:0;right:0;z-index:2;box-sizing:border-box;padding:6px 10px;font-family:var(--vscode-font-family,sans-serif);font-size:12px;color:var(--vscode-inputValidation-infoForeground,var(--vscode-foreground));background:var(--vscode-inputValidation-infoBackground,rgba(100,148,237,0.12));border-bottom:1px solid var(--vscode-inputValidation-infoBorder,#4084d0);"></div>
+${BANNERS_HTML}
     <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>
 ${LOADING_OVERLAY_HTML}`,
     });

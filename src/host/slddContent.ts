@@ -16,21 +16,7 @@
 // Kept VS-Code-free.
 import { parseBinarySldd, parseBinarySlddParts, type ParseWarning } from 'data-explorer-core';
 import { isZipBytes } from './slddFormat.js';
-
-// The one rule both readers below enforce: a dictionary this host could not read must
-// not be handed on as a dictionary with nothing in it. The binary reader answers an
-// empty dictionary plus a `source-unreadable` warning rather than throwing — right
-// where it lives, since a bad file in a workspace scan should not take the scan down
-// and the warning can name the file — so the throw is raised here, at the boundary
-// where every caller either skips the file, refuses to save it, or paints an error.
-//
-// Only a source-level warning counts. `part-unreadable` is one piece of a dictionary
-// whose entries are otherwise all there (a sub-dictionary reference whose name could
-// not be read), and refusing the whole file for it would lose far more than it reports.
-function throwIfUnread(warnings: ParseWarning[]): void {
-  const lost = warnings.find((w) => w.code === 'source-unreadable');
-  if (lost) throw new Error(lost.message);
-}
+import { refuseIfUnreadable } from './parseWarnings.js';
 
 /**
  * The parsed content of a .sldd. Throws on corrupt input — a caller that wants to
@@ -41,16 +27,26 @@ function throwIfUnread(warnings: ParseWarning[]): void {
  * compressed-binary or JSON text depending only on what MATLAB wrote, and both
  * spellings carry the same extension.
  *
- * The two formats no longer FAIL the same way, which is why `throwIfUnread` is here:
- * `JSON.parse` still throws on a corrupt textual dictionary, and the binary reader
- * recovers, so without it the rule would be true of JSON and silently false of zip.
+ * The two formats no longer FAIL the same way, which is why `refuseIfUnreadable` is
+ * called here: `JSON.parse` still throws on a corrupt textual dictionary, and the
+ * binary reader recovers, so without it the rule would be true of JSON and silently
+ * false of zip.
+ *
+ * `warnings`, when a caller brings one, collects what the read survived — core's own
+ * out-parameter convention, and the array the caller then hands to
+ * `DataModel.addDataSource` so the node layer appends its findings to the SAME list
+ * and one file reports one list. A caller with nothing to report it to passes
+ * nothing, and the fatal warning is refused either way.
  */
-export function readSlddContent(bytes: ArrayBuffer): Record<string, unknown> {
+export function readSlddContent(
+  bytes: ArrayBuffer,
+  warnings?: ParseWarning[],
+): Record<string, unknown> {
   const u8 = new Uint8Array(bytes);
   if (!isZipBytes(u8)) return JSON.parse(new TextDecoder().decode(u8)) as Record<string, unknown>;
-  const warnings: ParseWarning[] = [];
-  const content = parseBinarySldd(bytes, warnings) as Record<string, unknown>;
-  throwIfUnread(warnings);
+  const collected = warnings ?? [];
+  const content = parseBinarySldd(bytes, collected) as Record<string, unknown>;
+  refuseIfUnreadable(collected);
   return content;
 }
 
@@ -66,9 +62,10 @@ export function readSlddContent(bytes: ArrayBuffer): Record<string, unknown> {
 export function readSlddParts(
   chunkXml: string,
   zipMeta: Record<string, Uint8Array>,
+  warnings?: ParseWarning[],
 ): Record<string, unknown> {
-  const warnings: ParseWarning[] = [];
-  const content = parseBinarySlddParts(chunkXml, zipMeta, warnings);
-  throwIfUnread(warnings);
+  const collected = warnings ?? [];
+  const content = parseBinarySlddParts(chunkXml, zipMeta, collected);
+  refuseIfUnreadable(collected);
   return content;
 }

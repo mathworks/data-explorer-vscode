@@ -64,6 +64,57 @@ describe('table webview overlays are created in code, not declared in markup', (
   });
 });
 
+// The banner strip is the exception to the rule above, and the reason it needs its
+// own guard. #dex-notice and #dex-warning are LAYOUT, not overlays: they sit above
+// the table and the table's top is offset by their measured height, so they cannot
+// be appended to <body> by table-main.ts like the popovers are. That puts them back
+// in markup — one rule over four paths — which is precisely where the two bugs above
+// came from. #dex-notice already lived in one provider alone.
+//
+// Three of the four shells interpolate BANNERS_HTML, so they agree by construction;
+// src/webview/table.html is a static file that cannot, so it holds a hand copy. The
+// ids the webview looks up are read out of banners.ts rather than listed here, so
+// adding a banner element cannot pass this test without being added to both.
+describe('the banner strip is declared by every shell, because it is layout', () => {
+  const BANNERS_HTML = /BANNERS_HTML = `([\s\S]*?)`;/.exec(read('src/host/webviewHtml.ts'))![1];
+
+  // Every element renderBanners resolves. If it looks one up and a shell omits it,
+  // that view silently shows no banner for a file that is short.
+  const LOOKED_UP = [...read('src/webview/banners.ts').matchAll(/getElementById\('([^']+)'\)/g)].map(
+    (m) => m[1],
+  );
+
+  it('renderBanners looks up more than one element, so the list below is real', () => {
+    expect(LOOKED_UP.length).toBeGreaterThan(1);
+  });
+
+  it.each(LOOKED_UP)('BANNERS_HTML declares %s', (id) => {
+    expect(BANNERS_HTML).toContain(`id="${id}"`);
+  });
+
+  it.each(LOOKED_UP)('the vite dev shell declares %s too', (id) => {
+    expect(read('src/webview/table.html')).toContain(`id="${id}"`);
+  });
+
+  it.each(['src/host/SlddTextEditorProvider.ts', 'src/host/BinarySlddEditorProvider.ts', 'src/host/BinaryEditorProvider.ts'])(
+    '%s interpolates the shared constant instead of its own copy',
+    (provider) => {
+      const src = read(provider);
+      expect(src).toContain('${BANNERS_HTML}');
+      // An inline copy is what this test exists to prevent: it would pass the id
+      // checks above and still drift the moment the shared one changed.
+      expect(src).not.toContain('id="dex-notice"');
+    },
+  );
+
+  it('table-main.ts paints the strip through that one function', () => {
+    // Not two calls (one per banner): the table is offset by the strip's TOTAL
+    // height, so whichever code sets one has to know about the other.
+    expect(read('src/webview/table-main.ts')).toContain('renderBanners(table, {');
+    expect(read('src/webview/table-main.ts')).not.toContain("getElementById('dex-notice')");
+  });
+});
+
 // The Property Inspector is a second webview with a second shell, and it grew the
 // same overlay for the same reason. It has only one provider today, which is
 // exactly how the table's shells started out.
