@@ -21,7 +21,11 @@ import { unzipSync, zipSync } from 'fflate';
 import { renderWebviewHtml, LOADING_OVERLAY_HTML } from './webviewHtml.js';
 import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { sectionRules } from './sectionRules.js';
-import { parseBinarySlddParts, serializeEntryToXml, DataModel } from 'data-explorer-core';
+import { serializeEntryToXml, DataModel } from 'data-explorer-core';
+// Never parseBinarySlddParts directly: readSlddParts is the same read plus the rule
+// that a dictionary this host could not read is not passed on as an empty one, which
+// the reader itself no longer enforces (it recovers and warns instead).
+import { readSlddParts } from './slddContent.js';
 import { findOwningEntry, resolveSectionForPaste, buildDragSnapshot } from './structuralEdit.js';
 import { copyEntryToClipboard } from './clipboardAction.js';
 import { captureBaseline, computeModified, clearBaseline } from './slddBaseline.js';
@@ -153,7 +157,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // Rebuild the model from the live chunkXml (+ pass-through parts).
     const buildModel = () => {
       DataModel.removeDataSource(document.srcId);
-      const content = parseBinarySlddParts(document.chunkXml, document.zipMeta);
+      const content = readSlddParts(document.chunkXml, document.zipMeta);
       return DataModel.addDataSource(document.srcId, content, { path: name });
     };
     const findNode = (rowId: string): any => {
@@ -320,7 +324,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         if (isCut && sameDoc && srcName) {
           before = deleteEntriesByNameXml(before, [srcSelector]);
           DataModel.removeDataSource(document.srcId);
-          DataModel.addDataSource(document.srcId, parseBinarySlddParts(before, document.zipMeta), { path: name });
+          DataModel.addDataSource(document.srcId, readSlddParts(before, document.zipMeta), { path: name });
         }
         const freshModel = (DataModel as any).getDataSource?.(document.srcId) ?? model;
         const freshSection = resolveSectionForPaste(freshModel, findNode(rowId), rowId) ?? section;
@@ -406,7 +410,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           working = deleteEntriesByNameXml(working, sourceTargets);
         }
         DataModel.removeDataSource(document.srcId);
-        DataModel.addDataSource(document.srcId, parseBinarySlddParts(working, document.zipMeta), { path: name });
+        DataModel.addDataSource(document.srcId, readSlddParts(working, document.zipMeta), { path: name });
         const model = (DataModel as any).getDataSource?.(document.srcId);
         const section = resolveSectionForPaste(model, findNode(msg.rowId), msg.rowId);
         if (!section) {
@@ -534,7 +538,7 @@ ${LOADING_OVERLAY_HTML}`,
       DataModel.removeDataSource(document.srcId);
       const node = DataModel.addDataSource(
         document.srcId,
-        parseBinarySlddParts(document.chunkXml, document.zipMeta),
+        readSlddParts(document.chunkXml, document.zipMeta),
         { path: basename(document.uri.path) || 'document' },
       );
       captureBaseline(document.uri.toString(), node);
@@ -544,10 +548,13 @@ ${LOADING_OVERLAY_HTML}`,
   }
 
   // Save gate: re-parse chunkXml before zipping. On failure, throw — VS Code keeps
-  // the document dirty and shows the error; the on-disk file is never touched.
+  // the document dirty and shows the error; the on-disk file is never touched. This
+  // is the call site the reads-as-empty rule in readSlddParts matters most for: a
+  // chunk the reader cannot read yields a dictionary with no entries, and zipping
+  // that over the file on disk would take every entry with it, silently.
   private async writeTo(document: BinarySlddDocument, dest: vscode.Uri): Promise<void> {
     try {
-      parseBinarySlddParts(document.chunkXml, document.zipMeta);
+      readSlddParts(document.chunkXml, document.zipMeta);
     } catch (err) {
       throw new Error('Refusing to save: the document did not re-parse (' + (err as Error).message + ').');
     }

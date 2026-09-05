@@ -7,8 +7,10 @@
 //   Complexity complex, DimensionsMode Fixed, Description 'a populated element'
 // plus a default (empty) element y. These tests pin, against the real parsed
 // data, that:
-//   (1) the newly-surfaced Complexity / Dimensions / DimensionsMode columns
-//       populate for a BusElement (they used to render empty),
+//   (1) the Complexity / Dimensions / DimensionsMode columns populate for a
+//       BusElement (they used to render empty), with Complexity and
+//       DimensionsMode arriving as editable dropdowns over MATLAB's own enums
+//       and Dimensions, which has no enum, as a label,
 //   (2) Min/Max edits are routed through the MATLAB-verified finite-real-scalar
 //       validator (Inf / NaN / arrays / complex rejected; '' clears),
 //   (3) a FunctionElement surfaces only Name (no foreign Description/DataType),
@@ -17,6 +19,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { serializeEntryToXml } from 'data-explorer-core';
 import { getModelFromBytes, invalidate } from '../src/host/SlddModel.js';
 
 type Entry = Record<string, any>;
@@ -32,8 +35,8 @@ function loadElements(variant: 'elem_text' | 'elem_binary'): Record<string, Entr
   return found;
 }
 
-// A BusElement carries these three read-only columns that previously rendered
-// empty. Verify against both serialization formats.
+// A BusElement carries these three columns that previously rendered empty.
+// Verify against both serialization formats.
 for (const variant of ['elem_text', 'elem_binary'] as const) {
   describe(`BusElement columns (${variant})`, () => {
     it('parses the populated element x with all element props', () => {
@@ -53,18 +56,25 @@ for (const variant of ['elem_text', 'elem_binary'] as const) {
       expect(x.Dimensions).toBe(2);
     });
 
-    it('surfaces Complexity/Dimensions/DimensionsMode as read-only columns', () => {
+    it('surfaces Complexity/DimensionsMode as selects and Dimensions as a label', () => {
       const { MyBus } = loadElements(variant);
       const x = MyBus.children.find((c: Entry) => c.name === 'x');
       const props = x.getProperties();
-      for (const key of ['complexity', 'dimensions', 'dimensionsMode']) {
+      // MATLAB constrains a BusElement's Complexity and DimensionsMode to a
+      // closed enum, so each is a dropdown; Dimensions is a free numeric value
+      // and stays read-only. A Signal's dimensionsMode column comes from the
+      // declarative schema and is still a label — see dimensionsMode.test.ts.
+      for (const [key, editor] of Object.entries({ complexity: 'select', dimensions: 'label', dimensionsMode: 'select' })) {
         const prop = props.find((p: any) => p.key === key);
         expect(prop, key).toBeDefined();
-        expect(prop.editor, key).toBe('label');
+        expect(prop.editor, key).toBe(editor);
       }
+      // An editable cell reaches the table as the object shape dex-tree-table
+      // opens an editor from — text plus editable/editor/options — not a string,
+      // and the options are in MATLAB's own casing.
       const row: Entry = x.toRow();
-      expect(row.complexity).toBe('complex');
-      expect(row.dimensionsMode).toBe('Fixed');
+      expect(row.complexity).toEqual({ text: 'complex', editable: true, editor: 'select', options: ['real', 'complex'] });
+      expect(row.dimensionsMode).toEqual({ text: 'Fixed', editable: true, editor: 'select', options: ['Fixed', 'Variable'] });
       expect(row.dimensions).toBe('2');
     });
 
@@ -74,8 +84,8 @@ for (const variant of ['elem_text', 'elem_binary'] as const) {
       expect(y).toBeDefined();
       // A default BusElement is real/Fixed with scalar dimensions in MATLAB.
       const row: Entry = y.toRow();
-      expect(row.complexity).toBe('real');
-      expect(row.dimensionsMode).toBe('Fixed');
+      expect(row.complexity.text).toBe('real');
+      expect(row.dimensionsMode.text).toBe('Fixed');
     });
   });
 }
@@ -126,23 +136,23 @@ describe('BusElement Min/Max constraint parity', () => {
   });
 });
 
-describe('BusElement serialization preserves read-only element props', () => {
-  // Walk the serialized entry tree to the first element's _properties bag.
-  function elementProps(serialized: any): Record<string, any> {
-    let found: Record<string, any> | null = null;
-    const visit = (o: any) => {
-      if (found || !o || typeof o !== 'object') return;
-      if (o._array_class === 'Simulink.BusElement' && Array.isArray(o._elements)) {
-        found = o._elements[0]._properties;
-        return;
-      }
-      for (const k of Object.keys(o)) visit(o[k]);
-    };
-    visit(serialized);
-    if (!found) throw new Error('no BusElement array in serialized entry');
-    return found;
-  }
+// Walk the serialized entry tree to the first element's _properties bag.
+function elementProps(serialized: any): Record<string, any> {
+  let found: Record<string, any> | null = null;
+  const visit = (o: any) => {
+    if (found || !o || typeof o !== 'object') return;
+    if (o._array_class === 'Simulink.BusElement' && Array.isArray(o._elements)) {
+      found = o._elements[0]._properties;
+      return;
+    }
+    for (const k of Object.keys(o)) visit(o[k]);
+  };
+  visit(serialized);
+  if (!found) throw new Error('no BusElement array in serialized entry');
+  return found;
+}
 
+describe('BusElement serialization preserves the element props', () => {
   it('a Min edit round-trips while Complexity/Dimensions/DimensionsMode survive', () => {
     const { MyBus } = loadElements('elem_text');
     const x = MyBus.children.find((c: Entry) => c.name === 'x');
@@ -151,7 +161,7 @@ describe('BusElement serialization preserves read-only element props', () => {
     const props = elementProps(MyBus.serialize());
     // The edited numeric prop is written back (stored key is Min_internal).
     expect(props.Min_internal).toBe(2);
-    // The read-only element props are preserved verbatim from the source.
+    // The element props this edit did not touch are preserved verbatim.
     expect(props.Complexity).toBe('complex');
     expect(props.DimensionsMode).toBe('Fixed');
     expect(props.Dimensions).toBe(2);
@@ -168,6 +178,50 @@ describe('BusElement serialization preserves read-only element props', () => {
     }
   });
 });
+
+// Both editor providers hand setProperty the COLUMN id the webview sent
+// ('complexity'), never the capitalised node/_properties key, so a dropdown over
+// one of these two enums only reaches the file if that mapping holds — a broken
+// one writes a stray lowercase field and reports success. Cover both write paths:
+// the text provider reserializes the entry to JSON, the binary one to the XML
+// fragment it splices back into chunk0.xml.
+for (const variant of ['elem_text', 'elem_binary'] as const) {
+  describe(`BusElement enum edits reach the file (${variant})`, () => {
+    it('an edit routed by column id lands on the capitalised property', () => {
+      const { MyBus } = loadElements(variant);
+      const x = MyBus.children.find((c: Entry) => c.name === 'x');
+      expect(x.setProperty('complexity', 'real')).toBe(true);
+      expect(x.setProperty('dimensionsMode', 'Variable')).toBe(true);
+      const props = elementProps(MyBus.serialize());
+      expect(props.Complexity).toBe('real');
+      expect(props.DimensionsMode).toBe('Variable');
+      // Not written twice under the display key.
+      expect('complexity' in props).toBe(false);
+      expect('dimensionsMode' in props).toBe(false);
+      // The fragment the binary provider splices carries both edits. The sibling
+      // element y is real/Fixed already, so 'Variable' can only have come from x,
+      // and 'complex' appearing nowhere is what proves x's Complexity moved.
+      const frag = serializeEntryToXml(MyBus);
+      expect(frag).toContain('<P Name="DimensionsMode" Class="char">Variable</P>');
+      expect(frag).not.toContain('>complex<');
+    });
+
+    it('a value outside MATLAB’s enum is refused and nothing is written', () => {
+      const { MyBus } = loadElements(variant);
+      const x = MyBus.children.find((c: Entry) => c.name === 'x');
+      // 'Real' is the right word in the wrong casing — MATLAB raises "There is
+      // no enumerated value named ..." for it, and so must we.
+      for (const [key, bad] of Object.entries({ complexity: 'Real', dimensionsMode: 'fixed' })) {
+        const r: any = x.setProperty(key, bad);
+        expect(r, key).not.toBe(true);
+        expect(r.error, key).toBe(true);
+      }
+      const props = elementProps(MyBus.serialize());
+      expect(props.Complexity).toBe('complex');
+      expect(props.DimensionsMode).toBe('Fixed');
+    });
+  });
+}
 
 describe('FunctionElement surface (no foreign props)', () => {
   it('surfaces only Name — never Description or DataType', () => {

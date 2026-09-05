@@ -61,22 +61,32 @@ suite('BinarySlddEditorProvider', () => {
     doc.dispose();
   });
 
-  test('save gate rejects malformed chunkXml and does not write', async () => {
-    const uri = wsUri('binary.sldd');
-    const before = await vscode.workspace.fs.readFile(uri);
-    const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
-    (doc as any).chunkXml = '<not valid<<<';
-    let threw = false;
-    try {
-      await provider.saveCustomDocument(doc, token());
-    } catch {
-      threw = true;
-    }
-    assert.ok(threw, 'save must throw on malformed xml');
-    const after = await vscode.workspace.fs.readFile(uri);
-    assert.deepStrictEqual(Array.from(after), Array.from(before), 'file must be untouched');
-    doc.dispose();
-  });
+  // Both shapes of unreadable chunkXml, because the reader no longer throws for
+  // either: it reports `source-unreadable` and answers an empty dictionary, which
+  // is right for an open and is the content the save gate must refuse to write.
+  // The second case is the dangerous one — well-formed XML under the wrong root
+  // reads as a dictionary with zero entries, i.e. as a successful parse.
+  for (const [label, chunk] of [
+    ['malformed', '<not valid<<<'],
+    ['well-formed but not a dictionary', '<Other Class="DD.THING"/>'],
+  ] as const) {
+    test(`save gate rejects ${label} chunkXml and does not write`, async () => {
+      const uri = wsUri('binary.sldd');
+      const before = await vscode.workspace.fs.readFile(uri);
+      const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
+      (doc as any).chunkXml = chunk;
+      let threw = false;
+      try {
+        await provider.saveCustomDocument(doc, token());
+      } catch {
+        threw = true;
+      }
+      assert.ok(threw, `save must throw on ${label} xml`);
+      const after = await vscode.workspace.fs.readFile(uri);
+      assert.deepStrictEqual(Array.from(after), Array.from(before), 'file must be untouched');
+      doc.dispose();
+    });
+  }
 
   test('save round-trips: saved bytes re-unzip and contain data/chunk0.xml', async () => {
     const src = wsUri('binary.sldd');

@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
-import { DataModel, parseBinarySlddParts, serializeEntryToXml } from 'data-explorer-core';
+import { DataModel, parseBinarySlddParts, serializeEntryToXml, type ParseWarning } from 'data-explorer-core';
 import { findEntryObjectSpan } from '../src/host/xmlEntrySplice.js';
 
 function loadZip(fixture: string) {
@@ -43,7 +43,12 @@ describe('binary sldd round-trip', () => {
     // Edited entry present under the new name; the old name is gone.
     expect(findEntryObjectSpan(newText, oldName + '_edited')).not.toBeNull();
     expect(findEntryObjectSpan(newText, oldName)).toBeNull();
-    // The whole document still re-parses.
-    expect(() => parseBinarySlddParts(newText, meta)).not.toThrow();
+    // The whole document still re-parses. Not-throwing is no longer proof of that on
+    // its own — the reader recovers from an unreadable chunk and reports it through
+    // the warnings sink instead — so read the sink, which is also the oracle the save
+    // gate in BinarySlddEditorProvider.writeTo uses.
+    const warnings: ParseWarning[] = [];
+    expect(() => parseBinarySlddParts(newText, meta, warnings)).not.toThrow();
+    expect(warnings).toEqual([]);
   });
 });

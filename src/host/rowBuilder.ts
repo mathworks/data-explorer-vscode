@@ -32,9 +32,12 @@ export const COLUMN_LABELS: Record<string, string> = {
 // (one picker, columns unioned across all sections), so it is owned here rather
 // than derived per-class from the schema: node-owned value props (Min/Max/Unit),
 // host-owned metadata (lastModified/lastModifiedBy), and the schema-driven
-// read-only columns (dimensions/complexity/dimensionsMode → Data Object;
+// columns (dimensions/complexity/dimensionsMode → Data Object;
 // storageClass/headerFile/alignment → Code Generation) all get their picker
-// header here. Labels still come from the schema (schemaColumnLabels), which
+// header here. Read-only for most classes, but not by definition: on a
+// Simulink.BusElement, complexity and dimensionsMode emit an editable select over
+// MATLAB's own enum, which the generic cell path renders and edits like any other
+// object cell. Labels still come from the schema (schemaColumnLabels), which
 // remains the single source of truth for a column's display name.
 export const COLUMN_GROUPS: Record<string, string> = {
   Min: 'Data Object', Max: 'Data Object', Unit: 'Data Object',
