@@ -1,7 +1,9 @@
 // Copyright 2026 The MathWorks, Inc.
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { identifiersIn as coreIdentifiersIn } from 'data-explorer-core';
 import {
-  identifiers,
+  identifiersIn,
   resolveParam,
   buildEdges,
   type ModelSummary,
@@ -23,13 +25,41 @@ function data(uri: string, vars: string[], dictRefs: string[] = []): DataSummary
   return { uri, varNames: new Set(vars), dictRefs };
 }
 
-describe('identifiers', () => {
+// The scope of this module is its own — core resolves usages within a session, this
+// resolves them across a workspace of files on disk — but the reading of an expression
+// is not, and this is where the host stops having a second opinion about it.
+describe('identifiersIn is core’s rule, not a second copy of it', () => {
   it('extracts variable names from an expression, dropping numbers/operators', () => {
-    expect(identifiers('2*Kp + 1')).toEqual(['Kp']);
-    expect(identifiers('Kp')).toEqual(['Kp']);
-    expect(identifiers('-gain')).toEqual(['gain']);
-    expect(identifiers('42')).toEqual([]);
-    expect(identifiers('a*b+c')).toEqual(['a', 'b', 'c']);
+    expect(identifiersIn('2*Kp + 1')).toEqual(['Kp']);
+    expect(identifiersIn('Kp')).toEqual(['Kp']);
+    expect(identifiersIn('-gain')).toEqual(['gain']);
+    expect(identifiersIn('42')).toEqual([]);
+    expect(identifiersIn('a*b+c')).toEqual(['a', 'b', 'c']);
+  });
+
+  it('credits a dotted reference to the base name only', () => {
+    // What the host's own copy got wrong: it credited `mode` as well, so any dictionary
+    // entry named `mode` collected a usage from every model with a `cfg.mode` parameter
+    // — a link the user follows to a block that does not refer to that entry at all.
+    expect(identifiersIn('cfg.mode')).toEqual(['cfg']);
+  });
+
+  it('does not read the tail of a numeric literal as a name', () => {
+    // The other drift: `1e5` offered `e5`, so a model full of scientific-notation
+    // parameters advertised usages of an entry nobody has.
+    expect(identifiersIn('1e5')).toEqual([]);
+    expect(identifiersIn('2.5e-3')).toEqual([]);
+  });
+
+  it('IS core’s function, not a same-named one that agrees today', () => {
+    // Identity, not equivalence: two implementations that agree on the cases a test
+    // happens to list is exactly the state this replaced. The re-export is checked in
+    // the source too, because an inlined copy would pass every assertion above on the
+    // day it was written.
+    expect(identifiersIn).toBe(coreIdentifiersIn);
+    const src = readFileSync(new URL('../src/host/usageResolve.ts', import.meta.url), 'utf8');
+    expect(src).toContain("export { identifiersIn } from 'data-explorer-core';");
+    expect(src).not.toMatch(/\[A-Za-z_\]\\w\*/);
   });
 });
 

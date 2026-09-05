@@ -2,6 +2,7 @@
 // Pure (vscode-free) core of the usage graph: parameter-source resolution and
 // edge construction. Split from usageGraph.ts (which does the file I/O) so the
 // shadowing rule and workspace->sldd->mat ordering are unit-testable.
+import { identifiersIn } from 'data-explorer-core';
 import { basename, uriBasename } from '../common/pathUtil.js';
 
 export { basename } from '../common/pathUtil.js';
@@ -43,11 +44,21 @@ export interface ResolvedGraph {
   forward: Map<string, ParamLink[]>;
 }
 
-// Identifiers a param expression references (so `2*Kp` yields ['Kp']). Numeric
-// literals and operators fall out naturally.
-export function identifiers(expr: string): string[] {
-  return expr.match(/[A-Za-z_]\w*/g) ?? [];
-}
+// Which names a param expression refers to, so `2*Kp` yields ['Kp'].
+//
+// The RULE is core's; only the SCOPE below is ours. Core answers "which blocks use this
+// definition" within a session — the sources a host registered — while this module
+// answers it across a whole workspace of files on disk, with MATLAB's
+// workspace → sldd → mat shadowing and transitive dictionary references, which core
+// deliberately does not model. Two resolvers, one reading of an expression.
+//
+// This file used to restate the regex, and the copy had drifted: it credited `mode` in
+// `cfg.mode` and `e5` in `1e5`, so a dictionary entry named `mode` collected a usage
+// that does not exist and a `1e5` parameter offered a link to `e5`. Core skips a token
+// preceded by `.` or a digit, and publishes the function for exactly this caller as of
+// v1.4.0 — so the re-export is the seam: the host names the rule in one place and
+// nowhere decides it.
+export { identifiersIn } from 'data-explorer-core';
 
 // Resolve a param identifier from a model: workspace -> linked .sldd(s) and
 // their transitive dict refs -> linked .mat(s). First found wins; a workspace
@@ -97,7 +108,7 @@ export function buildEdges(
 
   for (const model of models) {
     for (const bp of model.blockParams) {
-      const tokens = identifiers(bp.value);
+      const tokens = identifiersIn(bp.value);
       let primary: { kind: SourceKind; uri: string; token: string } | null = null;
       for (const token of tokens) {
         const res = resolveParam(model, token, slddByBase, matByBase);
