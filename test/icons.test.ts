@@ -5,11 +5,16 @@
 // This test pins the known-critical ids so a future edit that references a new
 // icon without adding the file fails fast.
 import { describe, it, expect } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { ICON_DIR } from '../src/host/iconAssets.js';
 
 function iconPath(id: string): string {
   return fileURLToPath(new URL(`../media/icons/${id}.svg`, import.meta.url));
+}
+
+function repoFile(rel: string): string {
+  return readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), 'utf8');
 }
 
 // Tree node-kind icons (SectionsTreeProvider.ICON_BY_KIND).
@@ -42,6 +47,7 @@ const MODEL_ICONS = [
 // (bus/connection elements, enum items, variant entries). These render in the
 // webview, so a missing file shows a broken image rather than a fallback.
 const DATA_NODE_ICONS = [
+  'ws3d',                    // any object whose class has no icon of its own (core's OBJECT_ICON)
   'wsBusElement',            // Design Data Simulink.Bus element
   'typeBusElement',          // Architectural Data DataInterface element
   'typeStructElement',       // StructType element
@@ -72,5 +78,44 @@ describe('icon assets', () => {
 
   it('the generic fallback icon exists (svgIconFor default)', () => {
     expect(existsSync(iconPath('typeGeneric'))).toBe(true);
+  });
+});
+
+// The assertions above check the SOURCES in media/icons, which is the right place
+// for them — that directory is what `copy:icons` copies wholesale, so an id with no
+// source has no shipped file either. What they cannot see is whether the directory
+// the HOST resolves against is one the VSIX actually contains. It was not: the tree
+// asked for `media/icons/<id>.svg`, a path present in every dev checkout and every
+// integration run and excluded from the package, so the Simulink Data tree shipped
+// with no icons while looking correct to everyone who could have noticed.
+//
+// Existence on this machine can never catch that. These three places have to agree
+// instead: where the host reads (ICON_DIR), where the build writes (copy:icons), and
+// what the package keeps (.vscodeignore).
+describe('the shipped icon directory', () => {
+  const dir = ICON_DIR.join('/');
+
+  it('is the directory copy:icons writes the SVGs to', () => {
+    const pkg = JSON.parse(repoFile('package.json')) as { scripts: Record<string, string> };
+    expect(pkg.scripts['copy:icons']).toContain(dir);
+  });
+
+  it('is not excluded from the VSIX by .vscodeignore', () => {
+    // Only the exclusions matter, and only as path prefixes: a pattern is a problem
+    // exactly when it names ICON_DIR or an ancestor of it ('dist/**', 'dist/webview').
+    const excluded = repoFile('.vscodeignore')
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#') && !line.startsWith('!'))
+      .map((line) => line.replace(/\/?\*\*?$/, '').replace(/\/$/, ''))
+      .filter((prefix) => prefix && (dir === prefix || dir.startsWith(prefix + '/')));
+    expect(excluded, `.vscodeignore excludes ${dir} via ${excluded.join(', ')}`).toEqual([]);
+  });
+
+  it('is where the webview loads its icons from, so one copy serves both', () => {
+    // dex-icon builds `${BASE_URL}icons/<id>.svg`, and the webview's base is the vite
+    // outDir — dist/webview. Shipping a second copy for the host would be the state
+    // this fix removed.
+    expect(dir).toBe('dist/webview/icons');
   });
 });
