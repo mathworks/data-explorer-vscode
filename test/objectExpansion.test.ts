@@ -514,6 +514,18 @@ describe('MCOS object array expansion — .mat (1x3 Simulink.Parameter, heteroge
     elems.forEach((e) => expect(e.Class).toBe('Simulink.Parameter'));
   });
 
+  it('draws the array row and its element rows with the parameter icon', () => {
+    // A MATLAB array is homogeneous, so the container row stands for three
+    // parameters and has to read as one: the array row used to carry the generic
+    // object glyph above three wsParameters rows — the same array drawn as two
+    // different kinds of thing. Asserted on the ROW rather than the node because the
+    // row's iconId is what the tree actually renders.
+    const iconOf = (r: any) => (typeof r.Name === 'object' ? r.Name.iconId : undefined);
+    const elems = rows.filter((r) => r.parent === topId);
+    expect([iconOf(rowById(rows, topId)), ...elems.map(iconOf)])
+      .toEqual(['wsParameters', 'wsParameters', 'wsParameters', 'wsParameters']);
+  });
+
   it('decodes each element Value in its own shape: scalar, numeric vector, struct', () => {
     // Proves the decoder walks every object id in the handle (not just the first)
     // and resolves each element's distinct Value type through the typed node.
