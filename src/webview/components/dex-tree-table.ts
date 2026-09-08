@@ -1420,6 +1420,14 @@ export class DexTreeTable extends LitElement {
 
   private _lastStartIdx = -1;
 
+  // NOTE: `_scrollTop` is the virtual WINDOW's position, not a mirror of the
+  // DOM's. A scroll that lands inside the slice already rendered needs no
+  // repaint, so this returns without touching the reactive state and the two
+  // deliberately diverge — by up to BUFFER_ROWS+1 rows near the top of the list,
+  // where the start index is clamped at 0. Anything that needs to know where the
+  // rows actually SIT must read `_container.scrollTop` (see `_scrollToRow` and
+  // `_scrollToSelectedRow`); keeping this in sync instead would cost a render per
+  // scroll event, which is what the early exit exists to avoid.
   private _onScroll(): void {
     if (!this._container) return;
     const scrollTop = this._container.scrollTop;
@@ -2550,17 +2558,28 @@ export class DexTreeTable extends LitElement {
       if (idx < 0) return;
       const top = idx * this._rowH;
       const headerHeight = this._rowH;
-      // Scroll relative to the reactive _scrollTop (the source of truth for the
-      // virtual window), not the live DOM scrollTop. On a fresh open the
-      // container isn't scrollable yet (its rows aren't painted), so writing
-      // _container.scrollTop clamps to 0 and fires no scroll event — the window
-      // would never move and a deep row would never render. Fall back to the
-      // tracked viewport height when the container hasn't been laid out.
-      const cur = this._scrollTop;
+      // WHERE THE ROWS ARE PAINTED RIGHT NOW: the container's own scrollTop.
+      // Deliberately not the reactive _scrollTop — that tracks the virtual
+      // WINDOW, and `_onScroll` leaves it behind on purpose for every scroll
+      // that lands in the slice already rendered (no repaint needed, so no
+      // state change). Near the top of the list that is a wide gap: the start
+      // index is clamped at 0, so the first BUFFER_ROWS+1 rows' worth of
+      // scrolling never updates it at all. Judging "is the row already in view"
+      // against that value is how a reveal decided the row was on screen, took
+      // the `next === cur` exit, and left the row the user clicked to off-screen.
+      //
+      // Writing the DOM is still not enough on its own — see the sync below.
+      // Fall back to the tracked viewport height when the container hasn't been
+      // laid out (happy-dom, and the first frame of a fresh open).
+      const cur = this._container.scrollTop;
       const viewHeight = this._container.clientHeight || this._viewportHeight;
       // The sticky header covers the top `headerHeight` of the viewport, so the
-      // area a row can actually occupy is this tall.
-      const usable = viewHeight - headerHeight;
+      // area a row can actually occupy is this tall. Floored at one row for the
+      // case where the height is unknown (a reveal that arrives before the panel
+      // is laid out, so both measurements read 0): a negative `usable` makes the
+      // centering below place the row ABOVE the window it is meant to bring it
+      // into. One row means "no room to center" — put its top at the top.
+      const usable = Math.max(this._rowH, viewHeight - headerHeight);
       let next = cur;
       // Only move when the row isn't already fully in view (above the current
       // window, or past its bottom). Leave a comfortably-visible row where it is.
@@ -2574,9 +2593,13 @@ export class DexTreeTable extends LitElement {
         next = Math.max(0, Math.min(next, maxScroll));
       }
       if (next === cur) return;
-      // Drive the virtual window via reactive state so the slice repaints to
-      // include the target row, then sync the DOM scroll position once the
-      // spacer that makes the container scrollable exists.
+      // Drive the virtual window via reactive state FIRST and sync the DOM after,
+      // rather than writing _container.scrollTop and letting the scroll event
+      // catch the window up: on a fresh open the container isn't scrollable yet
+      // (its rows aren't painted), so that write clamps to 0 and fires no scroll
+      // event — the window would stay pinned to the top and a deep row would
+      // never render. Setting the state repaints the slice, which creates the
+      // spacer that makes the write below land.
       this._scrollTop = next;
       this.updateComplete.then(() => {
         if (this._container) this._container.scrollTop = next;
