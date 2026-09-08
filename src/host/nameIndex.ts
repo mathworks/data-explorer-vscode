@@ -13,11 +13,11 @@
 // This module does the vscode file I/O + parser dispatch; the pure
 // name-extraction core lives in nameExtract.ts (unit-tested).
 import * as vscode from 'vscode';
-import { parseModel, parseMat } from 'data-explorer-core';
+import { isMatFile, isModelFile, isSlddFile, parseModel, parseMat } from 'data-explorer-core';
 import { readSlddContent } from './slddContent.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import { basename } from '../common/pathUtil.js';
-import { GRAPH_GLOB, isMatPath, isModelPath, isSlddPath } from '../common/fileTypes.js';
+import { GRAPH_GLOB } from '../common/fileTypes.js';
 import { namesFromSldd, namesFromMat, namesFromSlx, type NameRecord } from './nameExtract.js';
 
 export type { EntryKind, NameRecord } from './nameExtract.js';
@@ -125,15 +125,15 @@ async function recordsForFile(uri: vscode.Uri): Promise<NameRecord[]> {
   const path = uri.path;
   const uriString = uri.toString();
   try {
-    if (isModelPath(path)) {
+    if (isModelFile(path)) {
       const parsed = parseModel(ab, basename(path));
       return namesFromSlx(parsed, uriString);
     }
-    if (isMatPath(path)) {
+    if (isMatFile(path)) {
       const parsed = parseMat(ab);
       return namesFromMat(parsed, uriString);
     }
-    if (isSlddPath(path)) {
+    if (isSlddFile(path)) {
       return namesFromSldd(readSlddContent(ab), uriString);
     }
   } catch {

@@ -4,11 +4,11 @@
 // from nameIndex.ts (which does the file I/O + parser dispatch) so the
 // name-extraction rules are unit-testable without touching the filesystem.
 //
-// This module is deliberately independent of the usage graph (usageResolve.ts)
-// and the relationship graph: it answers only "what entry names exist, and
-// where", never how they resolve or relate. Duplicate names across files are
-// preserved (each becomes its own record) so a global "search entries by name"
-// can list every occurrence.
+// This module is deliberately independent of the usage graph (core's
+// `buildUsageIndex`, reached through usageCells.ts) and the relationship graph:
+// it answers only "what entry names exist, and where", never how they resolve or
+// relate. Duplicate names across files are preserved (each becomes its own record)
+// so a global "search entries by name" can list every occurrence.
 import { uriBasename } from '../common/pathUtil.js';
 
 export type EntryKind = 'sldd' | 'mat' | 'workspace' | 'block';

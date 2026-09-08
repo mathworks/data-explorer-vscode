@@ -7,8 +7,8 @@
 // three on-disk forms the bytes hold is core's decision, not this host's. Passing a
 // `.mdl` to parseSlx would throw "invalid zip data" and land in the catch below,
 // where a legacy model would silently show no relationships at all.
-import { parseModel } from 'data-explorer-core';
-import { MODEL_RE, refModelExt } from '../common/fileTypes.js';
+import { isModelFile, parseModel } from 'data-explorer-core';
+import { refModelExt } from '../common/fileTypes.js';
 
 export interface SlxStructure {
   dataDictionary: string | null; // linked data dictionary (basename or path)
@@ -34,7 +34,7 @@ export function extractSlxStructure(buffer: ArrayBuffer, filename: string): SlxS
       modelReferences: (parsed.modelReferences ?? [])
         .map((r) => r.modelName)
         .filter((n) => typeof n === 'string' && n.length > 0)
-        .map((n) => (MODEL_RE.test(n) ? n : n + ext)),
+        .map((n) => (isModelFile(n) ? n : n + ext)),
       externalDataSources: parsed.externalDataSources ?? [],
     };
   } catch {

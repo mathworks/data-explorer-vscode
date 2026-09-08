@@ -1,12 +1,19 @@
 // Copyright 2026 The MathWorks, Inc.
 // @vitest-environment happy-dom
 //
-// The Usage column over REAL FILES, end to end: bytes on disk → parse → summarise →
-// resolve → edges → annotated row → rendered cell. Every other test of this column
-// feeds hand-built summaries or hand-built cell payloads, each of which can agree
-// with a shape the parser never produces; this one starts from the fixtures and ends
-// at the text in the cell, calling the same `buildUsageGraph` the extension calls
-// (usageGraph.ts adds only the vscode file I/O in front of it).
+// The Usage column over REAL FILES, end to end: bytes on disk → core's usage index →
+// host cell shaping → annotated row → rendered cell. Every other test of this column
+// stops at one of those joints — core's own tests end at the index, usageCells.test.ts
+// asks only about the shaping, the webview tests feed hand-built cell payloads — and a
+// column assembled from four correct pieces can still render nothing. This one starts
+// from the fixtures and ends at the text in the cell, calling the same
+// `buildUsageGraph` the extension calls (usageGraph.ts adds only the vscode file I/O in
+// front of it).
+//
+// It is also what pins the CONTRACT with core across a version bump: the fixtures below
+// are this repo's, the expectations are the cells a user reads, and a core release that
+// changes what `buildUsageIndex` answers — or what shape it answers in — fails here
+// rather than in a Usage column someone eventually notices is wrong.
 //
 // It also reproduces the DEFECT in process, which is the part that could not be
 // pinned before. Two engines can fill this cell:
@@ -30,7 +37,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { annotateVariableRows, buildUsageGraph, type RawSource } from '../src/host/usageResolve.js';
+import { annotateVariableRows, buildUsageGraph, type RawSource } from '../src/host/usageCells.js';
 import { getModel, getModelFromBytes } from '../src/host/SlddModel.js';
 import { buildRows } from '../src/host/rowBuilder.js';
 import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
@@ -92,23 +99,23 @@ describe('the usage graph over the real fixture files', () => {
   it('credits a dictionary entry to every block in every model that uses it', () => {
     // Kp is used once in the classic .mdl and twice in the .slx. Three usages across
     // two models is the shape a dictionary exists for, and the one a bare block name
-    // cannot report.
-    const refs = graph().reverse.get(`${DICT}\nKp`);
-    expect(refs).toEqual([
-      { blockName: 'Gain1', modelName: 'legacy_ctrl', modelUri: CTRL },
-      { blockName: 'PlantGain', modelName: 'shared_gain', modelUri: GAIN },
-      { blockName: 'Trim', modelName: 'shared_gain', modelUri: GAIN },
+    // cannot report. Each carries the model AND a `blocks:`-channelled target back to
+    // the block, which is the whole cell — no second lookup on click.
+    expect(graph().blocksUsing(DICT, 'Kp')).toEqual([
+      { blockName: 'Gain1', modelName: 'legacy_ctrl', modelUri: CTRL, linkTarget: `blocks:Gain1@${CTRL}` },
+      { blockName: 'PlantGain', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:PlantGain@${GAIN}` },
+      { blockName: 'Trim', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:Trim@${GAIN}` },
     ]);
   });
 
   it('keeps an entry only one model uses to that model, and an unused one empty', () => {
     const g = graph();
-    expect(g.reverse.get(`${DICT}\nUo`)).toEqual([
-      { blockName: 'Setpoint', modelName: 'legacy_ctrl', modelUri: CTRL },
+    expect(g.blocksUsing(DICT, 'Uo')).toEqual([
+      { blockName: 'Setpoint', modelName: 'legacy_ctrl', modelUri: CTRL, linkTarget: `blocks:Setpoint@${CTRL}` },
     ]);
     // Ki is a real entry in the real dictionary that nothing references. The absence
     // has to come from the files, not from a fixture that omits the entry.
-    expect(g.reverse.get(`${DICT}\nKi`)).toBeUndefined();
+    expect(g.blocksUsing(DICT, 'Ki')).toEqual([]);
   });
 
   it('resolves an EXPRESSION through a differently-cased dictionary link', () => {
@@ -117,15 +124,14 @@ describe('the usage graph over the real fixture files', () => {
     // its dictionary as `Params.SLDD` while the file is `params.sldd`, so the ref
     // match has to be case-insensitive. Either failing leaves the param unresolved —
     // rendered with no source and no link, indistinguishable from an unused one.
-    const links = graph().forward.get(`${GAIN}\nTrim`);
-    expect(links).toEqual([
+    expect(graph().paramLinks(GAIN, 'Trim')).toEqual([
       { property: 'Value', paramName: '2*Kp', source: 'params.sldd', linkTarget: `Kp@${DICT}` },
     ]);
   });
 
   it('summarises a dictionary whose own FILENAME is upper-cased', () => {
     // The same real dictionary bytes, at `/fx/Params.SLDD`. Everything that admits a
-    // file to this graph — the findFiles glob, GRAPH_FILE_RE over the open tabs — is
+    // file to this graph — the findFiles glob, `isGraphPath` over the open tabs — is
     // case-insensitive, so the summariser has to be too. While it dispatched on
     // `endsWith('.sldd')` the file was accepted and then classified as neither
     // dictionary nor MAT: it contributed no variables, so BOTH models' `Kp` went
@@ -137,14 +143,14 @@ describe('the usage graph over the real fixture files', () => {
       FILES[1],
       { uriString: UPPER, path: '/fx/Params.SLDD', bytes: bytes('params.sldd') },
     ]);
-    expect(graph.reverse.get(`${UPPER}\nKp`)!.map((r) => r.blockName)).toEqual([
+    expect(graph.blocksUsing(UPPER, 'Kp').map((r) => r.blockName)).toEqual([
       'Gain1',
       'PlantGain',
       'Trim',
     ]);
     // And the forward direction names the file as it is actually spelled on disk,
     // rather than the lower-cased key the refs are matched through.
-    expect(graph.forward.get(`${GAIN}\nPlantGain`)).toEqual([
+    expect(graph.paramLinks(GAIN, 'PlantGain')).toEqual([
       { property: 'Gain', paramName: 'Kp', source: 'Params.SLDD', linkTarget: `Kp@${UPPER}` },
     ]);
   });
@@ -154,7 +160,7 @@ describe('the usage graph over the real fixture files', () => {
     // same dictionary renders the same cell on every open. Reversing the input must
     // be the only thing that reverses the output.
     const swapped = buildUsageGraph([FILES[1], FILES[0], FILES[2]]);
-    expect(swapped.reverse.get(`${DICT}\nKp`)!.map((r) => r.blockName)).toEqual([
+    expect(swapped.blocksUsing(DICT, 'Kp').map((r) => r.blockName)).toEqual([
       'PlantGain',
       'Trim',
       'Gain1',
@@ -188,7 +194,7 @@ describe('a dictionary row whose Usage the session already answered', () => {
   });
 
   it('is OVERWRITTEN with every model-qualified usage the files hold', () => {
-    expect(annotateVariableRows(DICT, sessionRows, buildUsageGraph(FILES).reverse)).toBe(true);
+    expect(annotateVariableRows(DICT, sessionRows, buildUsageGraph(FILES))).toBe(true);
     const usedBy = rowNamed(sessionRows, 'Kp').UsedBy;
     expect('links' in usedBy).toBe(false);
     expect(usedBy.blockLinks).toEqual([
@@ -202,7 +208,7 @@ describe('a dictionary row whose Usage the session already answered', () => {
     // Ki gets no answer from either engine. Overwriting it with an empty cell would
     // turn "no model here says so" into the emphatic "unused" that neither engine is
     // entitled to claim.
-    annotateVariableRows(DICT, sessionRows, buildUsageGraph(FILES).reverse);
+    annotateVariableRows(DICT, sessionRows, buildUsageGraph(FILES));
     expect(rowNamed(sessionRows, 'Ki').UsedBy).toBeUndefined();
   });
 
@@ -210,7 +216,7 @@ describe('a dictionary row whose Usage the session already answered', () => {
     // The far end of the path: what the user reads. Three usages, two models, two
     // qualifiers — and three separate links, because grouping is presentational and
     // must not cost a navigable target.
-    annotateVariableRows(DICT, sessionRows, buildUsageGraph(FILES).reverse);
+    annotateVariableRows(DICT, sessionRows, buildUsageGraph(FILES));
     const table = await mount(sessionRows as TreeTableRow[], ['section:design']);
     const td = table.shadowRoot!.querySelector(
       `tr[data-row-id="${rowNamed(sessionRows, 'Kp').ID}"] td.col-UsedBy`,

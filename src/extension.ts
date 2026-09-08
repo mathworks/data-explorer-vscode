@@ -18,10 +18,11 @@ import {
   invalidate as invalidateNameIndex,
 } from './host/nameIndex.js';
 import { isSectionRowId } from './common/sectionRowId.js';
-import { isSlddPath, SUPPORTED_RE, SUPPORTED_GLOB } from './common/fileTypes.js';
+import { isSupportedPath, SUPPORTED_GLOB } from './common/fileTypes.js';
+import { isSlddFile } from 'data-explorer-core';
 
 function isSlddUri(uri: vscode.Uri | undefined): boolean {
-  return !!uri && isSlddPath(uri.path);
+  return !!uri && isSlddFile(uri.path);
 }
 
 // True if the .sldd at `uri` is editable JSON (not zip/binary). Editable JSON
@@ -34,7 +35,7 @@ function isSlddUri(uri: vscode.Uri | undefined): boolean {
 // URI"), so it falls through to the read-only byte-backed view, which opens it
 // fine. See exceedsTextSyncLimit in slddFormat.ts.
 async function isEditableJsonSldd(uri: vscode.Uri): Promise<boolean> {
-  if (!isSlddPath(uri.path)) return false;
+  if (!isSlddFile(uri.path)) return false;
   try {
     const bytes = await vscode.workspace.fs.readFile(uri);
     return isEditableJsonSlddBytes(bytes) && !exceedsTextSyncLimit(bytes);
@@ -46,7 +47,7 @@ async function isEditableJsonSldd(uri: vscode.Uri): Promise<boolean> {
 // True if the .sldd at `uri` is a compressed-binary (zip/OPC) dictionary. These
 // open in the writable BinarySlddEditorProvider (table editing + re-zip on save).
 async function isZipSldd(uri: vscode.Uri): Promise<boolean> {
-  if (!isSlddPath(uri.path)) return false;
+  if (!isSlddFile(uri.path)) return false;
   try {
     const bytes = await vscode.workspace.fs.readFile(uri);
     return isZipBytes(bytes);
@@ -193,7 +194,7 @@ export function activate(context: vscode.ExtensionContext): void {
       // health badge, so refresh decorations for supported docs. Also re-sync
       // the name index for live entry-name edits (e.g. renaming an entry in an
       // open .sldd); reindexFile is a no-op until the index is first built.
-      if (SUPPORTED_RE.test(e.document.uri.path)) {
+      if (isSupportedPath(e.document.uri.path)) {
         void reindexFile(e.document.uri);
         refreshAll();
       }
@@ -223,7 +224,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     // Saving clears the dirty state → update the modified badge.
     vscode.workspace.onDidSaveTextDocument((doc) => {
-      if (SUPPORTED_RE.test(doc.uri.path)) {
+      if (isSupportedPath(doc.uri.path)) {
         refreshAll();
       }
     }),

@@ -1,8 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
-import { DataModel, type ParseWarning } from 'data-explorer-core';
+import { DataModel, isMatFile, isModelFile, type ParseWarning } from 'data-explorer-core';
 import { readSlddContent } from './slddContent.js';
 import { refuseIfUnreadable, sourceWarnings } from './parseWarnings.js';
-import { isMatPath, isModelPath } from '../common/fileTypes.js';
 
 const cache = new Map<string, any>(); // uriString -> SlddNode
 
@@ -50,9 +49,9 @@ export function getModelFromBytes(uriString: string, name: string, bytes: ArrayB
   // — both of its flavours are text — but it arrives here as bytes like the rest,
   // and core's addModelSource sniffs the actual format rather than trusting the
   // extension.
-  if (isModelPath(name)) {
+  if (isModelFile(name)) {
     node = DataModel.addModelSource(uriString, bytes, { path: name });
-  } else if (isMatPath(name)) {
+  } else if (isMatFile(name)) {
     node = DataModel.addMatSource(uriString, bytes, { path: name });
   } else {
     // .sldd — compressed (zip) vs JSON-as-bytes; readSlddContent dispatches. The

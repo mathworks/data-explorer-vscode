@@ -14,10 +14,10 @@ export function dirname(p: string): string {
   return i <= 0 ? '' : p.slice(0, i);
 }
 
-/** Basename lower-cased, for case-insensitive workspace matching. */
-export function refBasename(p: string): string {
-  return basename(p).toLowerCase();
-}
+// `refBasename` — the basename lower-cased, which is the key two spellings of one file
+// agree on — is core's (re-exported by slddRefs.ts). It is the key core's own usage
+// index matches references through, so a copy here would be a second opinion about
+// whether a model's `Params.SLDD` reaches `params.sldd` on disk.
 
 /** Basename of a URI string, stripping any `?query` or `#hash` first. */
 export function uriBasename(uriString: string): string {

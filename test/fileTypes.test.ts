@@ -14,25 +14,32 @@
 //   - miss the name index's glob  → it appears, but search cannot find its entries
 // No single feature test covers all four, so the guard has to be the list itself.
 //
-// These tests therefore check two things: that every consumer derives from the
-// shared list, and that no consumer has quietly grown its own copy again.
+// The list is now only HALF the rule. WHICH KIND a file is belongs to core, which
+// publishes `isModelFile`/`isSlddFile`/`isMatFile`/`isProjectFile` and dispatches its
+// own parsers on them; this host asks core rather than keeping a second opinion about
+// whether `Params.SLDD` is a dictionary. What is left here is the extension LIST, for
+// the two things only vscode needs it for: a `findFiles` glob and the `package.json`
+// selector.
+//
+// Splitting the rule that way creates the failure this file has to catch, because the
+// halves are not independent:
+//   - in the list, in none of core's tests → discovered, then classified as nothing
+//   - in core's tests, absent from the list → never discovered at all
+// Neither half can see the other, so this is the only place that agreement is
+// checkable, and it is pinned in BOTH directions below. The scan at the bottom then
+// covers the third case: a consumer that quietly grows its own copy of either half.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { isMatFile, isModelFile, isProjectFile, isSlddFile } from 'data-explorer-core';
 import {
   MODEL_EXTS,
   SUPPORTED_EXTS,
   GRAPH_EXTS,
-  SUPPORTED_RE,
-  GRAPH_FILE_RE,
-  MODEL_RE,
   SUPPORTED_GLOB,
   GRAPH_GLOB,
-  isModelPath,
-  isSlddPath,
-  isMatPath,
-  isProjectPath,
-  stripModelExt,
+  isSupportedPath,
+  isGraphPath,
   refModelExt,
 } from '../src/common/fileTypes.js';
 
@@ -64,84 +71,86 @@ describe('the shared extension list', () => {
   });
 });
 
-describe('the derived matchers', () => {
-  it('matches every supported extension and nothing else', () => {
+// The seam. Every extension this host discovers is claimed by exactly one of core's
+// kind tests, and every kind test's extension is discoverable — the two halves of one
+// rule, checked against each other because nothing else can.
+const KINDS: ReadonlyArray<readonly [string, string, (p: string) => boolean]> = [
+  ['sldd', 'dictionary', isSlddFile],
+  ['mat', 'MAT-file', isMatFile],
+  ['prj', 'project', isProjectFile],
+  ['slx', 'model', isModelFile],
+  ['mdl', 'model', isModelFile],
+];
+
+describe('the list and core’s kind tests agree', () => {
+  it('names a kind test for every supported extension, and no extension core alone knows', () => {
+    // Set equality, in both directions, and the reason this table is written out by
+    // hand: adding a format to SUPPORTED_EXTS without saying which of core's tests
+    // claims it fails HERE, where the answer is cheap, rather than as a file that
+    // appears in the tree and then renders as nothing. And a kind test that core grows
+    // (say `.slxp`) is only reachable once its extension joins the list.
+    expect([...new Set(KINDS.map(([ext]) => ext))].sort()).toEqual([...SUPPORTED_EXTS].sort());
+  });
+
+  it('classifies every supported extension as exactly its own kind', () => {
+    for (const [ext, kind, test] of KINDS) {
+      expect(test(`/w/thing.${ext}`), `.${ext} must be a ${kind}`).toBe(true);
+      for (const [otherExt, otherKind, otherTest] of KINDS) {
+        if (otherKind === kind) continue;
+        expect(otherTest(`/w/thing.${ext}`), `.${ext} is not a ${otherKind}`).toBe(false);
+        expect(test(`/w/thing.${otherExt}`), `.${otherExt} is not a ${kind}`).toBe(false);
+      }
+    }
+  });
+
+  it('classifies an upper-cased name, which is why the tests are core’s', () => {
+    // `Params.SLDD` is found by SUPPORTED_GLOB, so a classifier that is stricter than
+    // the glob accepts the file and then does nothing with it: no variables in the
+    // graph, the wrong row builder, and a skip past the editable-JSON redirect into
+    // the read-only view. Every copy this host used to keep was case-SENSITIVE; core's
+    // are not, and there is now one of them.
+    for (const [ext, kind, test] of KINDS) {
+      expect(test(`/w/Thing.${ext.toUpperCase()}`), `.${ext.toUpperCase()} must be a ${kind}`).toBe(true);
+    }
+  });
+
+  it('anchors at the end, so the globs and the kind tests admit the same files', () => {
+    // `**/*.{...}` matches the end of the name only; a kind test that did not would
+    // classify files discovery never offers, and the disagreement would surface as a
+    // routing decision made for a file nothing else in the host knows about.
+    expect(isSlddFile('/w/params.slddx')).toBe(false);
+    expect(isMatFile('/w/notes.material')).toBe(false);
+    expect(isModelFile('/w/model.mdl.bak')).toBe(false);
+    expect(isSupportedPath('/w/slx/readme.txt')).toBe(false);
+  });
+});
+
+describe('the host’s two routing questions', () => {
+  it('supports precisely the extensions in the supported list', () => {
     for (const ext of SUPPORTED_EXTS) {
-      expect(SUPPORTED_RE.test(`/w/model.${ext}`), `.${ext} must be supported`).toBe(true);
+      expect(isSupportedPath(`/w/thing.${ext}`), `.${ext} must be supported`).toBe(true);
+      expect(isSupportedPath(`/w/Thing.${ext.toUpperCase()}`), `.${ext} must be case-insensitive`).toBe(true);
     }
-    expect(SUPPORTED_RE.test('/w/notes.txt')).toBe(false);
-    expect(SUPPORTED_RE.test('/w/archive.zip')).toBe(false);
+    expect(isSupportedPath('/w/notes.txt')).toBe(false);
+    expect(isSupportedPath('/w/archive.zip')).toBe(false);
   });
 
-  it('matches case-insensitively, so a .MDL from Windows is not skipped', () => {
-    // The host's routing regex used to be case-SENSITIVE while the usage graph's
-    // was not, so `Model.SLX` was a graph participant the editor router did not
-    // recognise. These files live on case-insensitive filesystems.
-    expect(SUPPORTED_RE.test('/w/Model.SLX')).toBe(true);
-    expect(SUPPORTED_RE.test('/w/Legacy.MDL')).toBe(true);
-    expect(GRAPH_FILE_RE.test('/w/Legacy.MDL')).toBe(true);
-    expect(MODEL_RE.test('/w/Legacy.MDL')).toBe(true);
-  });
-
-  it('does not match an extension that merely appears mid-path', () => {
-    // `**/*.{...}` anchors at the end; the regexes must agree, or the two
-    // discovery paths disagree about the same file.
-    expect(SUPPORTED_RE.test('/w/slx/readme.txt')).toBe(false);
-    expect(MODEL_RE.test('/w/model.mdl.bak')).toBe(false);
-  });
-
-  it('recognises both model containers as models, and non-models as not', () => {
-    expect(isModelPath('/w/ctrl.slx')).toBe(true);
-    expect(isModelPath('/w/ctrl.mdl')).toBe(true);
-    expect(isModelPath('/w/params.sldd')).toBe(false);
-    expect(isModelPath('/w/signals.mat')).toBe(false);
-    expect(isModelPath('/w/proj.prj')).toBe(false);
-  });
-
-  // The three siblings of isModelPath. They exist because only the model test was
-  // shared: everything that had to tell a dictionary from a MAT-file from a project
-  // wrote its own `endsWith`, and every one of those copies was case-SENSITIVE while
-  // the matchers that ADMIT the file are not.
-  it('tells the four kinds apart, each excluding the others', () => {
-    expect(isSlddPath('/w/params.sldd')).toBe(true);
-    expect(isMatPath('/w/signals.mat')).toBe(true);
-    expect(isProjectPath('/w/proj.prj')).toBe(true);
-    for (const other of ['/w/ctrl.slx', '/w/ctrl.mdl', '/w/signals.mat', '/w/proj.prj']) {
-      expect(isSlddPath(other), `${other} is not a dictionary`).toBe(false);
+  it('admits precisely the graph list to the usage and name graphs', () => {
+    for (const ext of GRAPH_EXTS) {
+      expect(isGraphPath(`/w/thing.${ext}`), `.${ext} must participate`).toBe(true);
     }
-    for (const other of ['/w/ctrl.slx', '/w/params.sldd', '/w/proj.prj']) {
-      expect(isMatPath(other), `${other} is not a MAT-file`).toBe(false);
+    // The one difference between the two questions, and the reason there are two: a
+    // project is opened but contributes no variables and no parameter usages.
+    expect(isGraphPath('/w/proj.prj')).toBe(false);
+    expect(isSupportedPath('/w/proj.prj')).toBe(true);
+    for (const ext of SUPPORTED_EXTS) {
+      if (GRAPH_EXTS.includes(ext as never)) continue;
+      expect(isGraphPath(`/w/thing.${ext}`), `.${ext} is not a graph participant`).toBe(false);
     }
-    for (const other of ['/w/ctrl.slx', '/w/params.sldd', '/w/signals.mat']) {
-      expect(isProjectPath(other), `${other} is not a project`).toBe(false);
-    }
-  });
-
-  it('recognises an upper-cased kind, which is the whole reason they are shared', () => {
-    // `Params.SLDD` is found by SUPPORTED_GLOB and matched by GRAPH_FILE_RE, so a
-    // consumer that classifies it more strictly accepts the file and then does
-    // nothing with it: no variables in the graph, the wrong row builder, and a skip
-    // past the editable-JSON redirect into the read-only view.
-    expect(isSlddPath('/w/Params.SLDD')).toBe(true);
-    expect(isMatPath('/w/Signals.MAT')).toBe(true);
-    expect(isProjectPath('/w/Proj.PRJ')).toBe(true);
-    // Still anchored: a longer extension that merely starts the same is not a match.
-    expect(isSlddPath('/w/params.slddx')).toBe(false);
-    expect(isMatPath('/w/notes.material')).toBe(false);
   });
 });
 
 describe('model-name helpers', () => {
-  it('strips either container extension to the bare model name', () => {
-    // The usage graph labels a model by this name and matches block paths against
-    // it, so a `.mdl` left labelled `engine.mdl` would match nothing.
-    expect(stripModelExt('engine.slx')).toBe('engine');
-    expect(stripModelExt('engine.mdl')).toBe('engine');
-    expect(stripModelExt('engine.MDL')).toBe('engine');
-    // Not a model: left alone rather than half-stripped.
-    expect(stripModelExt('params.sldd')).toBe('params.sldd');
-  });
-
   it('completes a reference with the PARENT model’s own extension', () => {
     // A legacy hierarchy is legacy throughout: a .mdl model's references are .mdl
     // siblings, and labelling them .slx resolves to nothing. Mirrors core's
@@ -159,7 +168,10 @@ describe('no consumer keeps its own copy of the list', () => {
     'src/extension.ts',
     'src/host/SectionsTreeProvider.ts',
     'src/host/usageGraph.ts',
-    'src/host/usageResolve.ts',
+    // usageCells.ts is deliberately NOT here: it neither discovers nor classifies a
+    // file. It hands core's `buildUsageIndex` the bytes usageGraph.ts read, and core
+    // dispatches on the filename with its own (case-insensitive) kind tests — so a
+    // rule about this extension's globs and predicates has nothing to say about it.
     'src/host/nameIndex.ts',
     'src/host/structuralIndex.ts',
     'src/host/slxStructure.ts',
@@ -184,9 +196,9 @@ describe('no consumer keeps its own copy of the list', () => {
 
   // A hand-rolled kind test, e.g. `path.endsWith('.sldd')`. This is the copy that got
   // written eight times, and the one whose failure is quietest: it is case-SENSITIVE,
-  // so it disagrees with every matcher above about a file MATLAB or Windows named
+  // so it disagrees with every glob above about a file MATLAB or Windows named
   // `Params.SLDD` — the file is discovered, opened, indexed, and then classified as
-  // nothing. Use isSlddPath/isMatPath/isProjectPath/isModelPath.
+  // nothing. Ask core: isSlddFile/isMatFile/isProjectFile/isModelFile.
   const ENDSWITH_EXT = new RegExp(`endsWith\\((['"])\\.(${SUPPORTED_EXTS.join('|')})\\1\\)`, 'i');
 
   for (const file of CONSUMERS) {
@@ -194,13 +206,23 @@ describe('no consumer keeps its own copy of the list', () => {
       const src = code(file);
       expect(GLOB_LITERAL.test(src), `${file} should use SUPPORTED_GLOB/GRAPH_GLOB`).toBe(false);
       expect(EXT_ALTERNATION.test(src), `${file} should use a shared matcher`).toBe(false);
-      expect(ENDSWITH_EXT.test(src), `${file} should use a shared is*Path predicate`).toBe(false);
+      expect(ENDSWITH_EXT.test(src), `${file} should use one of core's kind tests`).toBe(false);
     });
   }
 
-  it('every consumer that discovers or routes files imports the shared module', () => {
+  it('every consumer that discovers or routes files takes the rule from a shared module', () => {
+    // Either source counts, because the rule now lives in two places on purpose: the
+    // extension LIST here (globs, manifest) and the kind tests in core. A consumer
+    // that needs only to classify — SlddModel, structuralIndex, BinaryEditorProvider —
+    // imports core alone and never mentions the list, which is correct. What must not
+    // happen is a consumer deriving the rule from neither, and that is what the
+    // literal scan above and this check bracket between them.
     for (const file of CONSUMERS) {
-      expect(read(file), `${file} must import from common/fileTypes`).toContain('fileTypes.js');
+      const src = read(file);
+      expect(
+        src.includes('fileTypes.js') || src.includes("'data-explorer-core'"),
+        `${file} must take its globs from common/fileTypes or its kind tests from core`,
+      ).toBe(true);
     }
   });
 
@@ -209,11 +231,13 @@ describe('no consumer keeps its own copy of the list', () => {
     // through parseModel, which decides from the BYTES — that is also what makes a
     // mislabelled file open instead of failing.
     //
-    // The usage graph's model read is in usageResolve.ts, not usageGraph.ts: the pure
-    // summarising/resolution half was split out so it could be unit-tested, leaving
-    // usageGraph.ts as the vscode file I/O alone. This list names whoever holds the
-    // parse — following it there is the point, not an exemption.
-    for (const file of ['src/host/usageResolve.ts', 'src/host/nameIndex.ts', 'src/host/slxStructure.ts']) {
+    // The usage graph's model read is no longer in this repo at all — it is core's
+    // `buildUsageIndex`, which dispatches through the same `parseModel`. Pinning that
+    // by scanning a file in node_modules would assert against a pinned artifact, so it
+    // is pinned by BEHAVIOUR instead: test/usageEndToEnd.test.ts runs a classic
+    // legacy_ctrl.mdl through the graph and expects its blocks, and parseSlx on a
+    // `.mdl` throws rather than returning nothing.
+    for (const file of ['src/host/nameIndex.ts', 'src/host/slxStructure.ts']) {
       const src = code(file);
       expect(src, `${file} must use parseModel`).toContain('parseModel');
       expect(src, `${file} must not call parseSlx directly`).not.toContain('parseSlx');

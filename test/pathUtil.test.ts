@@ -1,7 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 // Unit tests for the shared path utilities in src/common/pathUtil.ts.
 import { describe, it, expect } from 'vitest';
-import { basename, dirname, refBasename, uriBasename } from '../src/common/pathUtil.js';
+import { basename, dirname, uriBasename } from '../src/common/pathUtil.js';
 
 describe('pathUtil', () => {
   describe('basename', () => {
@@ -32,11 +32,9 @@ describe('pathUtil', () => {
     });
   });
 
-  describe('refBasename', () => {
-    it('lowercases the basename', () => {
-      expect(refBasename('/some/Dir/MyFile.SLDD')).toBe('myfile.sldd');
-    });
-  });
+  // refBasename lives in core now and is tested there (test/fileKinds.test.ts), because
+  // it is the key core's usage index matches a model's recorded reference through. The
+  // host reaches it via slddRefs.ts; test/sectionsTree.test.ts covers that seam.
 
   describe('uriBasename', () => {
     it('strips ?query before extracting basename', () => {

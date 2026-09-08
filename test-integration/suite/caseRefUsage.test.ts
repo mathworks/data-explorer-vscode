@@ -3,17 +3,21 @@
 //
 // A model records a data-source link as the user typed it, not as the filesystem
 // spells it, so `caseparams.sldd` in a model routinely points at `CaseParams.sldd`
-// on disk. usageGraph therefore keys its by-basename maps — and every lookup into
-// them — through refBasename (basename lower-cased), and filters the .sldd/.mat
-// external sources with case-insensitive regexes. The sections tree already
-// resolved refs this way (RelGraph.byBasename), so matching case-sensitively here
-// made the SAME reference resolve in the tree and silently not in the Usage
-// column: parameters that are plainly used rendered as unused, with no error.
+// on disk. The graph therefore keys its by-basename maps — and every lookup into
+// them — through refBasename (basename lower-cased), and classifies the .sldd/.mat
+// external sources case-insensitively. The sections tree already resolved refs this
+// way (RelGraph.byBasename), so matching case-sensitively here made the SAME
+// reference resolve in the tree and silently not in the Usage column: parameters
+// that are plainly used rendered as unused, with no error.
 //
-// This has to be an integration test. The normalisation lives in usageGraph.ts,
-// which imports `vscode` and is excluded from the vitest suite; the pure resolver
-// (usageResolve.ts) is agnostic to it and its unit tests pass either way. Only the
-// real build over real files exercises the lines that were wrong.
+// That keying is core's now (`buildUsageIndex`, reached through usageCells.ts) and
+// core tests it directly, so this file is no longer where the rule is pinned. What
+// it still covers is everything on THIS side of the call, none of which core can
+// vouch for: whether a differently-cased file reaches the graph at all (the findFiles
+// glob and `isGraphPath` over open tabs), whether the path handed over is one
+// core can classify, and whether the answer reaches the editors — all of which
+// import `vscode` and are excluded from the vitest suite. Only the real build over
+// real files exercises them.
 //
 // The four blocks in the fixture cover four DIFFERENT lines of buildGraph — the
 // dataDictionary link, a chained dictionary reference, an external .sldd, and an

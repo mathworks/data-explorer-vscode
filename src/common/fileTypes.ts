@@ -1,5 +1,5 @@
 // Copyright 2026 The MathWorks, Inc.
-// The supported file extensions, in ONE place.
+// The supported file extensions, in ONE place — and ONLY the extensions.
 //
 // This list was the most-duplicated rule in the repo: before this module it was
 // spelled out in six independent literals — two extension regexes, three
@@ -9,12 +9,26 @@
 // relationship tree, or appears there but contributes no Usage links, or is read
 // once and then never re-read when it changes on disk.
 //
-// So the extension list lives here and every consumer derives from it.
-// test/fileTypes.test.ts scans the host sources for stray literals to keep it that
-// way, and test/manifest.test.ts holds package.json to the same list.
+// WHICH KIND a file is, though, is not this module's to say any more — it is core's
+// (`isSlddFile`/`isMatFile`/`isProjectFile`/`isModelFile`, published for exactly this
+// reason). It is a property of the format, this host is one of several readers that
+// has to decide it, and core's own parsers dispatch on those same tests: a host with
+// its own copy is a second opinion about whether `Params.SLDD` is a dictionary, and
+// the last time these disagreed the file was found by the glob, admitted to the usage
+// graph, and then classified as nothing at all. So every kind question in this host
+// goes to core, and what is left here is the extension LIST plus the things only
+// vscode needs it for — a `findFiles` glob and the `package.json` selector — neither
+// of which core has any concept of.
 //
-// These are pure (no vscode dependency) so both the host and its tests can use
-// them.
+// Those two are not independent: a format present in the list but in none of core's
+// tests is discovered and then unclassifiable, and one in core's tests but absent from
+// the list is never discovered at all. test/fileTypes.test.ts pins them against each
+// other in both directions, which is the only place that agreement can be checked —
+// and it also scans the host sources for stray literals, since a consumer that spells
+// its own `endsWith('.sldd')` is outside both.
+//
+// These are pure (no vscode dependency) so both the host and its tests can use them.
+import { isMatFile, isModelFile, isProjectFile, isSlddFile } from 'data-explorer-core';
 
 /**
  * Simulink models.
@@ -36,38 +50,9 @@ export const SUPPORTED_EXTS = ['sldd', 'mat', 'prj', ...MODEL_EXTS] as const;
  */
 export const GRAPH_EXTS = ['sldd', 'mat', ...MODEL_EXTS] as const;
 
-function extRe(exts: readonly string[]): RegExp {
-  return new RegExp(`\\.(${exts.join('|')})$`, 'i');
-}
-
 function extGlob(exts: readonly string[]): string {
   return `**/*.{${exts.join(',')}}`;
 }
-
-/**
- * Matches any supported file.
- *
- * Case-INSENSITIVE, which unifies a split that used to exist: the host's routing
- * regex was case-sensitive while the usage graph's was not, so `Model.SLX` was a
- * graph participant that the editor router did not recognise. These files live on
- * case-insensitive filesystems (macOS, Windows), where that asymmetry is a bug.
- */
-export const SUPPORTED_RE = extRe(SUPPORTED_EXTS);
-
-/** Matches a file the usage/name graphs read. */
-export const GRAPH_FILE_RE = extRe(GRAPH_EXTS);
-
-/** Matches a Simulink model, whichever container it uses. */
-export const MODEL_RE = extRe(MODEL_EXTS);
-
-/** Matches a data dictionary. */
-export const SLDD_RE = extRe(['sldd']);
-
-/** Matches a MAT-file. */
-export const MAT_RE = extRe(['mat']);
-
-/** Matches a MATLAB project marker. */
-export const PROJECT_RE = extRe(['prj']);
 
 /** `findFiles` glob for every supported file. */
 export const SUPPORTED_GLOB = extGlob(SUPPORTED_EXTS);
@@ -75,52 +60,27 @@ export const SUPPORTED_GLOB = extGlob(SUPPORTED_EXTS);
 /** `findFiles` glob for the usage/name graphs. */
 export const GRAPH_GLOB = extGlob(GRAPH_EXTS);
 
-/** True if `path` names a Simulink model (`.slx` or either flavour of `.mdl`). */
-export function isModelPath(path: string): boolean {
-  return MODEL_RE.test(path);
-}
-
-/*
- * WHICH KIND a supported file is, for the consumers that have to decide.
+/**
+ * True if this extension opens `path` at all — the routing question, asked of a tab
+ * or a changed document rather than of a folder listing.
  *
- * These exist because `isModelPath` was shared while its three siblings were not:
- * every consumer that had to tell a dictionary from a MAT-file from a project spelled
- * its own `path.endsWith('.sldd')`, and all eight of those copies were
- * case-SENSITIVE while every matcher above is case-insensitive. So a file named
- * `Params.SLDD` was found by the globs, matched by GRAPH_FILE_RE, admitted to the
- * usage graph's file list — and then classified as neither dictionary nor MAT by the
- * summariser, contributing no variables and no Usage links. The same asymmetry sent it
- * past the editable-JSON redirect into the read-only view, gave it the wrong row
- * builder, and left it out of the sections tree's reference reading: eight independent
- * ways for one file to be half-supported.
- *
- * A model reference is matched with the same predicates, since a model records a
- * linked source as the user typed it (`EXTRADICT.SLDD` is a real dictionary link).
- * One rule for "is this a dictionary", whether the string came from a filesystem or
- * from inside a model.
+ * A union of core's kind tests rather than a regex over SUPPORTED_EXTS, so that being
+ * "supported" means precisely "some reader will know what this is". Case-INSENSITIVE,
+ * because core's tests are: that unifies a split which used to exist here, where the
+ * host's routing regex was case-sensitive while the usage graph's was not, so
+ * `Model.SLX` was a graph participant the editor router did not recognise. These files
+ * live on case-insensitive filesystems (macOS, Windows), where that asymmetry is a bug.
  */
-
-/** True if `path` names a data dictionary. */
-export function isSlddPath(path: string): boolean {
-  return SLDD_RE.test(path);
-}
-
-/** True if `path` names a MAT-file. */
-export function isMatPath(path: string): boolean {
-  return MAT_RE.test(path);
-}
-
-/** True if `path` names a MATLAB project. */
-export function isProjectPath(path: string): boolean {
-  return PROJECT_RE.test(path);
+export function isSupportedPath(path: string): boolean {
+  return isGraphPath(path) || isProjectFile(path);
 }
 
 /**
- * Strip a model extension, giving the bare model name MATLAB uses internally
- * (`plant.slx` and `plant.mdl` are both the model `plant`).
+ * True if `path` names a file the usage/name graphs read. The same set as
+ * `isSupportedPath` minus the project marker — see GRAPH_EXTS.
  */
-export function stripModelExt(name: string): string {
-  return name.replace(MODEL_RE, '');
+export function isGraphPath(path: string): boolean {
+  return isModelFile(path) || isSlddFile(path) || isMatFile(path);
 }
 
 /**

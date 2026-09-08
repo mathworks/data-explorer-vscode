@@ -5,10 +5,16 @@
 import type { GraphSource, SourceType } from './graphModel.js';
 import { extractReferences, normalizeRefNames } from './slddRefs.js';
 import { extractSlxStructure } from './slxStructure.js';
-import { isZipBytes } from './slddFormat.js';
-import { parseBinarySldd, parseProject } from 'data-explorer-core';
+import { readSlddContent } from './slddContent.js';
+import {
+  isJsonTextBytes,
+  isMatFile,
+  isModelFile,
+  isProjectFile,
+  parseProject,
+  slddChunkContent,
+} from 'data-explorer-core';
 import { basename } from '../common/pathUtil.js';
-import { isMatPath, isModelPath, isProjectPath } from '../common/fileTypes.js';
 
 export interface RawFile {
   uriString: string;
@@ -24,9 +30,9 @@ function typeOf(path: string): SourceType {
   // Both model containers are the same SourceType: a `.mdl` is a Simulink model,
   // so it gets the model icon, the model row builder, and the model relationship
   // extraction — not the `.sldd` fallback this used to drop it into.
-  if (isModelPath(path)) return 'model';
-  if (isMatPath(path)) return 'mat';
-  if (isProjectPath(path)) return 'project';
+  if (isModelFile(path)) return 'model';
+  if (isMatFile(path)) return 'mat';
+  if (isProjectFile(path)) return 'project';
   return 'sldd';
 }
 
@@ -56,19 +62,23 @@ export function buildGraphSource(file: RawFile): GraphSource {
         return { ...base, slddRefs: extractReferences(file.text) };
       }
       if (file.bytes) {
-        if (isZipBytes(new Uint8Array(file.bytes))) {
-          // Compressed SLDD: the references live in the parsed binary content
-          // under the same "Dictionary References" key the JSON footer uses, so
-          // normalise them through the same helper as the text path.
-          const content = parseBinarySldd(file.bytes) as any;
-          const refs =
-            content?.__MW_TEXT_PARTS__?.['__MW_TEXT_PART__/data/chunk0']?.__MW_TEXT_content?.[
-              'Dictionary References'
-            ];
-          return { ...base, slddRefs: normalizeRefNames(refs) };
+        // WHICH format these bytes are is core's question, asked with core's own sniff:
+        // this used to test for the zip magic itself, which is the same rule written a
+        // second time, and the two did not agree on a textual dictionary that leads
+        // with a BOM. A textual one then takes the same cheap scan as the branch above
+        // — same file, so same treatment, and the tree deliberately does not parse a
+        // whole dictionary just to draw its reference edges.
+        const u8 = new Uint8Array(file.bytes);
+        if (isJsonTextBytes(u8)) {
+          return { ...base, slddRefs: extractReferences(new TextDecoder().decode(u8)) };
         }
-        // Fallback: treat bytes as UTF-8 JSON text.
-        return { ...base, slddRefs: extractReferences(new TextDecoder().decode(file.bytes)) };
+        // Compressed: no cheap path exists, so read it properly. The content object is
+        // reached through core's accessor rather than by walking `__MW_TEXT_PARTS__`
+        // here, and the reference list goes through the same normaliser as the text
+        // path, since the object-vs-string spelling is the writer's choice and not the
+        // format's.
+        const content = slddChunkContent(readSlddContent(file.bytes));
+        return { ...base, slddRefs: normalizeRefNames(content?.['Dictionary References']) };
       }
     }
     // mat and everything else: node with no outbound relationships.
