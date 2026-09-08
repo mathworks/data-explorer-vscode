@@ -382,7 +382,53 @@ writeFileSync(
   }),
 );
 
+// --- shadow_ws.slx: a model workspace variable that SHADOWS a dictionary entry ---
+//
+// The third model of the usage set, and the one that pins shadowing over real bytes:
+// it links `params.sldd` like the other two, but its own model workspace ALSO defines
+// `Kp`. MATLAB resolves a name once — workspace first — so `WsGain` reads the
+// workspace's `Kp` and the dictionary's `Kp` is not used by it at all.
+//
+// `DictOnly` is the control, and the reason this fixture has two blocks: it reads `Uo`,
+// which only the dictionary defines, so the dictionary is provably linked and reachable
+// from this model. Without it, an empty cell for `Kp` would be equally well explained by
+// a dictionary link that failed to resolve — which is the bug NEXT DOOR to the one under
+// test, and would pass a one-block fixture.
+//
+// The workspace is written as the pre-R2019b `simulink/modelworkspace.mat` part (a whole
+// Level-5 MAT-file, which SlxParser routes to parseMat) rather than the newer
+// `simulink/modelWorkspace.mxarray`, because a MAT-file is what the writer above already
+// emits. Which part carries it is SlxParser's concern, and both arrive as
+// `ParsedSlx.workspace`.
+writeFileSync(
+  here('shadow_ws.slx'),
+  zipSync({
+    'simulink/blockDiagram.json': strToU8(
+      JSON.stringify({
+        BlockDiagram: {
+          DataDictionary: 'params.sldd',
+          ModelUUID: 'uuid-shadow-ws',
+          System: { Ref: 'system_root' },
+        },
+      }),
+    ),
+    'simulink/systems/system_root.xml': strToU8(
+      `<?xml version="1.0" encoding="utf-8"?>` +
+        `<System>` +
+        `<Block BlockType="Gain" Name="WsGain" SID="1"><P Name="Gain">Kp</P></Block>` +
+        `<Block BlockType="Constant" Name="DictOnly" SID="2"><P Name="Value">Uo</P></Block>` +
+        `</System>`,
+    ),
+    'simulink/modelworkspace.mat': matFile('MATLAB 5.0 MAT-file, hand-built model workspace', [
+      matrixElement('Kp', [1, 1], [7]),
+    ]),
+    'metadata/coreProperties.xml': strToU8(
+      `<?xml version="1.0"?><coreProperties><version>R2026b</version></coreProperties>`,
+    ),
+  }),
+);
+
 console.log(
   'wrote model_with_refs.slx, model_with_refs.mdl, legacy_ctrl.mdl, compressed.sldd, ' +
-    'object_array_binary.sldd, nd_numeric.mat, params.sldd, shared_gain.slx',
+    'object_array_binary.sldd, nd_numeric.mat, params.sldd, shared_gain.slx, shadow_ws.slx',
 );
