@@ -428,7 +428,64 @@ writeFileSync(
   }),
 );
 
+// --- sid_blocks.slx: a block's identity is its SID, not its name ---------------
+//
+// The fourth model of the usage set, shaped after ~/delite/f/f14.slx, which is where
+// both halves of this were found:
+//
+//   two blocks named `Gain`, in DIFFERENT systems (SIDs 15 and 24). A block name is
+//   unique only within its own system, and f14 has four `Gain` blocks; keyed by name
+//   they collapsed into ONE row reading `Gain=Mq, Gain=Zw, Gain=Kf, Gain=Zw` and all
+//   four shared the id `f14.slx/blocks/Gain`. Here they read different variables
+//   (`Kp` and `Ki`) precisely so a merge is visible: each row must show its own.
+//
+//   a block with NO name (SID 65). Simulink wrote its `Name` attribute as a lone line
+//   break, which normalizes to the empty string, so it displayed as a blank Name, an
+//   id of `f14.slx/blocks/`, and an EMPTY Usage link the user could not click. It
+//   reads `Uo` — the same parameter, and the same block, the user asked about.
+//
+// The nameless block is written as `&#xA;` rather than `Name=""`: that is the byte
+// sequence in the real file, and an empty attribute would test a case Simulink does
+// not actually produce.
+//
+// The subsystem carries its blocks in a `systems/system_1.xml` part of its own, as
+// R2020a-and-later files do; the parts loop is what makes both systems reachable.
+// `params.sldd` (Kp, Uo, Ki) is linked, so every parameter here resolves to a real
+// entry in a real dictionary and the reverse direction has something to credit.
+writeFileSync(
+  here('sid_blocks.slx'),
+  zipSync({
+    'simulink/blockDiagram.json': strToU8(
+      JSON.stringify({
+        BlockDiagram: {
+          DataDictionary: 'params.sldd',
+          ModelUUID: 'uuid-sid-blocks',
+          System: { Ref: 'system_root' },
+        },
+      }),
+    ),
+    'simulink/systems/system_root.xml': strToU8(
+      `<?xml version="1.0" encoding="utf-8"?>` +
+        `<System>` +
+        `<Block BlockType="Gain" Name="Gain" SID="15"><P Name="Gain">Kp</P></Block>` +
+        `<Block BlockType="SubSystem" Name="Inner" SID="61"><System Ref="system_1"/></Block>` +
+        `</System>`,
+    ),
+    'simulink/systems/system_1.xml': strToU8(
+      `<?xml version="1.0" encoding="utf-8"?>` +
+        `<System>` +
+        `<Block BlockType="Gain" Name="Gain" SID="24"><P Name="Gain">Ki</P></Block>` +
+        `<Block BlockType="Constant" Name="&#xA;" SID="65"><P Name="Value">Uo</P></Block>` +
+        `</System>`,
+    ),
+    'metadata/coreProperties.xml': strToU8(
+      `<?xml version="1.0"?><coreProperties><version>R2026b</version></coreProperties>`,
+    ),
+  }),
+);
+
 console.log(
   'wrote model_with_refs.slx, model_with_refs.mdl, legacy_ctrl.mdl, compressed.sldd, ' +
-    'object_array_binary.sldd, nd_numeric.mat, params.sldd, shared_gain.slx, shadow_ws.slx',
+    'object_array_binary.sldd, nd_numeric.mat, params.sldd, shared_gain.slx, shadow_ws.slx, ' +
+    'sid_blocks.slx',
 );

@@ -23,6 +23,12 @@ import {
 
 const BINARY_VIEW = 'dataExplorer.binaryView';
 
+// A block is asked for by its KEY, which is its SID — the fixture writes `SID="1"` on
+// Gain1 and `SID="2"` on Const1. A name identifies a block only within one system, so
+// the graph is not keyed by it (see test/blockSidIdentity.test.ts).
+const GAIN1 = '1';
+const CONST1 = '2';
+
 // selfContained.slx sits one level up from the workspace folder, in
 // test-integration/fixtures/standalone — outside the workspace so findFiles skips it.
 function standaloneUri(): vscode.Uri {
@@ -81,7 +87,7 @@ suite('single-file Usage (open-tab union)', () => {
     // the next test — it isolates the open-tab union as the cause of the edges.
     invalidateUsageGraph();
     await ensureUsageGraph();
-    const links = await paramLinksForBlock(uri.toString(), 'Gain1');
+    const links = await paramLinksForBlock(uri.toString(), GAIN1);
     assert.strictEqual(links.length, 0, 'no param links before the file is opened');
     const blocks = await blocksUsingVariable(uri.toString(), 'Bp');
     assert.strictEqual(blocks.length, 0, 'no reverse edges before the file is opened');
@@ -95,7 +101,7 @@ suite('single-file Usage (open-tab union)', () => {
     // model-workspace variable Bp. Rebuild the graph so it unions in the now-open
     // tab, then read the edge.
     const links = await pollRebuilt(async () => {
-      const l = await paramLinksForBlock(uri.toString(), 'Gain1');
+      const l = await paramLinksForBlock(uri.toString(), GAIN1);
       return l.length > 0 ? l : null;
     });
     assert.ok(links && links.length === 1, 'Gain1 has exactly one resolved param link');
@@ -118,7 +124,7 @@ suite('single-file Usage (open-tab union)', () => {
     assert.strictEqual(usedBy[0].modelUri, uri.toString());
 
     // The second block/var pair resolves too (Const1 Value = Numeric).
-    const constLinks = await paramLinksForBlock(uri.toString(), 'Const1');
+    const constLinks = await paramLinksForBlock(uri.toString(), CONST1);
     assert.strictEqual(constLinks.length, 1, 'Const1 has one resolved param link');
     assert.strictEqual(constLinks[0].paramName, 'Numeric');
     assert.strictEqual(constLinks[0].source, '');

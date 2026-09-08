@@ -131,8 +131,17 @@ let pendingSelectName: string | null = null;
 
 function applyPendingNameSelection(): void {
   if (!pendingSelectName) return;
-  const rows = (table.rows ?? []) as { ID: string; Name?: { label?: string } }[];
-  const match = rows.find((r) => r.Name?.label === pendingSelectName);
+  const rows = (table.rows ?? []) as { ID: string; Name?: { label?: string }; _blockKey?: string }[];
+  // Two grammars share this one channel. A variable target (and a block in a file
+  // written before SIDs existed) is a NAME and matches the Name label; a block
+  // target is core's block KEY — the SID — which is not printed anywhere, so it is
+  // matched against the `_blockKey` the row publishes. Without that second pass a
+  // `blocks:65@f14.slx` click would open the model and select nothing, since the
+  // row it means reads `<SID: 65>`. Name first, so every pre-SID target keeps its
+  // existing answer when a same-spelled key also exists.
+  const match =
+    rows.find((r) => r.Name?.label === pendingSelectName) ??
+    rows.find((r) => r._blockKey === pendingSelectName);
   if (!match) return;
   table.selectedRowIds = [match.ID];
   vscode.postMessage({ type: 'select', rowIds: [match.ID] });

@@ -70,8 +70,11 @@ describe('the workspace graph over a model that shadows its dictionary', () => {
   it('credits the model workspace variable, which is what the block reads', () => {
     // Keyed on the MODEL's uri: a model's own workspace is a source of definitions like
     // any other, and this is the cell the model view's workspace rows carry.
+    //
+    // The link names the block by its SID (`1`) and the CELL by its name — the target is
+    // an identity and the text is a label, and they are not the same string.
     expect(graph().blocksUsing(SHADOW, 'Kp')).toEqual([
-      { blockName: 'WsGain', modelName: 'shadow_ws', modelUri: SHADOW, linkTarget: `blocks:WsGain@${SHADOW}` },
+      { blockName: 'WsGain', modelName: 'shadow_ws', modelUri: SHADOW, linkTarget: `blocks:1@${SHADOW}` },
     ]);
   });
 
@@ -83,7 +86,7 @@ describe('the workspace graph over a model that shadows its dictionary', () => {
     // The control: the link resolves, the dictionary is reached, and shadowing is per
     // NAME. Without this the empty cell above would prove nothing.
     expect(graph().blocksUsing(DICT, 'Uo')).toEqual([
-      { blockName: 'DictOnly', modelName: 'shadow_ws', modelUri: SHADOW, linkTarget: `blocks:DictOnly@${SHADOW}` },
+      { blockName: 'DictOnly', modelName: 'shadow_ws', modelUri: SHADOW, linkTarget: `blocks:2@${SHADOW}` },
     ]);
   });
 
@@ -91,10 +94,12 @@ describe('the workspace graph over a model that shadows its dictionary', () => {
     // The forward direction of the same resolution, and the other half of the fix: the
     // parameter must not be labelled `(params.sldd)`. A `workspace:` target is the
     // extension's routing prefix for a definition in the model's own workspace.
-    expect(graph().paramLinks(SHADOW, 'WsGain')).toEqual([
+    // Asked by block KEY — `1` is WsGain's SID, `2` is DictOnly's — which is the join
+    // `annotateModelRows` performs with the row's `_blockKey`.
+    expect(graph().paramLinks(SHADOW, '1')).toEqual([
       { property: 'Gain', paramName: 'Kp', source: '', linkTarget: `workspace:Kp@${SHADOW}` },
     ]);
-    expect(graph().paramLinks(SHADOW, 'DictOnly')).toEqual([
+    expect(graph().paramLinks(SHADOW, '2')).toEqual([
       { property: 'Value', paramName: 'Uo', source: 'params.sldd', linkTarget: `Uo@${DICT}` },
     ]);
   });
@@ -136,7 +141,7 @@ describe('the dictionary’s own rows, session first and graph second', () => {
     expect(rowNamed(sessionRows, 'Kp').UsedBy).toBeUndefined();
     expect(rowNamed(sessionRows, 'Uo').UsedBy).toEqual({
       blockLinks: [
-        { blockName: 'DictOnly', modelName: 'shadow_ws', modelUri: SHADOW, linkTarget: `blocks:DictOnly@${SHADOW}` },
+        { blockName: 'DictOnly', modelName: 'shadow_ws', modelUri: SHADOW, linkTarget: `blocks:2@${SHADOW}` },
       ],
     });
   });

@@ -46,6 +46,10 @@ export interface RawSource {
 // `modelName`: the name is a stripped basename, so two `engine` models in two folders
 // share one — grouping on the name would merge their blocks under a single qualifier
 // and claim usages in a model that has none. The uri is what identifies a model.
+//
+// `blockName` is a LABEL and not an identity: core substitutes `<SID: 65>` for a block
+// Simulink recorded without a name, and two blocks in different subsystems can print
+// the same text. What identifies the block is inside `linkTarget` (its SID).
 export interface BlockLink {
   blockName: string;
   modelName: string;
@@ -70,8 +74,13 @@ export interface ParamLink {
 export interface UsageGraph {
   /** Blocks that use `varName` in the source at `sourceUri` (a data file, or a model for its own workspace). */
   blocksUsing(sourceUri: string, varName: string): BlockLink[];
-  /** Resolved parameter links for one block of the model at `modelUri`. */
-  paramLinks(modelUri: string, blockName: string): ParamLink[];
+  /**
+   * Resolved parameter links for one block of the model at `modelUri`, keyed by the
+   * block's KEY — its SID, falling back to its name only for a file written before
+   * SIDs existed. Not the Name label: a label is unique only within one system, and
+   * a nameless block's label is the synthetic `<SID: 65>`.
+   */
+  paramLinks(modelUri: string, blockKey: string): ParamLink[];
 }
 
 /**
@@ -95,7 +104,7 @@ export function buildUsageGraph(files: RawSource[]): UsageGraph {
   return {
     blocksUsing: (sourceUri, varName) =>
       index.usagesOf(sourceUri, varName).map((u) => toBlockLink(u, modelNames)),
-    paramLinks: (modelUri, blockName) => index.paramsOf(modelUri, blockName).map(toParamLink),
+    paramLinks: (modelUri, blockKey) => index.paramsOf(modelUri, blockKey).map(toParamLink),
   };
 }
 
@@ -165,5 +174,49 @@ export function annotateVariableRows(
     row.UsedBy = { blockLinks };
     changed = true;
   }
+  return changed;
+}
+
+/**
+ * Fill the Usage column of a MODEL view's rows: block rows take their resolved parameter
+ * links (`Gain=Kp (dict.sldd)`), and the model-workspace variable rows go through
+ * `annotateVariableRows` above, so a variable's usage reads the same everywhere.
+ *
+ * Lives here rather than in usageGraph.ts for the same reason `annotateVariableRows`
+ * does: that module imports `vscode` and this is a policy worth testing over real bytes.
+ * usageGraph.ts only awaits the graph and calls this.
+ *
+ * A block row is joined by its `_blockKey` — the block's SID, which core's
+ * `ModelBlockNode.toRow` publishes for exactly this purpose — and NEVER by the Name
+ * label. A label is unique only inside one system, so two `Gain` blocks in different
+ * subsystems would take each other's parameters; and a block Simulink recorded with no
+ * name at all (f14.slx's SID 65, whose `Name` attribute is a lone line break) has the
+ * synthetic label `<SID: 65>`, which matches no block in core's index and left the cell
+ * empty. Unlike a variable row, a block row IS emptied when the graph has nothing for
+ * it: the row came from this same model's parse, so the graph has seen the block, and
+ * "no parameters resolved" is an answer about it rather than a gap in what was read.
+ */
+export function annotateModelViewRows(
+  modelUri: string,
+  rows: { Name?: { label?: string }; UsedBy?: unknown; _isBlockRow?: boolean; _blockKey?: string }[],
+  graph: UsageGraph,
+): boolean {
+  let changed = false;
+  const varRows: typeof rows = [];
+  for (const row of rows) {
+    // Block rows carry a paramLinks-shaped Usage today (from the ModelBlockNode remap in
+    // rowBuilder); replace it with the cross-file-resolved links.
+    if (row._isBlockRow) {
+      const links = graph.paramLinks(modelUri, row._blockKey ?? '');
+      row.UsedBy = links.length > 0 ? { paramLinks: links } : '';
+      changed = true;
+      continue;
+    }
+    varRows.push(row);
+  }
+  // Model-workspace variable rows: blocks in THIS model that use them. Every one names
+  // the model it is in, redundant as that reads in a model view — one shape for a
+  // variable's usage everywhere beats a second one that differs only here.
+  if (annotateVariableRows(modelUri, varRows, graph)) changed = true;
   return changed;
 }

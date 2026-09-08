@@ -185,9 +185,14 @@ suite('.mdl models (both flavours)', () => {
     // it mirrors must be indistinguishable downstream. A framing bug here (a lost
     // part, or the delimiter's newline kept as part content) leaves the JSON parts
     // unparseable and this model, too, contributing nothing.
+    //
+    // One thing does differ, and it is not the result: the block is asked for by its
+    // KEY, and the modern file records `SID="1"` where the classic one above records no
+    // SID at all, so there the name IS the key. Both spellings live on disk and the
+    // answer is the same.
     await openAllFixtures();
     const links = await pollRebuilt(async () => {
-      const l = await paramLinksForBlock(legacyUri(MODERN).toString(), 'ModernGain');
+      const l = await paramLinksForBlock(legacyUri(MODERN).toString(), '1');
       return l.length > 0 && l[0].linkTarget ? l : null;
     });
     assert.ok(links, 'ModernGain has a resolved param link');
@@ -230,12 +235,14 @@ suite('.mdl models (both flavours)', () => {
     // because something in the workspace happens to define `Kp`.
     invalidateUsageGraph();
     await ensureUsageGraph();
-    for (const [model, block] of [
-      [CLASSIC, 'ClassicGain'],
-      [CLASSIC, 'ClassicConst'],
-      [MODERN, 'ModernGain'],
+    // `key` is each block's own: a name in the classic file, which records no SID, and
+    // the SID in the modern one.
+    for (const [model, block, key] of [
+      [CLASSIC, 'ClassicGain', 'ClassicGain'],
+      [CLASSIC, 'ClassicConst', 'ClassicConst'],
+      [MODERN, 'ModernGain', '1'],
     ] as const) {
-      const links = await paramLinksForBlock(legacyUri(model).toString(), block);
+      const links = await paramLinksForBlock(legacyUri(model).toString(), key);
       assert.strictEqual(links.length, 0, `${block} has no links before ${model} is opened`);
     }
     const usedBy = await blocksUsingVariable(legacyUri(DICT).toString(), 'Kp');

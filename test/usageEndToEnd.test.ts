@@ -101,10 +101,15 @@ describe('the usage graph over the real fixture files', () => {
     // two models is the shape a dictionary exists for, and the one a bare block name
     // cannot report. Each carries the model AND a `blocks:`-channelled target back to
     // the block, which is the whole cell — no second lookup on click.
+    //
+    // The target names the block by its SID (core v1.8.0), which is why the two
+    // shared_gain blocks read `1`/`2` while the classic `.mdl`'s reads `Gain1` — a
+    // pre-R2010b file records no SID at all, so there the name IS the key. Both
+    // grammars are live on disk and both land here, over the same call.
     expect(graph().blocksUsing(DICT, 'Kp')).toEqual([
       { blockName: 'Gain1', modelName: 'legacy_ctrl', modelUri: CTRL, linkTarget: `blocks:Gain1@${CTRL}` },
-      { blockName: 'PlantGain', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:PlantGain@${GAIN}` },
-      { blockName: 'Trim', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:Trim@${GAIN}` },
+      { blockName: 'PlantGain', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:1@${GAIN}` },
+      { blockName: 'Trim', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:2@${GAIN}` },
     ]);
   });
 
@@ -124,7 +129,9 @@ describe('the usage graph over the real fixture files', () => {
     // its dictionary as `Params.SLDD` while the file is `params.sldd`, so the ref
     // match has to be case-insensitive. Either failing leaves the param unresolved —
     // rendered with no source and no link, indistinguishable from an unused one.
-    expect(graph().paramLinks(GAIN, 'Trim')).toEqual([
+    // `'2'` is Trim's SID, the key this direction is asked by — see the block-key note
+    // on the first test in this describe.
+    expect(graph().paramLinks(GAIN, '2')).toEqual([
       { property: 'Value', paramName: '2*Kp', source: 'params.sldd', linkTarget: `Kp@${DICT}` },
     ]);
   });
@@ -150,7 +157,7 @@ describe('the usage graph over the real fixture files', () => {
     ]);
     // And the forward direction names the file as it is actually spelled on disk,
     // rather than the lower-cased key the refs are matched through.
-    expect(graph.paramLinks(GAIN, 'PlantGain')).toEqual([
+    expect(graph.paramLinks(GAIN, '1')).toEqual([
       { property: 'Gain', paramName: 'Kp', source: 'Params.SLDD', linkTarget: `Kp@${UPPER}` },
     ]);
   });
@@ -199,8 +206,8 @@ describe('a dictionary row whose Usage the session already answered', () => {
     expect('links' in usedBy).toBe(false);
     expect(usedBy.blockLinks).toEqual([
       { blockName: 'Gain1', modelName: 'legacy_ctrl', modelUri: CTRL, linkTarget: `blocks:Gain1@${CTRL}` },
-      { blockName: 'PlantGain', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:PlantGain@${GAIN}` },
-      { blockName: 'Trim', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:Trim@${GAIN}` },
+      { blockName: 'PlantGain', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:1@${GAIN}` },
+      { blockName: 'Trim', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:2@${GAIN}` },
     ]);
   });
 

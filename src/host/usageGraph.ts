@@ -19,6 +19,7 @@ import * as vscode from 'vscode';
 import { toArrayBuffer } from '../common/bytes.js';
 import { GRAPH_GLOB, isGraphPath } from '../common/fileTypes.js';
 import {
+  annotateModelViewRows,
   annotateVariableRows,
   buildUsageGraph,
   type BlockLink,
@@ -104,18 +105,20 @@ export async function blocksUsingVariable(sourceUri: string, varName: string): P
   return g.blocksUsing(sourceUri, varName);
 }
 
-// Resolved param links for a block (model view Usage cell).
-export async function paramLinksForBlock(modelUri: string, blockName: string): Promise<ParamLink[]> {
+// Resolved param links for a block (model view Usage cell). `blockKey` is the
+// block's SID (its name only for a file written before SIDs existed), never the
+// Name label — see `annotateModelRows`.
+export async function paramLinksForBlock(modelUri: string, blockKey: string): Promise<ParamLink[]> {
   const g = await ensureUsageGraph();
-  return g.paramLinks(modelUri, blockName);
+  return g.paramLinks(modelUri, blockKey);
 }
 
 // --- Row annotation ---------------------------------------------------------
 //
-// Both directions below hand their variable rows to the SAME
-// `annotateVariableRows` (in usageCells.ts, where it is unit-testable — this
-// module imports `vscode`). See its comment for why the graph overwrites a cell a
-// node already filled instead of yielding to it.
+// Both directions below are thin awaits over the annotation policy in
+// usageCells.ts, where it is unit-testable — this module imports `vscode`. Both
+// reach the SAME `annotateVariableRows` for a variable row; see its comment for why
+// the graph overwrites a cell a node already filled instead of yielding to it.
 
 // Data view (.sldd/.mat): set the Usage column on variable rows to the blocks
 // that use them (links back to each block's model). `sourceUri` is the open
@@ -130,22 +133,5 @@ export async function annotateDataRows(sourceUri: string, rows: any[]): Promise<
 // blocks that use them. `modelUri` is the open model's uriString.
 export async function annotateModelRows(modelUri: string, rows: any[]): Promise<boolean> {
   const g = await ensureUsageGraph();
-  let changed = false;
-  const varRows: any[] = [];
-  for (const row of rows) {
-    // Block rows carry a paramLinks-shaped Usage today (from the ModelBlockNode
-    // remap in rowBuilder); replace it with the cross-file-resolved links.
-    if (row._isBlockRow) {
-      const links = g.paramLinks(modelUri, row.Name?.label ?? '');
-      row.UsedBy = links.length > 0 ? { paramLinks: links } : '';
-      changed = true;
-      continue;
-    }
-    varRows.push(row);
-  }
-  // Model-workspace variable rows: blocks in THIS model that use them. Every one
-  // names the model it is in, redundant as that reads in a model view — one shape
-  // for a variable's usage everywhere beats a second one that differs only here.
-  if (annotateVariableRows(modelUri, varRows, g)) changed = true;
-  return changed;
+  return annotateModelViewRows(modelUri, rows, g);
 }

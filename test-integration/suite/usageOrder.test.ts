@@ -177,17 +177,21 @@ suite('Usage does not depend on tab history', () => {
     assert.deepStrictEqual(
       cell.blockLinks,
       [
+        // The cell NAMES each block and TARGETS it by SID — the fixture numbers its
+        // blocks from 1 within each model, so `GainA` is `1@ctrlA` and `GainB`, in the
+        // other model, is `1@plantB`. Two blocks reachable through the same digit is
+        // exactly why the target carries the model uri too.
         {
           blockName: 'GainA',
           modelName: 'ctrlA',
           modelUri: ctrlUri(),
-          linkTarget: `blocks:GainA@${ctrlUri()}`,
+          linkTarget: `blocks:1@${ctrlUri()}`,
         },
         {
           blockName: 'LimitA',
           modelName: 'ctrlA',
           modelUri: ctrlUri(),
-          linkTarget: `blocks:LimitA@${ctrlUri()}`,
+          linkTarget: `blocks:2@${ctrlUri()}`,
         },
         // The load-bearing one: plantB is not in this bundle's session, so no engine
         // but the workspace graph could have produced it.
@@ -195,7 +199,7 @@ suite('Usage does not depend on tab history', () => {
           blockName: 'GainB',
           modelName: 'plantB',
           modelUri: plantUri(),
-          linkTarget: `blocks:GainB@${plantUri()}`,
+          linkTarget: `blocks:1@${plantUri()}`,
         },
       ],
       'every usage, each qualified by the model it lives in',

@@ -6,7 +6,11 @@
 //   workspace:<name>@<source>  block row -> a model-workspace param
 //   <name>@<source>            block row -> a dictionary/MAT variable
 //
-// <name> is a block or param name; <source> is a full uriString (when the
+// <name> is a param name, or — on the `blocks:` channel — core's block KEY, which
+// is the block's SID (`blocks:65@...`) and only falls back to its name for a file
+// written before SIDs existed. A block's DISPLAYED name is not in the target and
+// need not match it, which is why the selection this resolves to is made against a
+// row's `_blockKey` (see table-main.ts). <source> is a full uriString (when the
 // emitter knows it) or a bare basename. lastIndexOf('@') is used so a uriString
 // source (e.g. file:///a.slx) splits correctly — names never contain '@'.
 

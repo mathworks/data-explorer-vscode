@@ -35,6 +35,11 @@ import {
 const BINARY_VIEW = 'dataExplorer.binaryView';
 const TABLE_VIEW = 'dataExplorer.tableView';
 
+// The graph is asked for a block by its KEY, which is its SID — the fixture numbers its
+// four blocks 1..4 in the order below. A name identifies a block only within one system,
+// so it is not the key (see test/blockSidIdentity.test.ts).
+const SID = { Gain1: '1', Gain2: '2', Gain3: '3', Const1: '4' } as const;
+
 // The fixtures live in test-integration/fixtures/caserefs, one level up from the
 // workspace folder, so findFiles never returns them and they cannot perturb the
 // tree/index assertions in sectionsTree.test.ts and nameIndex.test.ts. Open tabs
@@ -115,7 +120,7 @@ suite('case-insensitive reference matching (usage graph)', () => {
     // indistinguishable from a genuinely unresolved parameter.
     await openAllFixtures();
     const links = await pollRebuilt(async () => {
-      const l = await paramLinksForBlock(modelUri(), 'Gain1');
+      const l = await paramLinksForBlock(modelUri(), SID.Gain1);
       return l.length > 0 ? l : null;
     });
     assert.ok(links, 'Gain1 has a resolved param link');
@@ -134,7 +139,7 @@ suite('case-insensitive reference matching (usage graph)', () => {
     // is normalised in slddSummary, a different line from the map keys above.
     await openAllFixtures();
     const links = await pollRebuilt(async () => {
-      const l = await paramLinksForBlock(modelUri(), 'Gain2');
+      const l = await paramLinksForBlock(modelUri(), SID.Gain2);
       return l.length > 0 && l[0].linkTarget ? l : null;
     });
     assert.ok(links, 'Gain2 has a resolved param link');
@@ -150,7 +155,7 @@ suite('case-insensitive reference matching (usage graph)', () => {
     // failure than a case-mismatched name, since the ref never reached the map.
     await openAllFixtures();
     const links = await pollRebuilt(async () => {
-      const l = await paramLinksForBlock(modelUri(), 'Gain3');
+      const l = await paramLinksForBlock(modelUri(), SID.Gain3);
       return l.length > 0 && l[0].linkTarget ? l : null;
     });
     assert.ok(links, 'Gain3 has a resolved param link');
@@ -164,7 +169,7 @@ suite('case-insensitive reference matching (usage graph)', () => {
     // the model owns no workspace variables, so nothing can shadow the MAT hit.
     await openAllFixtures();
     const links = await pollRebuilt(async () => {
-      const l = await paramLinksForBlock(modelUri(), 'Const1');
+      const l = await paramLinksForBlock(modelUri(), SID.Const1);
       return l.length > 0 && l[0].linkTarget ? l : null;
     });
     assert.ok(links, 'Const1 has a resolved param link');
@@ -200,9 +205,9 @@ suite('case-insensitive reference matching (usage graph)', () => {
     // something else in the workspace happens to define these names.
     invalidateUsageGraph();
     await ensureUsageGraph();
-    for (const block of ['Gain1', 'Gain2', 'Gain3', 'Const1']) {
+    for (const [block, sid] of Object.entries(SID)) {
       assert.strictEqual(
-        (await paramLinksForBlock(modelUri(), block)).length,
+        (await paramLinksForBlock(modelUri(), sid)).length,
         0,
         `${block} has no links with nothing open`,
       );
