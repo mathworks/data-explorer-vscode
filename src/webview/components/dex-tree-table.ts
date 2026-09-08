@@ -652,7 +652,15 @@ export class DexTreeTable extends LitElement {
         flex-shrink: 0;
       }
 
-      .name-cell .label {
+      /* The name and its qualifier share ONE truncating box, so a column too narrow
+         for "Gain3 (Controller)" eats the RIGHT of the text first — "Gain3 (Con…",
+         never "… (Controller)". They used to be two flex items, and a flex line
+         shrinks its items side by side: "(Controller)" has no break opportunity
+         after its opening paren, so it held its full width as a minimum while the
+         label — a scroll container, and so shrinkable to nothing — collapsed to an
+         ellipsis. The one part that names the row was the first part to go. One box
+         means one ellipsis, at the end of the line, which is where reading stops. */
+      .name-cell .name-text {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -710,7 +718,9 @@ export class DexTreeTable extends LitElement {
          since a model may show four rows reading Gain and only this tells them
          apart. */
       .name-qualifier {
-        margin-left: 4px;
+        /* 8px, which is what it has always rendered as: 4px of this used to come
+           from the flex gap, and the qualifier is no longer a flex item. */
+        margin-left: 8px;
         color: var(--dex-text-muted, #888);
         font-style: italic;
         font-size: 0.9em;
@@ -2329,12 +2339,14 @@ export class DexTreeTable extends LitElement {
             ${hasChildren ? (expanded ? '▼' : '▶') : ''}
           </span>
           ${iconId ? html`<dex-icon class="name-icon" .iconId=${iconId} .size=${16}></dex-icon>` : ''}
-          <span class="label ${isElement ? 'readonly' : ''}">${this._highlight(label)}</span
-          >${qualifier
-            ? html`<span class="name-qualifier" title=${row._blockPath || nothing}
-                >${'(' + qualifier + ')'}</span
-              >`
-            : ''}
+          <span class="name-text"
+            ><span class="label ${isElement ? 'readonly' : ''}">${this._highlight(label)}</span
+            >${qualifier
+              ? html`<span class="name-qualifier" title=${row._blockPath || nothing}
+                  >${'(' + qualifier + ')'}</span
+                >`
+              : ''}</span
+          >
         </div>
       `;
     }

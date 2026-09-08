@@ -36,6 +36,15 @@ const cell = (table: DexTreeTable, rowId: string, col: string): HTMLElement =>
 const text = (table: DexTreeTable, rowId: string, col: string): string =>
   (cell(table, rowId, col).textContent || '').trim();
 
+// The declarations of one rule in the component's own stylesheet. For the few cell
+// facts that are a matter of LAYOUT: happy-dom computes none of it, so the rule
+// itself is the closest thing to an assertion available.
+const styleRule = (selector: string): string => {
+  const sheet = (DexTreeTable.styles as unknown as { cssText: string }[]).map((s) => s.cssText).join('\n');
+  const at = sheet.indexOf(selector + ' {');
+  return at < 0 ? '' : sheet.slice(at, sheet.indexOf('}', at));
+};
+
 describe('user-supplied text is rendered as text, never as markup', () => {
   it('an entry named like an HTML tag shows the literal characters', async () => {
     // A .sldd is just a file; an entry named `<img src=x onerror="...">` must not
@@ -211,6 +220,29 @@ describe('a block row says which system it is in, after its name', () => {
     // payload. A path is searchable in the global entry search instead (searchFilter.ts).
     const table = await mount([blockRow('a', 'Gain', 'Controller', 'Controller/Gain')]);
     expect((table as any)._getCellText(table.rows[0], 'Name')).toBe('Gain');
+    table.remove();
+  });
+
+  it('puts the name and the qualifier in ONE truncating box, so a narrow column cuts the right', async () => {
+    // `Gain3 (Controller)` in a column too narrow for it must read `Gain3 (Con…`, not
+    // `… (Controller)`: the ellipsis belongs where reading stops. As two flex items it
+    // came out backwards — a flex line shrinks its items side by side, `(Controller)`
+    // has no break opportunity after its opening paren so it held its full width, and
+    // the label (a scroll container, shrinkable to nothing) gave up all of it. The part
+    // that NAMES the row was the first part to disappear.
+    //
+    // happy-dom has no layout engine, so what can be pinned is the box structure and
+    // the rule that truncates it — not the pixel where the ellipsis lands.
+    const table = await mount([blockRow('a', 'Gain', 'Controller', 'Controller/Gain')]);
+    const box = cell(table, 'a', 'Name').querySelector('.name-text')!;
+    expect(box.querySelector('.label')!.textContent).toBe('Gain');
+    expect(box.querySelector('.name-qualifier')!.textContent).toBe('(Controller)');
+
+    const truncation = ['overflow: hidden', 'text-overflow: ellipsis', 'white-space: nowrap'];
+    for (const decl of truncation) expect(styleRule('.name-cell .name-text')).toContain(decl);
+    // And exactly ONE box truncates. A second `overflow` inside it — on the label, as
+    // it used to be — is a second ellipsis and the old behaviour back.
+    expect(styleRule('.name-cell .label')).not.toContain('overflow');
     table.remove();
   });
 });
