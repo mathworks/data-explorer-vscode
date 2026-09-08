@@ -438,6 +438,11 @@ describe('links navigate rather than following an href', () => {
     });
 
     it('renders no empty parens for a link with no model name', async () => {
+      // Two different things reach the cell as a blank name, and it must print neither: a
+      // model the graph could not summarise (this row — no uri either), and a usage the
+      // host deliberately unqualified because it is inside the file being viewed
+      // (usageCells' `withoutOwnModel`, which keeps the uri). Blanking the name is how the
+      // host says "do not print this", so an empty `()` would break both.
       const table = await mount([
         makeRow('u', 'u', {
           UsedBy: { blockLinks: [{ blockName: 'orphan', modelName: '', modelUri: '', linkTarget: 'b:1' }] } as any,

@@ -31,7 +31,12 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { annotateVariableRows, buildUsageGraph, type RawSource } from '../src/host/usageCells.js';
+import {
+  annotateModelViewRows,
+  annotateVariableRows,
+  buildUsageGraph,
+  type RawSource,
+} from '../src/host/usageCells.js';
 import { getModel, getModelFromBytes } from '../src/host/SlddModel.js';
 import { buildRows } from '../src/host/rowBuilder.js';
 import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
@@ -193,6 +198,73 @@ describe('the dictionary’s own rows, session first and graph second', () => {
     // be told apart. Not part of the text above, deliberately: the path belongs on hover
     // rather than in a column this narrow.
     expect(cellOf('Uo').querySelector('a.value-link')!.getAttribute('title')).toBe('DictOnly');
+    table.remove();
+  });
+});
+
+// The same `Kp`, read from the model's own side. The dictionary view above is where
+// `(shadow_ws)` earns its place — a dictionary is shared, so the model is what tells one
+// `Gain` from another. A MODEL WORKSPACE is shared with nobody: every block that can read
+// `Kp` is a block of shadow_ws, so the qualifier named the file already open in the tab,
+// once for every link in the column.
+describe('the model’s own view, where a workspace variable’s users can only be here', () => {
+  let rows: any[];
+
+  beforeAll(() => {
+    // What BinaryEditorProvider does when the MODEL's editor resolves: its own rows, then
+    // the same annotation pass the dictionary got.
+    rows = buildRows(getModelFromBytes(SHADOW, 'shadow_ws.slx', bytes('shadow_ws.slx')));
+    annotateModelViewRows(SHADOW, rows, buildUsageGraph(FILES));
+  });
+
+  it('keeps everything that identifies the block and drops only the printed qualifier', () => {
+    expect(rowNamed(rows, 'Kp').UsedBy).toEqual({
+      blockLinks: [
+        {
+          blockName: 'WsGain',
+          blockPath: 'WsGain',
+          // Blank, not absent: the link is fully answered, and the uri below still says
+          // which model — so grouping, the tooltip and the target are all as they were.
+          modelName: '',
+          modelUri: SHADOW,
+          linkTarget: `blocks:1@${SHADOW}`,
+        },
+      ],
+    });
+  });
+
+  it('reads as the block alone, in the cell and in the text the cell copies as', async () => {
+    const table = new DexTreeTable();
+    table.columns = HOST_COLUMNS;
+    document.body.appendChild(table);
+    (table as any)._hiddenColumns = new Set<string>();
+    (table as any)._expandedIds = new Set(['section:workspace', 'section:blocks']);
+    table.rows = rows as TreeTableRow[];
+    table.requestUpdate();
+    await table.updateComplete;
+    const cellOf = (name: string): HTMLElement =>
+      table.shadowRoot!.querySelector(
+        `tr[data-row-id="${rowNamed(rows, name).ID}"] td.col-UsedBy`,
+      ) as HTMLElement;
+
+    expect(cellOf('Kp').textContent!.trim()).toBe('WsGain');
+    expect(cellOf('Kp').querySelector('.param-source')).toBeNull();
+    // The link itself is untouched — still followable, and still saying where the block is.
+    expect(cellOf('Kp').querySelectorAll('a.value-link').length).toBe(1);
+    expect(cellOf('Kp').querySelector('a.value-link')!.getAttribute('title')).toBe('WsGain');
+    // The column's TEXT, which is what sorting, copying and the filter bar see. Built from
+    // `modelName` as well, which is why the qualifier had to come off the payload rather
+    // than be hidden in the template: otherwise this still read `WsGain(shadow_ws)`.
+    expect((table as any)._getCellText(rowNamed(rows, 'Kp'), 'UsedBy')).toBe('WsGain');
+
+    // The styling this now matches, two rows up: the block that reads `Kp` has never said
+    // `Gain=Kp(shadow_ws)`, because a param resolved to the model's own workspace carries
+    // no source. One edge, both directions, one view, and now one convention.
+    expect(cellOf('WsGain').textContent!.trim()).toBe('Gain=Kp');
+    // And the control, unchanged: `Uo` comes from the linked dictionary, so the block that
+    // reads it still names where the value is from. Dropping a qualifier that disambiguates
+    // is the failure this test would otherwise permit.
+    expect(cellOf('DictOnly').textContent!.trim()).toBe('Value=Uo(params.sldd)');
     table.remove();
   });
 });

@@ -284,6 +284,36 @@ describe('annotateVariableRows names the model in every usage', () => {
     ]);
   });
 
+  it('drops the model qualifier from a usage inside the file being viewed', () => {
+    // A MODEL view's model-workspace row asks with the MODEL's uri, and a model workspace
+    // is private to its model — so every block the graph can answer with is in the file
+    // already open, and `(plant)` was the open file's own name printed once per link. The
+    // block view has never qualified the same edge read the other way (`Gain=Kp`, not
+    // `Gain=Kp (plant)`), so this is the two directions agreeing.
+    const MODEL = 'file:///w/plant.slx';
+    const rows = [row('Ts')];
+    annotateVariableRows(
+      MODEL,
+      rows,
+      graphSaying({
+        [`${MODEL}\nTs`]: [link('Gain1', 'plant', MODEL), link('Probe', 'harness', 'file:///w/harness.slx')],
+      }),
+    );
+    // The second link cannot arise from a real model workspace; it is here because the rule
+    // is "not the file being viewed" rather than "blank them all", which is exactly what
+    // leaves the dictionary view above untouched — a .sldd's uri is never a model's.
+    const links = rows[0].UsedBy.blockLinks;
+    expect(links.map((b: any) => `${b.blockName}${b.modelName ? `(${b.modelName})` : ''}`)).toEqual([
+      'Gain1',
+      'Probe(harness)',
+    ]);
+    // Only the printed qualifier goes. The uri is what the webview groups on and what the
+    // target resolves through, so blanking the name must leave both standing.
+    expect(links[0].modelUri).toBe(MODEL);
+    expect(links[0].linkTarget).toBe(`blocks:Gain1@${MODEL}`);
+    expect(links[0].blockPath).toBe('Gain1');
+  });
+
   it('OVERWRITES a session-supplied cell that names no model and knows fewer blocks', () => {
     // The regression. `node.toRow()` had already answered from the session, which held
     // FuelInjector.slx but not EngineCtrl.slx, so AFRTarget read `AFRConst, AFRCheck`:

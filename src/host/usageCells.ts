@@ -18,7 +18,8 @@
 //   - the LINK CHANNEL prefixes. Core emits `name@srcId`; `blocks:` and `workspace:`
 //     are this extension's routing grammar (see navTarget.ts), and prefixing them is
 //     the only place either string is spelled;
-//   - the `(source)` display label on a param link, which is a rendering decision;
+//   - the `(source)` label on a param link and the `(model)` qualifier on a block link:
+//     WHICH of them a cell has earned is a rendering decision, not a fact about the graph;
 //   - and `annotateVariableRows`, which decides which of two engines settles a cell.
 //
 // usageGraph.ts adds the vscode file I/O in front of this and nothing else, so a
@@ -46,6 +47,11 @@ export interface RawSource {
 // `modelName`: the name is a stripped basename, so two `engine` models in two folders
 // share one — grouping on the name would merge their blocks under a single qualifier
 // and claim usages in a model that has none. The uri is what identifies a model.
+//
+// Which is also why `modelName` can be BLANK on a link the graph answered fully: the cell
+// drops the qualifier when it names the very file being viewed (see `withoutOwnModel`).
+// The uri still identifies the model, so nothing downstream loses the ability to group,
+// target or navigate — only the printed `(model)` goes.
 //
 // `blockName` is a LABEL and not an identity: core substitutes `<SID: 65>` for a block
 // Simulink recorded without a name, and two blocks in different subsystems can print
@@ -182,16 +188,43 @@ export function annotateVariableRows(
     if (!name) continue;
     const blockLinks = graph.blocksUsing(sourceUri, name);
     if (blockLinks.length === 0) continue;
-    row.UsedBy = { blockLinks };
+    row.UsedBy = { blockLinks: blockLinks.map((link) => withoutOwnModel(link, sourceUri)) };
     changed = true;
   }
   return changed;
 }
 
 /**
+ * Drop the `(model)` qualifier from a usage inside the file the row itself belongs to.
+ *
+ * The qualifier is there because a variable can be SHARED: `DragCalc(MainVehicle)` and
+ * `DragCalc(SubChassis)` are two different blocks and the model is the only thing that
+ * separates them. A MODEL-WORKSPACE variable is shared with nobody — every block that can
+ * read it is in the model whose workspace holds it — so in a model view the qualifier
+ * repeated the name of the open file on every link and disambiguated nothing.
+ *
+ * Which is the rule `toParamLink` already applies to the same edge read the other way: a
+ * param resolved to the block's own model workspace reads `Gain=Kp`, not
+ * `Gain=Kp (shadow_ws)`. Now neither direction qualifies what the view already says.
+ *
+ * Blanked in the PAYLOAD rather than skipped while rendering, because the Usage column's
+ * text — what sorting, copying and the filter bar see — is built from `modelName` too
+ * (`_getCellText`). Hiding it in the template alone is how a cell comes to read `WsGain`
+ * and copy as `WsGain(shadow_ws)`.
+ *
+ * Keyed on the uri and not on "is this a model view", so it is inert where it should be: a
+ * data file's uri is never a model's, so a .sldd/.mat row keeps the qualifier on every
+ * link, and a usage from any OTHER model keeps it even in a model view.
+ */
+function withoutOwnModel(link: BlockLink, sourceUri: string): BlockLink {
+  return link.modelUri === sourceUri ? { ...link, modelName: '' } : link;
+}
+
+/**
  * Fill the Usage column of a MODEL view's rows: block rows take their resolved parameter
  * links (`Gain=Kp (dict.sldd)`), and the model-workspace variable rows go through
- * `annotateVariableRows` above, so a variable's usage reads the same everywhere.
+ * `annotateVariableRows` above, so a variable's usage reads the same everywhere — bar the
+ * `(model)` qualifier, which a usage inside the open model has no work for.
  *
  * Lives here rather than in usageGraph.ts for the same reason `annotateVariableRows`
  * does: that module imports `vscode` and this is a policy worth testing over real bytes.
@@ -225,9 +258,10 @@ export function annotateModelViewRows(
     }
     varRows.push(row);
   }
-  // Model-workspace variable rows: blocks in THIS model that use them. Every one names
-  // the model it is in, redundant as that reads in a model view — one shape for a
-  // variable's usage everywhere beats a second one that differs only here.
+  // Model-workspace variable rows: blocks in THIS model that use them, which is every
+  // block that could. Same call as the data view — one engine settles the column in both —
+  // and the `(model)` qualifier falls off there rather than here, because the reason it
+  // falls off is the uri and not the caller (see `withoutOwnModel`).
   if (annotateVariableRows(modelUri, varRows, graph)) changed = true;
   return changed;
 }
