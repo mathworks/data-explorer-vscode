@@ -50,8 +50,15 @@ export interface RawSource {
 // `blockName` is a LABEL and not an identity: core substitutes `<SID: 65>` for a block
 // Simulink recorded without a name, and two blocks in different subsystems can print
 // the same text. What identifies the block is inside `linkTarget` (its SID).
+//
+// Which is why `blockPath` is here too. A dictionary entry read by four blocks named
+// `Gain` gives a cell reading `Gain, Gain, Gain, Gain` — four separate, correct links
+// that a user cannot choose between. The path (`Controller/Gain`) is what tells them
+// apart, and the cell shows it as each link's tooltip rather than inline, because
+// spelling four paths out is a column nobody can read.
 export interface BlockLink {
   blockName: string;
+  blockPath: string;
   modelName: string;
   modelUri: string;
   linkTarget: string;
@@ -113,6 +120,10 @@ export function buildUsageGraph(files: RawSource[]): UsageGraph {
 function toBlockLink(usage: NodeUsage, modelNames: Map<string, string>): BlockLink {
   return {
     blockName: usage.blockName,
+    // Core's own join of the block's label onto its enclosing systems (`NodeUsage
+    // .blockPath`), not a second spelling of it: the same string the model view's rows
+    // carry, so one block reads the same wherever it is named.
+    blockPath: usage.blockPath,
     // A model in the graph always has a name; the fallback is for the answer that
     // cannot happen — a usage whose model core did not summarise — where a basename
     // is a better cell than `undefined`.

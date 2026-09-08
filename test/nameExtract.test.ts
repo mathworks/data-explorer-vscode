@@ -69,6 +69,8 @@ describe('namesFromMat', () => {
 
 describe('namesFromSlx', () => {
   it('extracts workspace vars (kind workspace) and block names (kind block)', () => {
+    // No SID in this parse, as a `.mdl` written before R2010b has none: the block's key
+    // falls back to its name, and its path is that name with no system in front of it.
     const parsed = {
       workspace: [{ name: 'Ts' }],
       blockParamUsages: [{ blockName: 'Gain1' }, { blockName: 'Sum1' }],
@@ -76,8 +78,22 @@ describe('namesFromSlx', () => {
     const records = namesFromSlx(parsed, 'file:///w/plant.slx');
     expect(records).toEqual<NameRecord[]>([
       { name: 'Ts', sourceUri: 'file:///w/plant.slx', sourceLabel: 'plant.slx', kind: 'workspace' },
-      { name: 'Gain1', sourceUri: 'file:///w/plant.slx', sourceLabel: 'plant.slx', kind: 'block' },
-      { name: 'Sum1', sourceUri: 'file:///w/plant.slx', sourceLabel: 'plant.slx', kind: 'block' },
+      {
+        name: 'Gain1',
+        sourceUri: 'file:///w/plant.slx',
+        sourceLabel: 'plant.slx',
+        kind: 'block',
+        selectName: 'Gain1',
+        blockPath: 'Gain1',
+      },
+      {
+        name: 'Sum1',
+        sourceUri: 'file:///w/plant.slx',
+        sourceLabel: 'plant.slx',
+        kind: 'block',
+        selectName: 'Sum1',
+        blockPath: 'Sum1',
+      },
     ]);
   });
 
@@ -92,6 +108,55 @@ describe('namesFromSlx', () => {
     const records = namesFromSlx(parsed, 'file:///w/plant.slx');
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({ name: 'Gain1', kind: 'block' });
+  });
+
+  // A block name is unique inside its own system and nowhere else, so the name is the
+  // wrong thing to key a block record on — and it was: f14.slx's four blocks named
+  // `Gain` deduped to a single hit that could reveal only whichever one came first,
+  // and its nameless Constant was dropped for having no name to search for. Both are
+  // core's rules (blockKey / blockLabel / joinBlockPath), applied here.
+  describe('one record per BLOCK, not per name', () => {
+    const uri = 'file:///w/f14.slx';
+    // Two `Gain` blocks in two subsystems and one whose label the file leaves blank —
+    // f14.slx's shape, which is where this came from.
+    const parsed = {
+      blockParamUsages: [
+        { blockName: 'Gain', sid: '15', systemPath: '' },
+        { blockName: 'Gain', sid: '24', systemPath: 'Controller' },
+        { blockName: 'Gain', sid: '24', systemPath: 'Controller' },
+        { blockName: '', sid: '65', systemPath: 'Pilot G-force calculation' },
+      ],
+    };
+
+    it('keeps two same-named blocks apart, each revealed by its own SID', () => {
+      const blocks = namesFromSlx(parsed, uri).filter((r) => r.kind === 'block');
+      expect(blocks.map((r) => r.name)).toEqual(['Gain', 'Gain', '<SID: 65>']);
+      // What travels to the editor: the SID, which is what the row publishes as
+      // `_blockKey`. Keyed by name there was one record for the first two.
+      expect(blocks.map((r) => r.selectName)).toEqual(['15', '24', '65']);
+    });
+
+    it('says which subsystem each hit is in, so the list is readable', () => {
+      expect(namesFromSlx(parsed, uri).map((r) => r.blockPath)).toEqual([
+        'Gain',
+        'Controller/Gain',
+        'Pilot G-force calculation/<SID: 65>',
+      ]);
+    });
+
+    it('makes a block whose label the file leaves blank searchable at all', () => {
+      // It used to be dropped: an empty name cannot be searched for. Its stand-in label
+      // can, and its SID is what selects it.
+      const nameless = namesFromSlx(parsed, uri).find((r) => r.selectName === '65');
+      expect(nameless).toMatchObject({ name: '<SID: 65>', kind: 'block' });
+    });
+
+    it('drops a block with neither a name nor a SID', () => {
+      // Nothing to search for AND nothing to select if it were found — the one case
+      // where a block still contributes no record.
+      const records = namesFromSlx({ blockParamUsages: [{ blockName: '', sid: '' }, {}] }, uri);
+      expect(records).toEqual([]);
+    });
   });
 
   it('drops empty/missing names in both workspace and blocks', () => {

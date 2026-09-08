@@ -72,10 +72,20 @@ describe('the workspace graph over same-named and nameless blocks', () => {
     // same word twice — that part IS the model — but the TARGETS differ, so the two rows
     // are reachable independently. Keyed by name there was one target for both.
     expect(graph().blocksUsing(DICT, 'Kp')).toEqual([
-      { blockName: 'Gain', modelName: 'sid_blocks', modelUri: MODEL, linkTarget: `blocks:15@${MODEL}` },
+      { blockName: 'Gain', blockPath: 'Gain', modelName: 'sid_blocks', modelUri: MODEL, linkTarget: `blocks:15@${MODEL}` },
     ]);
     expect(graph().blocksUsing(DICT, 'Ki')).toEqual([
-      { blockName: 'Gain', modelName: 'sid_blocks', modelUri: MODEL, linkTarget: `blocks:24@${MODEL}` },
+      {
+        blockName: 'Gain',
+        // What separates this link from the one above for a READER: the target already
+        // separates them for the code, but `Gain` and `Gain` do not, and a cell showing
+        // two of them is a choice a user cannot make. The path is the answer, and it is
+        // model-relative — the model is named by `modelName` beside it.
+        blockPath: 'Inner/Gain',
+        modelName: 'sid_blocks',
+        modelUri: MODEL,
+        linkTarget: `blocks:24@${MODEL}`,
+      },
     ]);
   });
 
@@ -84,7 +94,16 @@ describe('the workspace graph over same-named and nameless blocks', () => {
     // was empty — an anchor with no characters in it cannot be clicked — and the target
     // named no block at all.
     expect(graph().blocksUsing(DICT, 'Uo')).toEqual([
-      { blockName: NAMELESS, modelName: 'sid_blocks', modelUri: MODEL, linkTarget: `blocks:65@${MODEL}` },
+      {
+        blockName: NAMELESS,
+        // The stand-in label is what the path is built from too, so a nameless block is
+        // placed as `Inner/<SID: 65>` rather than the `Inner/` a bare name would give —
+        // a path ending in a separator names no block.
+        blockPath: `Inner/${NAMELESS}`,
+        modelName: 'sid_blocks',
+        modelUri: MODEL,
+        linkTarget: `blocks:65@${MODEL}`,
+      },
     ]);
   });
 
@@ -137,6 +156,16 @@ describe('the model view’s own rows, from the parse through the annotation', (
     expect(blockRows().map((r) => r._blockKey)).toEqual(['15', '24', '65']);
   });
 
+  it('publishes WHERE each block is, as the systems and as the whole path', () => {
+    // Two facts and not one, because the row shows them in two places: the qualifier
+    // after the Name is the enclosing systems alone (`Gain (Inner)` — repeating the
+    // label inside its own qualifier would be noise), and the whole path is what the
+    // qualifier's tooltip says. Both come from core's row, so the model view and the
+    // Usage column place a block identically.
+    expect(blockRows().map((r) => r._systemPath)).toEqual(['', 'Inner', 'Inner']);
+    expect(blockRows().map((r) => r._blockPath)).toEqual(['Gain', 'Inner/Gain', `Inner/${NAMELESS}`]);
+  });
+
   it('annotates each row with its OWN parameter', () => {
     // The defect, in the shape it reached the user: two rows labelled `Gain` must not both
     // resolve to the same block. Joining on `Name.label` gives BOTH rows the first block's
@@ -167,12 +196,22 @@ describe('the model view’s own rows, from the parse through the annotation', (
       table.shadowRoot!.querySelector(`tr[data-row-id="${id}"] td.col-${col}`) as HTMLElement;
     const text = (id: string, col: string): string => cell(id, col).textContent!.trim();
 
+    // The Name cell carries the qualifier the two `Gain` rows are told apart by. The
+    // root-system block gets none: there is no system to name, and `Gain ()` would be
+    // noise the other two rows do not need either.
     expect(text(`${MODEL}/blocks/15`, 'Name')).toBe('Gain');
     expect(text(`${MODEL}/blocks/15`, 'UsedBy')).toBe('Gain=Kp(params.sldd)');
-    expect(text(`${MODEL}/blocks/24`, 'Name')).toBe('Gain');
+    expect(text(`${MODEL}/blocks/24`, 'Name')).toBe('Gain(Inner)');
     expect(text(`${MODEL}/blocks/24`, 'UsedBy')).toBe('Gain=Ki(params.sldd)');
-    expect(text(`${MODEL}/blocks/65`, 'Name')).toBe(NAMELESS);
+    expect(text(`${MODEL}/blocks/65`, 'Name')).toBe(`${NAMELESS}(Inner)`);
     expect(text(`${MODEL}/blocks/65`, 'UsedBy')).toBe('Value=Uo(params.sldd)');
+    // The qualifier is a span of its own, so it can be dimmed and is not part of the
+    // label a rename would edit; its tooltip is the whole path.
+    const qualifier = (id: string): HTMLElement | null =>
+      cell(id, 'Name').querySelector('.name-qualifier');
+    expect(qualifier(`${MODEL}/blocks/15`)).toBeNull();
+    expect(qualifier(`${MODEL}/blocks/24`)!.getAttribute('title')).toBe('Inner/Gain');
+    expect(qualifier(`${MODEL}/blocks/65`)!.getAttribute('title')).toBe(`Inner/${NAMELESS}`);
     // Every one of the three has an anchor with text in it. The nameless block's used to
     // render as an empty `<a>`: present in the DOM, invisible, and unclickable.
     for (const sid of ['15', '24', '65']) {

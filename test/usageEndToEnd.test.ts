@@ -106,17 +106,28 @@ describe('the usage graph over the real fixture files', () => {
     // shared_gain blocks read `1`/`2` while the classic `.mdl`'s reads `Gain1` — a
     // pre-R2010b file records no SID at all, so there the name IS the key. Both
     // grammars are live on disk and both land here, over the same call.
+    // Each also carries where the block IS. Every one of these sits in its model's root
+    // system, so the path is the label alone — the interesting case (two `Gain`s in two
+    // subsystems) is pinned in usageCells.test.ts over bytes built for it, and in core
+    // against MATLAB-written f14.slx. What this pins is that the field survives the
+    // whole path from core's index to the cell.
     expect(graph().blocksUsing(DICT, 'Kp')).toEqual([
-      { blockName: 'Gain1', modelName: 'legacy_ctrl', modelUri: CTRL, linkTarget: `blocks:Gain1@${CTRL}` },
-      { blockName: 'PlantGain', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:1@${GAIN}` },
-      { blockName: 'Trim', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:2@${GAIN}` },
+      { blockName: 'Gain1', blockPath: 'Gain1', modelName: 'legacy_ctrl', modelUri: CTRL, linkTarget: `blocks:Gain1@${CTRL}` },
+      { blockName: 'PlantGain', blockPath: 'PlantGain', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:1@${GAIN}` },
+      { blockName: 'Trim', blockPath: 'Trim', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:2@${GAIN}` },
     ]);
   });
 
   it('keeps an entry only one model uses to that model, and an unused one empty', () => {
     const g = graph();
     expect(g.blocksUsing(DICT, 'Uo')).toEqual([
-      { blockName: 'Setpoint', modelName: 'legacy_ctrl', modelUri: CTRL, linkTarget: `blocks:Setpoint@${CTRL}` },
+      {
+        blockName: 'Setpoint',
+        blockPath: 'Setpoint',
+        modelName: 'legacy_ctrl',
+        modelUri: CTRL,
+        linkTarget: `blocks:Setpoint@${CTRL}`,
+      },
     ]);
     // Ki is a real entry in the real dictionary that nothing references. The absence
     // has to come from the files, not from a fixture that omits the entry.
@@ -205,9 +216,9 @@ describe('a dictionary row whose Usage the session already answered', () => {
     const usedBy = rowNamed(sessionRows, 'Kp').UsedBy;
     expect('links' in usedBy).toBe(false);
     expect(usedBy.blockLinks).toEqual([
-      { blockName: 'Gain1', modelName: 'legacy_ctrl', modelUri: CTRL, linkTarget: `blocks:Gain1@${CTRL}` },
-      { blockName: 'PlantGain', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:1@${GAIN}` },
-      { blockName: 'Trim', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:2@${GAIN}` },
+      { blockName: 'Gain1', blockPath: 'Gain1', modelName: 'legacy_ctrl', modelUri: CTRL, linkTarget: `blocks:Gain1@${CTRL}` },
+      { blockName: 'PlantGain', blockPath: 'PlantGain', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:1@${GAIN}` },
+      { blockName: 'Trim', blockPath: 'Trim', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:2@${GAIN}` },
     ]);
   });
 

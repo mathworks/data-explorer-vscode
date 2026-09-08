@@ -84,10 +84,41 @@ describe('blocksUsing — the cell a dictionary entry shows', () => {
     source(DICT, '/w/params.sldd', slddBytes(['Kp', 'Unused'])),
   ];
 
-  it('names the block, the model, and a target that navigates back to it', () => {
+  it('names the block, where it is, the model, and a target that navigates back to it', () => {
     expect(graphOf(files).blocksUsing(DICT, 'Kp')).toEqual([
-      { blockName: 'Gain1', modelName: 'plant', modelUri: PLANT, linkTarget: `blocks:Gain1@${PLANT}` },
+      {
+        blockName: 'Gain1',
+        // In the root system, so its path is the label alone.
+        blockPath: 'Gain1',
+        modelName: 'plant',
+        modelUri: PLANT,
+        linkTarget: `blocks:Gain1@${PLANT}`,
+      },
     ]);
+  });
+
+  it('tells two links reading the same name apart by the subsystem each is in', () => {
+    // The cell the model view cannot fix by itself: one dictionary entry read by two
+    // blocks named `Gain` renders `Gain, Gain` — two correct links a user cannot choose
+    // between. The path is what the renderer hangs on each anchor, and it comes from
+    // core rather than being re-derived here.
+    const nested = source(
+      PLANT,
+      '/w/plant.slx',
+      slxBytes({
+        dictionary: 'params.sldd',
+        blocks:
+          `<Block BlockType="Gain" Name="Gain" SID="15"><P Name="Gain">Kp</P></Block>` +
+          `<Block BlockType="SubSystem" Name="Controller" SID="20"><System>` +
+          `<Block BlockType="Gain" Name="Gain" SID="24"><P Name="Gain">Kp</P></Block>` +
+          `</System></Block>`,
+      }),
+    );
+    expect(
+      graphOf([nested, source(DICT, '/w/params.sldd', slddBytes(['Kp']))])
+        .blocksUsing(DICT, 'Kp')
+        .map((b) => `${b.blockName} @ ${b.blockPath}`),
+    ).toEqual(['Gain @ Gain', 'Gain @ Controller/Gain']);
   });
 
   it('prefixes the CHANNEL, which is this extension’s grammar and not core’s', () => {
@@ -197,8 +228,11 @@ describe('annotateVariableRows names the model in every usage', () => {
     blocksUsing: (sourceUri, varName) => answers[`${sourceUri}\n${varName}`] ?? [],
     paramLinks: () => [],
   });
-  const link = (blockName: string, modelName: string, modelUri: string): BlockLink => ({
+  // `blockPath` defaults to the name, which is what a root-system block's path is; the
+  // tests below that care about the path pass one.
+  const link = (blockName: string, modelName: string, modelUri: string, blockPath?: string): BlockLink => ({
     blockName,
+    blockPath: blockPath ?? blockName,
     modelName,
     modelUri,
     linkTarget: `blocks:${blockName}@${modelUri}`,
@@ -208,12 +242,17 @@ describe('annotateVariableRows names the model in every usage', () => {
 
   it('replaces the cell with the graph’s block links', () => {
     const rows = [row('Kp')];
-    const graph = graphSaying({ [`${SRC}\nKp`]: [link('Gain1', 'plant', 'file:///w/plant.slx')] });
+    const graph = graphSaying({
+      [`${SRC}\nKp`]: [link('Gain1', 'plant', 'file:///w/plant.slx', 'Controller/Gain1')],
+    });
     expect(annotateVariableRows(SRC, rows, graph)).toBe(true);
     expect(rows[0].UsedBy).toEqual({
       blockLinks: [
         {
           blockName: 'Gain1',
+          // Passed through whole: the renderer hangs it on the anchor as a tooltip, and
+          // it is the only field that separates two links printing the same name.
+          blockPath: 'Controller/Gain1',
           modelName: 'plant',
           // The uri as well as the name: the webview groups blocks by model, and two
           // models can share a stripped-basename name.

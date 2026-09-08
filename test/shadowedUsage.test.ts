@@ -72,9 +72,17 @@ describe('the workspace graph over a model that shadows its dictionary', () => {
     // any other, and this is the cell the model view's workspace rows carry.
     //
     // The link names the block by its SID (`1`) and the CELL by its name — the target is
-    // an identity and the text is a label, and they are not the same string.
+    // an identity and the text is a label, and they are not the same string. The path is
+    // a third thing again: where the block is, which for a root-system block is its
+    // label alone.
     expect(graph().blocksUsing(SHADOW, 'Kp')).toEqual([
-      { blockName: 'WsGain', modelName: 'shadow_ws', modelUri: SHADOW, linkTarget: `blocks:1@${SHADOW}` },
+      {
+        blockName: 'WsGain',
+        blockPath: 'WsGain',
+        modelName: 'shadow_ws',
+        modelUri: SHADOW,
+        linkTarget: `blocks:1@${SHADOW}`,
+      },
     ]);
   });
 
@@ -86,7 +94,13 @@ describe('the workspace graph over a model that shadows its dictionary', () => {
     // The control: the link resolves, the dictionary is reached, and shadowing is per
     // NAME. Without this the empty cell above would prove nothing.
     expect(graph().blocksUsing(DICT, 'Uo')).toEqual([
-      { blockName: 'DictOnly', modelName: 'shadow_ws', modelUri: SHADOW, linkTarget: `blocks:2@${SHADOW}` },
+      {
+        blockName: 'DictOnly',
+        blockPath: 'DictOnly',
+        modelName: 'shadow_ws',
+        modelUri: SHADOW,
+        linkTarget: `blocks:2@${SHADOW}`,
+      },
     ]);
   });
 
@@ -141,7 +155,13 @@ describe('the dictionary’s own rows, session first and graph second', () => {
     expect(rowNamed(sessionRows, 'Kp').UsedBy).toBeUndefined();
     expect(rowNamed(sessionRows, 'Uo').UsedBy).toEqual({
       blockLinks: [
-        { blockName: 'DictOnly', modelName: 'shadow_ws', modelUri: SHADOW, linkTarget: `blocks:2@${SHADOW}` },
+        {
+          blockName: 'DictOnly',
+          blockPath: 'DictOnly',
+          modelName: 'shadow_ws',
+          modelUri: SHADOW,
+          linkTarget: `blocks:2@${SHADOW}`,
+        },
       ],
     });
   });
@@ -169,6 +189,10 @@ describe('the dictionary’s own rows, session first and graph second', () => {
     // And the row beside it still renders its usage, so an empty cell is a statement
     // about this entry and not a column that stopped working.
     expect(cellOf('Uo').textContent!.trim()).toBe('DictOnly(shadow_ws)');
+    // The link's tooltip is where the block is, so two links printing one name can still
+    // be told apart. Not part of the text above, deliberately: the path belongs on hover
+    // rather than in a column this narrow.
+    expect(cellOf('Uo').querySelector('a.value-link')!.getAttribute('title')).toBe('DictOnly');
     table.remove();
   });
 });

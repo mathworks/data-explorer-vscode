@@ -29,7 +29,8 @@ It adds a native experience for Simulink file types — a **Simulink Data Explor
 - **Live two-way sync (textual `.sldd`)** — because a textual (JSON) `.sldd` is backed by its JSON text document, edits in the table and edits in the JSON text editor update each other instantly, and there is a single shared undo history across both views.
 - **Properties panel** — a selection-following webview that shows the full properties of the entry selected in the table. It lives in its own view container and can be docked in the secondary sidebar.
 - **Variable Editor for matrix values** — a value with two or more dimensions stays a short descriptor in its cell (`<2x3x2 double>`) with a grid glyph beside it; clicking the glyph opens the whole array in a floating spreadsheet-style grid, laid out the way MATLAB displays it. Anything above rank 2 gets a `(:,:,k)` page selector to step through its trailing dimensions. Available from both the table and the Properties panel; view-only.
-- **Search** — filter entries by name using the table's built-in filter bar as you type.
+- **Search** — filter entries by name using the table's built-in filter bar as you type, or search across every data source in the workspace with **Data Explorer: Search Data Source Entries** (<kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd>), which lists each match with the file it comes from. A model's blocks are listed one hit per block, qualified by the subsystem the block sits in — so the several blocks named `Gain` a model may hold stay distinguishable, and the subsystem name is searchable too.
+- **Block paths in the table** — where a model's blocks share a name, each row's Name shows the subsystem it lives in (`Gain (Controller)`), and hovering a block in the Usage column shows that block's full path.
 
 ### Fits your editor
 

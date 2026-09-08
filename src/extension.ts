@@ -267,10 +267,12 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
     // Global entry-name search overlay: pick an entry by name across all data
-    // sources, then open its source file and select the matching row.
+    // sources, then open its source file and select the matching row. What the pick
+    // hands over is what the row is SELECTED by — an entry's name, or a block's SID —
+    // which is the same grammar a Usage-link click travels in (see navigate.ts).
     vscode.commands.registerCommand('dataExplorer.searchDataSources', () =>
-      searchDataSources(listEntries, async (sourceUri, entryName) => {
-        requestSelect(sourceUri, entryName);
+      searchDataSources(listEntries, async (sourceUri, selectName) => {
+        requestSelect(sourceUri, selectName);
         await openInBestEditor(vscode.Uri.parse(sourceUri), { preview: true });
       }),
     ),

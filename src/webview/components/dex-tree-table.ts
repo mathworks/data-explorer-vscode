@@ -25,6 +25,12 @@ export interface TreeTableRow {
   Description: { text: string; clipboardMode?: string } | string;
   Status: { text: string; clipboardMode?: string } | string;
   UsedBy?: { text: string; linkTarget?: string } | { links: { text: string; linkTarget: string }[] } | string;
+  // Block rows only, straight from core's ModelBlockNode.toRow: the systems that
+  // enclose the block (`Controller/Inner`, empty for one in the root system) and the
+  // block's own path (those plus its label). The Name cell shows the first and hovers
+  // the second; nothing here computes either, so both spellings stay core's.
+  _systemPath?: string;
+  _blockPath?: string;
 }
 
 export interface EditCompletedDetail {
@@ -135,7 +141,7 @@ function isCellObject(value: unknown): boolean {
 
 export interface BlockLinkGroup {
   modelName: string;
-  blocks: { blockName: string; linkTarget: string }[];
+  blocks: { blockName: string; blockPath: string; linkTarget: string }[];
 }
 
 // A Usage cell's block links, one group per model: `AFR, AFRMonitor,
@@ -160,7 +166,13 @@ function groupBlockLinks(links: unknown): BlockLinkGroup[] {
   const byModel = new Map<string, BlockLinkGroup>();
   for (const link of Array.isArray(links) ? links : []) {
     if (!isCellObject(link)) continue;
-    const b = link as { blockName?: unknown; modelName?: unknown; modelUri?: unknown; linkTarget?: unknown };
+    const b = link as {
+      blockName?: unknown;
+      blockPath?: unknown;
+      modelName?: unknown;
+      modelUri?: unknown;
+      linkTarget?: unknown;
+    };
     const modelName = typeof b.modelName === 'string' ? b.modelName : '';
     const key = typeof b.modelUri === 'string' && b.modelUri ? b.modelUri : modelName;
     let group = byModel.get(key);
@@ -171,6 +183,10 @@ function groupBlockLinks(links: unknown): BlockLinkGroup[] {
     }
     group.blocks.push({
       blockName: typeof b.blockName === 'string' ? b.blockName : '',
+      // Where that block is, for the link's tooltip. Empty for a payload that predates
+      // the field, exactly as `modelName` handles one that predates the uri — an absent
+      // tooltip is a cell with less to say, not a broken one.
+      blockPath: typeof b.blockPath === 'string' ? b.blockPath : '',
       linkTarget: typeof b.linkTarget === 'string' ? b.linkTarget : '',
     });
   }
@@ -684,6 +700,17 @@ export class DexTreeTable extends LitElement {
       }
 
       .param-source {
+        color: var(--dex-text-muted, #888);
+        font-style: italic;
+        font-size: 0.9em;
+      }
+
+      /* The subsystem a block row lives in, after its Name. Same understatement as
+         .param-source above — it qualifies the label rather than competing with it,
+         since a model may show four rows reading Gain and only this tells them
+         apart. */
+      .name-qualifier {
+        margin-left: 4px;
         color: var(--dex-text-muted, #888);
         font-style: italic;
         font-size: 0.9em;
@@ -2262,6 +2289,13 @@ export class DexTreeTable extends LitElement {
       // entries and struct fields always render in normal color.
       const isElement = row.Name?.element ?? false;
       const label = row.Name?.label || '';
+      // The systems enclosing a block row, shown after its label as `Gain (Controller)`.
+      // A block NAME is unique only inside its own system, so a model view can list four
+      // rows reading `Gain` — separate rows with separate parameters and separate links,
+      // and indistinguishable by eye without this. Empty for a block in the root system
+      // (nothing to name) and absent for every row that is not a block, which is why the
+      // qualifier is driven by the field's presence and not by a row kind.
+      const qualifier = row._systemPath || '';
 
       if (isEditing) {
         return html`
@@ -2287,7 +2321,12 @@ export class DexTreeTable extends LitElement {
             ${hasChildren ? (expanded ? '▼' : '▶') : ''}
           </span>
           ${iconId ? html`<dex-icon class="name-icon" .iconId=${iconId} .size=${16}></dex-icon>` : ''}
-          <span class="label ${isElement ? 'readonly' : ''}">${this._highlight(label)}</span>
+          <span class="label ${isElement ? 'readonly' : ''}">${this._highlight(label)}</span
+          >${qualifier
+            ? html`<span class="name-qualifier" title=${row._blockPath || nothing}
+                >${'(' + qualifier + ')'}</span
+              >`
+            : ''}
         </div>
       `;
     }
@@ -2401,6 +2440,12 @@ export class DexTreeTable extends LitElement {
         // One `(model)` per group, after its last block. The qualifier is dropped
         // entirely for a group with no model name, the rule the paramLinks arm above
         // applies to an unresolved source: an empty `()` is noise, not information.
+        //
+        // Each link carries its block's path as a `title`. A variable read by four
+        // blocks named `Gain` gives four links that read alike, and this is where the
+        // difference goes: inline it would be four `Controller/Inner/Gain`s in a
+        // 12%-wide column, so it is on hover, and in the model view the row itself
+        // (see the Name cell) shows the same fact without one.
         return html`${groupBlockLinks((val as any).blockLinks).map(
           (group: BlockLinkGroup, gi: number) =>
             html`${gi > 0 ? '; ' : ''}${group.blocks.map(
@@ -2408,6 +2453,7 @@ export class DexTreeTable extends LitElement {
                 html`${i > 0 ? ', ' : ''}<a
                     class="value-link"
                     href="#"
+                    title=${b.blockPath || nothing}
                     @click=${(e: Event) => this._onLinkClick(b.linkTarget, e)}
                     >${this._highlight(b.blockName)}</a
                   >`,

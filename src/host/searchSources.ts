@@ -39,24 +39,32 @@ interface EntryItem extends vscode.QuickPickItem {
 const MAX_RESULTS = 500;
 
 function toItem(rec: NameRecord): EntryItem {
+  // A block's path goes in front of the file name, because with one row per block a
+  // model can answer a search with four hits all reading `Gain` and the path is what
+  // says which is which. Only when it adds something: a block in the root system has
+  // the path `Gain`, which would just repeat the label. The file name stays either
+  // way — it is the coarser fact, and the only one a non-block hit has.
+  const where = rec.blockPath && rec.blockPath !== rec.name ? rec.blockPath + ' · ' : '';
   return {
     label: rec.name,
-    description: rec.sourceLabel,
+    description: where + rec.sourceLabel,
     iconPath: themeIconFor(iconIdForKind(rec.kind)),
     entry: rec,
   };
 }
 
 // Show the search overlay. `listEntries` supplies the (lazily built) name index;
-// `reveal` opens the entry's source and selects the row. Both are injected so
-// this module stays free of the index/editor wiring (that lives in extension.ts).
+// `reveal` opens the entry's source and selects the row, and is handed the record's
+// `selectName` when it has one — a block travels as its SID, which is what the row
+// publishes and not what it prints. Both are injected so this module stays free of the
+// index/editor wiring (that lives in extension.ts).
 //
 // The list starts EMPTY and populates only as the user types: we filter the
 // in-memory index ourselves and set `qp.items` to the (capped) matches, rather
 // than handing the entire index to the un-virtualized QuickPick.
 export async function searchDataSources(
   listEntries: () => Promise<NameRecord[]>,
-  reveal: (sourceUri: string, entryName: string) => void | Promise<void>,
+  reveal: (sourceUri: string, selectName: string) => void | Promise<void>,
 ): Promise<void> {
   const qp = vscode.window.createQuickPick<EntryItem>();
   qp.title = 'Search Data Source Entries';
@@ -80,7 +88,7 @@ export async function searchDataSources(
   qp.onDidAccept(() => {
     const picked = qp.selectedItems[0];
     qp.hide();
-    if (picked) void reveal(picked.entry.sourceUri, picked.entry.name);
+    if (picked) void reveal(picked.entry.sourceUri, picked.entry.selectName ?? picked.entry.name);
   });
   qp.onDidHide(() => qp.dispose());
 

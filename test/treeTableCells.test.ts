@@ -175,6 +175,46 @@ describe('the cell shapes the host emits', () => {
   });
 });
 
+// A block NAME is unique only inside its own system, so a model view legitimately lists
+// several rows reading `Gain` — separate rows, separate parameters, separate links, and
+// nothing to tell them apart by eye. The qualifier is where their difference goes.
+describe('a block row says which system it is in, after its name', () => {
+  const blockRow = (id: string, name: string, systemPath?: string, blockPath?: string): TreeTableRow =>
+    ({ ...makeRow(id, name), _isBlockRow: true, _systemPath: systemPath, _blockPath: blockPath }) as any;
+
+  it('shows the enclosing systems, with the whole path as its tooltip', async () => {
+    const table = await mount([blockRow('a', 'Gain', 'Controller', 'Controller/Gain')]);
+    const q = cell(table, 'a', 'Name').querySelector('.name-qualifier')!;
+    // The systems only, not the path: the label is already right there, and repeating it
+    // inside its own qualifier reads as a second name. The path is on hover, where a
+    // deeply nested block can afford the characters.
+    expect(q.textContent).toBe('(Controller)');
+    expect(q.getAttribute('title')).toBe('Controller/Gain');
+    expect(text(table, 'a', 'Name')).toBe('Gain(Controller)');
+    table.remove();
+  });
+
+  it('shows nothing for a root-system block, or for a row that is not a block', async () => {
+    // `(...)` around nothing is noise, and a variable row has no system to be in — which
+    // is why the qualifier is driven by the field rather than by a row kind.
+    const table = await mount([blockRow('root', 'Gain', '', 'Gain'), makeRow('var', 'Kp')]);
+    expect(cell(table, 'root', 'Name').querySelector('.name-qualifier')).toBeNull();
+    expect(cell(table, 'var', 'Name').querySelector('.name-qualifier')).toBeNull();
+    expect(text(table, 'root', 'Name')).toBe('Gain');
+    table.remove();
+  });
+
+  it('keeps the qualifier out of the text an edit, a copy or a sort reads', async () => {
+    // Name is an EDITABLE cell: the rename input is seeded from the label, and a copied
+    // Name is pasted back as a name. `Gain(Controller)` is neither, so the qualifier stays
+    // presentational — unlike the Usage column's `(model)`, which is part of that cell's
+    // payload. A path is searchable in the global entry search instead (searchFilter.ts).
+    const table = await mount([blockRow('a', 'Gain', 'Controller', 'Controller/Gain')]);
+    expect((table as any)._getCellText(table.rows[0], 'Name')).toBe('Gain');
+    table.remove();
+  });
+});
+
 describe('links navigate rather than following an href', () => {
   it('a DataType link reports its target to the host', async () => {
     // This is how the user jumps from a signal to the bus type that defines it;
@@ -274,6 +314,50 @@ describe('links navigate rather than following an href', () => {
     expect(td.querySelector('a.value-link')!.textContent!.trim()).toBe('Gain1');
     expect(td.querySelector('.param-source')!.textContent).toBe('(topModel)');
     table.remove();
+  });
+
+  // Two links reading the same word are two links a user cannot choose between, and a
+  // dictionary entry read by four blocks named `Gain` is the ordinary case rather than a
+  // corner of one. The path is what separates them, and it goes on HOVER: spelled inline,
+  // four `Controller/Inner/Gain`s would fill a column sized for names.
+  describe('a blockLink carries where its block is, as a tooltip', () => {
+    it('titles each link with its own path, and adds nothing to the text', async () => {
+      const M = 'file:///w/f14.slx';
+      const table = await mount([
+        makeRow('u', 'u', {
+          UsedBy: {
+            blockLinks: [
+              { blockName: 'Gain', blockPath: 'Controller/Gain', modelName: 'f14', modelUri: M, linkTarget: 'b:15' },
+              { blockName: 'Gain', blockPath: 'Sensors/Gain', modelName: 'f14', modelUri: M, linkTarget: 'b:24' },
+            ],
+          } as any,
+        }),
+      ]);
+      const td = cell(table, 'u', 'UsedBy');
+      expect([...td.querySelectorAll('a.value-link')].map((a) => a.getAttribute('title'))).toEqual([
+        'Controller/Gain',
+        'Sensors/Gain',
+      ]);
+      // The visible cell is unchanged by the paths — that is the point of a tooltip — so
+      // sorting and copying read what they always did.
+      expect(td.textContent!.trim()).toBe('Gain, Gain(f14)');
+      expect((table as any)._getCellText(table.rows[0], 'UsedBy')).toBe('Gain, Gain(f14)');
+      table.remove();
+    });
+
+    it('renders no title at all for a link with no path, rather than an empty one', async () => {
+      // The cell payload is a host's, and a host built against an earlier core sends no
+      // path. An empty `title=""` is a tooltip that flashes nothing on hover.
+      const table = await mount([
+        makeRow('u', 'u', {
+          UsedBy: { blockLinks: [{ blockName: 'Gain', modelName: 'f14', modelUri: 'file:///w/f14.slx', linkTarget: 'b:1' }] } as any,
+        }),
+      ]);
+      const a = cell(table, 'u', 'UsedBy').querySelector('a.value-link')!;
+      expect(a.hasAttribute('title')).toBe(false);
+      expect(a.textContent!.trim()).toBe('Gain');
+      table.remove();
+    });
   });
 
   // A dictionary variable is used by every block that reads it, so the one-qualifier-

@@ -158,6 +158,25 @@ describe('buildPropertyGroups', () => {
     expect(all.every((p) => p.editable === false)).toBe(true);
   });
 
+  it('places a block in the model, which is what tells two `Gain` rows apart', () => {
+    // The selection's own answer to "which Gain is this?". The table qualifies a block
+    // row's Name with its enclosing systems and hovers the whole path; the panel is
+    // where the path is readable without hovering, and it comes from the same field
+    // (core's PropBlockPath over `ModelBlockNode.blockPath`) rather than a second join.
+    //
+    // sid_blocks.slx: `Gain` in the root system, `Gain` in the `Inner` subsystem, and
+    // the block whose name the file leaves blank beside it. Two of the three rows read
+    // `Gain`, so without this the panel repeated the label and said nothing more.
+    const root = load('test://pi_sid_blocks.slx', 'sid_blocks.slx');
+    const blocks = descend(root).filter((n) => n.constructor.name === 'ModelBlockNode');
+    expect(blocks.length).toBe(3);
+    const pathOf = (node: any): string | undefined =>
+      buildPropertyGroups(node)
+        .flatMap((g) => g.properties)
+        .find((p) => p.name === 'Block Path')?.value;
+    expect(blocks.map(pathOf)).toEqual(['Gain', 'Inner/Gain', 'Inner/<SID: 65>']);
+  });
+
   it('emits plain text rows (no links) for a dictionary entry', () => {
     // The webview turns type:'link' into a clickable anchor and expects a
     // navigable target; a textual .sldd has none, so a stray link would be a
