@@ -6,6 +6,8 @@ import {
   identifiersIn,
   resolveParam,
   buildEdges,
+  annotateVariableRows,
+  type BlockRef,
   type ModelSummary,
   type DataSummary,
 } from '../src/host/usageResolve.js';
@@ -267,5 +269,117 @@ describe('buildEdges', () => {
     });
     const g = buildEdges([m], sldds, mats);
     expect(g.reverse.get('file:///w/d.sldd\nKp')).toHaveLength(1);
+  });
+});
+
+// One engine settles a variable's Usage cell. The rows arrive carrying whatever the
+// node layer put there, and the node layer answers from the session — the models whose
+// editor happens to be open — so honouring that cell made the column say different
+// things about the same dictionary depending on the user's tab history.
+describe('annotateVariableRows names the model in every usage', () => {
+  const SRC = 'file:///w/d.sldd';
+  const refs = (...rs: [string, string, string][]): BlockRef[] =>
+    rs.map(([blockName, modelName, modelUri]) => ({ blockName, modelName, modelUri }));
+  const row = (name: string, UsedBy?: unknown): any => ({ Name: { label: name }, UsedBy });
+
+  it('shapes each ref as block + model + an exact-uri link target', () => {
+    const rows = [row('Kp')];
+    expect(annotateVariableRows(SRC, rows, new Map([[`${SRC}\nKp`, refs(['Gain1', 'plant', 'file:///w/plant.slx'])]]))).toBe(
+      true,
+    );
+    expect(rows[0].UsedBy).toEqual({
+      blockLinks: [
+        {
+          blockName: 'Gain1',
+          modelName: 'plant',
+          // The uri as well as the label: the webview groups blocks by model, and two
+          // models can share a stripped-basename label.
+          modelUri: 'file:///w/plant.slx',
+          linkTarget: 'blocks:Gain1@file:///w/plant.slx',
+        },
+      ],
+    });
+  });
+
+  it('keeps same-named blocks in different models apart', () => {
+    // The case a bare block name cannot express: SharedTypes' DragCoeff is used by a
+    // `DragCalc` in MainVehicle AND a `DragCalc` in SubChassis. Without the model the
+    // cell reads `DragCalc, DragCalc` and neither link is identifiable.
+    const rows = [row('DragCoeff')];
+    annotateVariableRows(
+      SRC,
+      rows,
+      new Map([
+        [
+          `${SRC}\nDragCoeff`,
+          refs(['DragCalc', 'MainVehicle', 'file:///w/MainVehicle.slx'], ['DragCalc', 'SubChassis', 'file:///w/SubChassis.slx']),
+        ],
+      ]),
+    );
+    expect(rows[0].UsedBy.blockLinks.map((b: any) => `${b.blockName}(${b.modelName})`)).toEqual([
+      'DragCalc(MainVehicle)',
+      'DragCalc(SubChassis)',
+    ]);
+  });
+
+  it('OVERWRITES a session-supplied cell that names no model and knows fewer blocks', () => {
+    // The regression. `node.toRow()` had already answered from the session, which held
+    // FuelInjector.slx but not EngineCtrl.slx, so AFRTarget read `AFRConst, AFRCheck`:
+    // no model, and three of its five users missing. The workspace graph knows all five
+    // whether or not either model is open, so it wins outright.
+    const rows = [
+      row('AFRTarget', {
+        links: [
+          { text: 'AFRConst', linkTarget: 'AFRConst@file:///w/FuelInjector.slx' },
+          { text: 'AFRCheck', linkTarget: 'AFRCheck@file:///w/FuelInjector.slx' },
+        ],
+      }),
+    ];
+    const E = 'file:///w/EngineCtrl.slx';
+    const F = 'file:///w/FuelInjector.slx';
+    expect(
+      annotateVariableRows(
+        SRC,
+        rows,
+        new Map([
+          [
+            `${SRC}\nAFRTarget`,
+            refs(
+              ['AFR', 'EngineCtrl', E],
+              ['AFRMonitor', 'EngineCtrl', E],
+              ['MixTarget', 'EngineCtrl', E],
+              ['AFRConst', 'FuelInjector', F],
+              ['AFRCheck', 'FuelInjector', F],
+            ),
+          ],
+        ]),
+      ),
+    ).toBe(true);
+    expect('links' in rows[0].UsedBy).toBe(false);
+    expect(rows[0].UsedBy.blockLinks.map((b: any) => `${b.blockName}(${b.modelName})`)).toEqual([
+      'AFR(EngineCtrl)',
+      'AFRMonitor(EngineCtrl)',
+      'MixTarget(EngineCtrl)',
+      'AFRConst(FuelInjector)',
+      'AFRCheck(FuelInjector)',
+    ]);
+  });
+
+  it('leaves a row the graph has no answer for exactly as it was', () => {
+    // Not emptied: the graph cannot see a model opened from outside the workspace and
+    // since closed, and overwriting with nothing would turn "I do not know" into the
+    // emphatic "unused" that core's _usedByCell refuses to say. An untouched row also
+    // means `changed` stays false, so nothing repaints.
+    const kept = { links: [{ text: 'Ghost', linkTarget: 'Ghost@file:///elsewhere/m.slx' }] };
+    const rows = [row('Orphan', kept), row('NeverUsed')];
+    expect(annotateVariableRows(SRC, rows, new Map())).toBe(false);
+    expect(rows[0].UsedBy).toBe(kept);
+    expect(rows[1].UsedBy).toBeUndefined();
+  });
+
+  it('ignores rows with no name (section rows and the like)', () => {
+    const rows: any[] = [{ Name: { label: '' } }, {}];
+    expect(annotateVariableRows(SRC, rows, new Map([[`${SRC}\n`, refs(['B', 'plant', 'file:///w/plant.slx'])]]))).toBe(false);
+    expect(rows[0].UsedBy).toBeUndefined();
   });
 });

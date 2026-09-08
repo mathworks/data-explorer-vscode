@@ -124,6 +124,7 @@ describe('no consumer keeps its own copy of the list', () => {
     'src/extension.ts',
     'src/host/SectionsTreeProvider.ts',
     'src/host/usageGraph.ts',
+    'src/host/usageResolve.ts',
     'src/host/nameIndex.ts',
     'src/host/structuralIndex.ts',
     'src/host/slxStructure.ts',
@@ -164,7 +165,12 @@ describe('no consumer keeps its own copy of the list', () => {
     // parseSlx on a `.mdl` throws "invalid zip data". Every model read must go
     // through parseModel, which decides from the BYTES — that is also what makes a
     // mislabelled file open instead of failing.
-    for (const file of ['src/host/usageGraph.ts', 'src/host/nameIndex.ts', 'src/host/slxStructure.ts']) {
+    //
+    // The usage graph's model read is in usageResolve.ts, not usageGraph.ts: the pure
+    // summarising/resolution half was split out so it could be unit-tested, leaving
+    // usageGraph.ts as the vscode file I/O alone. This list names whoever holds the
+    // parse — following it there is the point, not an exemption.
+    for (const file of ['src/host/usageResolve.ts', 'src/host/nameIndex.ts', 'src/host/slxStructure.ts']) {
       const src = code(file);
       expect(src, `${file} must use parseModel`).toContain('parseModel');
       expect(src, `${file} must not call parseSlx directly`).not.toContain('parseSlx');

@@ -10,23 +10,20 @@
 // file change (extension.ts wires the watcher). Both table directions read from
 // it, so labels, links, and shadowing stay consistent everywhere.
 //
-// This module does the vscode file I/O + parsing; the pure resolution/edge core
-// lives in usageResolve.ts (unit-tested). All navigation link targets carry FULL
-// uriStrings (not basenames), so a click resolves to an exact file even when two
-// same-named files exist.
+// This module does the vscode file I/O and NOTHING else; every parse, summary and
+// edge lives in usageResolve.ts (unit-tested), whose `buildUsageGraph` takes the
+// bytes read below. All navigation link targets carry FULL uriStrings (not
+// basenames), so a click resolves to an exact file even when two same-named files
+// exist.
 import * as vscode from 'vscode';
-import { parseModel, parseMat } from 'data-explorer-core';
-import { readSlddContent } from './slddContent.js';
-import { normalizeRefNames, refBasename } from './slddRefs.js';
 import { toArrayBuffer } from '../common/bytes.js';
-import { GRAPH_FILE_RE, GRAPH_GLOB, isModelPath, stripModelExt } from '../common/fileTypes.js';
+import { GRAPH_FILE_RE, GRAPH_GLOB } from '../common/fileTypes.js';
 import {
-  basename,
-  buildEdges,
+  annotateVariableRows,
+  buildUsageGraph,
   type BlockRef,
-  type DataSummary,
-  type ModelSummary,
   type ParamLink,
+  type RawSource,
   type ResolvedGraph,
 } from './usageResolve.js';
 
@@ -45,41 +42,12 @@ export function ensureUsageGraph(): Promise<ResolvedGraph> {
   return graphPromise;
 }
 
-function labelOf(uriPath: string): string {
-  // The bare model name MATLAB uses internally, whichever container the file is
-  // in — a `.mdl` left labelled `engine.mdl` would not match the `engine` that
-  // block paths and reference records name.
-  return stripModelExt(basename(uriPath));
-}
-
 async function readBytes(uri: vscode.Uri): Promise<ArrayBuffer | null> {
   try {
     return toArrayBuffer(await vscode.workspace.fs.readFile(uri));
   } catch {
     return null;
   }
-}
-
-// Variable names + dictionary references from an .sldd (JSON or zip). Both share
-// the same in-memory content shape (__MW_TEXT_PARTS__).
-function slddSummary(uri: string, content: Record<string, unknown>): DataSummary {
-  const parts = content.__MW_TEXT_PARTS__ as Record<string, unknown> | undefined;
-  const chunk = parts?.['__MW_TEXT_PART__/data/chunk0'] as Record<string, unknown> | undefined;
-  const inner = chunk?.__MW_TEXT_content as Record<string, unknown> | undefined;
-  const varNames = new Set<string>();
-  const dictRefs: string[] = [];
-  if (inner) {
-    for (const entry of (inner.entries as Record<string, unknown>[]) ?? []) {
-      const name = entry?.name as string | undefined;
-      if (name) varNames.add(name);
-    }
-    // Shared normalisation (a ref is a bare string or a { file } object), so the
-    // usage graph, the sections tree, and the compressed-.sldd index all agree on
-    // what a dictionary reference is. refBasename'd here because the graph matches
-    // refs against workspace files by name, case-insensitively (see slddByBase).
-    dictRefs.push(...normalizeRefNames(inner['Dictionary References']).map(refBasename));
-  }
-  return { uri, varNames, dictRefs };
 }
 
 // Supported files currently open in an editor tab. Custom-editor and text tab
@@ -107,67 +75,24 @@ async function buildGraph(): Promise<ResolvedGraph> {
   for (const uri of [...found, ...openTabUris()]) byUri.set(uri.toString(), uri);
   const uris = [...byUri.values()];
 
-  const models: ModelSummary[] = [];
-  // basename -> data summary (first match wins; ambiguous basenames are rare).
+  // Read every file concurrently, then hand the bytes to the pure builder. The
+  // reads race, but the RESULT ARRAY keeps `uris` order — the blocks in a Usage
+  // cell are listed in the order their models are summarised, and an order that
+  // depended on which file's read finished first made the same cell render
+  // differently between two opens of the same dictionary.
   //
-  // Keyed by refBasename (basename LOWER-CASED), because the keys are filenames
-  // and the lookups are references authored inside a model — MATLAB records those
-  // as the user typed them, so `Params.sldd` in a model legitimately refers to
-  // `params.sldd` on disk. The sections tree already resolves refs this way
-  // (RelGraph.byBasename); matching case-sensitively here made the SAME reference
-  // resolve in the tree and silently not in the Usage column, leaving parameters
-  // that are plainly used looking unused. Every key and every lookup below must
-  // use refBasename or the map half-matches.
-  const slddByBase = new Map<string, DataSummary>();
-  const matByBase = new Map<string, DataSummary>();
+  // A file that cannot be READ drops out here; one that cannot be PARSED drops out
+  // inside summarizeSources. Both contribute nothing rather than failing the build.
+  const files = (
+    await Promise.all(
+      uris.map(async (uri): Promise<RawSource | null> => {
+        const bytes = await readBytes(uri);
+        return bytes ? { uriString: uri.toString(), path: uri.path, bytes } : null;
+      }),
+    )
+  ).filter((f): f is RawSource => f !== null);
 
-  await Promise.all(
-    uris.map(async (uri) => {
-      const path = uri.path;
-      const ab = await readBytes(uri);
-      if (!ab) return;
-      try {
-        if (isModelPath(path)) {
-          const parsed = parseModel(ab, basename(path));
-          // Sorted by extension case-insensitively for the same reason the map is
-          // keyed that way: these strings are whatever the model recorded, so a
-          // `.SLDD` link is a real dictionary link and must not be dropped (which
-          // would silently classify it as neither .sldd nor .mat).
-          const externals = parsed.externalDataSources ?? [];
-          const slddRefs = [
-            ...(parsed.dataDictionary ? [refBasename(parsed.dataDictionary)] : []),
-            ...externals.filter((e) => /\.sldd$/i.test(e)).map(refBasename),
-          ];
-          const matRefs = externals.filter((e) => /\.mat$/i.test(e)).map(refBasename);
-          models.push({
-            uri: uri.toString(),
-            label: labelOf(path),
-            wsNames: new Set((parsed.workspace ?? []).map((v) => v.name).filter(Boolean)),
-            slddRefs,
-            matRefs,
-            blockParams: (parsed.blockParamUsages ?? []).map((u) => ({
-              blockName: u.blockName,
-              property: u.paramProperty,
-              value: u.paramValue,
-            })),
-          });
-        } else if (path.endsWith('.mat')) {
-          const parsed = parseMat(ab);
-          matByBase.set(refBasename(path), {
-            uri: uri.toString(),
-            varNames: new Set(parsed.variables.map((v) => v.name).filter(Boolean)),
-            dictRefs: [],
-          });
-        } else if (path.endsWith('.sldd')) {
-          slddByBase.set(refBasename(path), slddSummary(uri.toString(), readSlddContent(ab)));
-        }
-      } catch {
-        /* unreadable/corrupt file contributes nothing */
-      }
-    }),
-  );
-
-  return buildEdges(models, slddByBase, matByBase);
+  return buildUsageGraph(files);
 }
 
 // --- Queries ----------------------------------------------------------------
@@ -186,33 +111,18 @@ export async function paramLinksForBlock(modelUri: string, blockName: string): P
 }
 
 // --- Row annotation ---------------------------------------------------------
-
-// Shape reverse-edge block refs into the `blockLinks` Usage-cell payload (each
-// link navigates back to the block in its owning model). Shared by both the
-// data view and the model-workspace-variable path below.
-function toBlockLinks(refs: BlockRef[]): { blockName: string; modelName: string; linkTarget: string }[] {
-  return refs.map((r) => ({
-    blockName: r.blockName,
-    modelName: r.modelName,
-    linkTarget: `blocks:${r.blockName}@${r.modelUri}`,
-  }));
-}
+//
+// Both directions below hand their variable rows to the SAME
+// `annotateVariableRows` (in usageResolve.ts, where it is unit-testable — this
+// module imports `vscode`). See its comment for why the graph overwrites a cell a
+// node already filled instead of yielding to it.
 
 // Data view (.sldd/.mat): set the Usage column on variable rows to the blocks
 // that use them (links back to each block's model). `sourceUri` is the open
-// file's uriString. Rows that already carry a Usage value are left untouched.
+// file's uriString.
 export async function annotateDataRows(sourceUri: string, rows: any[]): Promise<boolean> {
   const g = await ensureUsageGraph();
-  let changed = false;
-  for (const row of rows) {
-    if (row.UsedBy) continue;
-    const name: string = row.Name?.label ?? '';
-    const refs = g.reverse.get(`${sourceUri}\n${name}`);
-    if (!refs || refs.length === 0) continue;
-    row.UsedBy = { blockLinks: toBlockLinks(refs) };
-    changed = true;
-  }
-  return changed;
+  return annotateVariableRows(sourceUri, rows, g.reverse);
 }
 
 // Model view (.slx): rewrite block-row Usage cells with resolved param links
@@ -221,6 +131,7 @@ export async function annotateDataRows(sourceUri: string, rows: any[]): Promise<
 export async function annotateModelRows(modelUri: string, rows: any[]): Promise<boolean> {
   const g = await ensureUsageGraph();
   let changed = false;
+  const varRows: any[] = [];
   for (const row of rows) {
     // Block rows carry a paramLinks-shaped Usage today (from the ModelBlockNode
     // remap in rowBuilder); replace it with the cross-file-resolved links.
@@ -230,14 +141,11 @@ export async function annotateModelRows(modelUri: string, rows: any[]): Promise<
       changed = true;
       continue;
     }
-    // Model-workspace variable rows: blocks in THIS model that use them.
-    if (!row.UsedBy) {
-      const refs = g.reverse.get(`${modelUri}\n${row.Name?.label ?? ''}`);
-      if (refs && refs.length > 0) {
-        row.UsedBy = { blockLinks: toBlockLinks(refs) };
-        changed = true;
-      }
-    }
+    varRows.push(row);
   }
+  // Model-workspace variable rows: blocks in THIS model that use them. Every one
+  // names the model it is in, redundant as that reads in a model view — one shape
+  // for a variable's usage everywhere beats a second one that differs only here.
+  if (annotateVariableRows(modelUri, varRows, g.reverse)) changed = true;
   return changed;
 }

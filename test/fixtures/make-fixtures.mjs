@@ -311,7 +311,78 @@ const classicMdl = `Model {
 `;
 writeFileSync(here('legacy_ctrl.mdl'), strToU8(classicMdl));
 
+// --- params.sldd + shared_gain.slx: the two-model usage set -------------------
+//
+// legacy_ctrl.mdl above already links `params.sldd` and uses `Kp`/`Uo`; these two
+// fixtures complete that set so the WHOLE Usage path — real bytes → parse →
+// summarise → resolve → edges → annotated row → rendered cell — can be driven in
+// the vitest suite (test/usageEndToEnd.test.ts) instead of from hand-written
+// summaries. What that needs, and nothing more:
+//
+//   params.sldd     the dictionary the models link, holding Kp, Uo and an UNUSED
+//                   Ki (so "no answer" is covered by a real entry, not a fake one)
+//   shared_gain.slx a SECOND model using the same Kp, so the cell has to name two
+//                   models — the case a bare block name cannot express, and the one
+//                   that regressed
+//
+// shared_gain.slx links the dictionary as `Params.SLDD`: a model records a link as
+// the user typed it, so the case-insensitive match belongs in the real-file path
+// too, not only in the integration suite.
+
+// The __MW_TEXT_PARTS__ shape both .sldd formats deserialize to (see
+// usageResolve.slddSummary). Same helper as make-caserefs.mjs.
+const jsonSldd = (entries, refs = []) =>
+  JSON.stringify(
+    {
+      __MW_TEXT_COREPROPERTIES__: { release: 'R2026b' },
+      __MW_TEXT_PARTS__: {
+        '__MW_TEXT_PART__/data/chunk0': {
+          __MW_TEXT_content: {
+            entries: entries.map((name, i) => ({
+              name,
+              metadata: { uuid: `fixture-uuid-${name}`, isderived: '0' },
+              value: i + 1,
+            })),
+            'Dictionary References': refs,
+            AllowAccessBWS: '0',
+          },
+        },
+      },
+    },
+    null,
+    '\t',
+  );
+writeFileSync(here('params.sldd'), jsonSldd(['Kp', 'Uo', 'Ki']));
+
+// `Gain`/`Value` are absent from SlxParser's NON_PARAM_PROPS and both values are
+// expressions rather than literals, so extractBlockParamUsages records both. `2*Kp`
+// is deliberately an expression: identifiersIn has to reduce it to `Kp`.
+writeFileSync(
+  here('shared_gain.slx'),
+  zipSync({
+    'simulink/blockDiagram.json': strToU8(
+      JSON.stringify({
+        BlockDiagram: {
+          DataDictionary: 'Params.SLDD',
+          ModelUUID: 'uuid-shared-gain',
+          System: { Ref: 'system_root' },
+        },
+      }),
+    ),
+    'simulink/systems/system_root.xml': strToU8(
+      `<?xml version="1.0" encoding="utf-8"?>` +
+        `<System>` +
+        `<Block BlockType="Gain" Name="PlantGain" SID="1"><P Name="Gain">Kp</P></Block>` +
+        `<Block BlockType="Constant" Name="Trim" SID="2"><P Name="Value">2*Kp</P></Block>` +
+        `</System>`,
+    ),
+    'metadata/coreProperties.xml': strToU8(
+      `<?xml version="1.0"?><coreProperties><version>R2026b</version></coreProperties>`,
+    ),
+  }),
+);
+
 console.log(
   'wrote model_with_refs.slx, model_with_refs.mdl, legacy_ctrl.mdl, compressed.sldd, ' +
-    'object_array_binary.sldd, nd_numeric.mat',
+    'object_array_binary.sldd, nd_numeric.mat, params.sldd, shared_gain.slx',
 );

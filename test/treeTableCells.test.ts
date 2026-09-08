@@ -266,7 +266,7 @@ describe('links navigate rather than following an href', () => {
     const table = await mount([
       makeRow('u', 'u', {
         UsedBy: {
-          blockLinks: [{ blockName: 'Gain1', modelName: 'topModel', linkTarget: 'b:1' }],
+          blockLinks: [{ blockName: 'Gain1', modelName: 'topModel', modelUri: 'file:///w/top.slx', linkTarget: 'b:1' }],
         } as any,
       }),
     ]);
@@ -274,6 +274,116 @@ describe('links navigate rather than following an href', () => {
     expect(td.querySelector('a.value-link')!.textContent!.trim()).toBe('Gain1');
     expect(td.querySelector('.param-source')!.textContent).toBe('(topModel)');
     table.remove();
+  });
+
+  // A dictionary variable is used by every block that reads it, so the one-qualifier-
+  // per-block form spent a narrow column repeating `(EngineCtrl)` and pushed the block
+  // names — the part being read — out of sight.
+  describe('blockLinks aggregate by model', () => {
+    const linksOf = (td: HTMLElement): string[] =>
+      [...td.querySelectorAll('a.value-link')].map((a) => a.textContent!.trim());
+    const sourcesOf = (td: HTMLElement): string[] =>
+      [...td.querySelectorAll('.param-source')].map((s) => s.textContent!);
+
+    it('names each model once, after its last block', async () => {
+      const E = 'file:///w/EngineCtrl.slx';
+      const F = 'file:///w/FuelInjector.slx';
+      const table = await mount([
+        makeRow('u', 'u', {
+          UsedBy: {
+            blockLinks: [
+              { blockName: 'AFR', modelName: 'EngineCtrl', modelUri: E, linkTarget: 'b:1' },
+              { blockName: 'AFRMonitor', modelName: 'EngineCtrl', modelUri: E, linkTarget: 'b:2' },
+              { blockName: 'MixTarget', modelName: 'EngineCtrl', modelUri: E, linkTarget: 'b:3' },
+              { blockName: 'AFRConst', modelName: 'FuelInjector', modelUri: F, linkTarget: 'b:4' },
+              { blockName: 'AFRCheck', modelName: 'FuelInjector', modelUri: F, linkTarget: 'b:5' },
+            ],
+          } as any,
+        }),
+      ]);
+      const td = cell(table, 'u', 'UsedBy');
+      expect(sourcesOf(td)).toEqual(['(EngineCtrl)', '(FuelInjector)']);
+      expect(linksOf(td)).toEqual(['AFR', 'AFRMonitor', 'MixTarget', 'AFRConst', 'AFRCheck']);
+      expect(td.textContent!.trim()).toBe('AFR, AFRMonitor, MixTarget(EngineCtrl); AFRConst, AFRCheck(FuelInjector)');
+      // Every block keeps its own link — grouping is presentational and must not cost
+      // the user a navigable target.
+      expect(linksOf(td).length).toBe(5);
+      table.remove();
+    });
+
+    it('collects a model’s blocks even when the payload interleaves them', async () => {
+      // Ordering is the reverse index's, so two models CAN arrive interleaved. Grouping
+      // only runs of the same model would then print `(A); (B); (A)` — the very
+      // repetition this removes.
+      const A = 'file:///w/a.slx';
+      const B = 'file:///w/b.slx';
+      const table = await mount([
+        makeRow('u', 'u', {
+          UsedBy: {
+            blockLinks: [
+              { blockName: 'a1', modelName: 'A', modelUri: A, linkTarget: 'b:1' },
+              { blockName: 'b1', modelName: 'B', modelUri: B, linkTarget: 'b:2' },
+              { blockName: 'a2', modelName: 'A', modelUri: A, linkTarget: 'b:3' },
+            ],
+          } as any,
+        }),
+      ]);
+      const td = cell(table, 'u', 'UsedBy');
+      expect(sourcesOf(td)).toEqual(['(A)', '(B)']);
+      expect(td.textContent!.trim()).toBe('a1, a2(A); b1(B)');
+      table.remove();
+    });
+
+    it('keeps two same-labelled models apart, because it groups on the uri', async () => {
+      // `engine.slx` and `vendor/engine.slx` both label `engine`. Grouping on the label
+      // would print one `(engine)` over blocks living in two different files.
+      const table = await mount([
+        makeRow('u', 'u', {
+          UsedBy: {
+            blockLinks: [
+              { blockName: 'g1', modelName: 'engine', modelUri: 'file:///w/engine.slx', linkTarget: 'b:1' },
+              { blockName: 'g2', modelName: 'engine', modelUri: 'file:///w/vendor/engine.slx', linkTarget: 'b:2' },
+            ],
+          } as any,
+        }),
+      ]);
+      const td = cell(table, 'u', 'UsedBy');
+      expect(sourcesOf(td)).toEqual(['(engine)', '(engine)']);
+      expect(td.textContent!.trim()).toBe('g1(engine); g2(engine)');
+      table.remove();
+    });
+
+    it('renders no empty parens for a link with no model name', async () => {
+      const table = await mount([
+        makeRow('u', 'u', {
+          UsedBy: { blockLinks: [{ blockName: 'orphan', modelName: '', modelUri: '', linkTarget: 'b:1' }] } as any,
+        }),
+      ]);
+      const td = cell(table, 'u', 'UsedBy');
+      expect(td.querySelector('.param-source')).toBeNull();
+      expect(td.textContent!.trim()).toBe('orphan');
+      table.remove();
+    });
+
+    it('gives sorting and copying the same grouped text the cell shows', async () => {
+      const E = 'file:///w/EngineCtrl.slx';
+      const F = 'file:///w/FuelInjector.slx';
+      const table = await mount([
+        makeRow('u', 'u', {
+          UsedBy: {
+            blockLinks: [
+              { blockName: 'AFR', modelName: 'EngineCtrl', modelUri: E, linkTarget: 'b:1' },
+              { blockName: 'AFRConst', modelName: 'FuelInjector', modelUri: F, linkTarget: 'b:2' },
+              { blockName: 'AFRMonitor', modelName: 'EngineCtrl', modelUri: E, linkTarget: 'b:3' },
+            ],
+          } as any,
+        }),
+      ]);
+      const grouped = 'AFR, AFRMonitor(EngineCtrl); AFRConst(FuelInjector)';
+      expect((table as any)._getCellText(table.rows[0], 'UsedBy')).toBe(grouped);
+      expect(cell(table, 'u', 'UsedBy').textContent!.trim()).toBe(grouped);
+      table.remove();
+    });
   });
 
   it('DataType paramLinks and links render through the same paths', async () => {

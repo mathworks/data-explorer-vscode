@@ -133,6 +133,50 @@ function isCellObject(value: unknown): boolean {
   return value !== null && typeof value === 'object';
 }
 
+export interface BlockLinkGroup {
+  modelName: string;
+  blocks: { blockName: string; linkTarget: string }[];
+}
+
+// A Usage cell's block links, one group per model: `AFR, AFRMonitor,
+// MixTarget(EngineCtrl); AFRConst, AFRCheck(FuelInjector)`. A dictionary variable is
+// used by as many blocks as a model has, so naming the model once per block spent most
+// of a narrow column repeating `(EngineCtrl)` and buried the block names the user is
+// actually reading.
+//
+// Grouped on `modelUri`, NOT on the displayed `modelName`: the label is a stripped
+// basename, so `engine.slx` and a vendored `other/engine.slx` both read `engine`, and
+// merging them would print one qualifier over blocks that live in two different files —
+// a false claim, and the links underneath would still go to two places. Falls back to
+// the label only when a payload predates the uri (see toBlockLinks).
+//
+// FIRST-APPEARANCE order, for models and for blocks within a model, so the cell tracks
+// the order the graph reports rather than an alphabetical one nothing else uses. Blocks
+// of the same model are collected wherever they appear, adjacent or not — otherwise a
+// reverse index that happened to interleave two models would print a model twice, which
+// is the repetition this exists to remove.
+function groupBlockLinks(links: unknown): BlockLinkGroup[] {
+  const groups: BlockLinkGroup[] = [];
+  const byModel = new Map<string, BlockLinkGroup>();
+  for (const link of Array.isArray(links) ? links : []) {
+    if (!isCellObject(link)) continue;
+    const b = link as { blockName?: unknown; modelName?: unknown; modelUri?: unknown; linkTarget?: unknown };
+    const modelName = typeof b.modelName === 'string' ? b.modelName : '';
+    const key = typeof b.modelUri === 'string' && b.modelUri ? b.modelUri : modelName;
+    let group = byModel.get(key);
+    if (!group) {
+      group = { modelName, blocks: [] };
+      byModel.set(key, group);
+      groups.push(group);
+    }
+    group.blocks.push({
+      blockName: typeof b.blockName === 'string' ? b.blockName : '',
+      linkTarget: typeof b.linkTarget === 'string' ? b.linkTarget : '',
+    });
+  }
+  return groups;
+}
+
 @customElement('dex-tree-table')
 export class DexTreeTable extends LitElement {
   static override styles = [
@@ -1284,7 +1328,12 @@ export class DexTreeTable extends LitElement {
             .map((p: any) => `${p.property}=${p.paramName}${p.source ? `(${p.source})` : ''}`)
             .join(', ');
         if ('blockLinks' in (row.UsedBy as any))
-          return (row.UsedBy as any).blockLinks.map((b: any) => `${b.blockName}(${b.modelName})`).join(', ');
+          // Grouped through the same helper the cell renders with, so what the user
+          // copies, sorts and searches is the text on screen and not a second reading
+          // of the same payload.
+          return groupBlockLinks((row.UsedBy as any).blockLinks)
+            .map((g) => `${g.blocks.map((b) => b.blockName).join(', ')}${g.modelName ? `(${g.modelName})` : ''}`)
+            .join('; ');
         if ('links' in row.UsedBy) return row.UsedBy.links.map((l) => l.text).join(', ');
         // Always a string: sorting lowercases this, so returning undefined for a
         // shapeless object (usageGraph can leave `UsedBy: {}`) would throw and
@@ -2349,14 +2398,20 @@ export class DexTreeTable extends LitElement {
         )}`;
       }
       if ('blockLinks' in val) {
-        return html`${(val as any).blockLinks.map(
-          (b: { blockName: string; modelName: string; linkTarget: string }, i: number) =>
-            html`${i > 0 ? ', ' : ''}<a
-                class="value-link"
-                href="#"
-                @click=${(e: Event) => this._onLinkClick(b.linkTarget, e)}
-                >${this._highlight(b.blockName)}</a
-              ><span class="param-source">${'(' + b.modelName + ')'}</span>`,
+        // One `(model)` per group, after its last block. The qualifier is dropped
+        // entirely for a group with no model name, the rule the paramLinks arm above
+        // applies to an unresolved source: an empty `()` is noise, not information.
+        return html`${groupBlockLinks((val as any).blockLinks).map(
+          (group: BlockLinkGroup, gi: number) =>
+            html`${gi > 0 ? '; ' : ''}${group.blocks.map(
+              (b, i) =>
+                html`${i > 0 ? ', ' : ''}<a
+                    class="value-link"
+                    href="#"
+                    @click=${(e: Event) => this._onLinkClick(b.linkTarget, e)}
+                    >${this._highlight(b.blockName)}</a
+                  >`,
+            )}${group.modelName ? html`<span class="param-source">${'(' + group.modelName + ')'}</span>` : ''}`,
         )}`;
       }
       if ('links' in val) {
