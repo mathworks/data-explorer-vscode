@@ -1,13 +1,41 @@
-.vscode/**
-.claude/**
-.github/**
+# What NOT to ship in the .vsix.
+#
+# vsce packages the WORKING TREE, not the git index, so `.gitignore` buys nothing
+# here: a file git refuses to track is still shipped to every user unless it is
+# named below as well. That is one rule ("this is local-only") written in two
+# places, and the second place was missing the local notes — CLAUDE.md, with its
+# internal hostnames, went out in every locally built .vsix from v1.5.0 to v1.7.0.
+#
+# So: every gitignored path is named here too, except `dist/`, which IS the
+# product. test/packaging.test.ts holds the two files to that.
+#
+# Paths vsce already excludes by default (`.vscode-test`, `.DS_Store`, …) are
+# still listed explicitly. What ships should be legible from this file alone,
+# rather than from which defaults a packaging tool happens to carry.
+
+# Local-only notes and scratch state (gitignored).
+CLAUDE.md
+.superpowers/**
+.DS_Store
+**/.DS_Store
+
+# Sources, tests and their outputs.
 src/**
 test/**
 test-integration/**
 dist-test/**
 coverage/**
+.vscode-test/**
+.vscode-test-web/**
+demo-workspace/**
+
+# Tooling and repo furniture.
+.vscode/**
+.claude/**
+.github/**
 docs/**
 node_modules/**
+scripts/**
 esbuild.mjs
 esbuild.test.mjs
 .vscode-test.mjs
@@ -15,8 +43,6 @@ vite.config.ts
 vitest.config.ts
 tsconfig.json
 **/*.map
-demo-workspace/**
-scripts/**
 media/screenshots/**
 media/icons/**
 *.vsix
