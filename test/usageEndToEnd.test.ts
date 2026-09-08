@@ -123,6 +123,32 @@ describe('the usage graph over the real fixture files', () => {
     ]);
   });
 
+  it('summarises a dictionary whose own FILENAME is upper-cased', () => {
+    // The same real dictionary bytes, at `/fx/Params.SLDD`. Everything that admits a
+    // file to this graph — the findFiles glob, GRAPH_FILE_RE over the open tabs — is
+    // case-insensitive, so the summariser has to be too. While it dispatched on
+    // `endsWith('.sldd')` the file was accepted and then classified as neither
+    // dictionary nor MAT: it contributed no variables, so BOTH models' `Kp` went
+    // unresolved (rendered with no source and no link, like an unused parameter) and
+    // the dictionary's own Usage column came up empty.
+    const UPPER = 'file:///fx/Params.SLDD';
+    const graph = buildUsageGraph([
+      FILES[0],
+      FILES[1],
+      { uriString: UPPER, path: '/fx/Params.SLDD', bytes: bytes('params.sldd') },
+    ]);
+    expect(graph.reverse.get(`${UPPER}\nKp`)!.map((r) => r.blockName)).toEqual([
+      'Gain1',
+      'PlantGain',
+      'Trim',
+    ]);
+    // And the forward direction names the file as it is actually spelled on disk,
+    // rather than the lower-cased key the refs are matched through.
+    expect(graph.forward.get(`${GAIN}\nPlantGain`)).toEqual([
+      { property: 'Gain', paramName: 'Kp', source: 'Params.SLDD', linkTarget: `Kp@${UPPER}` },
+    ]);
+  });
+
   it('lists the blocks in file order, not in read-completion order', () => {
     // usageGraph reads the files concurrently but preserves the uri order, so the
     // same dictionary renders the same cell on every open. Reversing the input must

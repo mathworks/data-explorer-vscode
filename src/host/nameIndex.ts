@@ -17,7 +17,7 @@ import { parseModel, parseMat } from 'data-explorer-core';
 import { readSlddContent } from './slddContent.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import { basename } from '../common/pathUtil.js';
-import { GRAPH_GLOB, isModelPath } from '../common/fileTypes.js';
+import { GRAPH_GLOB, isMatPath, isModelPath, isSlddPath } from '../common/fileTypes.js';
 import { namesFromSldd, namesFromMat, namesFromSlx, type NameRecord } from './nameExtract.js';
 
 export type { EntryKind, NameRecord } from './nameExtract.js';
@@ -129,11 +129,11 @@ async function recordsForFile(uri: vscode.Uri): Promise<NameRecord[]> {
       const parsed = parseModel(ab, basename(path));
       return namesFromSlx(parsed, uriString);
     }
-    if (path.endsWith('.mat')) {
+    if (isMatPath(path)) {
       const parsed = parseMat(ab);
       return namesFromMat(parsed, uriString);
     }
-    if (path.endsWith('.sldd')) {
+    if (isSlddPath(path)) {
       return namesFromSldd(readSlddContent(ab), uriString);
     }
   } catch {

@@ -29,6 +29,9 @@ import {
   SUPPORTED_GLOB,
   GRAPH_GLOB,
   isModelPath,
+  isSlddPath,
+  isMatPath,
+  isProjectPath,
   stripModelExt,
   refModelExt,
 } from '../src/common/fileTypes.js';
@@ -94,6 +97,38 @@ describe('the derived matchers', () => {
     expect(isModelPath('/w/signals.mat')).toBe(false);
     expect(isModelPath('/w/proj.prj')).toBe(false);
   });
+
+  // The three siblings of isModelPath. They exist because only the model test was
+  // shared: everything that had to tell a dictionary from a MAT-file from a project
+  // wrote its own `endsWith`, and every one of those copies was case-SENSITIVE while
+  // the matchers that ADMIT the file are not.
+  it('tells the four kinds apart, each excluding the others', () => {
+    expect(isSlddPath('/w/params.sldd')).toBe(true);
+    expect(isMatPath('/w/signals.mat')).toBe(true);
+    expect(isProjectPath('/w/proj.prj')).toBe(true);
+    for (const other of ['/w/ctrl.slx', '/w/ctrl.mdl', '/w/signals.mat', '/w/proj.prj']) {
+      expect(isSlddPath(other), `${other} is not a dictionary`).toBe(false);
+    }
+    for (const other of ['/w/ctrl.slx', '/w/params.sldd', '/w/proj.prj']) {
+      expect(isMatPath(other), `${other} is not a MAT-file`).toBe(false);
+    }
+    for (const other of ['/w/ctrl.slx', '/w/params.sldd', '/w/signals.mat']) {
+      expect(isProjectPath(other), `${other} is not a project`).toBe(false);
+    }
+  });
+
+  it('recognises an upper-cased kind, which is the whole reason they are shared', () => {
+    // `Params.SLDD` is found by SUPPORTED_GLOB and matched by GRAPH_FILE_RE, so a
+    // consumer that classifies it more strictly accepts the file and then does
+    // nothing with it: no variables in the graph, the wrong row builder, and a skip
+    // past the editable-JSON redirect into the read-only view.
+    expect(isSlddPath('/w/Params.SLDD')).toBe(true);
+    expect(isMatPath('/w/Signals.MAT')).toBe(true);
+    expect(isProjectPath('/w/Proj.PRJ')).toBe(true);
+    // Still anchored: a longer extension that merely starts the same is not a match.
+    expect(isSlddPath('/w/params.slddx')).toBe(false);
+    expect(isMatPath('/w/notes.material')).toBe(false);
+  });
 });
 
 describe('model-name helpers', () => {
@@ -147,11 +182,19 @@ describe('no consumer keeps its own copy of the list', () => {
   // extensions ORed together and anchored at the end.
   const EXT_ALTERNATION = /\\\.\([a-z|]+\)\$/;
 
+  // A hand-rolled kind test, e.g. `path.endsWith('.sldd')`. This is the copy that got
+  // written eight times, and the one whose failure is quietest: it is case-SENSITIVE,
+  // so it disagrees with every matcher above about a file MATLAB or Windows named
+  // `Params.SLDD` — the file is discovered, opened, indexed, and then classified as
+  // nothing. Use isSlddPath/isMatPath/isProjectPath/isModelPath.
+  const ENDSWITH_EXT = new RegExp(`endsWith\\((['"])\\.(${SUPPORTED_EXTS.join('|')})\\1\\)`, 'i');
+
   for (const file of CONSUMERS) {
-    it(`${file} names no glob or extension alternation of its own`, () => {
+    it(`${file} names no glob or extension test of its own`, () => {
       const src = code(file);
       expect(GLOB_LITERAL.test(src), `${file} should use SUPPORTED_GLOB/GRAPH_GLOB`).toBe(false);
       expect(EXT_ALTERNATION.test(src), `${file} should use a shared matcher`).toBe(false);
+      expect(ENDSWITH_EXT.test(src), `${file} should use a shared is*Path predicate`).toBe(false);
     });
   }
 

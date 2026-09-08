@@ -18,10 +18,10 @@ import {
   invalidate as invalidateNameIndex,
 } from './host/nameIndex.js';
 import { isSectionRowId } from './common/sectionRowId.js';
-import { SUPPORTED_RE, SUPPORTED_GLOB } from './common/fileTypes.js';
+import { isSlddPath, SUPPORTED_RE, SUPPORTED_GLOB } from './common/fileTypes.js';
 
 function isSlddUri(uri: vscode.Uri | undefined): boolean {
-  return !!uri && uri.path.endsWith('.sldd');
+  return !!uri && isSlddPath(uri.path);
 }
 
 // True if the .sldd at `uri` is editable JSON (not zip/binary). Editable JSON
@@ -34,7 +34,7 @@ function isSlddUri(uri: vscode.Uri | undefined): boolean {
 // URI"), so it falls through to the read-only byte-backed view, which opens it
 // fine. See exceedsTextSyncLimit in slddFormat.ts.
 async function isEditableJsonSldd(uri: vscode.Uri): Promise<boolean> {
-  if (!uri.path.endsWith('.sldd')) return false;
+  if (!isSlddPath(uri.path)) return false;
   try {
     const bytes = await vscode.workspace.fs.readFile(uri);
     return isEditableJsonSlddBytes(bytes) && !exceedsTextSyncLimit(bytes);
@@ -46,7 +46,7 @@ async function isEditableJsonSldd(uri: vscode.Uri): Promise<boolean> {
 // True if the .sldd at `uri` is a compressed-binary (zip/OPC) dictionary. These
 // open in the writable BinarySlddEditorProvider (table editing + re-zip on save).
 async function isZipSldd(uri: vscode.Uri): Promise<boolean> {
-  if (!uri.path.endsWith('.sldd')) return false;
+  if (!isSlddPath(uri.path)) return false;
   try {
     const bytes = await vscode.workspace.fs.readFile(uri);
     return isZipBytes(bytes);

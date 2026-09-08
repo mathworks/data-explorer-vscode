@@ -138,10 +138,22 @@ describe('buildGraphSource', () => {
     expect(s.path).toBe('/deep/path/x.mat');
   });
 
-  it('classifies extension case-insensitively is NOT assumed — .SLDD upper falls through to sldd default', () => {
-    // typeOf only matches lowercase .slx/.mat; anything else is 'sldd'. Documents current behavior.
-    const s = buildGraphSource({ uriString: 'file:///X.MAT', path: '/X.MAT', bytes: new ArrayBuffer(0) });
-    expect(s.type).toBe('sldd');
+  it('classifies an upper-cased extension by its kind, not by the sldd fallback', () => {
+    // This test used to assert the opposite, pinning what `typeOf` then did: it matched
+    // only lowercase, so anything else fell through to the `sldd` DEFAULT. That default
+    // is what made the old behaviour so quiet — `X.MAT` was not rejected, it was
+    // confidently mis-typed, taking the dictionary icon, the dictionary row builder and
+    // the dictionary reference reading, none of which a MAT-file has. The kind tests are
+    // shared and case-insensitive now (common/fileTypes), so the fallback catches only
+    // what it should.
+    const mat = buildGraphSource({ uriString: 'file:///X.MAT', path: '/X.MAT', bytes: new ArrayBuffer(0) });
+    expect(mat.type).toBe('mat');
+    const model = buildGraphSource({ uriString: 'file:///C.SLX', path: '/C.SLX', bytes: new ArrayBuffer(0) });
+    expect(model.type).toBe('model');
+    const prj = buildGraphSource({ uriString: 'file:///P.PRJ', path: '/P.PRJ' });
+    expect(prj.type).toBe('project');
+    // And the fallback still answers for a dictionary, in either case.
+    expect(buildGraphSource({ uriString: 'file:///D.SLDD', path: '/D.SLDD' }).type).toBe('sldd');
   });
 });
 

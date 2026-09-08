@@ -8,7 +8,7 @@
 // rather than a re-creation of it in the test.
 import { identifiersIn, parseMat, parseModel, type ParsedMat, type ParsedSlx } from 'data-explorer-core';
 import { basename, uriBasename } from '../common/pathUtil.js';
-import { isModelPath, stripModelExt } from '../common/fileTypes.js';
+import { isMatPath, isModelPath, isSlddPath, stripModelExt } from '../common/fileTypes.js';
 import { normalizeRefNames, refBasename } from './slddRefs.js';
 import { readSlddContent } from './slddContent.js';
 
@@ -109,9 +109,9 @@ export function modelLabel(path: string): string {
 // links to (dictionary first, then externals split by extension), and every block
 // parameter whose value is an expression.
 //
-// The extension filters are case-INSENSITIVE because these strings are whatever the
-// model recorded: `EXTRADICT.SLDD` is a real dictionary link, and an `endsWith`
-// test classified it as neither .sldd nor .mat, dropping the link entirely.
+// The kind tests are the SHARED ones (case-insensitive) because these strings are
+// whatever the model recorded: `EXTRADICT.SLDD` is a real dictionary link, and an
+// `endsWith` test classified it as neither .sldd nor .mat, dropping the link entirely.
 export function modelSummary(parsed: ParsedSlx, uriString: string, path: string): ModelSummary {
   const externals = parsed.externalDataSources ?? [];
   return {
@@ -120,9 +120,9 @@ export function modelSummary(parsed: ParsedSlx, uriString: string, path: string)
     wsNames: new Set((parsed.workspace ?? []).map((v) => v.name).filter(Boolean)),
     slddRefs: [
       ...(parsed.dataDictionary ? [refBasename(parsed.dataDictionary)] : []),
-      ...externals.filter((e) => /\.sldd$/i.test(e)).map(refBasename),
+      ...externals.filter(isSlddPath).map(refBasename),
     ],
-    matRefs: externals.filter((e) => /\.mat$/i.test(e)).map(refBasename),
+    matRefs: externals.filter(isMatPath).map(refBasename),
     blockParams: (parsed.blockParamUsages ?? []).map((u) => ({
       blockName: u.blockName,
       property: u.paramProperty,
@@ -163,9 +163,12 @@ export function matSummary(uriString: string, parsed: ParsedMat): DataSummary {
 }
 
 // Parse each file into the summary its kind calls for, dispatching on the PATH's
-// extension. A file that cannot be parsed contributes nothing rather than aborting
-// the scan: one corrupt dictionary in a workspace must not empty the Usage column
-// of every other file in it.
+// extension through the shared predicates — the caller admitted these files with
+// GRAPH_FILE_RE, which is case-insensitive, so classifying them any more strictly
+// here would silently drop a `Params.SLDD` from a graph that had already accepted it.
+// A file that cannot be parsed contributes nothing rather than aborting the scan: one
+// corrupt dictionary in a workspace must not empty the Usage column of every other
+// file in it.
 export function summarizeSources(files: RawSource[]): SourceSummaries {
   const models: ModelSummary[] = [];
   const slddByBase = new Map<string, DataSummary>();
@@ -174,9 +177,9 @@ export function summarizeSources(files: RawSource[]): SourceSummaries {
     try {
       if (isModelPath(file.path)) {
         models.push(modelSummary(parseModel(file.bytes, basename(file.path)), file.uriString, file.path));
-      } else if (file.path.endsWith('.mat')) {
+      } else if (isMatPath(file.path)) {
         matByBase.set(refBasename(file.path), matSummary(file.uriString, parseMat(file.bytes)));
-      } else if (file.path.endsWith('.sldd')) {
+      } else if (isSlddPath(file.path)) {
         slddByBase.set(refBasename(file.path), slddSummary(file.uriString, readSlddContent(file.bytes)));
       }
     } catch {

@@ -36,7 +36,12 @@ async function readDirInto(
     const childRel = `${relDir}/${name}`;
     if (type === vscode.FileType.Directory) {
       await readDirInto(childUri, childRel, out);
-    } else if (type === vscode.FileType.File && name.endsWith('.xml')) {
+    } else if (type === vscode.FileType.File && /\.xml$/i.test(name)) {
+      // Case-insensitive for the same reason as the extensions in common/fileTypes:
+      // these names come off a case-insensitive filesystem, so an `.XML` store
+      // document would be silently skipped and cost whatever entity it described.
+      // Not shared with that module — `.xml` is a part name INSIDE a project store,
+      // not a format this extension opens.
       try {
         const bytes = await vscode.workspace.fs.readFile(childUri);
         out[childRel] = new TextDecoder().decode(bytes);

@@ -60,6 +60,15 @@ export const GRAPH_FILE_RE = extRe(GRAPH_EXTS);
 /** Matches a Simulink model, whichever container it uses. */
 export const MODEL_RE = extRe(MODEL_EXTS);
 
+/** Matches a data dictionary. */
+export const SLDD_RE = extRe(['sldd']);
+
+/** Matches a MAT-file. */
+export const MAT_RE = extRe(['mat']);
+
+/** Matches a MATLAB project marker. */
+export const PROJECT_RE = extRe(['prj']);
+
 /** `findFiles` glob for every supported file. */
 export const SUPPORTED_GLOB = extGlob(SUPPORTED_EXTS);
 
@@ -69,6 +78,41 @@ export const GRAPH_GLOB = extGlob(GRAPH_EXTS);
 /** True if `path` names a Simulink model (`.slx` or either flavour of `.mdl`). */
 export function isModelPath(path: string): boolean {
   return MODEL_RE.test(path);
+}
+
+/*
+ * WHICH KIND a supported file is, for the consumers that have to decide.
+ *
+ * These exist because `isModelPath` was shared while its three siblings were not:
+ * every consumer that had to tell a dictionary from a MAT-file from a project spelled
+ * its own `path.endsWith('.sldd')`, and all eight of those copies were
+ * case-SENSITIVE while every matcher above is case-insensitive. So a file named
+ * `Params.SLDD` was found by the globs, matched by GRAPH_FILE_RE, admitted to the
+ * usage graph's file list — and then classified as neither dictionary nor MAT by the
+ * summariser, contributing no variables and no Usage links. The same asymmetry sent it
+ * past the editable-JSON redirect into the read-only view, gave it the wrong row
+ * builder, and left it out of the sections tree's reference reading: eight independent
+ * ways for one file to be half-supported.
+ *
+ * A model reference is matched with the same predicates, since a model records a
+ * linked source as the user typed it (`EXTRADICT.SLDD` is a real dictionary link).
+ * One rule for "is this a dictionary", whether the string came from a filesystem or
+ * from inside a model.
+ */
+
+/** True if `path` names a data dictionary. */
+export function isSlddPath(path: string): boolean {
+  return SLDD_RE.test(path);
+}
+
+/** True if `path` names a MAT-file. */
+export function isMatPath(path: string): boolean {
+  return MAT_RE.test(path);
+}
+
+/** True if `path` names a MATLAB project. */
+export function isProjectPath(path: string): boolean {
+  return PROJECT_RE.test(path);
 }
 
 /**

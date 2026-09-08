@@ -7,7 +7,7 @@ import { readProjectStore } from './projectStore.js';
 import { encode, type HealthState } from './health.js';
 import { isZipBytes } from './slddFormat.js';
 import { toArrayBuffer } from '../common/bytes.js';
-import { SUPPORTED_GLOB } from '../common/fileTypes.js';
+import { isProjectPath, isSlddPath, SUPPORTED_GLOB } from '../common/fileTypes.js';
 
 // The Data Explorer tree is a cross-format relationship graph (model->model,
 // model->sldd/mat, sldd->sldd), rendered as an expansion tree. Structural
@@ -123,14 +123,14 @@ export class SectionsTreeProvider implements vscode.TreeDataProvider<SlddTreeNod
         try {
           // A .prj is an empty marker: read its sibling resources/project/**
           // store into a project-root-relative relpath map instead of bytes.
-          if (uri.path.endsWith('.prj')) {
+          if (isProjectPath(uri.path)) {
             raw.projectFiles = await readProjectStore(uri);
             return buildGraphSource(raw);
           }
           const bytes = await vscode.workspace.fs.readFile(uri);
           const ab = toArrayBuffer(bytes);
           // JSON .sldd is passed as text so extractReferences works; others as bytes.
-          if (uri.path.endsWith('.sldd')) {
+          if (isSlddPath(uri.path)) {
             if (isZipBytes(bytes)) raw.bytes = ab;
             else raw.text = new TextDecoder().decode(bytes);
           } else {

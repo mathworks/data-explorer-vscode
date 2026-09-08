@@ -2,7 +2,7 @@
 import { DataModel, type ParseWarning } from 'data-explorer-core';
 import { readSlddContent } from './slddContent.js';
 import { refuseIfUnreadable, sourceWarnings } from './parseWarnings.js';
-import { isModelPath } from '../common/fileTypes.js';
+import { isMatPath, isModelPath } from '../common/fileTypes.js';
 
 const cache = new Map<string, any>(); // uriString -> SlddNode
 
@@ -52,7 +52,7 @@ export function getModelFromBytes(uriString: string, name: string, bytes: ArrayB
   // extension.
   if (isModelPath(name)) {
     node = DataModel.addModelSource(uriString, bytes, { path: name });
-  } else if (name.endsWith('.mat')) {
+  } else if (isMatPath(name)) {
     node = DataModel.addMatSource(uriString, bytes, { path: name });
   } else {
     // .sldd — compressed (zip) vs JSON-as-bytes; readSlddContent dispatches. The

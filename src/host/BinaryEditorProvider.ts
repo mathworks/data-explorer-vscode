@@ -18,7 +18,7 @@ import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
-import { isModelPath } from '../common/fileTypes.js';
+import { isMatPath, isModelPath, isProjectPath, isSlddPath } from '../common/fileTypes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 
 // viewType of the editable text-backed table (SlddTextEditorProvider). Declared
@@ -84,7 +84,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     // editable tableView. When one lands here (e.g. an Explorer double-click),
     // redirect it: reopen with tableView and close this binary tab. Binary/zip
     // .sldd and .slx/.mat/.prj fall through and render read-only as normal.
-    if (name.endsWith('.sldd')) {
+    if (isSlddPath(name)) {
       try {
         const bytes = await vscode.workspace.fs.readFile(document.uri);
         // A JSON .sldd larger than V8's string limit (~512 MB) can't be decoded
@@ -164,7 +164,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     // drop the cached model and post a banner.
     const post = async () => {
       try {
-        if (name.endsWith('.prj')) {
+        if (isProjectPath(name)) {
           // The .prj is an empty marker; the project structure lives in the
           // sibling resources/project/** store, read into a project-root-
           // relative POSIX relpath map for the parser.
@@ -192,14 +192,14 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
 
         const ab = await readBytes();
         const node = getModelFromBytes(uriString, name, ab);
-        const rows = name.endsWith('.mat') ? buildMatRows(node) : buildRows(node);
+        const rows = isMatPath(name) ? buildMatRows(node) : buildRows(node);
         // Fill the Usage column from the shared workspace usage graph (lazy +
         // cached). A model (.slx/.mdl) resolves its blocks' params to source files
         // and its workspace vars to the blocks that use them; a .mat/.sldd data
         // view resolves its variables to the blocks that use them.
         if (isModelPath(name)) {
           await annotateModelRows(uriString, rows).catch(() => false);
-        } else if (name.endsWith('.mat') || name.endsWith('.sldd')) {
+        } else if (isMatPath(name) || isSlddPath(name)) {
           await annotateDataRows(uriString, rows).catch(() => false);
         }
         webview.postMessage({
