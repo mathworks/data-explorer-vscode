@@ -4,6 +4,13 @@
 // provided by the host), unlike the headless vitest unit suite under test/.
 import * as esbuild from 'esbuild';
 import { glob } from 'glob';
+import { rmSync } from 'node:fs';
+
+// Wipe the output tree first. The runner's glob is `dist-test/suite/**/*.test.js`, so
+// a compiled test whose source has since been DELETED keeps running — silently, from
+// bytes no source in the repo can account for. One throwaway probe outlived its `.ts`
+// by a week that way, inflating every run's count by a test nobody could find.
+rmSync('dist-test', { recursive: true, force: true });
 
 const entryPoints = await glob('test-integration/**/*.ts');
 
