@@ -1,10 +1,19 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
 import { renderWebviewHtml, LOADING_OVERLAY_HTML, BANNERS_HTML } from './webviewHtml.js';
-import { getModel, invalidate, findNode } from './SlddModel.js';
+import { getModel, invalidate, findNode, peekModel } from './SlddModel.js';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
-import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
-import { captureBaseline, computeModified, clearBaseline } from './slddBaseline.js';
+import {
+  buildRows,
+  buildEntryRows,
+  COLUMNS,
+  COLUMN_LABELS,
+  COLUMN_GROUPS,
+  type ClipMark,
+} from './rowBuilder.js';
+import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
+import { applyEntryOps } from './entryOps.js';
+import { planEntrySync } from './jsonEntrySync.js';
 import { getClipboard, clearClipboard, clipboardState } from './clipboard.js';
 import { setDrag, getDrag, clearDrag } from './dragState.js';
 import {
@@ -91,10 +100,37 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // against the initial content.
     let initialized = false;
 
+    /**
+     * Whether every row on screen was built from the text as it now reads.
+     *
+     * The precondition of the entry-scoped repaint, and the reason a stretch of invalid
+     * JSON cannot leave a stale row behind. While the document does not parse, each
+     * keystroke's repaint fails and paints nothing; if the keystroke that finally makes it
+     * parse were repainted narrowly, only the entry that keystroke was in would be
+     * refreshed — every other entry the user touched during the invalid stretch would keep
+     * the rows it had before. So a failed repaint withdraws the narrow path until a full
+     * one has succeeded.
+     */
+    let modelInSync = false;
+
+    // If the clipboard's cut/copied entry lives in THIS document, the mark its source
+    // row should carry, so the table can render the cut (dimmed) / copied (dashed)
+    // affordance. Cleared automatically once the clipboard empties on paste.
+    //
+    // Shared by the full and entry-scoped repaints, so a cut affordance renders the same
+    // way whichever one painted it: one that appeared or vanished depending on which
+    // repaint the user happened to trigger would be a bug visible only after an edit.
+    const clipMarkOfDoc = (): ClipMark | undefined => {
+      const clip = getClipboard();
+      return clip && clip.sourceDocUri === uriString && clip.payload.name
+        ? { name: clip.payload.name as string, section: clip.sourceSection, mode: clip.mode }
+        : undefined;
+    };
+
     // Rebuild the model from the live TextDocument text and push rows to the
-    // webview. Called on open, on every text change (table edits, text-view
-    // edits, undo, redo — all arrive here uniformly), and on save. The Usage
-    // column is filled asynchronously from the shared workspace usage graph.
+    // webview. Called on open, on every text change that is not a single entry's
+    // (see syncOneEntry), and on save. The Usage column is filled asynchronously
+    // from the shared workspace usage graph.
     const post = () => {
       try {
         invalidate(uriString);
@@ -104,15 +140,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           initialized = true;
         }
         const modified = computeModified(uriString, node);
-        // If the clipboard's cut/copied entry lives in THIS document, stamp its
-        // source row so the table can render the cut (dimmed) / copied (dashed)
-        // affordance. Cleared automatically once the clipboard empties on paste.
-        const clip = getClipboard();
-        const clipMark: ClipMark | undefined =
-          clip && clip.sourceDocUri === uriString && clip.payload.name
-            ? { name: clip.payload.name as string, section: clip.sourceSection, mode: clip.mode }
-            : undefined;
-        const rows = buildRows(node, modified, clipMark);
+        const rows = buildRows(node, modified, clipMarkOfDoc());
+        // Every row below is built from `node`, which getModel just parsed from the live
+        // text and registered as this document's source.
+        modelInSync = true;
         // Fill the Usage column from the shared usage graph, then post. The graph
         // builds lazily on first use and is cached, so only the very first open in
         // a session pays the scan cost; subsequent posts resolve near-instantly.
@@ -141,10 +172,107 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           });
       } catch (err) {
         invalidate(uriString);
+        // Nothing was painted, so what is on screen is older than the text (see
+        // modelInSync): the next repaint has to be a full one.
+        modelInSync = false;
         webview.postMessage({
           type: 'error',
           message: `Failed to parse ${name}: ${(err as Error).message}`,
         });
+      }
+    };
+
+    // Repaint ONE entry: rebuild its rows from the model and splice them over the run the
+    // table already holds under `entryRowId`.
+    //
+    // The per-entry form of post(): the two whole-model passes it runs are asked about a
+    // single entry here (computeModified would serialize all 64,700 entries of a big
+    // dictionary to answer about one), and the Usage column is filled from the same cached
+    // graph, so the rows are the ones a full rebuild would have produced for that entry.
+    // Everything else about the view — columns, banners, section rules, the clipboard
+    // state — is what the last setRows left, because none of it can change under a text
+    // edit inside one entry.
+    const postEntryRows = (entryRowId: string, entry: any): void => {
+      const modified = new Set<string>();
+      if (isEntryModified(uriString, entry)) modified.add(entry.name);
+      const mark = clipMarkOfDoc();
+      const sectionName = entry.parent?.name ?? '';
+      // Pre-matched by section exactly as buildRows does it: entry names are unique
+      // within a section, not across the file, so only the marked entry's own section
+      // may carry the mark.
+      const sectionMark = mark && mark.section === sectionName ? mark : undefined;
+      const rows = buildEntryRows(entry, sectionName, modified, sectionMark);
+      void annotateDataRows(uriString, rows)
+        .catch(() => false)
+        .then(() => {
+          webview.postMessage({ type: 'updateEntryRows', entryRowId, rows });
+        });
+    };
+
+    /**
+     * The row id the rows ON SCREEN carry for the entry the next host-originated edit
+     * changes, when that differs from the id the model now gives it.
+     *
+     * applyEdit mutates the model BEFORE it edits the text, so after a rename the entry
+     * already answers to its new id while the table still shows the old one — and the
+     * splice has to find the run that is on screen. Set immediately before the edit and
+     * consumed by the change event it produces; honoured only when it names the very node
+     * the plan resolved, so a hint the edit never used cannot be spent on another entry.
+     *
+     * Purely an optimization: without it (or with it refused) the splice misses, and the
+     * webview answers a miss by asking for the full payload — correct, just wide.
+     */
+    let editHint: { node: any; rowId: string } | null = null;
+
+    /**
+     * Sync ONE entry from the text, or say no.
+     *
+     * The narrow answer to "the text changed": find the entry the change is inside, rebuild
+     * that entry from its own JSON, and repaint its rows. What it replaces is a full
+     * re-parse + full row rebuild + full postMessage on every keystroke — ~1.3 s of host
+     * work and a ~120 MB payload on a 46 MB dictionary, against ~82 ms to locate the entry
+     * and 0.3 ms to rebuild it.
+     *
+     * Returns false for anything it is not sure about, and the caller repaints the old way.
+     * See jsonEntrySync.ts for what "sure" means; the checks that live HERE are the ones
+     * about state rather than text:
+     *   - one content change, because a batch's later offsets are stated against the text
+     *     before the batch and so do not locate anything in the text after it;
+     *   - rows that match the text (modelInSync) and a tree still registered for this
+     *     document to apply the op to.
+     */
+    const syncOneEntry = (e: vscode.TextDocumentChangeEvent): boolean => {
+      const hint = editHint;
+      editHint = null;
+      if (e.contentChanges.length !== 1) return false;
+      if (!modelInSync) return false;
+      const model = peekModel(uriString);
+      if (!model) return false;
+      try {
+        const change = e.contentChanges[0];
+        const plan = planEntrySync(model, e.document.getText(), {
+          rangeOffset: change.rangeOffset,
+          text: change.text,
+        });
+        if (!plan) return false;
+        const entryRowId = hint && hint.node === plan.entry ? hint.rowId : plan.entry.id;
+        const applied = applyEntryOps(model, [
+          { kind: 'replace', rowId: plan.entry.id, record: plan.record },
+        ]);
+        const op = applied[0];
+        // PRECONDITION (untested): applyEntryOps answers a `replace` op with a `replace`,
+        // one per op. Checked rather than asserted so a shape change here falls back to the
+        // full repaint instead of painting rows for an entry it did not resolve.
+        if (!op || op.kind !== 'replace') return false;
+        postEntryRows(entryRowId, op.entry);
+        return true;
+      } catch {
+        // The model may now be half-changed, so the caller's full repaint is not just a
+        // fallback but the repair: it re-parses the text, which is the truth in this
+        // format, and re-registers the tree built from it.
+        invalidate(uriString);
+        modelInSync = false;
+        return false;
       }
     };
 
@@ -214,6 +342,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // off a same-named entry in another namespace (see entrySelector.ts).
         const entrySelectorForLookup = entrySelectorOf(entry);
         const isRename = msg.columnId === 'Name';
+        // And its row id, for the same reason one step further on: the rows on screen
+        // carry the entry as the table last painted it, so the repaint this edit
+        // triggers has to splice over THAT id, not the one a rename is about to mint.
+        const entryRowIdOnScreen = entry.id;
 
         const result = node.setProperty(msg.columnId, msg.newValue);
         if (result && typeof result === 'object' && result.error) {
@@ -249,11 +381,16 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         const endPos = document.positionAt(span.offset + span.length);
         const edit = new vscode.WorkspaceEdit();
         edit.replace(document.uri, new vscode.Range(startPos, endPos), entryText);
+        // Set last, immediately before the edit, so the change event this edit fires is
+        // the one that spends it (see editHint).
+        editHint = { node: entry, rowId: entryRowIdOnScreen };
         await vscode.workspace.applyEdit(edit);
-        // onDidChangeTextDocument repaints (setRows preserves expansion +
-        // selection). For a rename, re-select by the new id.
+        // onDidChangeTextDocument repaints — narrowly, since the edit is one entry's
+        // span (setRows and the splice both preserve expansion + selection). For a
+        // rename, re-select by the new id.
         if (newSelectId) webview.postMessage({ type: 'selectRow', rowId: newSelectId });
       } catch (err) {
+        editHint = null;
         invalidate(uriString);
         webview.postMessage({ type: 'error', message: 'Failed to apply edit: ' + (err as Error).message });
       }
@@ -617,12 +754,13 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     const navSub = wireNavigateSelect(webview, uriString);
 
     // Repaint on ANY change to this document: table edits, text-view edits, undo,
-    // and redo all arrive here. setRows (webview side) preserves expansion and
-    // re-applies selection, so the tree doesn't collapse under the user.
+    // and redo all arrive here. A change inside ONE entry repaints just that entry's
+    // rows; anything else rebuilds every row, and setRows (webview side) preserves
+    // expansion and re-applies selection, so the tree doesn't collapse under the user.
     const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
-      if (e.document.uri.toString() === uriString) {
-        post();
-      }
+      if (e.document.uri.toString() !== uriString) return;
+      if (syncOneEntry(e)) return;
+      post();
     });
 
     // On save, re-capture the baseline so per-row "Modified" marks clear.

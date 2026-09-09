@@ -82,6 +82,26 @@ export function invalidate(uriString: string): void {
   cache.delete(uriString);
 }
 
+/**
+ * The tree the session currently holds for a URI, or null — no parse, no registration.
+ *
+ * What an entry-scoped repaint starts from: the model that is already built, rather than
+ * the one getModel would rebuild from text (~300 ms on a 46 MB dictionary, which is the
+ * cost that path exists to avoid).
+ *
+ * The SESSION's copy, deliberately, not this module's `cache`: the two are set together by
+ * every adder above, but `invalidate` clears only the cache — and it is called on every
+ * keystroke in an open .sldd (see extension.ts, which drops the cache so the tree view and
+ * the usage graph re-read an edited file). The registered source is also the one
+ * `findNodeById` resolves into, so it is the only answer an entry op can be applied to.
+ *
+ * Says nothing about whether that tree still matches the text; only its caller knows what
+ * has been applied to it since (see SlddTextEditorProvider's modelInSync).
+ */
+export function peekModel(uriString: string): any | null {
+  return (DataModel as any).getDataSource?.(uriString) ?? null;
+}
+
 export function findNode(uriString: string, nodeId: string): any | null {
   // Prefer the global registry — it is keyed by the FULL node id (which embeds
   // the source's srcId), so it resolves regardless of which provider registered
