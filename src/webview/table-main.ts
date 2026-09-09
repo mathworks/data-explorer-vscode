@@ -7,7 +7,7 @@ import './components/dex-error-dialog.js';
 import './components/dex-variable-editor.js';
 import { installMatrixOpen } from './matrixOpen.js';
 import { renderBanners } from './banners.js';
-import { nextExpandedIds, spliceEntryRows, insertEntryRows } from './rowUpdates.js';
+import { nextExpandedIds, nextStickyIds, spliceEntryRows, insertEntryRows } from './rowUpdates.js';
 import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from './menuItems.js';
 import { dropDecision, type DragMode, type DropTarget, type DragSource } from './dropDecision.js';
 import type { SectionRule } from '../host/sectionRules.js';
@@ -191,10 +191,22 @@ function installRows(rows: any[]): void {
   // arrives here, so this is what keeps selection stable through all of them.
   const prevSelected: string[] = Array.isArray(table.selectedRowIds) ? table.selectedRowIds : [];
   const prevExpanded: Set<string> | null = table._expandedIds instanceof Set ? table._expandedIds : null;
+  // Read BEFORE the new rows land: what the user is looking at is the answer to a
+  // search, and a row they have since edited out of that answer must not be deleted
+  // from under them.
+  const prevVisible: string[] =
+    typeof table._getVisibleRows === 'function'
+      ? table._getVisibleRows().map((r: { ID: string }) => r.ID)
+      : [];
   table.rows = rows;
   // Preserve expansion (keep still-existing expanded ids); default to
   // sections-only on first load. Never collapse the tree under the user.
   table._expandedIds = nextExpandedIds(prevExpanded, rows);
+  // Preserve the filtered list: rows edited out of the active search stay until the
+  // user searches again. pendingSelectId — the row the host wants selected after this
+  // edit, so a renamed row under its new id, or a pasted one — is still unread here;
+  // applyPendingSelection() below is what consumes it.
+  table._stickyRowIds = nextStickyIds(table._filterText ?? '', prevVisible, rows, pendingSelectId);
   table._visibleRowsCache = null;
   const present = new Set(rows.map((r: { ID: string }) => r.ID));
   const stillSelected = prevSelected.filter((id) => present.has(id));

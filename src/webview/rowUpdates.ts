@@ -26,6 +26,47 @@ export function nextExpandedIds<T extends RowLike>(prev: Set<string> | null, row
 }
 
 /**
+ * Decide which rows stay in a filtered list after a repaint even though they no
+ * longer match the active search.
+ *
+ * Editing a row is how the user makes it stop matching their OWN search: filter on
+ * `double`, retype one row's type as `single`, and a straight re-filter deletes that
+ * row from the list the instant the edit commits — the cell they are still looking
+ * at, with its selection, gone from under the cursor. So a search resolves to a list
+ * once, and rows leave that list only when the user searches again (see
+ * `_onFilterInput` / Escape in dex-tree-table.ts, which drop this set). Rows that
+ * newly match are still added: this suppresses removals, never additions.
+ *
+ * `selectId` is the row the HOST asked us to select after this edit (its `selectRow`
+ * message), and it is sticky for two reasons:
+ *
+ *  - A RENAME re-keys the row, because core keys a row by its path. The row just
+ *    edited out of the match therefore arrives under an id `prevVisible` has never
+ *    seen, and only the host knows the new spelling — the webview must not re-derive
+ *    core's id rule to guess it.
+ *  - The same channel carries the selection after a paste, an add, a move, and the
+ *    surviving sibling after a delete. Those rows need not match the search either,
+ *    and a selected row the filter hides is the same defect as the one above: the
+ *    user acts inside the list and the list shows nothing of it.
+ *
+ * Nothing is sticky when no search is active. The set would then hold every visible
+ * id in the document — ~130,000 on a real customer dictionary — to no purpose, since
+ * an unfiltered view hides no rows to begin with.
+ */
+export function nextStickyIds<T extends RowLike>(
+  filterText: string,
+  prevVisible: string[],
+  rows: T[],
+  selectId: string | null,
+): Set<string> {
+  if (!filterText) return new Set();
+  const existing = new Set(rows.map((r) => r.ID));
+  const sticky = new Set(prevVisible.filter((id) => existing.has(id)));
+  if (selectId !== null && existing.has(selectId)) sticky.add(selectId);
+  return sticky;
+}
+
+/**
  * Replace ONE entry's subtree rows in place, returning a new array (or null when
  * the entry's row isn't present).
  *

@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { nextExpandedIds, spliceEntryRows, insertEntryRows } from '../src/webview/rowUpdates.js';
+import { nextExpandedIds, nextStickyIds, spliceEntryRows, insertEntryRows } from '../src/webview/rowUpdates.js';
 import { getModel } from '../src/host/SlddModel.js';
 import { buildRows, buildEntryRows } from '../src/host/rowBuilder.js';
 
@@ -238,6 +238,53 @@ describe('insertEntryRows — add one new entry to a section', () => {
     const before = rows();
     insertEntryRows(before, 'section:P', undefined, addition);
     expect(before).toEqual(rows());
+  });
+});
+
+// Editing a row is how a user makes it stop matching their own search. nextStickyIds
+// is what keeps that row in the filtered list across the repaint, so the answer to a
+// search changes only when the user searches again.
+describe('nextStickyIds — a filtered list holds still across a repaint', () => {
+  const rows: Row[] = [
+    { ID: 'section:P', parent: null },
+    { ID: 'section:P/Gain', parent: 'section:P' },
+    { ID: 'section:P/Offset', parent: 'section:P' },
+  ];
+
+  it('keeps the ids that were visible, so an edited row cannot vanish', () => {
+    expect(nextStickyIds('gain', ['section:P', 'section:P/Gain'], rows, null)).toEqual(
+      new Set(['section:P', 'section:P/Gain']),
+    );
+  });
+
+  it('nothing is sticky when no search is active', () => {
+    // Without a filter the set would hold every visible id in the document —
+    // ~130,000 on a real customer dictionary — and buy nothing: an unfiltered
+    // view hides no rows to begin with.
+    expect(nextStickyIds('', ['section:P', 'section:P/Gain'], rows, null)).toEqual(new Set());
+  });
+
+  it('drops ids that no longer exist, so a deleted row does not linger', () => {
+    expect(nextStickyIds('gain', ['section:P/Gain', 'section:P/Deleted'], rows, null)).toEqual(
+      new Set(['section:P/Gain']),
+    );
+  });
+
+  it("adds the host's post-edit selection, which a rename made unrecognisable", () => {
+    // A rename changes the row's id (core keys a row by its path), so the row just
+    // edited out of the match arrives under an id the previous list never held. The
+    // host supplies the new spelling; the webview must not re-derive core's id rule.
+    const renamed: Row[] = [
+      { ID: 'section:P', parent: null },
+      { ID: 'section:P/Renamed', parent: 'section:P' },
+    ];
+    expect(nextStickyIds('gain', ['section:P', 'section:P/Gain'], renamed, 'section:P/Renamed')).toEqual(
+      new Set(['section:P', 'section:P/Renamed']),
+    );
+  });
+
+  it('ignores a selection that is not in the new rows', () => {
+    expect(nextStickyIds('gain', [], rows, 'section:P/Absent')).toEqual(new Set());
   });
 });
 

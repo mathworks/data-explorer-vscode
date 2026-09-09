@@ -1122,6 +1122,10 @@ export class DexTreeTable extends LitElement {
   @state() private _filterText = '';
   // Not @state: derived from _filterText, and keyed by it so it cannot go stale.
   private _filterTermsCache: { text: string; terms: FilterTerm[] } | null = null;
+  // Rows kept in the filtered list although they no longer match, because the user
+  // edited them there. Written by installRows (table-main.ts) on every repaint from
+  // nextStickyIds; dropped here the moment the user searches again.
+  private _stickyRowIds: Set<string> = new Set();
   @state() private _editingCell: {
     rowId: string;
     columnId: string;
@@ -2021,12 +2025,23 @@ export class DexTreeTable extends LitElement {
       }
     }
 
+    // Rows the user has edited out of the match since they last searched (see
+    // nextStickyIds). Kept in the list — with their ancestors, since the flatten
+    // DROPS a row whose parent is missing rather than merely unindenting it — but
+    // deliberately NOT counted as matches: a match pulls in its whole subtree
+    // below, and every visible row's section header is sticky, so treating these as
+    // matches would re-admit entire sections on the first edit and blow the filter
+    // wide open. The cost of that choice is narrow: renaming a matched PARENT keeps
+    // the parent but not the children it was showing, since a rename re-keys them
+    // and only the parent's new id reaches us.
+    const keepSet = this._stickyRowIds.size === 0 ? hitSet : new Set([...hitSet, ...this._stickyRowIds]);
+
     // Every ancestor walk below is cycle-guarded: a malformed document can give
     // two rows each other as parent, and an unguarded walk would spin forever,
     // freezing the webview mid-search with no error shown.
     const includeSet = new Set<string>();
     for (const row of rows) {
-      if (hitSet.has(row.ID)) {
+      if (keepSet.has(row.ID)) {
         includeSet.add(row.ID);
         let parentId = row.parent;
         const seen = new Set<string>([row.ID]);
@@ -2676,15 +2691,25 @@ export class DexTreeTable extends LitElement {
 
   private _onFilterInput(e: Event): void {
     this._filterText = (e.target as HTMLInputElement).value.trim();
-    this._visibleRowsCache = null;
+    this._newSearch();
   }
 
   private _onFilterKeyDown(e: KeyboardEvent): void {
     if (e.key === 'Escape') {
       this._filterText = '';
       this._filterInput.value = '';
-      this._visibleRowsCache = null;
+      this._newSearch();
     }
+  }
+
+  // Touching the box is the user asking for a fresh answer, so the rows the previous
+  // one is still holding on screen are released here (see nextStickyIds). The explicit
+  // requestUpdate is why this exists as its own step: retyping the SAME query leaves
+  // _filterText unchanged, and then nothing would schedule the re-filter.
+  private _newSearch(): void {
+    this._stickyRowIds = new Set();
+    this._visibleRowsCache = null;
+    this.requestUpdate();
   }
 
   private _onLinkClick(target: string, e: Event): void {

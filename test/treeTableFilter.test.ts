@@ -9,6 +9,7 @@
 // is useless if its parent rows vanish.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import { nextStickyIds } from '../src/webview/rowUpdates.js';
 
 const HOST_COLUMNS = ['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class'];
 
@@ -532,6 +533,151 @@ describe('matched text is highlighted', () => {
     const table = await mount(CATALOG);
     await search(table, 'name:');
     expect(marks(table, 'p1', 'Name')).toEqual([]);
+    table.remove();
+  });
+});
+
+// Editing a row inside a filtered list is how the user makes it stop matching their
+// own search. Re-filtering on the spot deletes that row from under the cursor the
+// moment the edit commits, so a search resolves to a list ONCE and rows leave it
+// only when the user searches again.
+describe('a filtered list holds still while its rows are edited', () => {
+  // Mirrors installRows() in table-main.ts — the one funnel every repaint (value
+  // edit, rename, structural edit, undo, redo) arrives through. Only the sticky-row
+  // rule is reproduced here; nextStickyIds itself is pinned in rowUpdates.test.ts.
+  async function repaint(
+    table: DexTreeTable,
+    rows: TreeTableRow[],
+    selectId: string | null = null,
+  ): Promise<string[]> {
+    const prevVisible = (table as any)._getVisibleRows().map((r: TreeTableRow) => r.ID);
+    table.rows = rows;
+    (table as any)._stickyRowIds = nextStickyIds((table as any)._filterText, prevVisible, rows, selectId);
+    (table as any)._visibleRowsCache = null;
+    table.requestUpdate();
+    await table.updateComplete;
+    return (table as any)._getVisibleRows().map((r: TreeTableRow) => r.ID);
+  }
+
+  const edited = (id: string, extra: Partial<TreeTableRow>): TreeTableRow[] =>
+    CATALOG.map((r) => (r.ID === id ? { ...r, ...extra } : r));
+
+  it('a row edited out of the match stays in the list', async () => {
+    const table = await mount(CATALOG);
+    expect(await search(table, '12')).toEqual(['p2']);
+    expect(await repaint(table, edited('p2', { Value: '99' }))).toEqual(['p2']);
+    table.remove();
+  });
+
+  it('it leaves as soon as the user searches again — even for the same text', async () => {
+    // "Until the user triggers another search" means the box, not the text: pressing
+    // Enter or retyping the same query is the user asking for a fresh answer.
+    const table = await mount(CATALOG);
+    await search(table, '12');
+    await repaint(table, edited('p2', { Value: '99' }));
+    expect(await search(table, '12')).toEqual([]);
+    table.remove();
+  });
+
+  it('a different search is answered from scratch', async () => {
+    const table = await mount(CATALOG);
+    await search(table, '12');
+    await repaint(table, edited('p2', { Value: '99' }));
+    expect(await search(table, 'gain')).toEqual(['p1']);
+    table.remove();
+  });
+
+  it('a renamed row stays, under the new id the host supplies', async () => {
+    // The rename is what changes the Name cell out of the match, and it re-keys the
+    // row at the same time, so the sticky id has to come from the host's selectRow.
+    const table = await mount(CATALOG);
+    expect(await search(table, 'gain')).toEqual(['p1']);
+    const renamed = CATALOG.map((r) =>
+      r.ID === 'p1' ? { ...r, ID: 'p1b', Name: { label: 'plainValue' } } : r,
+    );
+    expect(await repaint(table, renamed, 'p1b')).toEqual(['p1b']);
+    table.remove();
+  });
+
+  it('a row that never matched still does not appear', async () => {
+    // Stickiness suppresses removals from the list the search produced; it is not
+    // "show everything once an edit happens".
+    const table = await mount(CATALOG);
+    await search(table, 'gain');
+    expect(await repaint(table, edited('p2', { Value: '99' }))).toEqual(['p1']);
+    table.remove();
+  });
+
+  it('a row edited INTO the match appears immediately', async () => {
+    // Additions are never suppressed: the user renaming a row to what they searched
+    // for expects to see it, and nothing on screen is disturbed by it arriving.
+    const table = await mount(CATALOG);
+    await search(table, 'gain');
+    expect(await repaint(table, edited('p2', { Value: 'gain3' }))).toEqual(['p1', 'p2']);
+    table.remove();
+  });
+
+  it('a deleted row does not linger', async () => {
+    const table = await mount(CATALOG);
+    await search(table, 'gain');
+    expect(await repaint(table, CATALOG.filter((r) => r.ID !== 'p1'))).toEqual([]);
+    table.remove();
+  });
+
+  it('a kept row keeps its ancestors, so it is still reachable in the tree', async () => {
+    // A row whose parent is filtered out is not merely unindented — it is dropped
+    // entirely by the flatten, so keeping it without its parents keeps nothing.
+    const tree = [
+      makeRow('sec', null, 'Parameters'),
+      makeRow('bus', 'sec', 'busEntry'),
+      makeRow('el', 'bus', 'gainField', { Value: '5' }),
+    ];
+    const table = await mount(tree, ['sec', 'bus']);
+    expect(await search(table, 'gain')).toEqual(['sec', 'bus', 'el']);
+    const renamed = tree.map((r) => (r.ID === 'el' ? { ...r, ID: 'el2', Name: { label: 'plainField' } } : r));
+    expect(await repaint(table, renamed, 'el2')).toEqual(['sec', 'bus', 'el2']);
+    table.remove();
+  });
+
+  it('a pasted row shows even when it does not match the search', async () => {
+    // Paste, add, move and the survivor of a delete all arrive on the same channel
+    // as a rename: the host names the row it wants selected. Filtering that row out
+    // would leave the selection on a row the user cannot see, and make the paste look
+    // as though it had not happened.
+    const table = await mount(CATALOG);
+    await search(table, 'gain');
+    const pasted = [...CATALOG, makeRow('new', null, 'copyOfOffset', { Value: '12' })];
+    expect(await repaint(table, pasted, 'new')).toEqual(['p1', 'new']);
+    table.remove();
+  });
+
+  it('keeping a row does not re-admit the rest of its section', async () => {
+    // A kept row brings its ancestors along, and a MATCHING row brings its whole
+    // subtree — so if kept rows counted as matches, the section header kept with the
+    // first one would reopen the entire section and the first edit would quietly
+    // undo the search.
+    const tree = [
+      makeRow('sec', null, 'Parameters'),
+      makeRow('a', 'sec', 'gainA', { Value: '5' }),
+      makeRow('b', 'sec', 'unrelated', { Value: '7' }),
+    ];
+    const table = await mount(tree, ['sec']);
+    expect(await search(table, 'gain')).toEqual(['sec', 'a']);
+    const renamed = tree.map((r) => (r.ID === 'a' ? { ...r, ID: 'a2', Name: { label: 'plainA' } } : r));
+    expect(await repaint(table, renamed, 'a2')).toEqual(['sec', 'a2']);
+    table.remove();
+  });
+
+  it('clearing the search forgets what was kept', async () => {
+    // Escape ends the search, so the next one starts from the rows as they are now.
+    const table = await mount(CATALOG);
+    await search(table, 'gain');
+    await repaint(table, edited('p1', { Name: { label: 'plainValue' } }));
+    const input = table.shadowRoot!.querySelector('.filter-input') as HTMLInputElement;
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await table.updateComplete;
+    expect((table as any)._getVisibleRows().length).toBe(4);
+    expect(await search(table, 'gain')).toEqual([]);
     table.remove();
   });
 });
