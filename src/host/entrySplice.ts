@@ -1,67 +1,36 @@
 // Copyright 2026 The MathWorks, Inc.
-import { parseTree, type Node } from 'jsonc-parser';
+//
+// Where in a JSON .sldd's text a given entry lives — the finders every write to that text
+// goes through (a table cell edit, a delete, an add-child, a paste, a drop).
+//
+// These used to answer by building a jsonc parse tree of the whole document, which is a node
+// for every token in the file to settle a question about one element: 552 ms on a 46 MB
+// customer dictionary, paid on every single edit. The answer now comes from
+// jsonEntryScan.indexEntries — the same scan the text-view repaint already used, at 82 ms —
+// so the two halves of this file's editing story share ONE account of where the entries are
+// instead of holding two that can drift. See entrySpliceScan.test.ts, which pins that index
+// against jsonc-parser's tree element for element.
+import { indexEntries, type EntryElementSpan } from './jsonEntryScan.js';
 import { toEntrySelector, type EntrySelector } from './entrySelector.js';
 
-/**
- * Read the value node of a named property from an object node.
- * Returns null if the node is not an object or the property is absent.
- */
-function getProperty(objectNode: Node | null | undefined, key: string): Node | null {
-  if (!objectNode || objectNode.type !== 'object' || !objectNode.children) {
+// The metadata uuid an element's text declares, or null. Parsing the element is affordable
+// here because this is only reached to break a tie between same-named candidates, of which a
+// real file has at most a handful — never once per element.
+function elementUuid(text: string, el: EntryElementSpan): string | null {
+  try {
+    const parsed: unknown = JSON.parse(text.slice(el.offset, el.offset + el.length));
+    const metadata = ((parsed ?? {}) as { metadata?: unknown }).metadata;
+    const uuid = ((metadata ?? {}) as { uuid?: unknown }).uuid;
+    return typeof uuid === 'string' ? uuid : null;
+  } catch {
     return null;
   }
-  for (const prop of objectNode.children) {
-    if (prop.type !== 'property' || !prop.children || prop.children.length < 2) {
-      continue;
-    }
-    const keyNode = prop.children[0];
-    // PRECONDITION (untested) for the `type === 'string'` half: jsonc-parser only
-    // emits a `property` node when its key is a quoted string (an unquoted or
-    // numeric key parses to no property at all), so the type check never rejects.
-    // Kept so the value comparison cannot be reached with a non-string key.
-    if (keyNode.type === 'string' && keyNode.value === key) {
-      return prop.children[1] ?? null;
-    }
-  }
-  return null;
 }
 
-/** Read a string property value from an object node, or null. */
-function getStringProperty(objectNode: Node | null | undefined, key: string): string | null {
-  const valueNode = getProperty(objectNode, key);
-  if (valueNode && valueNode.type === 'string' && typeof valueNode.value === 'string') {
-    return valueNode.value;
-  }
-  return null;
-}
-
-/**
- * Walk the .sldd structure to the `entries` array node, or null.
- *
- *   root → "__MW_TEXT_PARTS__" → "__MW_TEXT_PART__/data/chunk0"
- *        → "__MW_TEXT_content" → "entries"[]
- *
- * Returns null if any step of the path is missing or `entries` is not an array.
- * Never throws.
- */
-function findEntriesArray(text: string): Node | null {
-  const root = parseTree(text);
-  if (!root || root.type !== 'object') return null;
-  const parts = getProperty(root, '__MW_TEXT_PARTS__');
-  const chunk0 = getProperty(parts, '__MW_TEXT_PART__/data/chunk0');
-  const content = getProperty(chunk0, '__MW_TEXT_content');
-  const entries = getProperty(content, 'entries');
-  if (!entries || entries.type !== 'array' || !entries.children) return null;
-  return entries;
-}
-
-/** The metadata uuid of an entry element, or null when it declares none. */
-function elementUuid(el: Node): string | null {
-  return getStringProperty(getProperty(el, 'metadata'), 'uuid');
-}
-
-// Index within the entries array of the element the selector names, or -1.
-// Non-object elements can never match, so they are skipped.
+// Index within the entries array of the element the selector names, or -1. An element with no
+// string name of its own can never match: the scan reports that as a null name, and no
+// selector's name is ever null (entrySelector.ts always yields a string), so a numeric or
+// missing name is unfindable without a guard for it here.
 //
 // Names are matched first, and the uuid is consulted ONLY to break a tie: entry
 // names are unique per namespace, not per file, so `Array` in Design and `Array`
@@ -71,14 +40,14 @@ function elementUuid(el: Node): string | null {
 // touched disappear while the one they deleted stayed. When the selector carries
 // no uuid (a bare-name caller), or no candidate matches it, the first name match
 // stands, which is what a file with no duplicate always yields.
-function indexOfEntryElement(elements: Node[], selector: EntrySelector): number {
+function indexOfEntryElement(text: string, elements: EntryElementSpan[], selector: EntrySelector): number {
   const matches: number[] = [];
   elements.forEach((el, i) => {
-    if (el.type === 'object' && getStringProperty(el, 'name') === selector.name) matches.push(i);
+    if (el.name === selector.name) matches.push(i);
   });
   if (matches.length === 0) return -1;
   if (matches.length === 1 || !selector.uuid) return matches[0];
-  const exact = matches.find((i) => elementUuid(elements[i]) === selector.uuid);
+  const exact = matches.find((i) => elementUuid(text, elements[i]) === selector.uuid);
   return exact ?? matches[0];
 }
 
@@ -86,15 +55,15 @@ function indexOfEntryElement(elements: Node[], selector: EntrySelector): number 
  * Locate the `{...}` span of the entry object the selector identifies (see
  * entrySelector.ts — a bare string means "whichever entry has this name").
  *
- * Returns the element object node's offset/length, or null if the entries array
- * is missing or no element matches. Never throws.
+ * Returns the element's offset/length, or null if the entries array cannot be
+ * scanned or no element matches. Never throws.
  */
 export function findEntrySpan(
   text: string,
   target: string | EntrySelector,
 ): { offset: number; length: number } | null {
-  const elements = findEntriesArray(text)?.children ?? [];
-  const idx = indexOfEntryElement(elements, toEntrySelector(target));
+  const elements = indexEntries(text)?.elements ?? [];
+  const idx = indexOfEntryElement(text, elements, toEntrySelector(target));
   if (idx < 0) return null;
   const { offset, length } = elements[idx];
   return { offset, length };
@@ -111,8 +80,8 @@ export function findEntryElementSpan(
   text: string,
   target: string | EntrySelector,
 ): { offset: number; length: number } | null {
-  const elements = findEntriesArray(text)?.children ?? [];
-  const idx = indexOfEntryElement(elements, toEntrySelector(target));
+  const elements = indexEntries(text)?.elements ?? [];
+  const idx = indexOfEntryElement(text, elements, toEntrySelector(target));
   if (idx < 0) return null;
   const el = elements[idx];
 
@@ -146,13 +115,9 @@ export function findEntryElementSpan(
 export function findEntriesArrayInsertion(
   text: string,
 ): { offset: number; needsLeadingComma: boolean; elementIndent: string } | null {
-  const entries = findEntriesArray(text);
-  if (!entries) return null;
-  // PRECONDITION (untested) for `?? []`: findEntriesArray already rejects a node
-  // without `children`, and jsonc-parser always gives an array node one anyway —
-  // `[]` and even an unterminated `[` both yield an empty array. The fallback
-  // keeps the empty-array insert path below correct for a parser change.
-  const elements = entries.children ?? [];
+  const index = indexEntries(text);
+  if (!index) return null;
+  const elements = index.elements;
   if (elements.length > 0) {
     const last = elements[elements.length - 1];
     // Indent = whitespace on the line where the last element begins.
@@ -160,10 +125,9 @@ export function findEntriesArrayInsertion(
     const elementIndent = text.slice(lineStart, last.offset);
     return { offset: last.offset + last.length, needsLeadingComma: true, elementIndent };
   }
-  // Empty array `[]` or `[ ]`: insert just after the `[`.
-  const open = text.indexOf('[', entries.offset);
+  // Empty array `[]` or `[ ]`: insert just after the `[`, which is where the scan anchored.
   const baseIndent = detectIndent(text);
-  return { offset: open + 1, needsLeadingComma: false, elementIndent: baseIndent.repeat(5) };
+  return { offset: index.arrayStart + 1, needsLeadingComma: false, elementIndent: baseIndent.repeat(5) };
 }
 
 /**

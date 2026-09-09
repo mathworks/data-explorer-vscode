@@ -210,6 +210,9 @@ describe('jsonEntryScan — finding one entry without parsing', () => {
       offset: first.offset,
       length: first.length,
       index: 0,
+      // The element's own name, which is what the splice finders resolve a selector
+      // against now that they read this same index (see entrySpliceScan.test.ts).
+      name: 'Array',
     });
   });
 

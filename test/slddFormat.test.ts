@@ -91,9 +91,10 @@ describe('exceedsStringDecodeLimit (undecodable-file routing guard)', () => {
 });
 
 // Every JSON .sldd write path gates on this before splicing. It is the strict
-// counterpart to the tolerant jsonc-parser walk the splice helpers use: they will
-// happily recover a span out of half-typed text, and a splice against that text
-// writes back a file that is still invalid and now missing a chunk too.
+// counterpart to the tolerant scan the splice helpers use: that scan validates only
+// the shape of the entries array, so it will happily recover a span out of text that
+// is half-typed ANYWHERE else, and a splice against that text writes back a file that
+// is still invalid and now missing a chunk too.
 describe('parsesAsJson (the strict gate in front of every write)', () => {
   const fixtureText = readFileSync(
     fileURLToPath(new URL('../test-integration/fixtures/workspace/data.sldd', import.meta.url)),
@@ -124,23 +125,32 @@ describe('parsesAsJson (the strict gate in front of every write)', () => {
     expect(parsesAsJson('')).toBe(false);
   });
 
+  // The finders' own refusal covers only what makes the ENTRIES ARRAY unwalkable.
+  // Everything the array's shape survives is still located, which is why the gate
+  // in front of it cannot be retired.
+  it('the finders refuse text whose entries array no longer closes', () => {
+    expect(findEntryElementSpan(MIDEDIT['tail cut off mid-entry'], 'Array1')).toBeNull();
+  });
+
   it('REGRESSION: is the only thing standing between the splice and a broken write', () => {
-    // Why the gate exists rather than trusting the splice to fail safe: the
-    // tolerant walk still LOCATES the entry in text that does not parse, so the
-    // delete goes through and returns text that also does not parse. Left
-    // ungated, a cross-document move deleted an entry out of a source file the
-    // user had mid-edit, leaving a file too broken to reopen as a table.
-    for (const [label, text] of Object.entries(MIDEDIT)) {
-      expect(findEntryElementSpan(text, 'Array1'), label).not.toBeNull();
+    // Why the gate exists rather than trusting the splice to fail safe: for every
+    // mid-edit state whose entries array is still intact, the entry is still LOCATED
+    // in text that does not parse, so the delete goes through and returns text that
+    // also does not parse. Left ungated, a cross-document move deleted an entry out
+    // of a source file the user had mid-edit, leaving a file too broken to reopen as
+    // a table.
+    const located = Object.entries(MIDEDIT).filter(
+      ([, text]) => findEntryElementSpan(text, 'Array1') !== null,
+    );
+    expect(located.length).toBeGreaterThan(0);
+    for (const [label, text] of located) {
       const trimmed = deleteEntriesByName(text, ['Array1']);
       expect(trimmed, label).not.toBe(text);
       expect(trimmed.includes('"Array1"'), label).toBe(false);
     }
-    // Two of those spliced results do not even parse afterwards — the write would
+    // Some of those spliced results do not even parse afterwards — the write would
     // have made an invalid file invalid AND shorter.
-    const broken = Object.values(MIDEDIT).filter(
-      (t) => !parsesAsJson(deleteEntriesByName(t, ['Array1'])),
-    );
+    const broken = located.filter(([, t]) => !parsesAsJson(deleteEntriesByName(t, ['Array1'])));
     expect(broken.length).toBeGreaterThan(0);
   });
 });
