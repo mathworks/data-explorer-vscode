@@ -48,14 +48,23 @@ interface SortEntry {
 const DEFAULT_ROW_HEIGHT = 26;
 const BUFFER_ROWS = 10;
 
+// Default column widths as RELATIVE weights: only their ratio matters, because
+// _getColWidth renders each one as its share of the weights of the columns
+// actually visible. So the numbers stay meaningful whatever subset of columns the
+// document offers or the user has enabled. They are tuned for the five
+// default-visible columns, whose weights sum to 100 and so read exactly as the
+// percentages a fresh table shows: Name 30, Value 20, Data Type 20, Usage 20,
+// Status 10. Name is widest because it alone carries the tree indent and the
+// expand toggle on top of its text; Status is narrowest because it only ever
+// holds a short word.
 const DEFAULT_WIDTHS: Record<string, number> = {
-  Name: 25,
+  Name: 30,
   Value: 20,
   Class: 16,
   Kind: 14,
-  DataType: 18,
+  DataType: 20,
   Description: 15,
-  UsedBy: 12,
+  UsedBy: 20,
   Status: 10,
   dimensions: 12,
   dimensionsMode: 14,
@@ -69,6 +78,21 @@ const DEFAULT_WIDTHS: Record<string, number> = {
   lastModified: 18,
   lastModifiedBy: 14,
 };
+
+// Weight for a column DEFAULT_WIDTHS says nothing about — the .prj view's
+// Type/Location/Labels, or any column a future host posts. One fifth of a
+// five-column table, i.e. the even split the table used to give every column.
+const FALLBACK_WIDTH = 20;
+
+// Pixels per unit of weight, which turns the weights above into a floor under the
+// whole table: below the sum of them the table stops shrinking with the panel and
+// overflows into a horizontal scroll instead of squeezing every column into an
+// unreadable sliver. Deriving the floor from the SAME weights that size the
+// columns is what keeps the two consistent — at exactly the floor width every
+// column's percentage share resolves to its own minimum, so there is no column
+// that the floor quietly squeezes on behalf of the others. At the default five
+// that is a 500px floor (Name 150, Value/Data Type/Usage 100, Status 50).
+const MIN_PX_PER_WEIGHT = 5;
 
 // The default column order and visibility. Class and Kind are supplementary
 // classifications, so they ship hidden; the user can enable them via the column
@@ -267,15 +291,89 @@ export class DexTreeTable extends LitElement {
         min-height: 0;
         position: relative;
         outline: none;
+        /* The shade the hidden columns slide into, as whole shadow layers: geometry and
+           colour have to move together, because how visible a band is depends as much
+           on how much of the neighbouring column it covers as on its alpha. OWNED here
+           rather than taken from the theme's own widget.shadow, for two reasons learned
+           the hard way: that token is tuned for a widget the eye is already tracking and
+           is far too faint for a band this narrow, and routing a --vscode-* var through
+           here risks poisoning the whole box-shadow — one unusable value invalidates the
+           declaration and takes the line down with it. So: no var() in this value, ever.
+
+           THE SPREAD IS MINUS HALF THE BLUR, which is what keeps this a right-hand band
+           instead of a shadow all the way around the cell. A box-shadow is a copy of the
+           WHOLE cell box offset sideways, not a strip along one edge, so a blurred one
+           reaches above and below the cell across the column's full width — and since
+           the header and the rows are separate tables, the header cell's bleed lands on
+           top of the first row as a shadow running the width of the column. Reported as
+           "a four border shadow". A blur of B reaches B/2 past the shadow rect, so a
+           spread of -B/2 pulls that rect in by exactly as much as the blur pushes out
+           and the vertical reach comes to zero. The cost, and the reason the blur stays
+           modest: the same inset softens the band's own top and bottom, so it thins out
+           over the last B/2 of each cell — which is where the row separator runs. */
+        --dex-frozen-shade: 8px 0 6px -3px rgba(0, 0, 0, 0.28);
+        /* The frozen column's right-hand boundary, as one token every rule that
+           draws a shadow on that column shares (box-shadow does not accumulate
+           across rules, so each of them has to restate this). Present but invisible
+           at rest, rather than absent: the layer count then never changes, so the
+           real value below transitions in instead of snapping, and a rule that
+           appends this to a ring of its own stays valid either way. */
+        --dex-frozen-edge: 0 0 0 0 transparent, 0 0 0 0 transparent;
+      }
+
+      /* VS Code puts these classes on the webview's body, so the shade can answer to
+         the theme kind with no help from the host. Dark themes get a heavier, wider one
+         and still end up with the subtler band: black over a near-black editor
+         background has barely any room to darken it — the same alpha takes a light
+         sidebar (243 per channel) down by ~68 levels and a #181818 one (24) down by ~17
+         — so what perceptible contrast there is has to come from covering more ground.
+         The spread stays at minus half the blur here too, for the reason above. High
+         contrast wants no shade at all — a hard line is the idiom there — so the layer
+         stays and only turns transparent, keeping the layer count, and with it the
+         transition, intact. */
+      :host-context(body.vscode-dark) .table-container {
+        --dex-frozen-shade: 11px 0 8px -4px rgba(0, 0, 0, 0.7);
+      }
+
+      :host-context(body.vscode-high-contrast) .table-container {
+        --dex-frozen-shade: 0 0 0 0 transparent;
+      }
+
+      /* Once the column is actually holding content back, its right edge stops
+         meaning "the first cell ends here" and starts meaning "the rest of the
+         table is under here" — so it goes to a full-strength line plus a shade the
+         hidden columns appear to slide into. Both are shadow layers rather than
+         borders, so they stay unbroken down the section rows and through the light
+         table style, neither of which draws a cell edge in this column at all. */
+      .table-container.scrolled-x {
+        --dex-frozen-edge:
+          1px 0 0 0 var(--dex-border-color, #d0d0d0),
+          var(--dex-frozen-shade);
       }
 
       .virtual-spacer {
         width: 100%;
+        min-width: var(--dex-table-min-width, 0px);
       }
 
+      /* width:100% keeps the table tracking the panel; min-width is the floor it
+         stops tracking at, below which .table-container scrolls it sideways
+         instead. A constant floor, unlike a measured pixel width, cannot go stale:
+         it does not encode how wide the panel happened to be at any one moment.
+         Both tables take it, so the header and the rows can never disagree on
+         where a column sits. */
+      /* Borders are SEPARATE (at zero spacing, so the grid looks collapsed) because
+         collapsing hands every cell border to the table, and Blink then refuses to
+         paint an outer box-shadow on a cell at all — which is the shadow the frozen
+         Name column casts over the columns scrolling under it. Separate borders keep
+         each border on its own cell, where a sticky cell carries it along. Zero
+         spacing plus one border per edge (right on td/th, bottom on td) means no
+         doubled lines: the rendered grid is pixel-identical to the collapsed one. */
       table {
         width: 100%;
-        border-collapse: collapse;
+        min-width: var(--dex-table-min-width, 0px);
+        border-collapse: separate;
+        border-spacing: 0;
         table-layout: fixed;
         position: sticky;
         top: 0;
@@ -285,7 +383,8 @@ export class DexTreeTable extends LitElement {
 
       .rows-table {
         width: 100%;
-        border-collapse: collapse;
+        border-collapse: separate;
+        border-spacing: 0;
         table-layout: fixed;
         position: absolute;
         left: 0;
@@ -468,9 +567,11 @@ export class DexTreeTable extends LitElement {
         opacity: 0.5;
       }
 
+      /* The row separator lives on the CELLS (see the border-spacing note on the table
+         rule): separate borders ignore a border on a <tr>. Every row is a .data-row, so
+         a border on td is the same set of lines. */
       tr.data-row {
         height: var(--dex-row-height, 28px);
-        border-bottom: 1px solid var(--dex-border-color-light, #e0e0e0);
       }
 
       tr.data-row:hover {
@@ -569,6 +670,7 @@ export class DexTreeTable extends LitElement {
       td {
         padding: 3px 8px;
         border-right: 1px solid var(--dex-border-color-light, #e0e0e0);
+        border-bottom: 1px solid var(--dex-border-color-light, #e0e0e0);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -588,14 +690,141 @@ export class DexTreeTable extends LitElement {
 
       :host([table-style='light']) td {
         border-right: none;
-      }
-
-      :host([table-style='light']) tr.data-row {
         border-bottom: 1px solid var(--dex-border-color-ultralight, rgba(0, 0, 0, 0.05));
       }
 
       :host([table-style='light']) th {
         border-right: none;
+      }
+
+      /* --- Frozen Name column -------------------------------------------------
+         Name is ALWAYS the first visible column — it cannot be reordered (guarded
+         in every header and menu drag handler) and cannot be hidden (the persisted
+         hidden set strips it) — so :first-child IS the Name column, in the header
+         table and the rows table alike. Freezing it means that once the table is
+         wider than the panel, the other columns scroll out from under the one cell
+         that says WHICH row you are reading. */
+      th:first-child,
+      td:first-child {
+        position: sticky;
+        left: 0;
+        /* Sibling cells are position:relative (th) or static (td), so without this
+           the later ones in DOM order paint over the sticky cell. Scoped to one
+           table's stacking context: the tables are already layered (header 2 over
+           rows 1), so this cannot lift a body cell above the header. */
+        z-index: 1;
+      }
+
+      /* A section row reads as one continuous strip with no vertical cell edges (the
+         light table style drops them table-wide, in its own rules above). The scroll
+         shade below is then the only edge this column draws there, and only while it
+         is actually holding content back. */
+      tr.section-row td:first-child {
+        border-right: none;
+      }
+
+      /* A sticky cell paints its own background, and anything short of a FULLY
+         opaque one lets the scrolled columns slide visibly underneath it. That
+         rules out inheriting the row's colour, which is what row state (hover,
+         selection) sets: those colours come from the theme, and a theme colour is
+         free to carry alpha — or to be missing, in which case the declaration is
+         invalid at computed-value time and the row's background computes to
+         transparent, fallback and all. Either way the cell would be see-through.
+         So the cell paints an opaque base of its own and layers the row's state
+         colour over it as a background-image (which paints above
+         background-color), compositing exactly as that colour does over the
+         table's background everywhere else. The base is the rows table's own
+         colour, so an unstated row is unchanged. th needs none of this: its own
+         rule already gives it an opaque background. */
+      td:first-child {
+        background-color: var(--dex-bg-secondary, #f8f8f8);
+      }
+
+      /* Selection is listed after hover for the same reason it is on the <tr>:
+         equal specificity, so a selected row under the cursor reads as selected. */
+      tr.data-row:hover td:first-child {
+        background-image: linear-gradient(
+          var(--dex-bg-hover, #e8e8e8),
+          var(--dex-bg-hover, #e8e8e8)
+        );
+      }
+
+      tr.data-row.selected td:first-child {
+        background-image: linear-gradient(
+          var(--dex-color-accent-bg, #cde4f7),
+          var(--dex-color-accent-bg, #cde4f7)
+        );
+      }
+
+      /* The copy flash animates the <tr> background, which the opaque cell above
+         hides. Mirror it as a tint layer so the flash does not skip the one column
+         that is always on screen. */
+      tr.data-row.copy-flash td:first-child {
+        animation: copy-flash-cell 0.35s ease-out;
+      }
+
+      @keyframes copy-flash-cell {
+        0% {
+          background-image: linear-gradient(
+            rgba(255, 255, 255, 0.9),
+            rgba(255, 255, 255, 0.9)
+          );
+        }
+        100% {
+          background-image: linear-gradient(
+            rgba(255, 255, 255, 0),
+            rgba(255, 255, 255, 0)
+          );
+        }
+      }
+
+      /* The boundary itself — an OUTER shadow, which is why the table cannot collapse
+         its borders (see the note on the table rule); a td clips its own overflow, so no
+         pseudo-element of the cell's could reach past its right edge either. The
+         transition is what makes it read as an answer to the scroll: the line and the
+         shade fade up together on the first sideways scroll and back out on the way
+         home to the left edge. */
+      th:first-child,
+      td:first-child {
+        box-shadow: var(--dex-frozen-edge);
+        transition: box-shadow 120ms ease-out;
+      }
+
+      /* The focus ring is the common case of a rule having to restate the frozen
+         edge: without this it would vanish on the Name cell, which is the cell most
+         likely to be focused. */
+      td:first-child.focused {
+        box-shadow:
+          inset 0 0 0 1px var(--dex-color-accent, #0078d4),
+          var(--dex-frozen-edge);
+      }
+
+      /* Drop rings are inset shadows on the <tr>, which the frozen cell's opaque
+         background covers. Redraw the segments that cross this column so the ring
+         stays unbroken; its right edge stays open because the ring continues into
+         the next cell. These rings chase the cursor from row to row, so they take
+         the frozen edge without the easing that would smear them. */
+      tr.data-row.drop-target-above td:first-child {
+        box-shadow:
+          inset 0 2px 0 0 var(--dex-color-accent, #0078d4),
+          var(--dex-frozen-edge);
+        transition: none;
+      }
+
+      tr.data-row.drop-target-on td:first-child {
+        box-shadow:
+          inset 2px 2px 0 0 var(--dex-color-accent, #0078d4),
+          inset 0 -2px 0 0 var(--dex-color-accent, #0078d4),
+          var(--dex-frozen-edge);
+        transition: none;
+      }
+
+      tr.data-row.drop-target-forbidden td:first-child {
+        box-shadow:
+          inset 2px 2px 0 0 var(--vscode-errorForeground, #f14c4c),
+          inset 0 -2px 0 0 var(--vscode-errorForeground, #f14c4c),
+          var(--dex-frozen-edge);
+        transition: none;
       }
 
       .empty-state {
@@ -822,6 +1051,10 @@ export class DexTreeTable extends LitElement {
       ) => { canDrop: boolean; cursor: string; tooltip: string; noop: boolean } | null)
     | null = null;
 
+  // Whether the table is scrolled off its left edge, i.e. whether the frozen Name
+  // column is actually holding anything back. Drives only its edge shadow.
+  @state() private _scrolledX = false;
+
   @state() private _columnWidths: Map<string, number> = new Map();
   @state() private _columnOrder: string[] = [...DEFAULT_COLUMN_ORDER];
   @state() private _hiddenColumns: Set<string> = new Set(DEFAULT_HIDDEN_COLUMNS);
@@ -969,22 +1202,55 @@ export class DexTreeTable extends LitElement {
   // the last column) nor shrank with a narrowed one (overflow and a scrollbar).
   // Projecting each pinned width as its share of their total keeps the ratios the
   // user dragged while leaving the table itself fluid — one sizing mode, not a
-  // fluid one that latches into a fixed one on first resize.
-  private _getColWidth(col: string, visibleCount: number): string {
-    const even = `${100 / visibleCount}%`;
+  // fluid one that latches into a fixed one on first resize. Un-dragged columns are
+  // relative for the same reason, just against DEFAULT_WIDTHS instead of measured
+  // pixels: same normalization, so the two sizing sources cannot disagree about how
+  // a share is computed.
+  private _getColWidth(col: string): string {
+    const visible = this._visibleColumns;
     const pinned = this._columnWidths.get(col);
-    if (pinned === undefined) return even;
-    // Only the columns rendered right now count toward the total; a hidden or
-    // since-removed column's width must not claim a share of the table.
+    if (pinned !== undefined) {
+      // Only the columns rendered right now count toward the total; a hidden or
+      // since-removed column's width must not claim a share of the table.
+      let total = 0;
+      for (const c of visible) {
+        total += this._columnWidths.get(c) ?? 0;
+      }
+      // A collapsed or not-yet-laid-out panel measures every header as 0. Dividing
+      // by that total would emit NaN% for every column, leaving a table with no
+      // visible columns and no way for the user to recover them — so fall through
+      // to the defaults, which are constants and cannot measure as zero.
+      if (total > 0) return `${(pinned / total) * 100}%`;
+    }
+    return this._defaultColWidth(col, visible);
+  }
+
+  // A column's default share: its weight over the weights of the visible columns.
+  // Showing or hiding a column therefore redistributes the whole table rather than
+  // leaving a gap, and the shares always sum to 100%.
+  private _defaultColWidth(col: string, visible: string[]): string {
+    let total = 0;
+    for (const c of visible) {
+      total += DEFAULT_WIDTHS[c] ?? FALLBACK_WIDTH;
+    }
+    // Every weight is a positive constant, so the only way the total is zero is an
+    // empty column list — nothing to size, and no divide-by-zero NaN% either.
+    if (total <= 0) return '0%';
+    return `${((DEFAULT_WIDTHS[col] ?? FALLBACK_WIDTH) / total) * 100}%`;
+  }
+
+  // The width the table stops shrinking at, in pixels: past it the panel scrolls
+  // sideways rather than squeezing the columns further (see MIN_PX_PER_WEIGHT).
+  // Always the DEFAULT weights, never the user's dragged pixels — a floor that
+  // moved with the drag would resize the table mid-gesture, under arithmetic that
+  // is reading the very widths it is changing. It also keeps the floor stable for a
+  // given set of visible columns, so it cannot creep as the user resizes.
+  private get _minTableWidth(): number {
     let total = 0;
     for (const c of this._visibleColumns) {
-      total += this._columnWidths.get(c) ?? 0;
+      total += (DEFAULT_WIDTHS[c] ?? FALLBACK_WIDTH) * MIN_PX_PER_WEIGHT;
     }
-    // A collapsed or not-yet-laid-out panel measures every header as 0. Dividing by
-    // that total would emit `NaN%` for every column, leaving a table with no visible
-    // columns and no way for the user to recover them.
-    if (total <= 0) return even;
-    return `${(pinned / total) * 100}%`;
+    return total;
   }
 
   // --- Column Resizing ---
@@ -1440,6 +1706,13 @@ export class DexTreeTable extends LitElement {
   // scroll event, which is what the early exit exists to avoid.
   private _onScroll(): void {
     if (!this._container) return;
+    // Before the early exit below: a purely horizontal scroll never changes the row
+    // slice, so it would return without ever noticing that the frozen column now
+    // has content hidden behind it. Only the crossing matters, so this repaints at
+    // most twice per gesture rather than on every scroll event.
+    const scrolledX = this._container.scrollLeft > 0;
+    if (scrolledX !== this._scrolledX) this._scrolledX = scrolledX;
+
     const scrollTop = this._container.scrollTop;
     const headerHeight = this._rowH;
     const adjustedScroll = Math.max(0, scrollTop - headerHeight);
@@ -2672,12 +2945,13 @@ export class DexTreeTable extends LitElement {
         ${this._renderColumnsButton()}
       </div>
       <div
-        class="table-container"
+        class="table-container ${this._scrolledX ? 'scrolled-x' : ''}"
         role="treegrid"
         aria-rowcount=${totalRows + 1}
         aria-colcount=${visibleCols.length}
         aria-label="Data entries"
         tabindex="0"
+        style="--dex-table-min-width: ${this._minTableWidth}px"
         @scroll=${this._onScroll}
         @keydown=${this._onTableKeyDown}
         @contextmenu=${this._onContainerContextMenu}
@@ -2685,7 +2959,7 @@ export class DexTreeTable extends LitElement {
         <div class="virtual-spacer" style="height: ${totalHeight + headerHeight}px;">
           <table>
             <colgroup>
-              ${visibleCols.map((col) => html`<col style="width: ${this._getColWidth(col, visibleCols.length)}" />`)}
+              ${visibleCols.map((col) => html`<col style="width: ${this._getColWidth(col)}" />`)}
             </colgroup>
             <thead>
               <tr role="row">
@@ -2728,7 +3002,7 @@ export class DexTreeTable extends LitElement {
             : nothing}
           <table class="rows-table" style="top: ${offsetTop}px;">
             <colgroup>
-              ${visibleCols.map((col) => html`<col style="width: ${this._getColWidth(col, visibleCols.length)}" />`)}
+              ${visibleCols.map((col) => html`<col style="width: ${this._getColWidth(col)}" />`)}
             </colgroup>
             <tbody>
               ${sliceRows.map((row, ri) => {

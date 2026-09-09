@@ -29,6 +29,22 @@ async function mount(): Promise<DexTreeTable> {
   return table;
 }
 
+// The component's own stylesheet text, whitespace collapsed so a rule reads as one
+// line. For the handful of rules whose effect happy-dom cannot compute (state
+// selectors, keyframes) this is the only place the invariant can be pinned.
+const styleText = (): string => {
+  const s = (DexTreeTable as any).styles;
+  return (Array.isArray(s) ? s : [s]).map((x: any) => String(x.cssText)).join('\n').replace(/\s+/g, ' ');
+};
+
+// The declarations of one rule, by its exact selector text.
+const ruleFor = (selector: string): string => {
+  const css = styleText();
+  const at = css.indexOf(`${selector} {`);
+  expect(at, selector).toBeGreaterThan(-1);
+  return css.slice(at, css.indexOf('}', at));
+};
+
 const headers = (table: DexTreeTable): HTMLElement[] =>
   Array.from(table.shadowRoot!.querySelectorAll('th')) as HTMLElement[];
 
@@ -214,18 +230,61 @@ describe('resizing a column', () => {
     table.remove();
   });
 
-  it('an unpinned column takes an even share, and pinned ones stay relative', async () => {
+  it('an unpinned column takes its weighted default share, and pinned ones stay relative', async () => {
     // Widths are always relative, whether or not the user has resized anything:
     // mixing pixel and percentage columns in a fixed-layout table makes them jump
     // around, and a pixel column is what stopped the table following the panel.
+    // Un-dragged columns are relative against the DEFAULT_WIDTHS weights, so the
+    // default layout is Name-heavy rather than an even split.
     const table = await mount();
     const cols = (table as any)._visibleColumns as string[];
-    expect((table as any)._getColWidth('Value', cols.length)).toBe(`${100 / cols.length}%`);
+    // Default visible here is the shipped five (HOST_COLUMNS minus hidden Kind and
+    // Class), whose weights sum to 100 — the shares are the weights themselves.
+    expect(cols).toEqual(['Name', 'Value', 'DataType', 'UsedBy', 'Status']);
+    expect((table as any)._getColWidth('Name')).toBe('30%');
+    expect((table as any)._getColWidth('Value')).toBe('20%');
+    expect((table as any)._getColWidth('DataType')).toBe('20%');
+    expect((table as any)._getColWidth('UsedBy')).toBe('20%');
+    expect((table as any)._getColWidth('Status')).toBe('10%');
 
-    // Equal pinned widths are the same layout as no pinned widths at all.
+    // Equal pinned widths override the weights: a drag is the user's own layout.
     const widths = new Map<string, number>(cols.map((c) => [c, 120]));
     (table as any)._columnWidths = widths;
-    expect((table as any)._getColWidth('Value', cols.length)).toBe(`${100 / cols.length}%`);
+    expect((table as any)._getColWidth('Value')).toBe(`${100 / cols.length}%`);
+    table.remove();
+  });
+
+  it('the default shares always sum to 100%, whatever columns are visible', async () => {
+    // The weights only mean anything as a ratio, so every subset has to normalize:
+    // revealing a column must redistribute the table rather than overflow it, and
+    // hiding one must not leave dead space to the right of the last column.
+    const table = await mount();
+    const sumShares = () => {
+      const cols = (table as any)._visibleColumns as string[];
+      return cols.reduce((s, c) => s + parseFloat((table as any)._getColWidth(c) as string), 0);
+    };
+    expect(sumShares()).toBeCloseTo(100, 6);
+
+    (table as any)._hiddenColumns = new Set<string>();
+    expect(sumShares()).toBeCloseTo(100, 6);
+
+    (table as any)._hiddenColumns = new Set(['Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class']);
+    expect((table as any)._getColWidth('Name')).toBe('100%');
+    table.remove();
+  });
+
+  it('a column with no default weight falls back instead of emitting NaN', async () => {
+    // The .prj view posts its own columns (Type/Location/Labels), which the
+    // dictionary weight table says nothing about. An undefined weight would make
+    // both the share and the total NaN, blanking every column in that view.
+    const table = await mount();
+    table.columns = ['Name', 'Type', 'Location', 'Labels'];
+    await table.updateComplete;
+    const cols = (table as any)._visibleColumns as string[];
+    expect(cols).toEqual(['Name', 'Type', 'Location', 'Labels']);
+    const shares = cols.map((c) => (table as any)._getColWidth(c) as string);
+    expect(shares.every((w) => /^[\d.]+%$/.test(w))).toBe(true);
+    expect(shares.reduce((s, w) => s + parseFloat(w), 0)).toBeCloseTo(100, 6);
     table.remove();
   });
 
@@ -248,11 +307,11 @@ describe('resizing a column', () => {
     (table as any)._columnWidths = widths;
 
     const units = 4 + (cols.length - 1);
-    expect((table as any)._getColWidth('Name', cols.length)).toBe(`${(4 / units) * 100}%`);
-    expect((table as any)._getColWidth('Value', cols.length)).toBe(`${(1 / units) * 100}%`);
+    expect((table as any)._getColWidth('Name')).toBe(`${(4 / units) * 100}%`);
+    expect((table as any)._getColWidth('Value')).toBe(`${(1 / units) * 100}%`);
 
     // Every column is relative, so nothing anchors the table to a pixel size.
-    const all = cols.map((c) => (table as any)._getColWidth(c, cols.length) as string);
+    const all = cols.map((c) => (table as any)._getColWidth(c) as string);
     expect(all.every((w) => w.endsWith('%'))).toBe(true);
     const sum = all.reduce((s, w) => s + parseFloat(w), 0);
     expect(sum).toBeCloseTo(100, 6);
@@ -262,7 +321,9 @@ describe('resizing a column', () => {
   it('neither table carries an inline pixel width, so both track the panel', async () => {
     // The sticky header is a separate <table> from the rows. An inline pixel width
     // on either one is what pinned it to a stale size; the stylesheet's width:100%
-    // is now the only thing sizing them, so they cannot disagree.
+    // is now the only thing sizing them, so they cannot disagree. The scroll floor
+    // is deliberately NOT an inline width either — it arrives as a CSS variable on
+    // the container, so a constant floor can never be mistaken for a measurement.
     const table = await mount();
     const cols = (table as any)._visibleColumns as string[];
     (table as any)._columnWidths = new Map<string, number>(cols.map((c) => [c, 120]));
@@ -277,7 +338,7 @@ describe('resizing a column', () => {
     table.remove();
   });
 
-  it('a zero-width measurement falls back to an even split instead of NaN', async () => {
+  it('a zero-width measurement falls back to the default shares instead of NaN', async () => {
     // Column widths are snapshotted from offsetWidth. A collapsed or not-yet-laid-out
     // panel measures every header as 0, which would make the share computation divide
     // by zero and emit `NaN%` for every column — a table with no visible columns at
@@ -285,7 +346,7 @@ describe('resizing a column', () => {
     const table = await mount();
     const cols = (table as any)._visibleColumns as string[];
     (table as any)._columnWidths = new Map<string, number>(cols.map((c) => [c, 0]));
-    expect((table as any)._getColWidth('Value', cols.length)).toBe(`${100 / cols.length}%`);
+    expect((table as any)._getColWidth('Value')).toBe('20%');
     table.remove();
   });
 
@@ -304,6 +365,207 @@ describe('resizing a column', () => {
     valueTh.click(); // a genuine click afterwards
     expect((table as any)._sortState).toEqual([{ column: 'Value', direction: 'asc' }]);
     table.remove();
+  });
+});
+
+describe('the width floor and the frozen Name column', () => {
+  // Two halves of one behavior: the table stops shrinking with the panel at a
+  // floor and scrolls sideways past it, and the Name column stays put while the
+  // rest scrolls under it. happy-dom has no layout, but it does resolve the shadow
+  // DOM cascade and CSS variables, so the declarations that produce all of this
+  // are checkable even though the resulting geometry is not.
+  const container = (table: DexTreeTable) => table.shadowRoot!.querySelector('.table-container') as HTMLElement;
+  const tablesIn = (table: DexTreeTable) => Array.from(table.shadowRoot!.querySelectorAll('table')) as HTMLElement[];
+
+  it('both tables stop shrinking at the summed weights of the visible columns', async () => {
+    // The floor is the same weights that size the columns, times MIN_PX_PER_WEIGHT
+    // (5), so at exactly the floor each column resolves to its own minimum and no
+    // column is the one being squeezed on behalf of the others. Default five =
+    // 100 weight = 500px. Both tables need it, or the header would stop scrolling
+    // where the rows kept going.
+    const table = await mount();
+    expect(container(table).style.getPropertyValue('--dex-table-min-width')).toBe('500px');
+    for (const t of tablesIn(table)) {
+      expect(getComputedStyle(t).minWidth).toBe('500px');
+    }
+    table.remove();
+  });
+
+  it('revealing a column raises the floor rather than squeezing what is there', async () => {
+    // The point of the floor: the more columns the user enables, the sooner the
+    // table overflows, instead of every column getting thinner without limit.
+    const table = await mount();
+    (table as any)._hiddenColumns = new Set(['Class']); // reveals Kind (weight 14)
+    await table.updateComplete;
+    expect((table as any)._visibleColumns).toContain('Kind');
+    expect(container(table).style.getPropertyValue('--dex-table-min-width')).toBe('570px');
+    table.remove();
+  });
+
+  it('the floor ignores dragged widths, so a resize cannot move it', async () => {
+    // A floor computed from the pinned pixels would resize the table in the middle
+    // of the drag that is producing those pixels — while the drag arithmetic reads
+    // the widths it is changing.
+    const table = await mount();
+    const cols = (table as any)._visibleColumns as string[];
+    (table as any)._columnWidths = new Map<string, number>(cols.map((c) => [c, 900]));
+    await table.updateComplete;
+    expect(container(table).style.getPropertyValue('--dex-table-min-width')).toBe('500px');
+    table.remove();
+  });
+
+  it('Name is stuck to the left edge of both the header and the rows', async () => {
+    // Name is the only column this can be right for: it is the one that cannot be
+    // reordered or hidden, so :first-child is always Name.
+    const table = await mount();
+    const th = table.shadowRoot!.querySelector('th') as HTMLElement;
+    const td = table.shadowRoot!.querySelector('td') as HTMLElement;
+    for (const cell of [th, td]) {
+      const s = getComputedStyle(cell);
+      expect(s.position).toBe('sticky');
+      expect(s.left).toBe('0px');
+      // Sibling cells are positioned (th) or later in DOM order (td), so without a
+      // z-index they would paint over the frozen one.
+      expect(s.zIndex).toBe('1');
+    }
+    table.remove();
+  });
+
+  it('the frozen cell paints an opaque base of its own, not the row colour', async () => {
+    // A sticky cell paints its own background, and anything short of fully opaque
+    // lets the scrolled columns slide visibly underneath it. Inheriting the row's
+    // colour looks like the cheap way to track hover and selection, but those
+    // colours come from the theme: free to carry alpha, and free to be missing —
+    // in which case the declaration is invalid at computed-value time and the
+    // colour lands on transparent, fallback and all. Both cases were reported as
+    // "the other columns' text shows under Name".
+    const table = await mount();
+    const td = table.shadowRoot!.querySelector('td') as HTMLElement;
+    const bg = getComputedStyle(td).backgroundColor;
+    expect(bg).not.toBe('inherit');
+    expect(bg).not.toBe('transparent');
+    expect(bg).not.toBe('');
+    table.remove();
+  });
+
+  it('row state tints the frozen cell as a layer over that base', async () => {
+    // The paint is the one part of this the DOM cannot answer for: happy-dom
+    // resolves neither :hover nor a descendant selector's computed value, so the
+    // rules are pinned against the component's own stylesheet. background-IMAGE is
+    // the load-bearing word — a background-color would REPLACE the opaque base
+    // with a possibly-translucent theme colour and put the bug straight back.
+    const css = styleText();
+    for (const state of ['tr.data-row:hover td:first-child', 'tr.data-row.selected td:first-child']) {
+      expect(css).toContain(`${state} { background-image: linear-gradient(`);
+    }
+    // Same reason: the flash animates the <tr>'s background, which the opaque cell
+    // hides, so it is mirrored as a tint on the one column always on screen.
+    expect(css).toContain('tr.data-row.copy-flash td:first-child { animation: copy-flash-cell');
+  });
+
+  it('the table keeps its borders separate, so the frozen edge can be cast at all', async () => {
+    // Blink will not paint an OUTER box-shadow on a cell of a border-collapse:collapse
+    // table — silently, so the frozen edge below was twice tuned against a declaration
+    // the browser was throwing away. Separate borders paint it, and hand each border
+    // back to its own cell, where a sticky cell carries it instead of leaving it behind
+    // at the unscrolled position. Zero spacing keeps the grid reading as collapsed.
+    const table = await mount();
+    for (const t of Array.from(table.shadowRoot!.querySelectorAll('table')) as HTMLElement[]) {
+      expect(getComputedStyle(t).borderCollapse).toBe('separate');
+      expect(parseFloat(getComputedStyle(t).borderSpacing) || 0).toBe(0);
+    }
+    // With separate borders a border on a <tr> is ignored, so the row separator has to
+    // ride on the cells — every row is a .data-row, so that is the same set of lines.
+    expect(getComputedStyle(table.shadowRoot!.querySelector('td')!).borderBottomStyle).toBe('solid');
+    expect(ruleFor('tr.data-row')).not.toContain('border');
+    table.remove();
+  });
+
+  it('the frozen edge appears only once content is hidden to the left', async () => {
+    // The edge is the cue that the column is frozen rather than merely first, so it
+    // must not show at rest. The flag it keys off is read on scroll BEFORE the
+    // row-slice early exit: a purely horizontal scroll never changes the slice, so
+    // checking it afterwards would never see a sideways scroll at all.
+    const table = await mount();
+    const c = container(table);
+    const cell = () => table.shadowRoot!.querySelector('td') as HTMLElement;
+    const edge = () => getComputedStyle(cell()).boxShadow.replace(/\s+/g, ' ');
+    expect(c.classList.contains('scrolled-x')).toBe(false);
+    // Present but invisible, not absent: same layer count as the scrolled value, so
+    // the two can transition into each other instead of snapping.
+    expect(edge()).toBe('0 0 0 0 transparent, 0 0 0 0 transparent');
+    expect(getComputedStyle(cell()).transition).toContain('box-shadow');
+
+    c.scrollLeft = 120;
+    c.dispatchEvent(new Event('scroll'));
+    await table.updateComplete;
+    expect(c.classList.contains('scrolled-x')).toBe(true);
+    // A full-strength line hard against the cell, then the shade for the columns to
+    // slide into — whose offset has to clear its own spread, or the half of the band
+    // that falls under the cell is clipped away unseen.
+    expect(edge()).toContain('1px 0 0 0 ');
+    expect(edge()).toContain('8px 0 6px -3px ');
+    expect(ruleFor('.table-container.scrolled-x')).toContain('var(--dex-border-color');
+
+    c.scrollLeft = 0;
+    c.dispatchEvent(new Event('scroll'));
+    await table.updateComplete;
+    expect(c.classList.contains('scrolled-x')).toBe(false);
+    expect(edge()).toBe('0 0 0 0 transparent, 0 0 0 0 transparent');
+    table.remove();
+  });
+
+  it('each theme kind states the shade as a whole layer, with no var() to poison it', async () => {
+    // Every clause here is a bug already paid for. A --vscode-* var in the shade took
+    // the whole box-shadow down with it when it turned out not to resolve to a usable
+    // colour — the line included, since one bad value invalidates the entire
+    // declaration. The theme's own widget.shadow, once it did resolve, was too faint
+    // to see. And the fix for THAT is not just alpha: black over a near-black
+    // background has so little room to darken it that the dark band has to cover more
+    // ground as well, so geometry and colour have to travel together.
+    const shades = [
+      '.table-container',
+      ':host-context(body.vscode-dark) .table-container',
+      // High contrast draws a hard line and no shade at all — but as a transparent
+      // layer, not as nothing, so both sides of the transition stay the same length.
+      ':host-context(body.vscode-high-contrast) .table-container',
+    ].map((scope) => {
+      const shade = ruleFor(scope).match(/--dex-frozen-shade:([^;]+)/)![1].trim();
+      expect(shade, scope).not.toContain('var(');
+      // A whole layer: four lengths (offset x/y, blur, spread) and then a colour,
+      // which may itself contain spaces. A bare colour here would leave the two sides
+      // of the transition different lengths, and box-shadow would snap instead.
+      const lengths = shade.match(/^(\S+) (\S+) (\S+) (\S+) (.+)$/);
+      expect(lengths, scope).not.toBeNull();
+      // The one that was a bug: a shadow is a copy of the whole cell box offset
+      // sideways, so a blur reaches above and below it across the column's full width,
+      // and the header table's bleed lands on the first row as a full-width shadow.
+      // A spread of minus half the blur pulls the rect in by what the blur pushes out,
+      // leaving the band strictly to the right of the cell.
+      const [, , , blur, spread] = lengths!;
+      expect(parseFloat(spread), `${scope} spread vs blur`).toBeCloseTo(-parseFloat(blur) / 2, 5);
+      return shade;
+    });
+    expect(shades[2]).toBe('0 0 0 0 transparent');
+  });
+
+  it('a ring drawn on the frozen cell keeps the frozen edge with it', async () => {
+    // box-shadow does not accumulate across rules, so every rule that draws its own
+    // shadow on this cell drops the edge unless it restates it — and the cells that
+    // take a ring (focused, drop target) are exactly the ones being looked at.
+    const drops = [
+      'tr.data-row.drop-target-above td:first-child',
+      'tr.data-row.drop-target-on td:first-child',
+      'tr.data-row.drop-target-forbidden td:first-child',
+    ];
+    for (const ring of ['td:first-child.focused', ...drops]) {
+      expect(ruleFor(ring), ring).toContain('var(--dex-frozen-edge)');
+    }
+    // A drop ring chases the cursor from row to row, where the easing that suits the
+    // scroll would only smear it. The focus ring moves a keystroke at a time, so it
+    // keeps the easing it inherits from the cell.
+    for (const drop of drops) expect(ruleFor(drop), drop).toContain('transition: none');
+    expect(ruleFor('td:first-child.focused')).not.toContain('transition');
   });
 });
 
