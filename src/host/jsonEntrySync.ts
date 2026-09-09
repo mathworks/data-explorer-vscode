@@ -116,12 +116,15 @@ export interface OwnEditPlan {
  * text that was submitted.
  *
  * WHY THE ENTRY IS REBUILT FROM THAT TEXT rather than repainted from the node the edit mutated,
- * which is what the binary provider does and is cheaper still. A mutation is not a re-parse.
- * Where the two disagree — a rename the systemComposer catalog does not follow, a nested rename
- * the format cannot express, a Description a node accepts and never serializes — the repaint
- * would show something the next wide repaint takes away. Parsing the bytes that were just
- * written makes "the table says what the file says" true by construction, and still costs a
- * fraction of finding the entry again (7 ms against 290 ms on a 46 MB dictionary).
+ * which is what the binary provider does and is cheaper still. A mutation is not a re-parse, and
+ * where the two disagree the repaint would show something the next wide repaint takes away. The
+ * three disagreements this path was written around have since been fixed at the model layer — a
+ * rename now moves the systemComposer catalog with it, and the two cells whose text serialize()
+ * dropped (a Description a node has nowhere to write, the Name of an object's Value row) are
+ * refused instead of accepted. Reading the bytes back is what made this path correct BEFORE they
+ * were, and what keeps it from depending on the next one being found: "the table says what the
+ * file says" holds by construction, and still costs a fraction of finding the entry again (7 ms
+ * against 290 ms on a 46 MB dictionary).
  *
  * A change that does not prove itself to be the echo is refused (see isEchoOfEdit), and the
  * caller falls back to the recovery path, which reads the same bytes the slow way.

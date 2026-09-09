@@ -19,6 +19,11 @@ export interface TreeTableRow {
     | { text: string; editable?: boolean; clipboardMode?: string; linkTarget?: string; editor?: string; options?: string[] }
     | string;
   _valueEditable?: boolean;
+  // Whether a Description typed onto this row could be SAVED — its own flag, because
+  // it is its own question: a plain MATLAB variable has an editable Value and nowhere
+  // to keep a Description, an object with a summarized Value has a read-only Value and
+  // keeps one fine. Reading the Value flag for it was wrong in both directions.
+  _descriptionEditable?: boolean;
   // Present only when this row's value is a griddable matrix (host: matrixPayload.ts).
   // Its presence IS the decision — the cell renders the glyph and asks nothing else.
   _matrix?: MatrixPayload;
@@ -72,6 +77,7 @@ type _CoreRowContract = [
   AssertTrue<CoreCellFits<'Status'>>,
   AssertTrue<CoreCellFits<'UsedBy'>>,
   AssertTrue<CoreCellFits<'_valueEditable'>>,
+  AssertTrue<CoreCellFits<'_descriptionEditable'>>,
 ];
 
 export interface EditCompletedDetail {
@@ -2409,7 +2415,10 @@ export class DexTreeTable extends LitElement {
       if (!val.editable) return;
       this._onCellDblClick(row.ID, 'Value', val.text || '', (val as { editor?: string }).editor, (val as { options?: string[] }).options);
     } else if (columnId === 'Description') {
-      if (row._valueEditable === false) return;
+      // The row's OWN Description flag, not its Value's: the node that cannot keep a
+      // Description says so here (core: BaseNode.descriptionEditable), and offering an
+      // editor anyway showed the user text that serialize drops on the next read.
+      if (row._descriptionEditable === false) return;
       this._onCellDblClick(row.ID, 'Description', cellText(row.Description));
     } else {
       // Generic editable column (e.g. the schema Code Generation columns): the

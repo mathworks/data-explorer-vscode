@@ -18,13 +18,14 @@
 // WHY FROM THE TEXT AND NOT STRAIGHT FROM THE MUTATED NODE — which is what the binary
 // provider does, and would be 4 ms cheaper still. A mutation is not a re-parse, and where the
 // two disagree the difference is a row the user watches change under them at the next wide
-// repaint. Three such disagreements are known today: renaming an entry does not re-derive
-// what the systemComposer catalog says it IS, renaming a nested row the format cannot express
-// changes a model the text will not follow, and a Description a node accepts but never
-// serializes stays on screen. All three are model-layer bugs, all three are live in a binary
-// dictionary right now, and none of them has to be fixed before this path can be exactly as
-// correct as the re-parse it replaces. Reading the entry back out of its own text is what
-// makes that true by construction instead of by argument.
+// repaint. Three such disagreements were live when this path was written, all three
+// model-layer bugs and all three visible in a binary dictionary: an entry rename did not
+// re-derive what the systemComposer catalog says it IS, a rename of a nested row the format
+// cannot express changed a model the text would not follow, and a Description a node accepted
+// but never serialized stayed on screen. They have since been fixed — but none of them HAD to
+// be for this path to be exactly as correct as the re-parse it replaces, and the next one
+// found will not have to be either. Reading the entry back out of its own text is what makes
+// that true by construction instead of by argument.
 //
 // Three claims, and they are what this file pins:
 //
@@ -52,7 +53,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DataModel } from 'data-explorer-core';
+import { DataModel, applyScEdits } from 'data-explorer-core';
 import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
 import { buildEntryRows } from '../src/host/rowBuilder.js';
 import { findEntrySpan, detectIndent } from '../src/host/entrySplice.js';
@@ -61,6 +62,7 @@ import { entrySelectorOf } from '../src/host/entrySelector.js';
 import { reserializeEntry } from '../src/host/structuralEdit.js';
 import { mutateEntry, applyEntryOps } from '../src/host/entryOps.js';
 import { planEntrySync, isEchoOfEdit, planOwnEdit } from '../src/host/jsonEntrySync.js';
+import { catalogRenameOf, scJsonRenameEdits } from '../src/host/scRename.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -248,6 +250,9 @@ function editInPlace(uri: string, label: string, text: string, pair: Pair): Edit
   const selector = entrySelectorOf(entry);
   const rowIdOnScreen: string = entry.id;
   const before = buildEntryRows(entry, sectionName, new Set<string>());
+  // And the third thing a rename invalidates: the name the System Composer catalog lists the
+  // entry under, in another part of this same document.
+  const catalogRename = catalogRenameOf(pair.columnId, pair.value, node, entry);
 
   const result = mutateEntry(entry, () => node.setProperty(pair.columnId, pair.value));
   if (result && typeof result === 'object' && (result as any).error) {
@@ -272,9 +277,19 @@ function editInPlace(uri: string, label: string, text: string, pair: Pair): Edit
   const span = findEntrySpan(text, selector);
   expect(span, `the text still spells "${selector.name}"`).not.toBeNull();
   const entryText = reserializeEntry(entry, detectIndent(text));
-  const newText = text.slice(0, span!.offset) + entryText + text.slice(span!.offset + span!.length);
+  // ONE WorkspaceEdit, as applyEdit submits it: the entry's span, plus every site the System
+  // Composer catalog names this entry at (empty for all but a rename of a catalogued
+  // architectural entry). Both are ranges into the pre-edit text, so they are applied
+  // together, back to front.
+  const newText = applyScEdits(text, [
+    { start: span!.offset, end: span!.offset + span!.length, text: entryText },
+    ...(catalogRename ? scJsonRenameEdits(text, catalogRename.oldName, catalogRename.newName) : []),
+  ]);
 
-  // The change event that splice fires, and what the host makes of it.
+  // The change event that splice fires, and what the host makes of it. Asked of every pair,
+  // including the catalogued renames the provider itself answers with a wide repaint (a
+  // multi-change event is not an echo of one span): if the narrow rows are right there too,
+  // the fallback is a choice about latency and not about correctness.
   const submitted = { rangeOffset: span!.offset, rangeLength: span!.length, text: entryText };
   const plan = planOwnEdit([{ ...submitted }], { entryId: entry.id, rowId: rowIdOnScreen, submitted });
   expect(plan, `the host recognises its own edit (${pair.columnId} on "${pair.nodeId}")`).not.toBeNull();
@@ -327,10 +342,11 @@ for (const { label, text } of FIXTURES) {
         expect(entry.id, `the two paths agree on the entry's id (${where})`).toBe(done.entryId);
         const theirs = buildEntryRows(entry, done.sectionName, new Set<string>());
         // NOT to within a tolerance: every cell, on every row, of every entry these three
-        // dictionaries hold. The known model-layer disagreements the header lists are exactly
-        // the ones this path does not inherit, because it reads the entry back from the text —
-        // including the architectural rename characterised below, where the two agree on an
-        // answer that is WRONG in the file and right on screen.
+        // dictionaries hold. The model-layer disagreements the header lists are exactly the
+        // ones this path never inherited, because it reads the entry back from the text —
+        // including the architectural rename characterised below, which the two agreed on
+        // while the answer was WRONG in the file and agree on now that the edit carries the
+        // catalog with it.
         expect(theirs, where).toEqual(done.rows);
         compared++;
       }
@@ -362,108 +378,108 @@ for (const { label, text } of FIXTURES) {
 }
 
 // ---------------------------------------------------------------------------------------
-// The three mutation/re-parse disagreements the header names, stated outright — the reason
-// the repaint reads the entry back from the text instead of from the node.
+// The three mutation/re-parse disagreements the header names, stated outright. Each was a
+// row that showed text the next read of the file took away, and each has since been fixed
+// where it belonged — two of them by refusing the edit in the model, one by carrying the
+// rename into the part that classifies the entry. They are pinned here because this is the
+// path they were found on: a repaint that reads the entry back from the text shows the
+// refusal and the carry alike, without being told which is which.
 // ---------------------------------------------------------------------------------------
-describe('renaming a row the format has no name for — a rename the file will not keep', () => {
+describe('renaming a row the format has no name for — an edit the model now refuses', () => {
   const text = read('./fixtures/mcos/all.sldd');
   const uri = 'test://host-edit-nested-rename';
 
-  it('renames it in the model, and the text comes back saying what it always said', () => {
+  it('is refused, so nothing is shown that the next read would take away', () => {
     reset(uri);
     getModel(uri, 'mcos/all.sldd', text);
     // A Simulink.Parameter's "Value" row is not a named child in the file — it is the shape
-    // the parser gives a value with elements to expand. The table offers its Name cell an
-    // editor all the same (the row carries editable: true), so a user can type into it.
+    // the parser gives a value with elements to expand. serialize() writes it under the key
+    // `Value` whatever the node is called, so a rename here could only be discarded.
     const row = findNode(uri, `${uri}/design/ParamMat/Value`);
     expect(row, 'the fixture still holds a matrix-valued parameter').toBeTruthy();
     const entry = owningEntry(row);
-    const selector = entrySelectorOf(entry);
+    const rowsBefore = buildEntryRows(entry, 'design', new Set<string>());
 
-    expect(mutateEntry(entry, () => row.setProperty('Name', 'Value_renamed')), 'the model accepts it').toBe(true);
-    expect(buildEntryRows(entry, 'design', new Set<string>())[1].Name.label).toBe('Value_renamed');
+    const result = mutateEntry(entry, () => row.setProperty('Name', 'Value_renamed')) as any;
 
-    const span = findEntrySpan(text, selector)!;
-    const entryText = reserializeEntry(entry, detectIndent(text));
-    expect(entryText, 'and serialize has nowhere to put it').not.toContain('Value_renamed');
-
-    reset(uri);
-    const newText = text.slice(0, span.offset) + entryText + text.slice(span.offset + span.length);
-    const reread = entryNamed(getModel(uri, 'mcos/all.sldd', newText), 'design', 'ParamMat');
-    // So the edit is discarded, and the honest table says so at once rather than showing a
-    // name that will not survive the next read. Worth fixing where the row is built (do not
-    // offer the editor) rather than here.
-    expect(buildEntryRows(reread, 'design', new Set<string>())[1].Name.label).toBe('Value');
+    expect(result?.error, 'the model refuses the rename').toBe(true);
+    expect(typeof result?.reason, 'and says why, for the dialog the provider shows').toBe('string');
+    // A refusal has to change nothing at all: the provider answers one by repainting this
+    // entry from the model, so a half-applied mutation would paint rows the document does not
+    // say. (The table also declines to open the editor — see treeTableEditing.)
+    expect(buildEntryRows(entry, 'design', new Set<string>())).toEqual(rowsBefore);
+    expect(JSON.stringify(entry.serialize())).not.toContain('Value_renamed');
   });
 });
 
 
-describe('renaming an architectural entry — a file-level bug this path neither causes nor hides', () => {
+describe('renaming an architectural entry — the rename carries the catalog with it', () => {
   const text = read('./fixtures/arch.sldd');
   const uri = 'test://host-edit-arch-rename';
 
   const rowOf = (entry: any) => buildEntryRows(entry, 'arch', new Set<string>())[0];
   const kindOf = (row: any) => `${row.Kind} / ${row.Name.iconId}`;
 
-  it('demotes a struct type to a data interface, and the mutated node does not notice', () => {
+  it('keeps a struct type a struct type, in the file and on screen', () => {
     reset(uri);
     const model = getModel(uri, 'arch.sldd', text);
     // A Simulink.Bus is a struct type or a data interface depending on what the file's
     // systemComposer catalog says about it BY NAME (SlddNode.parse threads the catalog into
-    // every parseEntry). So renaming one leaves the catalog describing a name the dictionary
-    // no longer has, and the entry comes back as the plain interface it now looks like.
+    // every parseEntry). So a rename that changed the entry alone would leave the catalog
+    // describing a name the dictionary no longer has, and the entry would come back as the
+    // plain interface it then looks like.
     const entry = entryNamed(model, 'arch', 'StructType');
     expect(kindOf(rowOf(entry))).toBe('Struct Type / typeStruct');
 
     const selector = entrySelectorOf(entry);
+    const carry = catalogRenameOf('Name', 'StructType_renamed', entry, entry);
+    expect(carry, 'the catalog lists this entry, so the rename has something to carry').toEqual({
+      oldName: 'StructType',
+      newName: 'StructType_renamed',
+    });
     expect(mutateEntry(entry, () => entry.setProperty('Name', 'StructType_renamed'))).toBe(true);
-    // The node the mutation returns still says what it was PARSED as: classification is not
-    // re-derived by a rename. Repainting from it would show a struct type the file no longer
-    // describes — which is why this path repaints from the text instead.
-    expect(kindOf(rowOf(entry)), 'the mutated node keeps its old classification').toBe('Struct Type / typeStruct');
+    expect(kindOf(rowOf(entry)), 'the mutated node keeps its classification').toBe('Struct Type / typeStruct');
 
     const span = findEntrySpan(text, selector)!;
-    const newText =
-      text.slice(0, span.offset) + reserializeEntry(entry, detectIndent(text)) + text.slice(span.offset + span.length);
+    const scEdits = scJsonRenameEdits(text, carry!.oldName, carry!.newName);
+    expect(scEdits, 'the catalog names it in one place in this dictionary').toHaveLength(1);
+    const newText = applyScEdits(text, [
+      { start: span.offset, end: span.offset + span.length, text: reserializeEntry(entry, detectIndent(text)) },
+      ...scEdits,
+    ]);
     reset(uri);
     const reread = entryNamed(getModel(uri, 'arch.sldd', newText), 'arch', 'StructType_renamed');
-    // The rename cost the entry its kind, and this is what the FILE now says: a save here is
-    // silent data loss, on both formats, and it wants fixing in the data model (the rename
-    // should carry the catalog with it). Until it is, the honest table is the one that shows
-    // it — which the sweep above proves this repaint does, byte for byte.
-    expect(kindOf(rowOf(reread)), 'a re-read demotes it').toBe('Data Interface / typeBus');
+    // The whole point: the FILE still models it as a struct type. Without the catalog edit
+    // this read said 'Data Interface / typeBus' — a different thing entirely, arrived at by a
+    // rename, and invisible until the file was read again.
+    expect(kindOf(rowOf(reread)), 'a re-read finds the same kind').toBe('Struct Type / typeStruct');
   });
 });
 
-describe('a Description the format cannot hold — a pre-existing loss, not this change', () => {
+describe('a Description the format cannot hold — an edit the model now refuses', () => {
   const { label, text } = FIXTURES[0];
 
-  it('is accepted, shown, and gone on the next read', () => {
+  it('is refused, on the format that used to lose it silently', () => {
     const uri = 'test://host-edit-description-loss';
     reset(uri);
     const model = getModel(uri, label, text);
     // A plain MATLAB variable: `{name, metadata, value}` on disk, with no property bag to
-    // carry a Description. Its class declares the prop anyway, so setProperty's generic tail
-    // writes it onto the node, the row shows it, and serialize never emits it.
+    // carry a Description. Its class declared the prop anyway, so setProperty's generic tail
+    // used to write it onto the node — the row showed it, and serialize never emitted it.
     const entry = entryNamed(model, 'design', 'Number');
     expect(entry, 'the fixture still holds a plain numeric variable').toBeTruthy();
-    expect(mutateEntry(entry, () => entry.setProperty('Description', 'why this exists'))).toBe(true);
-    expect(buildEntryRows(entry, 'design', new Set<string>())[0].Description).toBe('why this exists');
-    expect(JSON.stringify(entry.serialize())).not.toContain('why this exists');
+    const rowsBefore = buildEntryRows(entry, 'design', new Set<string>());
 
-    // The same loss on both formats. What differs is what the user SEES: a binary dictionary
-    // keeps the typed text on screen (its repaint comes from the mutated node) until the next
-    // wide repaint drops it, while here the repaint reads the entry back out of the text the
-    // splice wrote — which has no Description in it — so the cell reverts immediately, exactly
-    // as it does today. Worth fixing in the model (refuse it, or persist it), together with the
-    // question of whether the cell should offer an editor at all.
-    const newText = (() => {
-      const span = findEntrySpan(text, entrySelectorOf(entry))!;
-      return text.slice(0, span.offset) + reserializeEntry(entry, detectIndent(text)) + text.slice(span.offset + span.length);
-    })();
-    reset(uri);
-    const reread = entryNamed(getModel(uri, label, newText), 'design', 'Number');
-    expect(buildEntryRows(reread, 'design', new Set<string>())[0].Description).toBe('');
+    const result = mutateEntry(entry, () => entry.setProperty('Description', 'why this exists')) as any;
+
+    expect(result?.error, 'the model refuses what it cannot write').toBe(true);
+    expect(buildEntryRows(entry, 'design', new Set<string>()), 'and the rows are untouched').toEqual(rowsBefore);
+    expect(JSON.stringify(entry.serialize())).not.toContain('why this exists');
+    // Both formats, one answer. Before the refusal the two differed only in what the user SAW:
+    // a binary dictionary kept the typed text on screen (its repaint comes from the mutated
+    // node) until some later wide repaint dropped it, while here the repaint read the entry
+    // back out of the text the splice wrote — which had no Description in it — so the cell
+    // reverted at once. Neither was the file keeping it.
   });
 });
 

@@ -40,6 +40,7 @@ import {
   type StructuralResult,
 } from './xmlStructuralEdit.js';
 import { findEntryObjectSpan } from './xmlEntrySplice.js';
+import { catalogRenameOf, scXmlRenamePatch, type ScPartPatch } from './scRename.js';
 import {
   applyEntryOps,
   entryRecord,
@@ -163,21 +164,43 @@ class BinarySlddDocument implements vscode.CustomDocument {
    * direction then repaints the old way, from a re-parse of the text it just restored.
    * That is the safety property the narrow paths rest on — a missing or wrong patch
    * costs latency, never correctness.
+   *
+   * `part` is a pass-through zip member this edit also changed — today only the System
+   * Composer catalog, which a rename of an architectural entry has to move because it
+   * lists the entry by name. It travels with the chunk in both directions, and it forces
+   * both of them WIDE: what a catalogued rename changes is how an entry CLASSIFIES, and
+   * only a re-read of the chunk and the parts together derives that. The entry ops would
+   * rebuild it against the catalog the model is holding, which is a step ahead.
    */
-  pushEdit(label: string, before: string, after: string, patch?: EntryPatch): void {
+  pushEdit(label: string, before: string, after: string, patch?: EntryPatch, part?: ScPartPatch): void {
     this.chunkXml = after;
+    if (part) this.zipMeta[part.member] = part.after;
     this._onDidChange.fire({
       document: this,
       label,
       undo: () => {
         this.chunkXml = before;
-        this.applyOps(patch?.undo);
+        if (part) this.zipMeta[part.member] = part.before;
+        this.applyOps(part ? undefined : patch?.undo);
       },
       redo: () => {
         this.chunkXml = after;
-        this.applyOps(patch?.redo);
+        if (part) this.zipMeta[part.member] = part.after;
+        this.applyOps(part ? undefined : patch?.redo);
       },
     });
+  }
+
+  /**
+   * Replace every pass-through part, for a read that replaced the whole document.
+   *
+   * In place, because `zipMeta` is the object `writeTo` re-zips and `readSlddParts` reads
+   * the catalog out of — handing either of them a different object later is how a revert
+   * ends up writing a chunk from disk beside a part an undone edit patched.
+   */
+  resetParts(zip: Record<string, Uint8Array>): void {
+    for (const member of Object.keys(this.zipMeta)) delete this.zipMeta[member];
+    for (const [member, data] of Object.entries(zip)) if (member !== 'data/chunk0.xml') this.zipMeta[member] = data;
   }
 
   /**
@@ -673,6 +696,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // that is on screen, not the one that will be).
         const entrySelectorForLookup = entrySelectorOf(entry);
         const entryRowId = entry.id;
+        // Third thing read before the mutation: the rename to carry into the System Composer
+        // catalog, which names the entry as the file still does. Null for all but a rename of
+        // a catalogued architectural entry.
+        const catalogRename = catalogRenameOf(msg.columnId, msg.newValue, node, entry);
         // The undo half of the patch has to be snapshotted here: this is the only moment
         // the pre-edit state exists. (Through attempt, so an entry that will not
         // serialize costs this edit its fast undo and not the edit itself.)
@@ -712,7 +739,14 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           beforeRecord && redoOps
             ? { undo: [{ kind: 'replace' as const, rowId: entry.id, record: beforeRecord }], redo: redoOps }
             : undefined;
-        document.pushEdit('Edit ' + msg.columnId, before, after, patch);
+        // The catalog is a zip member this document only passes through, so carrying the
+        // rename into it is a member swap rather than a text edit — computed here, after the
+        // validation gate, so a rejected edit does not pay for reading the part. Null unless
+        // a definition actually carries the name.
+        const scPart = catalogRename
+          ? scXmlRenamePatch(document.zipMeta, catalogRename.oldName, catalogRename.newName)
+          : null;
+        document.pushEdit('Edit ' + msg.columnId, before, after, patch, scPart ?? undefined);
         document.repaintOps([{ kind: 'replace', entryRowId, entry }]);
         if (msg.columnId === 'Name') webview.postMessage({ type: 'selectRow', rowId: node.id });
       } catch (err) {
@@ -1034,7 +1068,14 @@ ${BANNERS_HTML}
     const bytes = await vscode.workspace.fs.readFile(document.uri);
     const zip = unzipSync(bytes);
     const chunk = zip['data/chunk0.xml'];
-    if (chunk) document.chunkXml = new TextDecoder().decode(chunk);
+    if (chunk) {
+      document.chunkXml = new TextDecoder().decode(chunk);
+      // The parts too, and for the same reason: an edit can have patched one of them (a
+      // rename carried into the System Composer catalog), and a revert that restored only
+      // the chunk would leave the entry named as the file spells it beside a catalog that
+      // no longer classifies it — then write that pair out on the next save.
+      document.resetParts(zip);
+    }
     // Wide on purpose: a revert replaces the whole document, so there is no narrower
     // truth to tell the table than "everything you are showing came from elsewhere".
     document.repaintAll();

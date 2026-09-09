@@ -46,6 +46,7 @@ import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { parsesAsJson } from './slddFormat.js';
 import { entrySelectorOf } from './entrySelector.js';
+import { catalogRenameOf, scJsonRenameEdits } from './scRename.js';
 import { basename } from '../common/pathUtil.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 
@@ -454,6 +455,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // carry the entry as the table last painted it, so the repaint this edit
         // triggers has to splice over THAT id, not the one a rename is about to mint.
         const entryRowIdOnScreen = entry.id;
+        // And the rename to carry into the System Composer catalog, for the same
+        // before-the-mutation reason: the catalog names the entry as the document still
+        // does. Null for all but a rename of a catalogued architectural entry.
+        const catalogRename = catalogRenameOf(msg.columnId, msg.newValue, node, entry);
 
         // Mutated through entryOps so the session's node index follows a rename: an id is a
         // PATH, so renaming an entry rekeys it and everything under it. The wide re-parse used
@@ -493,21 +498,49 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           return;
         }
 
+        // The System Composer interface dictionary is a part of THIS document, and it lists
+        // the entry BY NAME — so a rename that changes only the entry leaves the file
+        // saying two different things: the entry is no longer classified (a struct type
+        // re-reads as a plain data interface) and the catalog defines an interface no entry
+        // backs. Empty for every rename no definition carries, which is nearly all of them.
+        const scEdits = catalogRename
+          ? scJsonRenameEdits(currentText, catalogRename.oldName, catalogRename.newName)
+          : [];
+
         // Byte-scoped range replace: only the edited entry's span changes, so
         // sibling entries stay byte-identical. Native undo groups this edit.
         const startPos = document.positionAt(span.offset);
         const endPos = document.positionAt(span.offset + span.length);
         const edit = new vscode.WorkspaceEdit();
         edit.replace(document.uri, new vscode.Range(startPos, endPos), entryText);
+        // In the SAME WorkspaceEdit, so the two halves of one rename are one undo step and
+        // cannot be half-applied. Every range is addressed against the pre-edit text, which
+        // is what both spans were found in, and the catalog part cannot overlap the entries
+        // array either span was scanned from.
+        scEdits.forEach((scEdit) => {
+          edit.replace(
+            document.uri,
+            new vscode.Range(document.positionAt(scEdit.start), document.positionAt(scEdit.end)),
+            scEdit.text,
+          );
+        });
         // Set last, immediately before the edit, so the change event this edit fires is
         // the one that spends it (see hostEdit). The entry id is read AFTER the mutation
         // (a rename has already moved it) while the row id was read before, which is the
         // whole reason both are carried.
-        hostEdit = {
-          entryId: entry.id,
-          rowId: entryRowIdOnScreen,
-          submitted: { rangeOffset: span.offset, rangeLength: span.length, text: entryText },
-        };
+        //
+        // No hint when the catalog rode along: the event will report several changes, which
+        // is not an echo of one entry span and not a change any narrow path can plan, so it
+        // takes the wide repaint. Said here rather than discovered there — a rename that
+        // reclassifies an entry is exactly the case whose rows have to come from a re-read.
+        hostEdit =
+          scEdits.length > 0
+            ? null
+            : {
+                entryId: entry.id,
+                rowId: entryRowIdOnScreen,
+                submitted: { rangeOffset: span.offset, rangeLength: span.length, text: entryText },
+              };
         await vscode.workspace.applyEdit(edit);
         // onDidChangeTextDocument repaints — narrowly, since the edit is one entry's
         // span (setRows and the splice both preserve expansion + selection). For a

@@ -112,18 +112,32 @@ describe('opening an editor', () => {
     renamable.remove();
   });
 
-  it('Description is editable unless the row is read-only', async () => {
+  it('Description opens unless the row says a Description cannot be saved', async () => {
+    // Gated on its OWN flag, not on the Value cell's. The two are different
+    // questions and each answer was wrong for the other: a plain MATLAB variable
+    // serializes as {name, metadata, value} with nowhere to put a Description (so
+    // the cell must not open even though its Value is editable), while an object
+    // whose Value renders as a `<1x12 double>` summary takes a Description
+    // perfectly well (so a read-only Value must not lock it).
     const table = await mount([makeRow('a', 'A', { Description: 'notes' })]);
     dblClickCell(table, 'a', 'Description');
     await table.updateComplete;
     expect((table as any)._editingCell).toMatchObject({ columnId: 'Description', value: 'notes' });
     table.remove();
 
-    const readOnly = await mount([makeRow('b', 'B', { Description: 'notes', _valueEditable: false })]);
-    dblClickCell(readOnly, 'b', 'Description');
-    await readOnly.updateComplete;
-    expect((readOnly as any)._editingCell).toBeNull();
-    readOnly.remove();
+    const noPlaceForOne = await mount([makeRow('b', 'B', { Description: '', _descriptionEditable: false })]);
+    dblClickCell(noPlaceForOne, 'b', 'Description');
+    await noPlaceForOne.updateComplete;
+    expect((noPlaceForOne as any)._editingCell).toBeNull();
+    noPlaceForOne.remove();
+
+    const summaryValue = await mount([
+      makeRow('c', 'C', { Description: 'notes', _valueEditable: false, _descriptionEditable: true }),
+    ]);
+    dblClickCell(summaryValue, 'c', 'Description');
+    await summaryValue.updateComplete;
+    expect((summaryValue as any)._editingCell).toMatchObject({ columnId: 'Description', value: 'notes' });
+    summaryValue.remove();
   });
 
   it('a generic column opens an editor only when its cell object says editable', async () => {

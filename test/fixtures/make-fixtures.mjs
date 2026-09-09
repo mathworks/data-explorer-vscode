@@ -484,8 +484,96 @@ writeFileSync(
   }),
 );
 
+// --- arch_binary.sldd: an ARCHITECTURAL dictionary in the compressed-binary format ---
+//
+// The binary twin of the checked-in `arch.sldd`, and the fixture the HOST's rename-carry
+// path needs: what says a `Simulink.Bus` is a struct type rather than a data interface is
+// a second part of the package, `simulink/systemcomposer/interfaceDictionary.xml`, which
+// names its definitions by ENTRY NAME. So renaming an entry has to patch that member as
+// well as `data/chunk0.xml` — two edit surfaces in one save, which is what no other
+// fixture here has.
+//
+// Minimal on purpose: core's own fixtures cover the catalog vocabulary (all eight
+// classifications, both storage forms, the built-in types). What this one has to carry is
+// the TRAP, because the host patches text: `DataInterface` holds a bus element named
+// after the value type it references, so the name `ValueType` appears three times — the
+// definition, the value-type descriptor MATLAB keeps equal to it, and that element. A
+// rename that took the third one would corrupt an unrelated interface.
+const SC_NS =
+  'http://schema.mathworks.com/mf0/systemcomposer_architecture_model/3.21 ' +
+  'http://schema.mathworks.com/mf0/systemcomposer_property/2.12';
+const ARCH_NS = 'dacaf35e-55a5-454d-a7c1-93db038a210e';
+const archScXml =
+  `<?xml version="1.0"?>\n` +
+  `<MF0 packageUris="${SC_NS}">\n` +
+  `  <systemcomposer.architecture.model.SystemComposerModel type="systemcomposer.architecture.model.SystemComposerModel" uuid="127f28ec-e357-4fa3-8a7e-52f7437bff42">\n` +
+  `    <p_Name>arch</p_Name>\n` +
+  `    <p_PortInterfaceCatalog type="systemcomposer.architecture.model.interface.InterfaceCatalog" uuid="144e27c1-b244-4360-ba96-0cb8df225695">\n` +
+  `      <p_Interfaces type="systemcomposer.architecture.model.interface.ValueTypeInterface" uuid="46cb9da0-fc40-4566-a6a7-cc5d6d953c46">\n` +
+  `        <p_Name>ValueType</p_Name>\n` +
+  `        <p_ValueType type="systemcomposer.property.ValueTypeDescriptor" uuid="82927978-4c91-4892-80d8-c2370f926b6d">\n` +
+  `          <p_Name>ValueType</p_Name>\n` +
+  `        </p_ValueType>\n` +
+  `      </p_Interfaces>\n` +
+  `      <p_Interfaces type="systemcomposer.architecture.model.interface.CompositeDataInterface" uuid="61e42015-fa86-4b2f-bd2f-04350e68a7b0">\n` +
+  `        <p_DataElements type="systemcomposer.architecture.model.interface.DataElement" uuid="a4c32884-42b1-408e-bc27-e55141143e37">\n` +
+  `          <p_Index>1</p_Index>\n` +
+  `          <p_Name>ValueType</p_Name>\n` +
+  `        </p_DataElements>\n` +
+  `        <p_Name>DataInterface</p_Name>\n` +
+  `      </p_Interfaces>\n` +
+  `    </p_PortInterfaceCatalog>\n` +
+  `  </systemcomposer.architecture.model.SystemComposerModel>\n` +
+  `  <systemcomposer.property.TypeCatalog type="systemcomposer.property.TypeCatalog" uuid="fee70a44-2c9c-4c19-acfb-329cd36f6fc7">\n` +
+  `    <p_ModeledDataTypes type="systemcomposer.property.StructDataType" uuid="beac7d1c-c596-438c-af7a-d94d268e9b11">\n` +
+  `      <p_StructElements type="systemcomposer.property.StructElement" uuid="37453b4c-60be-4a11-a657-ccd189cc5e4a">\n` +
+  `        <p_Index>1</p_Index>\n` +
+  `        <p_Name>Element</p_Name>\n` +
+  `      </p_StructElements>\n` +
+  `      <p_Name>StructType</p_Name>\n` +
+  `    </p_ModeledDataTypes>\n` +
+  `  </systemcomposer.property.TypeCatalog>\n` +
+  `</MF0>\n`;
+
+const busElem = (elemName, dataType) =>
+  `<Element Class="Simulink.BusElement">` +
+  `<P Name="Name" Class="char">${elemName}</P>` +
+  (dataType ? `<P Name="DataType_internal" Class="char">${dataType}</P>` : '') +
+  `<P Name="Complexity" Class="char">real</P>` +
+  `<P Name="Dimensions" Class="double">1.0</P>` +
+  `</Element>`;
+const archEntries = [
+  ['StructType', 'a1e0f4ce-6f1e-4d0e-9a1a-1f1a5b3c2d01', `<Element Class="Simulink.Bus"><P Name="Elements_internal">${busElem('Element')}</P><P Name="Description" Class="char"/></Element>`],
+  ['DataInterface', 'b2f1a5df-7f2f-4e1f-8b2b-2f2b6c4d3e02', `<Element Class="Simulink.Bus"><P Name="Elements_internal">${busElem('ValueType', 'ValueType: ValueType')}</P><P Name="Description" Class="char"/></Element>`],
+  ['ValueType', 'c3f2b6e0-8f3f-4f2f-9c3c-3f3c7d5e4f03', `<Element Class="Simulink.ValueType"><P Name="Description" Class="char"/></Element>`],
+];
+const archChunkXml =
+  `<?xml version="1.0" encoding="UTF-8"?>\n` +
+  `<DataSource FormatVersion="1" MinRelease="R2014a" Arch="maca64">\n` +
+  archEntries
+    .map(
+      ([entryName, uuid, valueXml]) =>
+        `    <Object Class="DD.ENTRY">\n` +
+        `        <P Name="Name" Class="char">${entryName}</P>\n` +
+        `        <P Name="UUID" Class="char">${uuid}</P>\n` +
+        `        <P Name="Namespace" Class="char">${ARCH_NS}</P>\n` +
+        `        <P Name="IsDerived" Class="char">1</P>\n` +
+        `        <P Name="Value">${valueXml}</P>\n` +
+        `    </Object>\n`,
+    )
+    .join('') +
+  `</DataSource>\n`;
+writeFileSync(
+  here('arch_binary.sldd'),
+  zipSync({
+    'data/chunk0.xml': strToU8(archChunkXml),
+    'simulink/systemcomposer/interfaceDictionary.xml': strToU8(archScXml),
+    'metadata/mwcoreProperties.xml': strToU8(`<x><matlabRelease>R2027a</matlabRelease></x>`),
+  }),
+);
+
 console.log(
   'wrote model_with_refs.slx, model_with_refs.mdl, legacy_ctrl.mdl, compressed.sldd, ' +
     'object_array_binary.sldd, nd_numeric.mat, params.sldd, shared_gain.slx, shadow_ws.slx, ' +
-    'sid_blocks.slx',
+    'sid_blocks.slx, arch_binary.sldd',
 );
