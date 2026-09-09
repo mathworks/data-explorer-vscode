@@ -51,6 +51,30 @@ export interface SetRowsMessage {
   hasTextView?: boolean;
 }
 
+/**
+ * Entry-scoped repaint: replace the rows of ONE entry subtree, leaving every other
+ * row in the table untouched.
+ *
+ * The narrow counterpart to `setRows`, for an edit the host knows is confined to a
+ * single entry (a value edit, a rename, adding or deleting a nested child). A
+ * `setRows` is the wrong shape for those: it costs a re-parse of the whole
+ * dictionary plus every row, which on a real customer .sldd is seconds of latency
+ * and a ~67 MB payload to express a one-cell change.
+ *
+ * `rows` is `buildEntryRows` output — the entry row first, then its flattened
+ * descendants — and an empty array removes the subtree.
+ */
+export interface UpdateEntryRowsMessage {
+  type: 'updateEntryRows';
+  /**
+   * The entry row whose subtree these rows replace, as the TABLE currently spells
+   * it. On a rename that is the entry's OLD id: the rows on screen still carry it,
+   * and the replacement rows carry the new one.
+   */
+  entryRowId: string;
+  rows: any[];
+}
+
 /** This document's section drop-rules, for client-side drop prediction. */
 export interface SectionRulesMessage {
   type: 'sectionRules';
@@ -113,6 +137,7 @@ export interface EmptyMessage {
 /** Every message the table webview can receive from the host. */
 export type HostToTableMessage =
   | SetRowsMessage
+  | UpdateEntryRowsMessage
   | SectionRulesMessage
   | ClipboardStateMessage
   | DragStateMessage

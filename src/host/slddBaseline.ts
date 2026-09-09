@@ -23,23 +23,38 @@ const SERIALIZE_ERROR = '\u0000error';
 // neither array is ever absent. They stay because a serialize/diff pass must not
 // be the thing that throws on a shape change: a wrong "modified" dot is a far
 // smaller failure than an editor that will not open.
+// One entry's canonical JSON, or the sentinel if it will not serialize.
+function entryJson(entry: any): string {
+  try {
+    return JSON.stringify(entry.serialize());
+  } catch {
+    // PRECONDITION (untested): every node type's serialize() returns a plain
+    // JSON-safe tree, so neither the call nor the stringify throws for a
+    // parsed model. Reaching this needs a cyclic or BigInt-bearing value the
+    // parser cannot produce — hence the sentinel rather than a mocked test.
+    return SERIALIZE_ERROR;
+  }
+}
+
+// THE rule for "is this entry modified": its canonical JSON differs from the
+// baseline's, or the baseline has never heard of it (a newly added entry).
+//
+// Extracted so the whole-model diff and the single-entry question below are one
+// rule with two callers rather than two implementations. They are asked on the two
+// different repaint paths — computeModified on a full rebuild, isEntryModified on
+// an entry-scoped one — so a divergence here would be a "Modified" dot that
+// appears or clears depending on which repaint the user happened to trigger.
+function differsFromBaseline(baseline: Map<string, string>, name: string, json: string): boolean {
+  return !baseline.has(name) || baseline.get(name) !== json;
+}
+
 function serializeEntries(model: any): Map<string, string> {
   const map = new Map<string, string>();
   const sections = (model && model.children) || [];
   for (const section of sections) {
     const entries = (section && section.children) || [];
     for (const entry of entries) {
-      let json: string;
-      try {
-        json = JSON.stringify(entry.serialize());
-      } catch {
-        // PRECONDITION (untested): every node type's serialize() returns a plain
-        // JSON-safe tree, so neither the call nor the stringify throws for a
-        // parsed model. Reaching this needs a cyclic or BigInt-bearing value the
-        // parser cannot produce — hence the sentinel rather than a mocked test.
-        json = SERIALIZE_ERROR;
-      }
-      map.set(entry.name, json);
+      map.set(entry.name, entryJson(entry));
     }
   }
   return map;
@@ -59,11 +74,29 @@ export function computeModified(uriString: string, model: any): Set<string> {
   if (!baseline) return result;
   const current = serializeEntries(model);
   for (const [name, json] of current) {
-    if (!baseline.has(name) || baseline.get(name) !== json) {
+    if (differsFromBaseline(baseline, name, json)) {
       result.add(name);
     }
   }
   return result;
+}
+
+/**
+ * Whether ONE entry differs from the baseline — the same question computeModified
+ * answers for a whole model, asked about a single entry.
+ *
+ * This is what the entry-scoped repaint needs. Calling computeModified there would
+ * defeat the point: it serializes every entry in the dictionary (all 31,000 of them
+ * on a real customer file) to answer a question about one.
+ *
+ * Same "no baseline = nothing is modified" answer as computeModified, for the same
+ * reason: before the on-open baseline is captured there is nothing to diff against,
+ * and reporting everything as modified would be worse than reporting nothing.
+ */
+export function isEntryModified(uriString: string, entry: any): boolean {
+  const baseline = baselines.get(uriString);
+  if (!baseline) return false;
+  return differsFromBaseline(baseline, entry.name, entryJson(entry));
 }
 
 // Drop the baseline for a URI (on editor dispose).

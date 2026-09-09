@@ -7,7 +7,7 @@ import './components/dex-error-dialog.js';
 import './components/dex-variable-editor.js';
 import { installMatrixOpen } from './matrixOpen.js';
 import { renderBanners } from './banners.js';
-import { nextExpandedIds } from './rowUpdates.js';
+import { nextExpandedIds, spliceEntryRows } from './rowUpdates.js';
 import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from './menuItems.js';
 import { dropDecision, type DragMode, type DropTarget, type DragSource } from './dropDecision.js';
 import type { SectionRule } from '../host/sectionRules.js';
@@ -182,9 +182,60 @@ function clearError(): void {
   if (el) { el.textContent = ''; el.style.display = 'none'; }
 }
 
+// Hand a new row array to the table and re-derive everything that depends on it.
+//
+// Shared by the two repaint messages — the whole-table `setRows` and the
+// entry-scoped `updateEntryRows` — because every rule here is about ROWS and none
+// of them is about how many arrived. Written once so the narrow path cannot drift
+// from the wide one: an entry-scoped repaint that forgot to invalidate
+// `_visibleRowsCache`, or to re-apply a pending selection, would be a bug visible
+// only after an edit and only on one of the two paths.
+function installRows(rows: any[]): void {
+  // Preserve the current selection across the rebuild if the row still exists.
+  // EVERY repaint (value edit, structural edit, text-view edit, undo, redo)
+  // arrives here, so this is what keeps selection stable through all of them.
+  const prevSelected: string[] = Array.isArray(table.selectedRowIds) ? table.selectedRowIds : [];
+  const prevExpanded: Set<string> | null = table._expandedIds instanceof Set ? table._expandedIds : null;
+  table.rows = rows;
+  // Preserve expansion (keep still-existing expanded ids); default to
+  // sections-only on first load. Never collapse the tree under the user.
+  table._expandedIds = nextExpandedIds(prevExpanded, rows);
+  table._visibleRowsCache = null;
+  const present = new Set(rows.map((r: { ID: string }) => r.ID));
+  const stillSelected = prevSelected.filter((id) => present.has(id));
+  if (stillSelected.length > 0) table.selectedRowIds = stillSelected;
+  if (typeof table.requestUpdate === 'function') table.requestUpdate();
+  // A rename/structural edit posts selectRow then triggers this rebuild;
+  // re-apply now that the row with the new id exists.
+  applyPendingSelection();
+  // A cross-tab navigation may be waiting for its target row to appear.
+  applyPendingNameSelection();
+}
+
 window.addEventListener('message', (event: MessageEvent) => {
   const msg = event.data as HostToTableMessage;
-  if (msg.type === 'setRows') {
+  if (msg.type === 'updateEntryRows') {
+    // Entry-scoped repaint: splice this entry's rows over the run already on
+    // screen. Nothing else about the view changes, so columns, banners, editable
+    // and the section rules are all left exactly as the last setRows set them.
+    const spliced = spliceEntryRows((table.rows ?? []) as any[], msg.entryRowId, msg.rows ?? []);
+    if (!spliced) {
+      // The table doesn't hold the entry the host repainted, so the two are out of
+      // step and a splice would silently drop the edit. Ask for a full payload
+      // instead — which is exactly what `ready` requests, and what every provider
+      // already answers with post().
+      vscode.postMessage({ type: 'ready' });
+      return;
+    }
+    // Same reason setRows closes it: the grid is anchored to a cell in the rows
+    // being replaced, and its anchor glyph may not survive the repaint.
+    matrixOpen.close();
+    // Only a SUCCEEDING edit repaints this narrowly (every failure path in the host
+    // resyncs with a full setRows instead), so reaching here clears a banner left
+    // over from an earlier failure — as setRows does, for the same reason.
+    clearError();
+    installRows(spliced);
+  } else if (msg.type === 'setRows') {
     hideLoading();
     clearError();
     // Every row is about to be replaced, so an open grid describes a payload the
@@ -205,25 +256,7 @@ window.addEventListener('message', (event: MessageEvent) => {
     table.columns = msg.columns ?? null;
     table.columnLabels = msg.columnLabels ?? null;
     table.columnGroups = (msg.columnGroups as Record<string, string> | undefined) ?? null;
-    // Preserve the current selection across the rebuild if the row still exists.
-    // EVERY repaint (value edit, structural edit, text-view edit, undo, redo)
-    // arrives here, so this is what keeps selection stable through all of them.
-    const prevSelected: string[] = Array.isArray(table.selectedRowIds) ? table.selectedRowIds : [];
-    const prevExpanded: Set<string> | null = table._expandedIds instanceof Set ? table._expandedIds : null;
-    table.rows = rows;
-    // Preserve expansion (keep still-existing expanded ids); default to
-    // sections-only on first load. Never collapse the tree under the user.
-    table._expandedIds = nextExpandedIds(prevExpanded, rows);
-    table._visibleRowsCache = null;
-    const present = new Set(rows.map((r: { ID: string }) => r.ID));
-    const stillSelected = prevSelected.filter((id) => present.has(id));
-    if (stillSelected.length > 0) table.selectedRowIds = stillSelected;
-    if (typeof table.requestUpdate === 'function') table.requestUpdate();
-    // A rename/structural edit posts selectRow then triggers this rebuild;
-    // re-apply now that the row with the new id exists.
-    applyPendingSelection();
-    // A cross-tab navigation may be waiting for its target row to appear.
-    applyPendingNameSelection();
+    installRows(rows);
   } else if (msg.type === 'selectByName') {
     // Cross-tab navigation: select the row whose name matches (block or
     // variable). Apply now if present, else hold until the next setRows.
@@ -248,8 +281,8 @@ window.addEventListener('message', (event: MessageEvent) => {
     showError(msg.message);
   } else if (msg.type === 'validationError') {
     // Invalid cell edit: modal scoped to this webview (not the whole window).
-    // The host has already re-posted setRows, so the cell reverted to its
-    // previous value before this dialog appears.
+    // The host follows this message with a repaint of the rejected row's entry, so
+    // the cell is back to its previous value by the time the dialog is dismissed.
     errorDialog.show({
       title: 'Invalid Value',
       reason: msg.reason,

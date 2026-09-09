@@ -135,8 +135,28 @@ export function buildEntryRows(entry: any, sectionName: string, modifiedNames?: 
     // are never marked Modified, carry no dictionary metadata, and never take
     // the clipboard affordance.
     if (row.ID === entry.id) {
-      if (modifiedNames?.has(entry.name)) {
-        row = { ...row, Status: 'Modified' };
+      // The "Modified" mark is a diff against the last-saved baseline, so the
+      // CALLER owns the answer — and when it supplies one, that answer is
+      // authoritative in BOTH directions.
+      //
+      // Clearing is the half that used to be free. A node carries its own
+      // `status = 'Modified'` from the moment it is mutated (DataNode._markModified)
+      // and never clears it, and toRow() surfaces it; the full-rebuild path was blind
+      // to that because it re-parsed the file and threw the mutated node away. The
+      // entry-scoped repaint keeps the mutated node, so the node's flag now reaches a
+      // row — and it answers a DIFFERENT question ("was this node touched since it was
+      // parsed") from the one the mark shows ("does this entry differ from the last
+      // save"). Where they disagree, the baseline wins, because that is what the column
+      // means. Only a stale 'Modified' is cleared; any other status is left alone.
+      //
+      // Today they cannot disagree end to end — an edit rewrites the entry's
+      // lastModified stamp, so a mutated entry never matches its baseline again, not
+      // even when edited back to the value it had. That is why this is stated as a rule
+      // with a unit test (binaryEntryScopedEdit.test.ts) rather than left implicit: the
+      // alternative is a row marked forever on the strength of the wrong flag.
+      if (modifiedNames) {
+        if (modifiedNames.has(entry.name)) row = { ...row, Status: 'Modified' };
+        else if (row.Status === 'Modified') row = { ...row, Status: '' };
       }
       // Dictionary metadata columns (Last Modified / Last Modified By). The entry
       // node normalizes the two parse-path key schemes into these display

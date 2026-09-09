@@ -19,7 +19,7 @@
 import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
 import { renderWebviewHtml, LOADING_OVERLAY_HTML, BANNERS_HTML } from './webviewHtml.js';
-import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
+import { buildRows, buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { sectionRules } from './sectionRules.js';
 import { serializeEntryToXml, DataModel, type ParseWarning } from 'data-explorer-core';
 // Never parseBinarySlddParts directly: readSlddParts is the same read plus the rule
@@ -29,7 +29,7 @@ import { readSlddParts } from './slddContent.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { findOwningEntry, resolveSectionForPaste, buildDragSnapshot } from './structuralEdit.js';
 import { copyEntryToClipboard } from './clipboardAction.js';
-import { captureBaseline, computeModified, clearBaseline } from './slddBaseline.js';
+import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
 import {
   deleteEntryXml,
   deleteChildXml,
@@ -170,9 +170,52 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     };
     // Rebuild the model from the live chunkXml (+ pass-through parts).
     const buildModel = () => registerModel(document.chunkXml);
+    // The model as it already stands, WITHOUT re-parsing — what every edit should
+    // start from.
+    //
+    // At rest the registered source is exactly the parse of document.chunkXml: the
+    // only things that change chunkXml are pushEdit (whose every caller then
+    // repaints), the undo/redo closures, and revertCustomDocument — and all of them
+    // end in post()/_afterMutate, which re-registers. The two mid-transform
+    // registerModel calls in applyPaste/applyDrop are inside synchronous stretches
+    // that also end in post(), so no message can be handled while the source is a
+    // model of something other than chunkXml.
+    //
+    // Re-parsing here instead is what made an edit cost seconds: on a real customer
+    // dictionary (75 MB of data/chunk0.xml, 31k entries) fast-xml-parser alone takes
+    // ~3s, and applyEdit paid it once before touching the model and post() paid it
+    // again afterwards to rebuild a tree that was already correct.
+    const liveModel = () => (DataModel as any).getDataSource?.(document.srcId) ?? buildModel();
+    /**
+     * Mutate `entry`'s subtree in place, with the session's node index repaired around
+     * it — the other half of not re-parsing, and paired with it deliberately.
+     *
+     * A node id is a PATH, so renaming an entry (or a nested child) rekeys everything
+     * beneath it. Re-registering the source used to fix that as a side effect of
+     * re-parsing; an edit that skips the re-parse has to say so explicitly, or
+     * findNodeById stops resolving the very row ids this edit is about to paint and the
+     * NEXT edit on that row fails with "could not locate the edited item". Adding a
+     * child leaves it unfindable the same way; removing one leaves a detached node
+     * resolving, which is worse.
+     *
+     * So: every path that takes the entry-scoped repaint mutates through here. The
+     * paths that fall back to post() do not need it — post() re-registers, which is the
+     * same repair at whole-source scope.
+     */
+    const mutateEntry = <T>(entry: any, mutate: () => T): T => DataModel.mutateSubtree(entry, mutate);
     const findNode = (rowId: string): any => {
       const found = (DataModel as any).findNodeById?.(rowId);
       return found ?? null;
+    };
+
+    // The clipboard mark this document's rows should carry, if any. Shared by the
+    // full and entry-scoped repaints so a cut/copied entry renders its affordance
+    // the same way whichever one painted it.
+    const clipMarkOfDoc = (): ClipMark | undefined => {
+      const clip = getClipboard();
+      return clip && clip.sourceDocUri === uriString && clip.payload.name
+        ? { name: clip.payload.name as string, section: clip.sourceSection, mode: clip.mode }
+        : undefined;
     };
 
     const post = () => {
@@ -183,11 +226,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           initialized = true;
         }
         const modified = computeModified(uriString, node);
-        const clip = getClipboard();
-        const clipMark: ClipMark | undefined =
-          clip && clip.sourceDocUri === uriString && clip.payload.name
-            ? { name: clip.payload.name as string, section: clip.sourceSection, mode: clip.mode }
-            : undefined;
+        const clipMark = clipMarkOfDoc();
         const rows = buildRows(node, modified, clipMark);
         webview.postMessage({
           type: 'setRows',
@@ -209,6 +248,49 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         webview.postMessage({ type: 'error', message: `Failed to parse ${name}: ${(err as Error).message}` });
       }
     };
+    /**
+     * Repaint ONE entry's rows, for an edit confined to that entry.
+     *
+     * The fast path, and the reason the edit round-trip is milliseconds instead of
+     * seconds. It rebuilds nothing but the edited entry's subtree — from the model
+     * the edit already mutated in place — and sends only those rows, which the
+     * webview splices over the run it already holds. No re-parse, no 130k-row
+     * rebuild, no 67 MB postMessage.
+     *
+     * `entryRowId` is the id the TABLE currently spells this entry's rows under, and
+     * the caller must snapshot it BEFORE mutating: a rename changes entry.id, and
+     * the splice has to find the run that is on screen, not the one that will be.
+     *
+     * Falls back to a full repaint for an entry with no section parent — a detached
+     * node has no place in the table's row order, so there is no run to splice.
+     */
+    const postEntry = (entry: any, entryRowId: string) => {
+      try {
+        const section = entry?.parent;
+        if (!section) {
+          post();
+          return;
+        }
+        // The one-entry form of the diff post() runs over the whole model. Passing a
+        // set (rather than a boolean) keeps buildEntryRows' existing contract, which
+        // also lets it CLEAR a stale mark — see the Status comment in rowBuilder.
+        const modified = new Set<string>();
+        if (isEntryModified(uriString, entry)) modified.add(entry.name);
+        const mark = clipMarkOfDoc();
+        // Pre-matched by section exactly as buildRows does it: entry names are only
+        // unique within a section, so only the marked entry's own section may carry it.
+        const sectionMark = mark && mark.section === section.name ? mark : undefined;
+        const rows = buildEntryRows(entry, section.name, modified, sectionMark);
+        webview.postMessage({ type: 'updateEntryRows', entryRowId, rows });
+      } catch (err) {
+        // The edit itself already landed, so the table must not be left showing the
+        // pre-edit rows: fall back to the wide repaint, which builds these same rows by
+        // the other path. Then say so — after, because the repaint clears the banner.
+        post();
+        webview.postMessage({ type: 'error', message: `Failed to update the row: ${(err as Error).message}` });
+      }
+    };
+
     document._afterMutate = post;
 
     // Register with the cross-provider hub so clipboard/drag state broadcasts
@@ -225,25 +307,49 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       post();
     });
 
-    // Apply a structural transform: build model, locate node, run transform, push edit.
+    // Apply a structural transform: locate node, run transform, push edit, repaint.
+    //
+    // `scopeOf` names the entry whose rows the transform can only have changed, or
+    // null when the edit changes WHICH entries exist and so needs the full rebuild.
+    // It is per-call-site rather than derived here because the answer depends on the
+    // action, not just the node: adding a child to a top-level Bus is entry-scoped
+    // even though the target IS an entry, while deleting that same Bus is not.
     const applyStructural = (
       rowId: string,
       transform: (xml: string, node: any, model: any) => StructuralResult,
       label: string,
+      scopeOf: (node: any) => any,
     ) => {
+      const model = liveModel();
+      const node = findNode(rowId);
+      if (!node) {
+        webview.postMessage({ type: 'error', message: 'Could not locate the item in the model.' });
+        return;
+      }
+      // Snapshot before the transform: the within-entry transforms mutate the model,
+      // and a mutated entry's id is not necessarily the one the table still shows.
+      const scoped = scopeOf(node);
+      const scopedRowId = scoped?.id ?? '';
       try {
-        const model = buildModel();
-        const node = findNode(rowId);
-        if (!node) {
-          webview.postMessage({ type: 'error', message: 'Could not locate the item in the model.' });
-          return;
-        }
         const before = document.chunkXml;
-        const { newText, selectId } = transform(before, node, model);
+        // Through mutateEntry when the edit is entry-scoped: these transforms mutate the
+        // model (addChildToModel / removeChildFromModel) before they splice the text, and
+        // the repaint that follows skips the re-parse that used to repair the index.
+        const { newText, selectId } = scoped
+          ? mutateEntry(scoped, () => transform(before, node, model))
+          : transform(before, node, model);
         document.pushEdit(label, before, newText);
-        post();
+        if (scoped) postEntry(scoped, scopedRowId);
+        else post();
         if (selectId) webview.postMessage({ type: 'selectRow', rowId: selectId });
       } catch (err) {
+        // The within-entry transforms mutate the model BEFORE they splice the text
+        // (removeChildFromModel / addChildToModel), so a transform that throws
+        // half-way leaves a model that no longer matches chunkXml. The edit path now
+        // trusts that model instead of re-deriving it, so the mismatch has to be
+        // undone here rather than waiting for the next repaint to paper over it.
+        // First, because the repaint clears the error banner the message writes.
+        post();
         webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
       }
     };
@@ -251,7 +357,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // Value edit / rename: mutate node, reserialize its owning entry, splice.
     const applyEdit = (msg: { rowId: string; columnId: string; oldValue: string; newValue: string }) => {
       try {
-        buildModel();
+        liveModel();
         const node = findNode(msg.rowId);
         if (!node) {
           webview.postMessage({ type: 'error', message: 'Could not locate the edited item in the model.' });
@@ -262,11 +368,15 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           webview.postMessage({ type: 'error', message: 'Could not locate the owning entry in the model.' });
           return;
         }
-        // Snapshot the identity BEFORE the mutation: a rename changes `name`, so
-        // the span lookup must use the entry as the XML still spells it. The uuid
-        // half also keeps it off a same-named entry in another namespace.
+        // Snapshot the entry's identity BEFORE the mutation, twice over, because a
+        // rename moves both halves of it. `entrySelectorForLookup` is the entry as the
+        // XML still spells it (the span lookup must find the old text; the uuid half
+        // also keeps it off a same-named entry in another namespace), and `entryRowId`
+        // is the id the TABLE still spells it under (the row splice must find the run
+        // that is on screen, not the one that will be).
         const entrySelectorForLookup = entrySelectorOf(entry);
-        const result = node.setProperty(msg.columnId, msg.newValue);
+        const entryRowId = entry.id;
+        const result = mutateEntry(entry, () => node.setProperty(msg.columnId, msg.newValue));
         if (result && typeof result === 'object' && result.error) {
           webview.postMessage({
             type: 'validationError',
@@ -274,21 +384,31 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
             invalidValue: msg.newValue,
             previousValue: msg.oldValue,
           });
-          post();
+          // A rejected edit leaves the model untouched (setProperty validates before it
+          // mutates), so repainting this entry from it is what puts the cell back.
+          postEntry(entry, entryRowId);
           return;
         }
         const before = document.chunkXml;
         const frag = serializeEntryToXml(entry).replace(/\n$/, '');
         const span = findEntryObjectSpan(before, entrySelectorForLookup);
         if (!span) {
+          // The node is already mutated and the text is not, so the model no longer
+          // describes the file. Rebuild from the text — the edit is refused, so the
+          // orphan mutation has to go rather than sit there looking applied. Before the
+          // message, because the repaint it triggers CLEARS the error banner.
+          post();
           webview.postMessage({ type: 'error', message: 'Could not locate the entry text to update.' });
           return;
         }
         const after = before.slice(0, span.offset) + frag + before.slice(span.offset + span.length);
         document.pushEdit('Edit ' + msg.columnId, before, after);
-        post();
+        postEntry(entry, entryRowId);
         if (msg.columnId === 'Name') webview.postMessage({ type: 'selectRow', rowId: node.id });
       } catch (err) {
+        // Same reason as the !span branch, in both halves: setProperty may have landed
+        // before the throw, and the repaint clears the banner the message writes.
+        post();
         webview.postMessage({ type: 'error', message: 'Failed to apply edit: ' + (err as Error).message });
       }
     };
@@ -461,8 +581,21 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           msg.rowId,
           (xml, node) => (node.isEntry ? deleteEntryXml(xml, node) : deleteChildXml(xml, node)),
           'Delete',
+          // Deleting a nested child changes only its entry's rows. Deleting the ENTRY
+          // changes which entries the table has — and deleteEntryXml is a text-only
+          // splice that leaves the model holding the entry it just removed, so this is
+          // also the path that needs the re-parse to catch the model up.
+          (node) => (node.isEntry ? null : findOwningEntry(node)),
         );
-      else if (msg?.type === 'addChild') applyStructural(msg.rowId, (xml, node) => addChildXml(xml, node), 'Add child');
+      else if (msg?.type === 'addChild')
+        applyStructural(
+          msg.rowId,
+          (xml, node) => addChildXml(xml, node),
+          'Add child',
+          // Always entry-scoped, even when the target IS the entry (a top-level Bus
+          // gaining an element): a new child is a new row INSIDE the entry's run.
+          (node) => findOwningEntry(node),
+        );
       else if (msg?.type === 'paste') void applyPaste(msg.rowId);
       else if (msg?.type === 'dragStart') applyDragStart(msg);
       else if (msg?.type === 'dragEnd') applyDragEnd();
