@@ -12,8 +12,8 @@ import {
   type ClipMark,
 } from './rowBuilder.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
-import { applyEntryOps } from './entryOps.js';
-import { planEntrySync } from './jsonEntrySync.js';
+import { applyEntryOps, mutateEntry } from './entryOps.js';
+import { planEntrySync, planOwnEdit, type HostEdit } from './jsonEntrySync.js';
 import { getClipboard, clearClipboard, clipboardState } from './clipboard.js';
 import { setDrag, getDrag, clearDrag } from './dragState.js';
 import {
@@ -101,7 +101,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     let initialized = false;
 
     /**
-     * Whether every row on screen was built from the text as it now reads.
+     * Whether both the tree this document holds and every row on screen were built from the
+     * text as it now reads.
      *
      * The precondition of the entry-scoped repaint, and the reason a stretch of invalid
      * JSON cannot leave a stale row behind. While the document does not parse, each
@@ -110,6 +111,12 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * refreshed — every other entry the user touched during the invalid stretch would keep
      * the rows it had before. So a failed repaint withdraws the narrow path until a full
      * one has succeeded.
+     *
+     * It covers the MODEL as well as the rows because that is what lets an edit keep the
+     * tree it is holding instead of re-parsing 46 MB to rebuild one that was already
+     * correct (see liveModel), and what lets it skip the validity gate: a tree built from
+     * this text is proof the text parsed. Every path that leaves the two out of step has to
+     * clear it — which is the one obligation this flag imposes and the only way it can lie.
      */
     let modelInSync = false;
 
@@ -125,6 +132,47 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       return clip && clip.sourceDocUri === uriString && clip.payload.name
         ? { name: clip.payload.name as string, section: clip.sourceSection, mode: clip.mode }
         : undefined;
+    };
+
+    /**
+     * The tree for this document — the one already built when it still says what the text
+     * says, a fresh parse when it does not.
+     *
+     * The registered tree, not this module's cache: `invalidate` is called on every keystroke
+     * in an open .sldd (extension.ts drops the cache so the tree view and the usage graph
+     * re-read), so getModel would re-parse every time. On a 47.8 MB customer dictionary that
+     * parse is ~190 ms, paid on a keypress the user is waiting on.
+     *
+     * Deliberately does NOT touch modelInSync: a rebuild here brings the MODEL up to the text
+     * and leaves the ROWS wherever they were, so the narrow repaint stays withdrawn until a
+     * full one has run.
+     */
+    const liveModel = (): any => {
+      if (modelInSync) {
+        const held = peekModel(uriString);
+        if (held) return held;
+      }
+      invalidate(uriString);
+      return getModel(uriString, name, document.getText());
+    };
+
+    /**
+     * Bring the model back in step with the text, painting nothing.
+     *
+     * For the one case that needs it: an edit that mutated the tree and then could not write
+     * the text. Re-parsing is the repair — the text is the truth in this format — and the rows
+     * on screen still match it, so nothing has to be repainted; what must not happen is
+     * leaving a mutated tree that the text does not say, for the next edit to build on.
+     */
+    const rebuildModel = (): void => {
+      invalidate(uriString);
+      try {
+        getModel(uriString, name, document.getText());
+      } catch {
+        // The text does not parse, so nothing can be trusted: the next repaint goes wide and
+        // reports the parse error.
+        modelInSync = false;
+      }
     };
 
     // Rebuild the model from the live TextDocument text and push rows to the
@@ -210,28 +258,78 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     };
 
     /**
-     * The row id the rows ON SCREEN carry for the entry the next host-originated edit
-     * changes, when that differs from the id the model now gives it.
+     * What the table edit in flight will need when its own change event arrives: the entry it
+     * changed, the row id the screen holds that entry under, and the range replacement it
+     * submitted.
      *
-     * applyEdit mutates the model BEFORE it edits the text, so after a rename the entry
-     * already answers to its new id while the table still shows the old one — and the
-     * splice has to find the run that is on screen. Set immediately before the edit and
-     * consumed by the change event it produces; honoured only when it names the very node
-     * the plan resolved, so a hint the edit never used cannot be spent on another entry.
-     *
-     * Purely an optimization: without it (or with it refused) the splice misses, and the
-     * webview answers a miss by asking for the full payload — correct, just wide.
+     * Set immediately before the WorkspaceEdit and spent by the very next change event,
+     * whatever that event turns out to be — an expectation that outlived its edit must not be
+     * waiting when someone types in the text view. What makes spending it safe is that the
+     * event has to PROVE it is that edit, byte for byte (planOwnEdit / isEchoOfEdit); a
+     * mismatch costs the wide repaint the user has always had, never a wrong row.
      */
-    let editHint: { node: any; rowId: string } | null = null;
+    let hostEdit: HostEdit | null = null;
+
+    /**
+     * Repaint the entry THIS host just wrote, from the bytes it wrote.
+     *
+     * The whole point of step 2: the change event a table edit fires tells the host nothing it
+     * does not already know, so it does not have to be treated like a stranger's keystroke.
+     * Instead of scanning the array for the element that changed and re-parsing it (~120 ms on
+     * a 46 MB dictionary, on top of the ~101 ms span scan and the ~92 ms validity parse the
+     * edit no longer pays), the entry is rebuilt from the text that was submitted and its rows
+     * spliced over the run the table is holding.
+     *
+     * Rebuilding rather than repainting from the mutated node — 7 ms rather than 3 — is what
+     * keeps this exactly as correct as the re-parse it replaces: the rows come from the file's
+     * own bytes, so a mutation the format cannot express (a rename with nowhere to go, a
+     * Description that is never serialized, an architectural kind that is re-derived on read)
+     * shows on screen as what the file will say, not as what the user typed.
+     */
+    const syncOwnEdit = (e: vscode.TextDocumentChangeEvent, hint: HostEdit | null): boolean => {
+      if (!hint) return false;
+      const changes = e.contentChanges.map((c) => ({
+        rangeOffset: c.rangeOffset,
+        rangeLength: c.rangeLength,
+        text: c.text,
+      }));
+      const plan = planOwnEdit(changes, hint);
+      if (!plan) return false;
+      // Same two preconditions the text-view path has: rows that match the text, and a tree
+      // still registered for this document to apply the op to.
+      if (!modelInSync) return false;
+      const model = peekModel(uriString);
+      if (!model) return false;
+      try {
+        const applied = applyEntryOps(model, [plan.op]);
+        const op = applied[0];
+        // PRECONDITION (untested): applyEntryOps answers a `replace` op with a `replace`, one
+        // per op. Checked rather than asserted so a shape change falls back to the full repaint
+        // instead of painting rows for an entry it did not resolve.
+        if (!op || op.kind !== 'replace') return false;
+        postEntryRows(plan.entryRowId, op.entry);
+        return true;
+      } catch {
+        // The model may now be half-changed, so the caller's full repaint is the repair: it
+        // re-parses the text, which is the truth in this format.
+        invalidate(uriString);
+        modelInSync = false;
+        return false;
+      }
+    };
 
     /**
      * Sync ONE entry from the text, or say no.
      *
-     * The narrow answer to "the text changed": find the entry the change is inside, rebuild
-     * that entry from its own JSON, and repaint its rows. What it replaces is a full
-     * re-parse + full row rebuild + full postMessage on every keystroke — ~1.3 s of host
-     * work and a ~120 MB payload on a 46 MB dictionary, against ~82 ms to locate the entry
-     * and 0.3 ms to rebuild it.
+     * The narrow answer to "the text changed, and the host did not change it": find the entry
+     * the change is inside, rebuild that entry from its own JSON, and repaint its rows. What it
+     * replaces is a full re-parse + full row rebuild + full postMessage on every keystroke —
+     * ~1.3 s of host work and a ~120 MB payload on a 46 MB dictionary, against ~82 ms to
+     * locate the entry and 0.3 ms to rebuild it.
+     *
+     * Still the path for a table edit whose own event did not come back recognisable
+     * (syncOwnEdit ran first and refused), which is why it takes the hint too: the row id on
+     * screen is what a rename makes it unable to work out for itself.
      *
      * Returns false for anything it is not sure about, and the caller repaints the old way.
      * See jsonEntrySync.ts for what "sure" means; the checks that live HERE are the ones
@@ -241,9 +339,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      *   - rows that match the text (modelInSync) and a tree still registered for this
      *     document to apply the op to.
      */
-    const syncOneEntry = (e: vscode.TextDocumentChangeEvent): boolean => {
-      const hint = editHint;
-      editHint = null;
+    const syncOneEntry = (e: vscode.TextDocumentChangeEvent, hint: HostEdit | null): boolean => {
       if (e.contentChanges.length !== 1) return false;
       if (!modelInSync) return false;
       const model = peekModel(uriString);
@@ -255,7 +351,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           text: change.text,
         });
         if (!plan) return false;
-        const entryRowId = hint && hint.node === plan.entry ? hint.rowId : plan.entry.id;
+        // Honoured only when it names the very entry the plan resolved, so a hint left over
+        // from an edit of another entry cannot move this repaint onto the wrong run of rows.
+        const entryRowId = hint && hint.entryId === plan.entry.id ? hint.rowId : plan.entry.id;
         const applied = applyEntryOps(model, [
           { kind: 'replace', rowId: plan.entry.id, record: plan.record },
         ]);
@@ -301,8 +399,13 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // Guard against applying an edit while the text view holds invalid JSON
     // (a mid-edit state). Returns true when the current text parses; otherwise
     // posts an error banner and returns false so the caller can bail.
+    //
+    // A tree built from this text is already proof that it parses, so an in-step document is
+    // waved through instead of parsed a second time (~92 ms of the ~290 ms an edit used to
+    // spend before it changed anything). Out of step, the parse happens — which is exactly the
+    // case the guard exists for, since that is what a mid-edit text view looks like.
     const ensureValidJson = (): boolean => {
-      if (parsesAsJson(document.getText())) return true;
+      if (modelInSync || parsesAsJson(document.getText())) return true;
       webview.postMessage({
         type: 'error',
         message:
@@ -312,6 +415,12 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     };
 
     // --- Value edit / rename (byte-scoped entry-span splice) --------------------
+    //
+    // The edit path, and the one place in this provider where nothing is re-discovered: it
+    // changes the tree it is already holding, writes the entry it changed, and repaints that
+    // entry from what it wrote (syncOwnEdit). What it used to do first — parse the document to
+    // check it is valid, then parse it again to rebuild a model that was already right — cost
+    // ~282 ms of the ~290 ms an edit spent on a 47.8 MB dictionary before anything changed.
     const applyEdit = async (msg: {
       rowId: string;
       columnId: string;
@@ -322,8 +431,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         if (!ensureValidJson()) return;
         const currentText = document.getText();
 
-        invalidate(uriString);
-        getModel(uriString, name, currentText);
+        liveModel();
         const node = findNode(uriString, msg.rowId);
         if (!node) {
           webview.postMessage({ type: 'error', message: 'Could not locate the edited item in the model.' });
@@ -347,19 +455,25 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // triggers has to splice over THAT id, not the one a rename is about to mint.
         const entryRowIdOnScreen = entry.id;
 
-        const result = node.setProperty(msg.columnId, msg.newValue);
+        // Mutated through entryOps so the session's node index follows a rename: an id is a
+        // PATH, so renaming an entry rekeys it and everything under it. The wide re-parse used
+        // to repair that as a side effect — and the repaint's replace op, which detaches this
+        // very subtree, unindexes it by the ids the mutation leaves behind.
+        const result = mutateEntry(entry, () => node.setProperty(msg.columnId, msg.newValue));
         if (result && typeof result === 'object' && result.error) {
           // Invalid cell input: show the dex error dialog inside the webview
           // (scoped to the table view, not a window-blocking native modal),
           // then repaint so the cell reverts from the rejected text back to
-          // its previous value.
+          // its previous value. A refused setProperty changes nothing, so the
+          // entry's own rows are all that need repainting — and they still say
+          // what the text says.
           webview.postMessage({
             type: 'validationError',
             reason: result.reason,
             invalidValue: msg.newValue,
             previousValue: msg.oldValue,
           });
-          post();
+          postEntryRows(entryRowIdOnScreen, entry);
           return;
         }
         // After a rename node.id reflects the new name — re-select that row once
@@ -371,6 +485,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
         const span = findEntrySpan(currentText, entrySelectorForLookup);
         if (!span) {
+          // The tree has been mutated and the text cannot be, so the two now disagree — and
+          // the text is the truth here. Re-read it, or the next edit builds on a change this
+          // one failed to make.
+          rebuildModel();
           webview.postMessage({ type: 'error', message: 'Could not locate the entry text to update.' });
           return;
         }
@@ -382,16 +500,24 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         const edit = new vscode.WorkspaceEdit();
         edit.replace(document.uri, new vscode.Range(startPos, endPos), entryText);
         // Set last, immediately before the edit, so the change event this edit fires is
-        // the one that spends it (see editHint).
-        editHint = { node: entry, rowId: entryRowIdOnScreen };
+        // the one that spends it (see hostEdit). The entry id is read AFTER the mutation
+        // (a rename has already moved it) while the row id was read before, which is the
+        // whole reason both are carried.
+        hostEdit = {
+          entryId: entry.id,
+          rowId: entryRowIdOnScreen,
+          submitted: { rangeOffset: span.offset, rangeLength: span.length, text: entryText },
+        };
         await vscode.workspace.applyEdit(edit);
         // onDidChangeTextDocument repaints — narrowly, since the edit is one entry's
         // span (setRows and the splice both preserve expansion + selection). For a
         // rename, re-select by the new id.
         if (newSelectId) webview.postMessage({ type: 'selectRow', rowId: newSelectId });
       } catch (err) {
-        editHint = null;
-        invalidate(uriString);
+        hostEdit = null;
+        // Same repair as the missing span above, for the same reason: whatever threw may have
+        // left the tree saying something the document does not.
+        rebuildModel();
         webview.postMessage({ type: 'error', message: 'Failed to apply edit: ' + (err as Error).message });
       }
     };
@@ -759,7 +885,13 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // expansion and re-applies selection, so the tree doesn't collapse under the user.
     const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== uriString) return;
-      if (syncOneEntry(e)) return;
+      // Spent or dropped here, exactly once, whichever branch the event takes: an expectation
+      // that survived its own event must not be waiting for the next one.
+      const hint = hostEdit;
+      hostEdit = null;
+      // The host's own edit first, since it is the one case that needs no discovery at all.
+      if (syncOwnEdit(e, hint)) return;
+      if (syncOneEntry(e, hint)) return;
       post();
     });
 

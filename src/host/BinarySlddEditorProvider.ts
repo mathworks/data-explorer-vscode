@@ -45,6 +45,7 @@ import {
   entryRecord,
   insertAnchorOf,
   insertOp,
+  mutateEntry,
   patchOfPairs,
   removeOp,
   replaceOp,
@@ -293,23 +294,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // ~3s, and applyEdit paid it once before touching the model and post() paid it
     // again afterwards to rebuild a tree that was already correct.
     const liveModel = () => (DataModel as any).getDataSource?.(document.srcId) ?? buildModel();
-    /**
-     * Mutate `entry`'s subtree in place, with the session's node index repaired around
-     * it — the other half of not re-parsing, and paired with it deliberately.
-     *
-     * A node id is a PATH, so renaming an entry (or a nested child) rekeys everything
-     * beneath it. Re-registering the source used to fix that as a side effect of
-     * re-parsing; an edit that skips the re-parse has to say so explicitly, or
-     * findNodeById stops resolving the very row ids this edit is about to paint and the
-     * NEXT edit on that row fails with "could not locate the edited item". Adding a
-     * child leaves it unfindable the same way; removing one leaves a detached node
-     * resolving, which is worse.
-     *
-     * So: every path that takes the entry-scoped repaint mutates through here. The
-     * paths that fall back to post() do not need it — post() re-registers, which is the
-     * same repair at whole-source scope.
-     */
-    const mutateEntry = <T>(entry: any, mutate: () => T): T => DataModel.mutateSubtree(entry, mutate);
+    // Every path that takes the entry-scoped repaint mutates through entryOps.mutateEntry —
+    // shared with the JSON provider so that "an edit that keeps its model repairs the node
+    // index" is one rule rather than a habit each provider keeps separately. The paths that
+    // fall back to post() do not need it: post() re-registers, which is the same repair at
+    // whole-source scope. See entryOps.ts for why it is an obligation and not bookkeeping.
     const findNode = (rowId: string): any => {
       const found = (DataModel as any).findNodeById?.(rowId);
       return found ?? null;

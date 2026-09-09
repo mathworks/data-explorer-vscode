@@ -37,6 +37,26 @@ import { DataModel } from 'data-explorer-core';
 export type EntryRecord = Record<string, unknown>;
 
 /**
+ * Mutate `entry`'s subtree in place, with the session's node index repaired around it.
+ *
+ * The ops below describe a change to an entry by REBUILDING it from a record; this is the
+ * other shape, and the one every cell edit takes — the node the user typed into is changed
+ * where it stands. It belongs here because it carries the same obligation, for the same
+ * reason: a node id is a PATH, so renaming an entry (or a nested child) rekeys everything
+ * beneath it, and the wide re-parse used to repair that as a side effect. An edit that keeps
+ * the model it already has must say so explicitly, or findNodeById stops resolving the very
+ * row ids the repaint is about and the NEXT edit on one of them fails with "could not locate
+ * the edited item".
+ *
+ * Both providers mutate through here, which is what makes a cell edit mean the same thing in
+ * a binary .sldd and a JSON one. Returns whatever the mutation returned, so a setProperty
+ * refusal reaches the caller unchanged.
+ */
+export function mutateEntry<T>(entry: any, mutate: () => T): T {
+  return DataModel.mutateSubtree(entry, mutate);
+}
+
+/**
  * A change to WHICH entries a dictionary has, or to what one of them holds.
  *
  * Deliberately only three, and all at entry granularity: an edit inside an entry —
