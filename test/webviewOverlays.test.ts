@@ -115,6 +115,36 @@ describe('the banner strip is declared by every shell, because it is layout', ()
   });
 });
 
+// The loading state is neither: the COMPONENT draws it. It began as a third kind
+// of element — an overlay that markup declared — and got both halves of that wrong.
+// Three providers interpolated it and table.html did not, so the vite dev shell
+// looked it up and silently found nothing (the split this file exists to prevent);
+// and being pinned at inset:0 over the whole panel, it covered the search bar the
+// table had already painted, so the bar flickered on every slow open. A component
+// that draws its own wait has no shells to agree and no panel-wide layer.
+describe('the loading state belongs to the table component, not to any shell', () => {
+  const SHELLS = [...TABLE_SHELLS, 'src/host/webviewHtml.ts'];
+
+  it.each(SHELLS)('%s declares no loading element', (shell) => {
+    expect(read(shell)).not.toContain('dex-loading');
+  });
+
+  it('table-main.ts drives it as a property, not by reaching for an element', () => {
+    const src = read('src/webview/table-main.ts');
+    expect(src).toContain('table.loading = true');
+    expect(src).toContain('table.loading = false');
+    expect(src).not.toContain("getElementById('dex-loading')");
+  });
+
+  it('the component owns the spinner and its keyframes', () => {
+    // A keyframe in a shell's light DOM does not reach a shadow tree, so the
+    // animation has to live in the same stylesheet as the element it turns.
+    const src = read('src/webview/components/dex-tree-table.ts');
+    expect(src).toContain('class="loading-spinner"');
+    expect(src).toContain('@keyframes dex-spin');
+  });
+});
+
 // The Property Inspector is a second webview with a second shell, and it grew the
 // same overlay for the same reason. It has only one provider today, which is
 // exactly how the table's shells started out.

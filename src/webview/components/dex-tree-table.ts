@@ -837,6 +837,66 @@ export class DexTreeTable extends LitElement {
         font-style: italic;
       }
 
+      /* Waiting for the first payload. This lives INSIDE the component, in the
+         table's own place in the column, so it takes the region the table will
+         take and cannot reach the search bar above it. It replaced an overlay in
+         the shell markup pinned at inset:0 over the whole panel, which covered the
+         search bar too: the bar painted at boot, vanished under the overlay a
+         moment later, and came back with the rows. What the user saw was the bar
+         flickering, and the fix is structural rather than an offset — an overlay
+         positioned to start below the bar would have to be told the bar's height,
+         and would then be wrong every time that height changed.
+
+         Being in the component also settles WHICH shells have a spinner. The
+         overlay was interpolated by the three host providers and absent from
+         src/webview/table.html, the vite dev shell, where the lookup quietly
+         returned null — the same one-rule-over-four-paths split that
+         test/webviewOverlays.test.ts exists to prevent. A component brings its own.
+
+         The delay is what keeps a fast open from flashing: the whole region starts
+         transparent and fades in only after DELAY, so a payload that lands before
+         then removes it having never been seen. It is a CSS delay rather than a JS
+         timer because the renderer honors it while the extension host is blocked
+         in its parse — which is the entire window this state covers. */
+      .loading-state {
+        flex: 1 1 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        color: var(--dex-color-text-secondary, #888);
+        font-size: 12px;
+        animation: dex-loading-in 120ms ease-out 500ms both;
+      }
+
+      /* 'both' fill is load-bearing: it holds opacity 0 through the delay. Without
+         it the region paints at full strength immediately and the delay does
+         nothing. */
+      @keyframes dex-loading-in {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .loading-spinner {
+        width: 28px;
+        height: 28px;
+        border: 3px solid var(--vscode-progressBar-background, var(--dex-color-accent, #0e70c0));
+        border-top-color: transparent;
+        border-radius: 50%;
+        animation: dex-spin 0.8s linear infinite;
+      }
+
+      @keyframes dex-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
       /* Shown when the document HAS rows but the active search matches none.
          Without it the user just sees an empty grid under the header and can't
          tell whether the file is empty or the filter is too narrow. */
@@ -993,6 +1053,16 @@ export class DexTreeTable extends LitElement {
   @property({ type: Object }) columnLabels: Record<string, string> | null = null;
   @property({ type: Object }) columnGroups: Record<string, string> | null = null;
   @property({ type: Array }) columns: string[] | null = null;
+  // Waiting for the first payload — a DIFFERENT state from "the payload arrived
+  // and it was empty", which is the one that reads "No data". The host parses
+  // synchronously (and scans the workspace for the usage graph on first open), so
+  // an empty table is the normal view for the first second of a large file; saying
+  // "No data" about it is a claim the webview cannot yet make.
+  //
+  // Set by the host-facing module for exactly as long as that gap lasts, and it
+  // suppresses only the TABLE — see .loading-state for why the search bar stays
+  // put, and why nothing visible happens here on a fast open.
+  @property({ type: Boolean }) loading = false;
 
   get selectedRowId(): string {
     return this.selectedRowIds[this.selectedRowIds.length - 1] || '';
@@ -2899,29 +2969,61 @@ export class DexTreeTable extends LitElement {
 
   private _pendingFlashId: string | null = null;
 
+  // The search bar. Rendered by BOTH branches below from this one function, so the
+  // bar is the same element in the same place whether or not there are rows yet:
+  // Lit reuses it across the repaint that brings the table in, which is what makes
+  // the transition out of the loading state free of any movement at the top of the
+  // panel — and keeps text typed while waiting, and the caret, alive through it.
+  private _renderFilterBar() {
+    return html`
+      <div class="filter-bar">
+        <input
+          type="search"
+          class="filter-input"
+          placeholder="Search"
+          @input=${this._onFilterInput}
+          @keydown=${this._onFilterKeyDown}
+        />
+        ${this._renderColumnsButton()}
+      </div>
+    `;
+  }
+
   override render() {
     this._buildCaches();
     const allVisible = this._getVisibleRows();
     const totalRows = allVisible.length;
     const visibleCols = this._visibleColumns;
 
-    if (this.rows.length === 0) {
+    // ONE top-level template for every state, with only the region below the search
+    // bar switching. That is what keeps the bar the same ELEMENT across the repaint
+    // that brings the rows in: Lit reuses a nested template's nodes only while the
+    // template around it is unchanged, so a literal per state — which is what this
+    // was — rebuilt the input, dropping focus and anything typed while the file was
+    // still parsing. The flicker was the visible half of that; this is the rest.
+    const body =
+      this.rows.length === 0 ? this._renderNoRows() : this._renderTable(allVisible, totalRows, visibleCols);
+    return html`
+      ${this._renderFilterBar()} ${body} ${this._renderColumnMenu()} ${this._renderDropTooltip()}
+    `;
+  }
+
+  // The table's region when there are no rows to put in it, which is two states,
+  // not one: still waiting for the host's first payload, or holding a payload that
+  // was empty. "No data" is an ANSWER, so only the second may say it.
+  private _renderNoRows() {
+    if (this.loading) {
       return html`
-        <div class="filter-bar">
-          <input
-            type="search"
-            class="filter-input"
-            placeholder="Search"
-            @input=${this._onFilterInput}
-            @keydown=${this._onFilterKeyDown}
-          />
-          ${this._renderColumnsButton()}
+        <div class="loading-state" role="status" aria-label="Loading">
+          <div class="loading-spinner"></div>
+          <div>Loading…</div>
         </div>
-        <div class="empty-state">No data</div>
-        ${this._renderColumnMenu()}
       `;
     }
+    return html`<div class="empty-state">No data</div>`;
+  }
 
+  private _renderTable(allVisible: TreeTableRow[], totalRows: number, visibleCols: string[]) {
     const totalHeight = totalRows * this._rowH;
 
     const headerHeight = this._rowH;
@@ -2934,16 +3036,6 @@ export class DexTreeTable extends LitElement {
     this._lastStartIdx = startIdx;
 
     return html`
-      <div class="filter-bar">
-        <input
-          type="search"
-          class="filter-input"
-          placeholder="Search"
-          @input=${this._onFilterInput}
-          @keydown=${this._onFilterKeyDown}
-        />
-        ${this._renderColumnsButton()}
-      </div>
       <div
         class="table-container ${this._scrolledX ? 'scrolled-x' : ''}"
         role="treegrid"
@@ -3059,7 +3151,6 @@ export class DexTreeTable extends LitElement {
           </table>
         </div>
       </div>
-      ${this._renderColumnMenu()} ${this._renderDropTooltip()}
     `;
   }
 

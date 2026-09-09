@@ -148,29 +148,24 @@ function applyPendingNameSelection(): void {
   pendingSelectName = null;
 }
 
-// Loading spinner, shown only if the first payload is slow to arrive. The host
-// runs a synchronous parse (and, on first open, a whole-workspace usage-graph
-// scan) before it can post 'setRows', which can take several seconds on a large
-// file. Rather than flash a spinner on every open, we arm a timer at boot and
-// reveal the overlay only if that gap exceeds the delay below; a fast open hides
-// the (never-shown) overlay and cancels the timer, so it never flashes. The
-// webview renderer runs this timer independently of the busy extension host.
-const LOADING_SPINNER_DELAY_MS = 500;
-let loadingTimer: ReturnType<typeof setTimeout> | undefined = setTimeout(() => {
-  loadingTimer = undefined;
-  const el = document.getElementById('dex-loading');
-  if (el) el.style.display = 'flex';
-}, LOADING_SPINNER_DELAY_MS);
+// We are waiting for the first payload from the moment this module runs: the host
+// parses synchronously (and, on first open, scans the whole workspace for the
+// usage graph) before it can post 'setRows', which is several seconds on a large
+// file. Setting this at boot, ahead of the table's first paint, is what stops that
+// gap from being reported as "No data" — the table has no rows yet, but that is
+// not the same as the file having none.
+//
+// The table owns what the wait LOOKS like: a spinner in its own region, under a
+// search bar that stays, revealed only after a delay so a fast open never flashes
+// it (see .loading-state in dex-tree-table.ts). This module owns only when the
+// wait starts and ends. It used to own the whole thing — a timer here, revealing
+// an overlay pinned over the entire panel — and the overlay covered the search bar
+// on its way, which is the flicker that moved this into the component.
+table.loading = true;
 
-// Cancel the pending reveal and hide the overlay. Called on the first payload
-// (setRows) or on error — either ends the wait.
+// The wait is over: the first payload (setRows) landed, or an error ended it.
 function hideLoading(): void {
-  if (loadingTimer !== undefined) {
-    clearTimeout(loadingTimer);
-    loadingTimer = undefined;
-  }
-  const el = document.getElementById('dex-loading');
-  if (el) el.style.display = 'none';
+  table.loading = false;
 }
 
 function showError(message: string): void {

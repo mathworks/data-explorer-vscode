@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
-import { renderWebviewHtml, LOADING_OVERLAY_HTML, BANNERS_HTML } from './webviewHtml.js';
+import { renderWebviewHtml, BANNERS_HTML } from './webviewHtml.js';
 import { getModelFromBytes, getProjectModel, invalidate } from './SlddModel.js';
 import {
   buildRows,
@@ -294,8 +294,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       title: 'Data Explorer',
       body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
 ${BANNERS_HTML}
-    <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>
-${LOADING_OVERLAY_HTML}`,
+    <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>`,
     });
   }
 }

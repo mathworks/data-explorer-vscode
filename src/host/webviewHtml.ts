@@ -4,17 +4,14 @@ import { getNonce } from './nonce.js';
 import { renderShell } from './webviewShell.js';
 import { SHARED_STYLESHEET } from '../common/webviewAssets.js';
 
-// Shared loading overlay for the three table views (table.js). Starts hidden:
-// the webview only reveals it if the first payload hasn't arrived after a short
-// delay (see table-main.ts), so a fast open never flashes a spinner. The webview
-// renderer runs this timer independently of the extension host's synchronous
-// parse, so the delay is honored even while the host is busy. `hideLoading()`
-// hides it again on the first setRows/error.
-export const LOADING_OVERLAY_HTML = `    <style>@keyframes dex-spin { to { transform: rotate(360deg); } }</style>
-    <div id="dex-loading" role="status" aria-label="Loading" style="display:none;position:absolute;inset:0;z-index:3;flex-direction:column;align-items:center;justify-content:center;gap:12px;font-family:var(--vscode-font-family,sans-serif);font-size:12px;color:var(--vscode-descriptionForeground,var(--vscode-foreground));background:var(--vscode-editor-background,transparent);">
-      <div style="width:28px;height:28px;border:3px solid var(--vscode-progressBar-background,#0e70c0);border-top-color:transparent;border-radius:50%;animation:dex-spin 0.8s linear infinite;"></div>
-      <div>Loading…</div>
-    </div>`;
+// There is deliberately NO loading overlay here. The wait for the first payload is
+// drawn by <dex-tree-table> itself (`loading` property → .loading-state), in the
+// region the table will occupy. As shell markup it was an overlay at inset:0 over
+// the whole panel, so it covered the search bar the table had already painted: the
+// bar showed, disappeared under the overlay, then came back with the rows. It was
+// also missing from src/webview/table.html, the vite dev shell, where the lookup
+// silently found nothing — one rule over four shells, which is what
+// test/webviewOverlays.test.ts is about.
 
 // Shared banner strip for the three table views: the persistent read-only notice
 // (#dex-notice) and the parse-warning banner (#dex-warning), stacked above the

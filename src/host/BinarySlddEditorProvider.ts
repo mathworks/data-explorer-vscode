@@ -18,7 +18,7 @@
 // cached model of the same file.
 import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
-import { renderWebviewHtml, LOADING_OVERLAY_HTML, BANNERS_HTML } from './webviewHtml.js';
+import { renderWebviewHtml, BANNERS_HTML } from './webviewHtml.js';
 import { buildRows, buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { sectionRules } from './sectionRules.js';
 import { serializeEntryToXml, DataModel, type ParseWarning } from 'data-explorer-core';
@@ -990,8 +990,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       title: 'Data Explorer',
       body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
 ${BANNERS_HTML}
-    <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>
-${LOADING_OVERLAY_HTML}`,
+    <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>`,
     });
 
     webviewPanel.onDidDispose(() => {
