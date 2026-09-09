@@ -13,6 +13,7 @@
 // This module does the vscode file I/O + parser dispatch; the pure
 // name-extraction core lives in nameExtract.ts (unit-tested).
 import * as vscode from 'vscode';
+import { mapLimited, readForScan } from './scanRead.js';
 import { isMatFile, isModelFile, isSlddFile, parseModel, parseMat } from 'data-explorer-core';
 import { readSlddContent } from './slddContent.js';
 import { toArrayBuffer } from '../common/bytes.js';
@@ -82,13 +83,16 @@ export function removeFile(uriString: string): void {
 // JSON format and encoding the string back to bytes is lossless. A clean (or
 // unopened) document has no in-memory state worth preferring, so it reads disk —
 // which also keeps the full build() unaffected.
-async function readCurrentBytes(uri: vscode.Uri): Promise<ArrayBuffer> {
+async function readCurrentBytes(uri: vscode.Uri): Promise<ArrayBuffer | null> {
   const uriString = uri.toString();
   const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uriString);
   if (open?.isDirty) {
+    // Already in memory and already bounded — VS Code will not mirror a document
+    // this scan's cap would exclude (its own sync limit is far below it).
     return toArrayBuffer(new TextEncoder().encode(open.getText()));
   }
-  return toArrayBuffer(await vscode.workspace.fs.readFile(uri));
+  const bytes = await readForScan(uri);
+  return bytes ? toArrayBuffer(bytes) : null;
 }
 
 async function build(): Promise<void> {
@@ -99,12 +103,13 @@ async function build(): Promise<void> {
   } catch {
     /* no workspace folder open — nothing to scan; the index is legitimately empty */
   }
-  await Promise.all(
-    uris.map(async (uri) => {
-      const records = await recordsForFile(uri);
-      if (records.length > 0) map.set(uri.toString(), records);
-    }),
-  );
+  // A few files at a time, and nothing oversized — see scanRead. This scan is the
+  // heaviest of the three (it runs each file's real parser to collect names), so it
+  // is also the one that must not hold the whole folder at once.
+  await mapLimited(uris, async (uri) => {
+    const records = await recordsForFile(uri);
+    if (records.length > 0) map.set(uri.toString(), records);
+  });
   // Assigned on exactly ONE path, deliberately. `index` non-null is what marks
   // the build as done: reindexFile no-ops while it is null, and listEntries reads
   // through it. A failure path that resolved buildPromise WITHOUT setting it
@@ -116,12 +121,15 @@ async function build(): Promise<void> {
 // Read + parse a single file's NAMES ONLY. Any read/parse failure (corrupt or
 // unreadable file) contributes nothing.
 async function recordsForFile(uri: vscode.Uri): Promise<NameRecord[]> {
-  let ab: ArrayBuffer;
+  let ab: ArrayBuffer | null;
   try {
     ab = await readCurrentBytes(uri);
   } catch {
     return [];
   }
+  // Unreadable or too large to scan: no names, which is what an undecodable file
+  // could contribute anyway. It still opens in its own tab.
+  if (!ab) return [];
   const path = uri.path;
   const uriString = uri.toString();
   try {

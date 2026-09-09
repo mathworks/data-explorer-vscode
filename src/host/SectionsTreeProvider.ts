@@ -8,6 +8,7 @@ import { encode, type HealthState } from './health.js';
 import { isZipBytes } from './slddFormat.js';
 import { isProjectFile, isSlddFile } from 'data-explorer-core';
 import { toArrayBuffer } from '../common/bytes.js';
+import { mapLimited, readForScan } from './scanRead.js';
 import { SUPPORTED_GLOB } from '../common/fileTypes.js';
 
 // The Data Explorer tree is a cross-format relationship graph (model->model,
@@ -116,33 +117,38 @@ export class SectionsTreeProvider implements vscode.TreeDataProvider<SlddTreeNod
   private async buildGraph(): Promise<RelGraph> {
     const uris = await vscode.workspace.findFiles(SUPPORTED_GLOB);
     this.uris = new Map();
-    const sources = await Promise.all(
-      uris.map(async (uri): Promise<GraphSource> => {
-        const uriString = uri.toString();
-        this.uris.set(uriString, uri);
-        const raw: RawFile = { uriString, path: uri.path };
-        try {
-          // A .prj is an empty marker: read its sibling resources/project/**
-          // store into a project-root-relative relpath map instead of bytes.
-          if (isProjectFile(uri.path)) {
-            raw.projectFiles = await readProjectStore(uri);
-            return buildGraphSource(raw);
-          }
-          const bytes = await vscode.workspace.fs.readFile(uri);
-          const ab = toArrayBuffer(bytes);
-          // JSON .sldd is passed as text so extractReferences works; others as bytes.
+    // A few files at a time, and nothing oversized — see scanRead. The tree only
+    // wants each file's reference list, so a file it cannot read is still a node
+    // here (it is in the folder, so it belongs in the tree); it just has no edges.
+    const sources = await mapLimited(uris, async (uri): Promise<GraphSource> => {
+      const uriString = uri.toString();
+      this.uris.set(uriString, uri);
+      const raw: RawFile = { uriString, path: uri.path };
+      try {
+        // A .prj is an empty marker: read its sibling resources/project/**
+        // store into a project-root-relative relpath map instead of bytes.
+        if (isProjectFile(uri.path)) {
+          raw.projectFiles = await readProjectStore(uri);
+          return buildGraphSource(raw);
+        }
+        const bytes = await readForScan(uri);
+        if (bytes) {
+          // JSON .sldd is passed as text so extractReferences works; others as
+          // bytes. The ArrayBuffer copy is made only on the branch that needs one:
+          // the text branch decodes the bytes it already has, and paying for a
+          // full-size copy first made every textual dictionary cost twice its size.
           if (isSlddFile(uri.path)) {
-            if (isZipBytes(bytes)) raw.bytes = ab;
+            if (isZipBytes(bytes)) raw.bytes = toArrayBuffer(bytes);
             else raw.text = new TextDecoder().decode(bytes);
           } else {
-            raw.bytes = ab;
+            raw.bytes = toArrayBuffer(bytes);
           }
-        } catch {
-          /* unreadable: node with no relationships */
         }
-        return buildGraphSource(raw);
-      }),
-    );
+      } catch {
+        /* unreadable: node with no relationships */
+      }
+      return buildGraphSource(raw);
+    });
     const graph = new RelGraph(sources);
     return graph;
   }

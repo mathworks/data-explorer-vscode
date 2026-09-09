@@ -17,6 +17,7 @@
 // to an exact file even when two same-named files exist.
 import * as vscode from 'vscode';
 import { toArrayBuffer } from '../common/bytes.js';
+import { mapLimited, readForScan } from './scanRead.js';
 import { GRAPH_GLOB, isGraphPath } from '../common/fileTypes.js';
 import {
   annotateModelViewRows,
@@ -44,11 +45,8 @@ export function ensureUsageGraph(): Promise<UsageGraph> {
 }
 
 async function readBytes(uri: vscode.Uri): Promise<ArrayBuffer | null> {
-  try {
-    return toArrayBuffer(await vscode.workspace.fs.readFile(uri));
-  } catch {
-    return null;
-  }
+  const bytes = await readForScan(uri);
+  return bytes ? toArrayBuffer(bytes) : null;
 }
 
 // Supported files currently open in an editor tab. Custom-editor and text tab
@@ -76,21 +74,21 @@ async function buildGraph(): Promise<UsageGraph> {
   for (const uri of [...found, ...openTabUris()]) byUri.set(uri.toString(), uri);
   const uris = [...byUri.values()];
 
-  // Read every file concurrently, then hand the bytes to the pure builder. The
-  // reads race, but the RESULT ARRAY keeps `uris` order — the blocks in a Usage
-  // cell are listed in the order their models are summarised, and an order that
-  // depended on which file's read finished first made the same cell render
-  // differently between two opens of the same dictionary.
+  // Read the files a few at a time and hand the bytes to the pure builder. The
+  // reads race within a batch, but the RESULT ARRAY keeps `uris` order — the blocks
+  // in a Usage cell are listed in the order their models are summarised, and an
+  // order that depended on which file's read finished first made the same cell
+  // render differently between two opens of the same dictionary. See scanRead for
+  // why a scan is read in bounded batches and skips oversized files.
   //
-  // A file that cannot be READ drops out here; one that cannot be PARSED drops out
-  // inside core's summariser. Both contribute nothing rather than failing the build.
+  // A file that cannot be READ (or is too large to scan) drops out here; one that
+  // cannot be PARSED drops out inside core's summariser. Both contribute nothing
+  // rather than failing the build.
   const files = (
-    await Promise.all(
-      uris.map(async (uri): Promise<RawSource | null> => {
-        const bytes = await readBytes(uri);
-        return bytes ? { uriString: uri.toString(), path: uri.path, bytes } : null;
-      }),
-    )
+    await mapLimited(uris, async (uri): Promise<RawSource | null> => {
+      const bytes = await readBytes(uri);
+      return bytes ? { uriString: uri.toString(), path: uri.path, bytes } : null;
+    })
   ).filter((f): f is RawSource => f !== null);
 
   return buildUsageGraph(files);

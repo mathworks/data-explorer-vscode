@@ -27,6 +27,7 @@ export default defineConfig({
         'src/host/SlddTextEditorProvider.ts',
         'src/host/editorHub.ts',
         'src/host/nameIndex.ts',
+        'src/host/scanRead.ts',
         'src/host/searchSources.ts',
         'src/host/usageGraph.ts',
         'src/host/navigate.ts',
