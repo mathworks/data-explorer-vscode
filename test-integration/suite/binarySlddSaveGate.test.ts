@@ -40,6 +40,14 @@ function token() {
   return new vscode.CancellationTokenSource().token;
 }
 
+function makePanel(): vscode.WebviewPanel {
+  return vscode.window.createWebviewPanel('test.binSlddSaveGate', 'test', vscode.ViewColumn.One, {
+    enableScripts: true,
+  });
+}
+
+const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 /** A working copy of the fixture, so writing in this suite cannot touch the fixture. */
 async function workingCopy(name: string): Promise<vscode.Uri> {
   const dst = wsUri(name);
@@ -132,28 +140,37 @@ suite('Binary .sldd save gate vs hot-exit backup', () => {
 
   test('a save reads the dictionary once, and paints the tree it read', async () => {
     // The gate, the re-baseline and the repaint each used to read the payload — three
-    // trees describing one unchanged chunkXml, ~3.1 s each on a real dictionary. What is
-    // observable from here is the second and third reads being gone: the save registers
-    // the gate's tree, and tells every view to paint THAT rather than parse again.
+    // trees describing one unchanged chunkXml, ~3.1 s each on a real dictionary (and a
+    // fourth per split view, since the repaint is per view).
     const uri = await workingCopy('binary_save_once_copy.sldd');
     const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
     const srcId = (doc as unknown as { srcId: string }).srcId;
+    const panel = makePanel();
+    await provider.resolveCustomEditor(doc, panel, token());
+    await settle(500);
+    // Register the model through the live view, then keep the view: the repaint under test
+    // is the real post(), not a stub. Asserted, because with no view registered the count
+    // below would come out at 1 whether or not the repaint rebuilds.
+    (doc as any).repaintAll();
+    assert.strictEqual(((doc as any).views as Set<unknown>).size, 1, 'the real view is the one that repaints');
 
-    // Stand-in views, as in binarySlddUndo.test.ts: a real webview panel cannot be asked
-    // what it was told, and which tree the repaint uses is the whole assertion.
-    const seen: unknown[] = [];
-    const views = (doc as any).views as Set<{ repaintAll(from?: unknown): void; repaintOps(a: unknown[]): void }>;
-    for (const _tag of ['a', 'b']) {
-      views.add({ repaintAll: (from) => seen.push(from), repaintOps: () => undefined });
+    // Every read of the payload is followed by registering what it read, and
+    // `DataModel.addDataSource` is a property lookup on the imported class — so counting it
+    // is how many trees this save built. One: the gate's, reused. Before the fix it was two
+    // (re-baseline, then the repaint rebuilding what the re-baseline had just registered).
+    const realAdd = (DataModel as any).addDataSource;
+    let registrations = 0;
+    (DataModel as any).addDataSource = (...args: unknown[]) => {
+      registrations++;
+      return realAdd.apply(DataModel, args);
+    };
+    try {
+      await provider.saveCustomDocument(doc, token());
+    } finally {
+      (DataModel as any).addDataSource = realAdd;
     }
+    assert.strictEqual(registrations, 1, 'a save builds ONE tree, with a real view painting');
 
-    await provider.saveCustomDocument(doc, token());
-
-    assert.deepStrictEqual(
-      seen,
-      ['registered', 'registered'],
-      'every view paints the tree the save registered, instead of parsing the payload again',
-    );
     const root: any = DataModel.getDataSource(srcId);
     assert.ok(root, 'the save registered the tree it read');
     assert.strictEqual(firstEntry(root).name, 'Kp', 'built from the payload it wrote');
@@ -163,6 +180,23 @@ suite('Binary .sldd save gate vs hot-exit backup', () => {
       'and baselined that same tree, so the save leaves no row wearing a Modified mark',
     );
 
+    // The same fact said the other way round, because the count alone does not show WHICH
+    // tree the views were pointed at: stand-in views (a real panel cannot be asked what it
+    // was told), and every one of them is asked for the registered tree.
+    const seen: unknown[] = [];
+    const views = (doc as any).views as Set<{ repaintAll(from?: unknown): void; repaintOps(a: unknown[]): void }>;
+    views.clear();
+    for (const _tag of ['a', 'b']) {
+      views.add({ repaintAll: (from) => seen.push(from), repaintOps: () => undefined });
+    }
+    await provider.saveCustomDocument(doc, token());
+    assert.deepStrictEqual(
+      seen,
+      ['registered', 'registered'],
+      'every view paints the tree the save registered, instead of parsing the payload again',
+    );
+
+    panel.dispose();
     doc.dispose();
     await vscode.workspace.fs.delete(uri);
   });
