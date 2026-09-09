@@ -7,7 +7,7 @@ import './components/dex-error-dialog.js';
 import './components/dex-variable-editor.js';
 import { installMatrixOpen } from './matrixOpen.js';
 import { renderBanners } from './banners.js';
-import { nextExpandedIds, spliceEntryRows } from './rowUpdates.js';
+import { nextExpandedIds, spliceEntryRows, insertEntryRows } from './rowUpdates.js';
 import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from './menuItems.js';
 import { dropDecision, type DragMode, type DropTarget, type DragSource } from './dropDecision.js';
 import type { SectionRule } from '../host/sectionRules.js';
@@ -235,6 +235,18 @@ window.addEventListener('message', (event: MessageEvent) => {
     // over from an earlier failure — as setRows does, for the same reason.
     clearError();
     installRows(spliced);
+  } else if (msg.type === 'insertEntryRows') {
+    // Entry-scoped repaint for an entry the table does not hold yet — a paste, a
+    // drop, or the undo of a delete. Same rules as the splice above; only finding
+    // the place differs, and the host states it (see insertEntryRows).
+    const inserted = insertEntryRows((table.rows ?? []) as any[], msg.sectionRowId, msg.beforeRowId, msg.rows ?? []);
+    if (!inserted) {
+      vscode.postMessage({ type: 'ready' });
+      return;
+    }
+    matrixOpen.close();
+    clearError();
+    installRows(inserted);
   } else if (msg.type === 'setRows') {
     hideLoading();
     clearError();

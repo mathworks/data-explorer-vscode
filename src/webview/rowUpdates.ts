@@ -72,3 +72,47 @@ export function spliceEntryRows<T extends RowLike>(
   }
   return [...rows.slice(0, start), ...replacement, ...rows.slice(end)];
 }
+
+/**
+ * Insert ONE new entry's rows into a section, returning a new array (or null when
+ * the position can't be located).
+ *
+ * The counterpart of spliceEntryRows for an entry the table does not hold yet: a
+ * paste, a drop, or the undo of a delete. Where a splice finds its place by the run
+ * it replaces, an insert has to be TOLD the place, and the two forms of it are the
+ * two the host can produce:
+ *
+ *  - `beforeRowId` given → immediately before that entry's row (the undo of a
+ *    delete, which must put the entry back where it was).
+ *  - absent → after the section's last row, which is where a pasted entry lands.
+ *
+ * "The section's last row" is found by walking forward from the section header while
+ * rows keep belonging to it. `buildRows` emits a section's rows contiguously and
+ * every following section header carries `parent === null`, so the first row with a
+ * null parent ends the section — and a section that is the table's last needs no
+ * terminator beyond the array's end.
+ *
+ * Returns null rather than guessing when the section row is absent (or the named
+ * `beforeRowId` isn't in it), so the caller can ask for a full repaint instead of
+ * dropping the new entry or filing it under the wrong section.
+ */
+export function insertEntryRows<T extends RowLike>(
+  rows: T[],
+  sectionRowId: string,
+  beforeRowId: string | undefined,
+  addition: T[],
+): T[] | null {
+  const sectionAt = rows.findIndex((r) => r.ID === sectionRowId);
+  if (sectionAt < 0) return null;
+  let end = sectionAt + 1;
+  while (end < rows.length && rows[end].parent !== null) end++;
+  let at = end;
+  if (beforeRowId !== undefined) {
+    const beforeAt = rows.findIndex((r) => r.ID === beforeRowId);
+    // Inside THIS section, or not at all: an anchor found in another section would
+    // file the new entry under the wrong header, which is worse than a full repaint.
+    if (beforeAt <= sectionAt || beforeAt >= end) return null;
+    at = beforeAt;
+  }
+  return [...rows.slice(0, at), ...addition, ...rows.slice(at)];
+}

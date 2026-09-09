@@ -37,10 +37,28 @@ import { unzipSync } from 'fflate';
 import { DataModel, parseBinarySlddParts, serializeEntryToXml } from 'data-explorer-core';
 import { findEntryObjectSpan } from '../src/host/xmlEntrySplice.js';
 import { entrySelectorOf } from '../src/host/entrySelector.js';
-import { addChildXml, deleteChildXml } from '../src/host/xmlStructuralEdit.js';
+import {
+  addChildXml,
+  deleteChildXml,
+  deleteEntryXml,
+  pasteEntryXml,
+} from '../src/host/xmlStructuralEdit.js';
+import {
+  applyEntryOps,
+  entryRecord,
+  insertAnchorOf,
+  insertOp,
+  patchOfPairs,
+  removeOp,
+  replaceOp,
+  type AppliedOp,
+  type EntryOp,
+  type EntryOpPair,
+} from '../src/host/entryOps.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from '../src/host/slddBaseline.js';
 import { buildRows, buildEntryRows } from '../src/host/rowBuilder.js';
-import { spliceEntryRows } from '../src/webview/rowUpdates.js';
+import { spliceEntryRows, insertEntryRows } from '../src/webview/rowUpdates.js';
+import { buildSectionRowId } from '../src/common/sectionRowId.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -112,6 +130,34 @@ function expectRowsResolve(rows: any[]): void {
   for (const row of rows) {
     expect((DataModel as any).findNodeById(row.ID), `row ${row.ID} resolves to a node`).toBeTruthy();
   }
+}
+
+/**
+ * The webview's half of an op list: fold what the model ops produced into the rows that
+ * are already on screen.
+ *
+ * This is the dispatch the table performs on the three narrow messages — `updateEntryRows`
+ * for a replace or a remove, `insertEntryRows` for an insert — so a fold that cannot place
+ * an op is the same failure the real view reports by asking for a full repaint.
+ */
+function foldOps(rows: any[], applied: AppliedOp[], paint: (entry: any) => any[]): any[] {
+  let out = rows;
+  for (const op of applied) {
+    const next =
+      op.kind === 'remove'
+        ? spliceEntryRows(out, op.entryRowId, [])
+        : op.kind === 'replace'
+          ? spliceEntryRows(out, op.entryRowId, paint(op.entry))
+          : insertEntryRows(
+              out,
+              buildSectionRowId(op.entry.parent.name),
+              op.beforeRowId,
+              paint(op.entry),
+            );
+    expect(next, `the ${op.kind} op lands in the rows on screen`).not.toBeNull();
+    out = next!;
+  }
+  return out;
 }
 
 describe('binary .sldd entry-scoped repaint — narrow paint equals wide paint', () => {
@@ -295,6 +341,28 @@ describe('binary .sldd entry-scoped repaint — the Modified mark', () => {
     d.dispose();
   });
 
+  it('is dropped by an undo that restores the pre-edit record', () => {
+    // The mark answers "does this differ from the last SAVE", so an undo back to the saved
+    // state has to clear it — and it does so through the same isEntryModified the edit
+    // used, on an entry rebuilt from the record rather than re-read from the text.
+    const uri = 'test://ops-modified-undo.sldd';
+    const d = openDoc(uri);
+    d.widePaint();
+    const entry = d.entryNamed('scalarD');
+    const undoOps: EntryOp[] = [{ kind: 'replace', rowId: entry.id, record: entryRecord(entry) }];
+    const beforeXml = d.doc.chunkXml;
+
+    (DataModel as any).mutateSubtree(entry, () => entry.setProperty('Value', '42'));
+    d.spliceEntryText(entry, entrySelectorOf(entry));
+    expect(d.narrowPaint(entry)[0].Status).toBe('Modified');
+
+    d.doc.chunkXml = beforeXml;
+    const applied = applyEntryOps(d.live(), undoOps);
+    expect(d.narrowPaint((applied[0] as any).entry)[0].Status).toBeFalsy();
+    expect(computeModified(uri, d.build())).toEqual(new Set());
+    d.dispose();
+  });
+
   it('isEntryModified answers for one entry what computeModified answers for all', () => {
     // Two repaint paths ask the same question through different functions; if they can
     // disagree, a "Modified" dot appears or clears depending on which repaint the user
@@ -314,6 +382,265 @@ describe('binary .sldd entry-scoped repaint — the Modified mark', () => {
       }
     }
     expect(wide).toEqual(new Set(['MyBus']));
+    d.dispose();
+  });
+});
+
+// The other half of the same problem, and the one the user actually hit: an EDIT was fast
+// but its UNDO took 5-9 s, because restoring the text was the whole edit and the repaint
+// that followed re-parsed the dictionary to catch the model up. Undo, redo, delete, paste
+// and drop now each state the entries they change as ops (entryOps.ts), applied to the live
+// model and folded into the rows on screen.
+//
+// Same two invariants as above — NARROW === WIDE, and every painted row still RESOLVES —
+// plus the two that only ops can get wrong: a redo must restore what its undo took away
+// (not re-run the edit that produced it), and inverses must be replayed in reverse order.
+//
+// NOTE on ordering: `widePaint()` re-parses and RE-REGISTERS, which throws away the live
+// tree these ops were built against. Every comparison against it therefore comes last in
+// its step, and anything read from the model afterwards is re-fetched by name.
+describe('binary .sldd entry ops — undo, redo, delete, paste', () => {
+  it('undo and redo of a value edit are one replace op each', () => {
+    const d = openDoc('test://ops-undo-value.sldd');
+    const onScreen = d.widePaint();
+    const entry = d.entryNamed('scalarD');
+    const entryRowId = entry.id;
+    const beforeXml = d.doc.chunkXml;
+    const originalValue = entry.toRow().Value;
+
+    // The edit, as applyEdit performs it: the pre-edit record is snapshotted first,
+    // because this is the only moment that state exists.
+    const undoOps: EntryOp[] = [{ kind: 'replace', rowId: entryRowId, record: entryRecord(entry) }];
+    (DataModel as any).mutateSubtree(entry, () => entry.setProperty('Value', '42'));
+    d.spliceEntryText(entry, entrySelectorOf(entry));
+    const redoOps: EntryOp[] = [replaceOp(entry, entryRowId)];
+    const afterXml = d.doc.chunkXml;
+    const edited = foldOps(onScreen, [{ kind: 'replace', entryRowId, entry }], d.narrowPaint);
+    expect(edited).toEqual(d.widePaint());
+
+    // Undo: restore the text, then replay the inverse against the live model — no parse.
+    d.doc.chunkXml = beforeXml;
+    const undone = foldOps(edited, applyEntryOps(d.live(), undoOps), d.narrowPaint);
+    expect(d.entryNamed('scalarD').toRow().Value).toBe(originalValue);
+    expect(undone).toEqual(d.widePaint());
+
+    // Redo: the recorded post-edit state, addressed by the id undo just put back.
+    d.doc.chunkXml = afterXml;
+    const redone = foldOps(undone, applyEntryOps(d.live(), redoOps), d.narrowPaint);
+    expect(d.entryNamed('scalarD').toRow().Value).toBe('42');
+    expect(redone).toEqual(d.widePaint());
+    d.dispose();
+  });
+
+  it('undo of a rename addresses the POST-rename id and puts the old one back', () => {
+    // The asymmetry that makes a rename its own case: each direction addresses the entry by
+    // the id the OTHER one leaves behind. Get it backwards and the op resolves nothing, so
+    // the undo silently falls back to the slow repaint it exists to avoid.
+    const d = openDoc('test://ops-undo-rename.sldd');
+    const onScreen = d.widePaint();
+    const bus = d.entryNamed('MyBus');
+    const oldId = bus.id;
+    const selector = entrySelectorOf(bus);
+    const beforeXml = d.doc.chunkXml;
+    const undoRecord = entryRecord(bus);
+    const childIds = bus.children.map((c: any) => c.id);
+    expect(childIds.length).toBeGreaterThan(0);
+
+    (DataModel as any).mutateSubtree(bus, () => bus.setProperty('Name', 'MyRenamedBus'));
+    d.spliceEntryText(bus, selector);
+    const newId = bus.id;
+    expect(newId).not.toBe(oldId);
+    const undoOps: EntryOp[] = [{ kind: 'replace', rowId: newId, record: undoRecord }];
+    const renamed = foldOps(onScreen, [{ kind: 'replace', entryRowId: oldId, entry: bus }], d.narrowPaint);
+
+    d.doc.chunkXml = beforeXml;
+    const applied = applyEntryOps(d.live(), undoOps);
+    // The rows on screen carry the renamed id, so that is the run the fold replaces.
+    expect(applied[0]).toMatchObject({ kind: 'replace', entryRowId: newId });
+    const undone = foldOps(renamed, applied, d.narrowPaint);
+    // The rename's rekeying is undone for the entry AND for every descendant.
+    expect((DataModel as any).findNodeById(newId)).toBeNull();
+    expectRowsResolve([{ ID: oldId }, ...childIds.map((id: string) => ({ ID: id }))]);
+    expect(undone).toEqual(d.widePaint());
+    d.dispose();
+  });
+
+  it('deleting an entry and undoing it restores the same id at the same position', () => {
+    // The user's bug, at entry granularity: a delete's undo has to put the entry back where
+    // the restored TEXT says it is, or a later re-parse would reorder the table under them.
+    const d = openDoc('test://ops-delete-undo.sldd');
+    const onScreen = d.widePaint();
+    const entry = d.entryNamed('gravity');
+    const entryRowId = entry.id;
+    const index = entry.parent.children.indexOf(entry);
+    const beforeXml = d.doc.chunkXml;
+    // Both directions are snapshotted while the entry is still attached: insertOp reads its
+    // section and position from the tree.
+    const patch = { undo: [insertOp(entry)], redo: [removeOp(entryRowId)] };
+
+    const { newText } = deleteEntryXml(beforeXml, entry);
+    d.doc.chunkXml = newText;
+    const afterDelete = foldOps(onScreen, applyEntryOps(d.live(), patch.redo), d.narrowPaint);
+    expect((DataModel as any).findNodeById(entryRowId)).toBeNull();
+    expect(afterDelete).toEqual(d.widePaint());
+
+    d.doc.chunkXml = beforeXml;
+    const restored = foldOps(afterDelete, applyEntryOps(d.live(), patch.undo), d.narrowPaint);
+    const back = d.entryNamed('gravity');
+    expect(back.id).toBe(entryRowId);
+    expect(back.parent.children.indexOf(back)).toBe(index);
+    expect(restored).toEqual(d.widePaint());
+    d.dispose();
+  });
+
+  it('a paste inserts one entry run, and its redo keeps the pasted name and uuid', () => {
+    // Why an op carries a RECORD and not the edit that made it: pasting again would mint
+    // another uuid and another unique name, so a "redo" would add a third entry rather than
+    // restore the one undo took away.
+    const d = openDoc('test://ops-paste.sldd');
+    const onScreen = d.widePaint();
+    const model = d.live();
+    const section = (model.children as any[]).find((s) => s.name === 'design');
+    const payload = entryRecord(d.entryNamed('gravity')); // what a copy puts on the clipboard
+    const beforeXml = d.doc.chunkXml;
+
+    // Exactly applyPaste's shape: the paste attaches the new entry itself, appending, so
+    // the tail past this count is what it added.
+    const addedFrom = section.children.length;
+    const { newText } = pasteEntryXml(beforeXml, section, payload);
+    d.doc.chunkXml = newText;
+    const pairs: EntryOpPair[] = [];
+    const applied: AppliedOp[] = [];
+    for (const fresh of (section.children as any[]).slice(addedFrom)) {
+      DataModel.indexSubtree(fresh);
+      pairs.push({ redo: insertOp(fresh), undo: removeOp(fresh.id) });
+      applied.push({ kind: 'insert', entry: fresh, beforeRowId: insertAnchorOf(fresh) });
+    }
+    expect(applied.length).toBe(1);
+    const pasted = (applied[0] as any).entry;
+    const pastedName = pasted.name;
+    const pastedUuid = pasted.metadata.uuid;
+    expect(pastedName).not.toBe('gravity'); // uniquified across the namespace
+    expect(pastedUuid).not.toBe((payload.metadata as any).uuid); // and a distinct object
+    // Appended, so it is its section's last entry and there is no row to insert before.
+    expect((applied[0] as any).beforeRowId).toBeUndefined();
+
+    const withPaste = foldOps(onScreen, applied, d.narrowPaint);
+    expectRowsResolve(d.narrowPaint(pasted));
+    expect(withPaste).toEqual(d.widePaint());
+
+    const patch = patchOfPairs(pairs);
+    d.doc.chunkXml = beforeXml;
+    const undone = foldOps(withPaste, applyEntryOps(d.live(), patch.undo), d.narrowPaint);
+    expect(d.entryNamed(pastedName)).toBeUndefined();
+    expect(undone).toEqual(d.widePaint());
+
+    d.doc.chunkXml = newText;
+    const redone = foldOps(undone, applyEntryOps(d.live(), patch.redo), d.narrowPaint);
+    const again = d.entryNamed(pastedName);
+    expect(again.metadata.uuid).toBe(pastedUuid);
+    expect(redone).toEqual(d.widePaint());
+    d.dispose();
+  });
+
+  // A same-document move is [remove source, insert copy], and the copy keeps the name the
+  // source gave up — so at the moment of the undo, that ONE name has two candidate owners.
+  // Order is the only thing keeping them apart.
+  describe('a move that reclaims a name', () => {
+    // Remove `gravity`, then re-insert a copy of it that keeps the name but carries its own
+    // uuid (what prepareEntryForPaste mints). Returns the pair list the provider would push.
+    const setUp = (uri: string) => {
+      const d = openDoc(uri);
+      d.widePaint();
+      const model = d.live();
+      const src = d.entryNamed('gravity');
+      const section = src.parent;
+      const srcId = src.id;
+      const srcUuid = src.metadata.uuid;
+      const copyRecord = entryRecord(src);
+      (copyRecord.metadata as any).uuid = 'copy-uuid';
+
+      const pairs: EntryOpPair[] = [{ redo: removeOp(srcId), undo: insertOp(src) }];
+      applyEntryOps(model, [pairs[0].redo]);
+      const insert: EntryOp = { kind: 'insert', sectionName: section.name, index: -1, record: copyRecord };
+      const copy = (applyEntryOps(model, [insert])[0] as any).entry;
+      pairs.push({ redo: insertOp(copy), undo: removeOp(copy.id) });
+      // The point of the exercise: one id, and for now the copy is what answers to it.
+      expect(copy.id).toBe(srcId);
+      expect((DataModel as any).findNodeById(srcId).metadata.uuid).toBe('copy-uuid');
+      return { d, model, section, srcId, pairs, srcUuid };
+    };
+
+    const gravities = (section: any) =>
+      (section.children as any[]).filter((e) => e.name === 'gravity').map((e) => e.metadata.uuid);
+
+    it('undoes correctly with the inverses REVERSED, as patchOfPairs orders them', () => {
+      const { d, model, section, srcId, pairs, srcUuid } = setUp('test://ops-reclaim-reverse.sldd');
+      const patch = patchOfPairs(pairs);
+      expect(patch.undo.map((o) => o.kind)).toEqual(['remove', 'insert']);
+
+      applyEntryOps(model, patch.undo);
+      // One owner of the name, and it is the original — indexed, so the next edit finds it.
+      expect(gravities(section)).toEqual([srcUuid]);
+      expect((DataModel as any).findNodeById(srcId).metadata.uuid).toBe(srcUuid);
+      d.dispose();
+    });
+
+    it('does NOT undo correctly with the inverses in forward order', () => {
+      // Pinned as the reason patchOfPairs reverses: inserting the source while the copy is
+      // still standing puts two entries under one id, and the remove that follows resolves
+      // to whichever was indexed last — the source it just restored. The copy survives in
+      // its place, unindexed, and the table shows an entry no edit can address.
+      const { d, model, section, srcId, pairs, srcUuid } = setUp('test://ops-reclaim-forward.sldd');
+      applyEntryOps(model, pairs.map((p) => p.undo)); // NOT reversed
+      expect(gravities(section)).toEqual(['copy-uuid']);
+      expect(srcUuid).not.toBe('copy-uuid');
+      expect((DataModel as any).findNodeById(srcId)).toBeNull();
+      d.dispose();
+    });
+  });
+
+  it('throws rather than guessing when an op cannot be resolved', () => {
+    // The safety property the whole design rests on: a narrow path that cannot be sure
+    // hands the caller a throw, and the caller repaints wide from the text — which is
+    // already correct. Guessing would leave the table describing a file that does not exist.
+    const d = openDoc('test://ops-unresolvable.sldd');
+    d.widePaint();
+    const model = d.live();
+    const entry = d.entryNamed('scalarD');
+    const record = entryRecord(entry);
+    const inventory = () => (model.children as any[]).map((s) => s.children.map((e: any) => e.name));
+    const before = inventory();
+
+    expect(() => applyEntryOps(model, [{ kind: 'replace', rowId: 'no/such/row', record }])).toThrow(
+      /No entry is indexed/,
+    );
+    // A row inside an entry is not an entry: only whole entries are op-addressable.
+    expect(() => applyEntryOps(model, [removeOp(d.entryNamed('MyBus').children[0].id)])).toThrow(
+      /not a top-level entry/,
+    );
+    // A section that this dictionary does not have.
+    expect(() =>
+      applyEntryOps(model, [{ kind: 'insert', sectionName: 'nope', index: 0, record }]),
+    ).toThrow(/no "nope" section/);
+    expect(inventory()).toEqual(before);
+    d.dispose();
+  });
+
+  it('refuses an op that resolves into ANOTHER tree of the same document', () => {
+    // A wide repaint re-registers the source under the same srcId, so every id now names a
+    // node in a brand-new object graph. An op applied to the tree it was BUILT against would
+    // mutate something nothing paints — and the table would keep showing the old rows.
+    const d = openDoc('test://ops-stale-tree.sldd');
+    d.widePaint();
+    const stale = d.live();
+    const entry = d.entryNamed('scalarD');
+    const op = replaceOp(entry, entry.id);
+
+    d.build(); // what the wide path does
+    expect(() => applyEntryOps(stale, [op])).toThrow(/belongs to another model/);
+    // The same op against the tree that IS registered applies cleanly.
+    expect(() => applyEntryOps(d.live(), [op])).not.toThrow();
     d.dispose();
   });
 });

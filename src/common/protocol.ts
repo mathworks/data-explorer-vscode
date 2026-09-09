@@ -75,6 +75,31 @@ export interface UpdateEntryRowsMessage {
   rows: any[];
 }
 
+/**
+ * Entry-scoped INSERT: add the rows of ONE new entry to a section, leaving every
+ * other row untouched.
+ *
+ * `updateEntryRows` covers an entry that is already on screen — including removing
+ * it, with an empty `rows`. An entry that is NEW to the table (a paste, a drop, the
+ * undo of a delete) has no run to splice over, so it needs the position stated
+ * instead: which section it joins, and which of that section's entries it goes
+ * before.
+ *
+ * `beforeRowId` is the entry row the new rows precede; absent means "last in this
+ * section", which is where a paste lands (the fragment goes in at the end of the
+ * dictionary's entry list, so a re-read would put it there too — the narrow insert
+ * has to agree with the wide rebuild, or the row order changes under the user on
+ * the next full repaint).
+ */
+export interface InsertEntryRowsMessage {
+  type: 'insertEntryRows';
+  /** The section row (`section:<name>`) the new entry belongs to. */
+  sectionRowId: string;
+  /** The entry row the new rows go before; absent appends to the section. */
+  beforeRowId?: string;
+  rows: any[];
+}
+
 /** This document's section drop-rules, for client-side drop prediction. */
 export interface SectionRulesMessage {
   type: 'sectionRules';
@@ -138,6 +163,7 @@ export interface EmptyMessage {
 export type HostToTableMessage =
   | SetRowsMessage
   | UpdateEntryRowsMessage
+  | InsertEntryRowsMessage
   | SectionRulesMessage
   | ClipboardStateMessage
   | DragStateMessage

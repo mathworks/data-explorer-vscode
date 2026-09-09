@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { nextExpandedIds, spliceEntryRows } from '../src/webview/rowUpdates.js';
+import { nextExpandedIds, spliceEntryRows, insertEntryRows } from '../src/webview/rowUpdates.js';
 import { getModel } from '../src/host/SlddModel.js';
 import { buildRows, buildEntryRows } from '../src/host/rowBuilder.js';
 
@@ -127,6 +127,116 @@ describe('spliceEntryRows — replace one entry subtree', () => {
   it('does not mutate the array it was given', () => {
     const before = rows();
     spliceEntryRows(before, 'section:P/Bus', []);
+    expect(before).toEqual(rows());
+  });
+});
+
+// The other row-level half: an entry the table does NOT hold yet — a paste, a drop, or
+// the undo of a delete. A splice finds its place by the run it replaces; an insert has to
+// be told, and the host states it as "this section, before this entry (or last)".
+describe('insertEntryRows — add one new entry to a section', () => {
+  const rows = (): Row[] => [
+    { ID: 'section:P', parent: null },
+    { ID: 'section:P/Bus', parent: 'section:P' },
+    { ID: 'section:P/Bus/a', parent: 'section:P/Bus' },
+    { ID: 'section:P/Next', parent: 'section:P' },
+    { ID: 'section:Q', parent: null },
+    { ID: 'section:Q/Other', parent: 'section:Q' },
+  ];
+  const addition: Row[] = [
+    { ID: 'section:P/New', parent: 'section:P' },
+    { ID: 'section:P/New/kid', parent: 'section:P/New' },
+  ];
+
+  it('appends after the section’s last row when no anchor is given — where a paste lands', () => {
+    // Not at the array's end and not after the section HEADER: after the section's last
+    // row, which is the row before the next section's header.
+    const inserted = insertEntryRows(rows(), 'section:P', undefined, addition)!;
+    expect(inserted.map((r) => r.ID)).toEqual([
+      'section:P',
+      'section:P/Bus',
+      'section:P/Bus/a',
+      'section:P/Next',
+      'section:P/New',
+      'section:P/New/kid',
+      'section:Q',
+      'section:Q/Other',
+    ]);
+  });
+
+  it('inserts before the anchor row — the undo of a delete, which must restore position', () => {
+    const inserted = insertEntryRows(rows(), 'section:P', 'section:P/Next', addition)!;
+    expect(inserted.map((r) => r.ID)).toEqual([
+      'section:P',
+      'section:P/Bus',
+      'section:P/Bus/a',
+      'section:P/New',
+      'section:P/New/kid',
+      'section:P/Next',
+      'section:Q',
+      'section:Q/Other',
+    ]);
+  });
+
+  it('inserts as the section’s FIRST entry when the anchor is its first', () => {
+    const inserted = insertEntryRows(rows(), 'section:P', 'section:P/Bus', addition)!;
+    expect(inserted.map((r) => r.ID)).toEqual([
+      'section:P',
+      'section:P/New',
+      'section:P/New/kid',
+      'section:P/Bus',
+      'section:P/Bus/a',
+      'section:P/Next',
+      'section:Q',
+      'section:Q/Other',
+    ]);
+  });
+
+  it('appends into the table’s LAST section (no following header to stop at)', () => {
+    const addQ: Row[] = [{ ID: 'section:Q/New', parent: 'section:Q' }];
+    expect(insertEntryRows(rows(), 'section:Q', undefined, addQ)!.map((r) => r.ID)).toEqual([
+      'section:P',
+      'section:P/Bus',
+      'section:P/Bus/a',
+      'section:P/Next',
+      'section:Q',
+      'section:Q/Other',
+      'section:Q/New',
+    ]);
+  });
+
+  it('appends directly under the header of an EMPTY section', () => {
+    const empty: Row[] = [
+      { ID: 'section:P', parent: null },
+      { ID: 'section:Q', parent: null },
+      { ID: 'section:Q/Other', parent: 'section:Q' },
+    ];
+    expect(insertEntryRows(empty, 'section:P', undefined, addition)!.map((r) => r.ID)).toEqual([
+      'section:P',
+      'section:P/New',
+      'section:P/New/kid',
+      'section:Q',
+      'section:Q/Other',
+    ]);
+  });
+
+  it('returns null when the section row is absent', () => {
+    expect(insertEntryRows(rows(), 'section:Z', undefined, addition)).toBeNull();
+    expect(insertEntryRows([], 'section:P', undefined, addition)).toBeNull();
+  });
+
+  it('returns null when the anchor is in ANOTHER section, rather than filing it there', () => {
+    // The failure that matters: an anchor found outside this section would put the new
+    // entry under the wrong header, which is worse than paying for a full repaint.
+    expect(insertEntryRows(rows(), 'section:P', 'section:Q/Other', addition)).toBeNull();
+    // Including the section header itself, which is not one of its entries.
+    expect(insertEntryRows(rows(), 'section:P', 'section:P', addition)).toBeNull();
+    expect(insertEntryRows(rows(), 'section:P', 'section:P/Missing', addition)).toBeNull();
+  });
+
+  it('does not mutate the array it was given', () => {
+    const before = rows();
+    insertEntryRows(before, 'section:P', undefined, addition);
     expect(before).toEqual(rows());
   });
 });
