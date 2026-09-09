@@ -87,10 +87,41 @@ const SRC_PREFIX = 'binedit:';
  * at all).
  */
 interface DocumentView {
-  /** Rebuild the model from chunkXml and repaint every row. */
-  repaintAll(): void;
+  /**
+   * Repaint every row.
+   *
+   * `from` says where the tree comes from. `'chunk'` (the default) re-registers the source
+   * from chunkXml, which is what every caller that swapped the text under the model needs —
+   * the wide fallback exists precisely because the model may not match the text any more.
+   * `'registered'` paints the source the session already holds, for the one caller that has
+   * just registered a tree built from that same chunkXml itself (a save) and would
+   * otherwise pay a whole second parse to produce the same tree.
+   */
+  repaintAll(from?: ModelSource): void;
   /** Repaint just the rows the applied ops touched. */
   repaintOps(applied: AppliedOp[]): void;
+}
+
+/** Where a wide repaint gets its tree — see `DocumentView.repaintAll`. */
+type ModelSource = 'chunk' | 'registered';
+
+/**
+ * One read of a document's `data/chunk0.xml`, kept so it is not read twice.
+ *
+ * All three fields travel together on purpose:
+ *
+ *  - `warnings` is the sink core's parse filled, and `DataModel.addDataSource` appends the
+ *    node layer's findings to the SAME array. Handing the content on without its sink
+ *    would register a source that reports only half of what reading the file found.
+ *  - `chunkXml` is the exact payload this was read from, so a later reuse can check that
+ *    it is still the document's payload. A save awaits its `writeFile`, and the webview
+ *    can land an edit on that await — reusing a read of the pre-edit text after that
+ *    happened would register a model the text no longer matches.
+ */
+interface ParsedChunk {
+  chunkXml: string;
+  content: Record<string, unknown>;
+  warnings: ParseWarning[];
 }
 
 class BinarySlddDocument implements vscode.CustomDocument {
@@ -171,10 +202,10 @@ class BinarySlddDocument implements vscode.CustomDocument {
     this.repaintAll();
   }
 
-  repaintAll(): void {
+  repaintAll(from: ModelSource = 'chunk'): void {
     // Copied because a repaint can dispose a view (an error path re-registers), and a
     // Set mutated mid-iteration is how one view's failure silently skips another's.
-    for (const view of [...this.views]) view.repaintAll();
+    for (const view of [...this.views]) view.repaintAll(from);
   }
 
   repaintOps(applied: AppliedOp[]): void {
@@ -306,9 +337,13 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       return ((section?.children ?? []) as any[]).find((e) => e.name === entryName) ?? null;
     };
 
-    const post = () => {
+    const post = (from: ModelSource = 'chunk') => {
       try {
-        const node = buildModel();
+        // 'registered' is only ever passed by a caller that has just registered a tree
+        // built from this document's chunkXml (see saveCustomDocument); liveModel falls
+        // back to building one if the source is somehow gone, so this cannot paint from
+        // nothing.
+        const node = from === 'registered' ? liveModel() : buildModel();
         if (!document.baselineCaptured) {
           captureBaseline(uriString, node);
           document.baselineCaptured = true;
@@ -983,13 +1018,20 @@ ${LOADING_OVERLAY_HTML}`,
 
   // --- Save / backup / revert (the safety gate lives here) ---
   async saveCustomDocument(document: BinarySlddDocument, _token: vscode.CancellationToken): Promise<void> {
-    await this.writeTo(document, document.uri);
+    // A save used to read the dictionary THREE times — the gate, then the re-baseline,
+    // then the repaint's rebuild — for three trees that describe the same unchanged
+    // chunkXml. On a real 2.6 MB dictionary that is ~3.1 s each, so ~9 s of a save spent
+    // re-deriving what the first read already had. Now: read once, here.
+    const gated = await this.writeTo(document, document.uri);
     // Re-baseline to the just-saved content so per-row "Modified" marks clear,
     // then repaint (mirrors SlddTextEditorProvider's onDidSaveTextDocument path).
-    this.reBaseline(document);
+    // Baseline BEFORE painting, or the paint diffs against the pre-save baseline and
+    // stamps "Modified" on rows the save just made clean.
+    this.reBaseline(document, gated);
     // Wide on purpose: a save clears the Modified mark on EVERY row that had one, which
-    // is the one repaint that is genuinely about the whole table.
-    document.repaintAll();
+    // is the one repaint that is genuinely about the whole table. From 'registered'
+    // because the line above has just put the saved tree there.
+    document.repaintAll('registered');
   }
 
   async saveCustomDocumentAs(
@@ -1044,17 +1086,29 @@ ${LOADING_OVERLAY_HTML}`,
   // Re-capture the per-URI baseline from the document's current chunkXml so
   // per-row "Modified" marks reset after a save. Rebuilds the model under the
   // document's srcId (the same source post() paints from) and snapshots it.
-  private reBaseline(document: BinarySlddDocument): void {
+  //
+  // `gated` is the read the save gate already did — reused when it is still a read of the
+  // document's payload, which is the normal path and the reason a save reads a big
+  // dictionary once instead of three times. If chunkXml moved on under it (an edit landing
+  // on the save's `writeFile` await), or if a caller brought nothing, this reads it again:
+  // this method's contract is "get a tree that matches chunkXml and snapshot it", and
+  // skipping it instead would leave every edited row wearing a "Modified" dot after a
+  // successful save.
+  private reBaseline(document: BinarySlddDocument, gated?: ParsedChunk | null): void {
     try {
+      const reuse = gated && gated.chunkXml === document.chunkXml ? gated : null;
       DataModel.removeDataSource(document.srcId);
       // The sink is threaded here too, though nothing reads it on this path: this
       // re-registration is what the session holds until the next post(), and a node
       // that carries its warnings on one route into the session and not on another is
-      // how a source silently stops reporting.
-      const warnings: ParseWarning[] = [];
+      // how a source silently stops reporting. When the gate's read is reused, its sink
+      // comes with it — the node layer must append to the list the parse already filled,
+      // or the re-registered source reports only half of what the file's read found.
+      const warnings: ParseWarning[] = reuse?.warnings ?? [];
+      const content = reuse?.content ?? readSlddParts(document.chunkXml, document.zipMeta, warnings);
       const node = DataModel.addDataSource(
         document.srcId,
-        readSlddParts(document.chunkXml, document.zipMeta, warnings),
+        content,
         { path: basename(document.uri.path) || 'document' },
         warnings,
       );
@@ -1081,14 +1135,21 @@ ${LOADING_OVERLAY_HTML}`,
   //    backupCustomDocument — that parse is seconds of extension-host time between an
   //    edit and the next thing the user does) and compresses at level 1, which on a
   //    2.6 MB dictionary is 0.65 s against 0.74 s for a file nobody keeps.
+  //
+  // The gate's read is RETURNED rather than dropped, because the caller that re-baselines
+  // after a save needs exactly it: a second read of the same string is seconds of work for
+  // an answer already in hand. 'backup' gates nothing, so it has nothing to return.
   private async writeTo(
     document: BinarySlddDocument,
     dest: vscode.Uri,
     mode: 'save' | 'backup' = 'save',
-  ): Promise<void> {
+  ): Promise<ParsedChunk | null> {
+    let gated: ParsedChunk | null = null;
     if (mode === 'save') {
       try {
-        readSlddParts(document.chunkXml, document.zipMeta);
+        const warnings: ParseWarning[] = [];
+        const chunkXml = document.chunkXml;
+        gated = { chunkXml, content: readSlddParts(chunkXml, document.zipMeta, warnings), warnings };
       } catch (err) {
         throw new Error('Refusing to save: the document did not re-parse (' + (err as Error).message + ').');
       }
@@ -1097,5 +1158,6 @@ ${LOADING_OVERLAY_HTML}`,
     zipEntries['data/chunk0.xml'] = new TextEncoder().encode(document.chunkXml);
     const zipped = zipSync(zipEntries, { level: mode === 'save' ? 6 : 1 });
     await vscode.workspace.fs.writeFile(dest, zipped);
+    return gated;
   }
 }
