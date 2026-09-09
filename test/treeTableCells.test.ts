@@ -736,6 +736,100 @@ describe('cell text for sorting and searching', () => {
   });
 });
 
+// The invariant BETWEEN the two readings of a cell, rather than another assertion
+// of one side. Everything above pins either what `_getCellText` returns or what the
+// cell paints — and separate tests of two paths both keep passing as the paths
+// drift apart. The GAP is what the user meets: `type:myBus` finding nothing the
+// Data Type column plainly shows, a Usage column sorting by text nobody can see, a
+// search marking a run the filter never matched. Adding a cell shape in the host
+// layer, or an arm in core's toRow, produces exactly that gap and nothing raises.
+//
+// So: walk every cell shape the host can emit (src/host/rowBuilder.ts,
+// usageCells.ts, matrixPayload.ts) and assert the searched text IS the painted
+// text. Deliberately no expected strings — pinning the two readings to each other
+// is the whole point, so a shape whose flattening rule legitimately changes stays
+// covered without this test being touched. The compile-time half of the same
+// contract (core's RowData fits TreeTableRow) sits beside TreeTableRow itself.
+describe('the text read for search and sort is the text on screen', () => {
+  const MATRIX = { name: 'Mat', className: 'double', dims: [2, 2], cells: ['1', '2', '3', '4'] };
+  const LINKS = [
+    { text: 'busA', linkTarget: 'x' },
+    { text: 'busB', linkTarget: 'y' },
+  ];
+  // The second has no source, so neither reading may invent an empty `()`.
+  const PARAM_LINKS = [
+    { property: 'DataType', paramName: 'dt', source: 'Blk', linkTarget: 'x' },
+    { property: 'Min', paramName: 'lo', source: '', linkTarget: 'y' },
+  ];
+  // Two blocks in one model plus one with no model name: enough to exercise the
+  // grouping, the group separator, and a group that must drop its qualifier.
+  const BLOCK_LINKS = [
+    { blockName: 'Gain', modelName: 'm1', linkTarget: 'x' },
+    { blockName: 'Sum', modelName: 'm1', linkTarget: 'y' },
+    { blockName: 'Loose', modelName: '', linkTarget: 'z' },
+  ];
+
+  const SHAPES: Array<[string, string, Partial<TreeTableRow>]> = [
+    ['a plain label', 'Name', {}],
+    ['a block row that names its system', 'Name', { _systemPath: 'Controller/Inner', _blockPath: 'Controller/Inner/entryName' } as any],
+    ['a plain string', 'Value', { Value: '3.14' }],
+    ['an empty value', 'Value', { Value: '' }],
+    ['the {text} shape', 'Value', { Value: { text: '42' } }],
+    ['an editable cell', 'Value', { Value: { text: '7', editable: true } }],
+    ['a link value', 'Value', { Value: { text: 'busA', linkTarget: 'x' } }],
+    ['an object placeholder', 'Value', { Value: '<1x3 struct>' }],
+    ['a matrix, whose glyph must add no text', 'Value', { Value: '[1 2; 3 4]', _matrix: MATRIX }],
+    ['a plain string', 'DataType', { DataType: 'double' }],
+    ['the {text} shape', 'DataType', { DataType: { text: 'single' } }],
+    ['a resolved bus link', 'DataType', { DataType: { text: 'myBus', linkTarget: 'x' } }],
+    ['a links list', 'DataType', { DataType: { links: LINKS } as any }],
+    ['a paramLinks list', 'DataType', { DataType: { paramLinks: PARAM_LINKS } as any }],
+    ['a plain string', 'Class', { Class: 'Simulink.Parameter' }],
+    ['the {text} shape', 'Class', { Class: { text: 'Simulink.Signal', clipboardMode: 'cell' } }],
+    ['a plain string', 'Kind', { Kind: 'Parameter' }],
+    ['the {text} shape', 'Kind', { Kind: { text: 'Signal', clipboardMode: 'cell' } }],
+    ['a plain string', 'Description', { Description: 'the loop gain' }],
+    ['the {text} shape', 'Description', { Description: { text: 'the loop gain', clipboardMode: 'cell' } }],
+    ['a plain string', 'Status', { Status: 'Modified' }],
+    ['the {text} shape', 'Status', { Status: { text: 'New', clipboardMode: 'cell' } }],
+    ['no usage at all', 'UsedBy', {}],
+    ['an empty string', 'UsedBy', { UsedBy: '' }],
+    ['a shapeless {} from a lookup that found nothing', 'UsedBy', { UsedBy: {} as any }],
+    ['a plain string', 'UsedBy', { UsedBy: 'model1' }],
+    ['the {text} shape', 'UsedBy', { UsedBy: { text: 'model1' } }],
+    ['a link', 'UsedBy', { UsedBy: { text: 'model1', linkTarget: 'x' } }],
+    ['a links list', 'UsedBy', { UsedBy: { links: LINKS } as any }],
+    ['a paramLinks list', 'UsedBy', { UsedBy: { paramLinks: PARAM_LINKS } as any }],
+    ['a grouped blockLinks list', 'UsedBy', { UsedBy: { blockLinks: BLOCK_LINKS } as any }],
+    ['a schema column as a plain string', 'storageClass', { storageClass: 'ExportedGlobal' } as any],
+    ['a schema column as {text}', 'storageClass', { storageClass: { text: 'Auto' } } as any],
+    ['an editable schema column', 'storageClass', { storageClass: { text: 'Model default', editable: true } } as any],
+    ['an empty schema column', 'storageClass', { storageClass: '' } as any],
+  ];
+
+  const flat = (s: string): string => s.replace(/\s+/g, ' ').trim();
+
+  // The `(Controller/Inner)` a block row appends is a disambiguator the CELL adds
+  // when several blocks share a name — not part of the entry's name, which is why
+  // _getCellText returns the name alone. It is the one painted run outside this
+  // contract, so it is excluded HERE by name rather than being allowed to weaken
+  // every other case. `.param-property` and `.param-source` stay in: both readings
+  // include them.
+  const painted = (table: DexTreeTable, rowId: string, col: string): string => {
+    const clone = cell(table, rowId, col).cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('.name-qualifier').forEach((q) => q.remove());
+    return flat(clone.textContent || '');
+  };
+
+  for (const [label, col, extra] of SHAPES) {
+    it(`${col}: ${label}`, async () => {
+      const table = await mount([makeRow('r', 'entryName', extra)]);
+      expect(flat((table as any)._getCellText(table.rows[0], col))).toBe(painted(table, 'r', col));
+      table.remove();
+    });
+  }
+});
+
 // Cell values come out of a parsed file, so a column can arrive null (a property
 // present but unset) or as a bare {} (a partial parse, or a usage lookup that
 // found nothing). Neither is a shape the viewer chose, and both used to break the

@@ -7,6 +7,9 @@ import { dragModeFromModifiers, type DragMode } from './dragMode.js';
 import './dex-icon.js';
 import './dex-matrix-open.js';
 import type { MatrixPayload } from './dex-matrix-grid.js';
+// Type-only, so nothing from core enters the webview bundle: the import is erased
+// before vite ever resolves it. See the contract below TreeTableRow.
+import type { RowData } from 'data-explorer-core';
 
 export interface TreeTableRow {
   ID: string;
@@ -32,6 +35,44 @@ export interface TreeTableRow {
   _systemPath?: string;
   _blockPath?: string;
 }
+
+/**
+ * The compile-time half of the row contract with core.
+ *
+ * TreeTableRow cannot simply extend core's RowData. The host layer normalizes a
+ * row on its way here (src/host/rowBuilder.ts, usageCells.ts, matrixPayload.ts):
+ * it stringifies core's `Value: unknown`, and it adds cell shapes core has no name
+ * for — `paramLinks`, `blockLinks`, `clipboardMode`, `_matrix`. So the two shapes
+ * are declared separately, and were checked against each other nowhere.
+ *
+ * What must hold is narrower than equality: for every key core DOES own, the cell
+ * core can emit has to be one this table declares. Break that — rename
+ * `Name.label`, retype `Status`, add a third arm to `DataType` — and the cell does
+ * not fail loudly, it goes blank: `_getCellText` reads exactly these keys, so the
+ * row silently stops being searchable AND sortable, with nothing raising anywhere.
+ * Each line below turns that into a build error instead. Core may omit any of them
+ * (the host fills them in), hence the `| undefined`.
+ *
+ * `Value` is deliberately absent — the host owns that conversion. The runtime half
+ * of the contract, that a cell reads for search exactly as it paints, is pinned in
+ * test/treeTableCells.test.ts.
+ */
+type AssertTrue<T extends true> = T;
+type CoreCellFits<K extends keyof TreeTableRow & keyof RowData> = RowData[K] extends TreeTableRow[K] | undefined
+  ? true
+  : false;
+type _CoreRowContract = [
+  AssertTrue<CoreCellFits<'ID'>>,
+  AssertTrue<CoreCellFits<'parent'>>,
+  AssertTrue<CoreCellFits<'Name'>>,
+  AssertTrue<CoreCellFits<'DataType'>>,
+  AssertTrue<CoreCellFits<'Class'>>,
+  AssertTrue<CoreCellFits<'Kind'>>,
+  AssertTrue<CoreCellFits<'Description'>>,
+  AssertTrue<CoreCellFits<'Status'>>,
+  AssertTrue<CoreCellFits<'UsedBy'>>,
+  AssertTrue<CoreCellFits<'_valueEditable'>>,
+];
 
 export interface EditCompletedDetail {
   rowId: string;
@@ -119,6 +160,12 @@ const DEFAULT_COLUMN_ORDER = [
   'lastModifiedBy',
 ];
 const DEFAULT_HIDDEN_COLUMNS = ['Kind', 'Class', 'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit', 'storageClass', 'headerFile', 'alignment', 'lastModified', 'lastModifiedBy'];
+
+// One term the user typed, with the column it was restricted to (null = any
+// visible column). Both the row predicates and the <mark> highlighting are built
+// from this one list, so the table can never filter by one thing and highlight
+// another.
+type FilterTerm = { column: string | null; text: string };
 
 // Search prefixes that mean "substring-match this ONE column", and the column
 // each names. `type:` deliberately reads DataType — the prefix is what the user
@@ -1073,6 +1120,8 @@ export class DexTreeTable extends LitElement {
 
   @state() private _expandedIds: Set<string> = new Set();
   @state() private _filterText = '';
+  // Not @state: derived from _filterText, and keyed by it so it cannot go stale.
+  private _filterTermsCache: { text: string; terms: FilterTerm[] } | null = null;
   @state() private _editingCell: {
     rowId: string;
     columnId: string;
@@ -1848,8 +1897,20 @@ export class DexTreeTable extends LitElement {
     return visible;
   }
 
-  private _parseFilterExpression(text: string): Array<(row: TreeTableRow) => boolean> {
+  // Compiles the search box text into the row predicates AND the terms to
+  // highlight, in one pass over the tokens. Highlighting used to re-derive its
+  // term from the raw filter text, which held for a single word and broke for
+  // everything else: `var abc` went looking for the literal string "var abc" and
+  // marked nothing, so a query that filtered perfectly gave the user no clue
+  // which of their words each row had matched. Anything that decides what a token
+  // MEANS belongs here, emitted to both consumers together, rather than being
+  // guessed a second time at render.
+  private _parseFilterExpression(text: string): {
+    predicates: Array<(row: TreeTableRow) => boolean>;
+    terms: FilterTerm[];
+  } {
     const predicates: Array<(row: TreeTableRow) => boolean> = [];
+    const terms: FilterTerm[] = [];
     const tokens = text.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
 
     // An unqualified term matches against every visible column, so the search
@@ -1862,8 +1923,16 @@ export class DexTreeTable extends LitElement {
     // them on makes every quoted search silently match nothing.
     const unquote = (s: string): string =>
       s.length > 1 && s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s;
+    // An EMPTY term must never be recorded. `name:` on its own is a half-typed
+    // query that matches every row, but as a highlight term it would match at
+    // every offset of every cell — and the scan advances by the term's length, so
+    // a zero-length one never advances and hangs the webview mid-keystroke.
+    const addTerm = (column: string | null, term: string): void => {
+      if (term) terms.push({ column, text: term });
+    };
     const makeGenericPredicate = (term: string): ((row: TreeTableRow) => boolean) => {
       const lower = unquote(term).toLowerCase();
+      addTerm(null, lower);
       return (row) => searchColumns.some((col) => this._getCellText(row, col).toLowerCase().includes(lower));
     };
 
@@ -1876,10 +1945,12 @@ export class DexTreeTable extends LitElement {
         const column = SUBSTRING_FILTER_COLUMNS.get(prefix);
         if (column) {
           const term = unquote(rawValue).toLowerCase();
+          addTerm(column, term);
           predicates.push((row) => this._getCellText(row, column).toLowerCase().includes(term));
         } else if (prefix === 'value') {
           if (rawValue.startsWith('"') && rawValue.endsWith('"')) {
             const exact = rawValue.slice(1, -1);
+            addTerm('Value', exact.toLowerCase());
             predicates.push((row) => {
               return this._getCellText(row, 'Value') === exact;
             });
@@ -1911,6 +1982,7 @@ export class DexTreeTable extends LitElement {
             }
           } else {
             const term = unquote(rawValue).toLowerCase();
+            addTerm('Value', term);
             predicates.push((row) => {
               return this._getCellText(row, 'Value').toLowerCase().includes(term);
             });
@@ -1923,11 +1995,20 @@ export class DexTreeTable extends LitElement {
       }
     }
 
-    return predicates;
+    return { predicates, terms };
+  }
+
+  // The terms behind the current search, cached because _highlight runs once per
+  // rendered cell and the tokens only change when the box does.
+  private get _filterTerms(): FilterTerm[] {
+    if (this._filterTermsCache?.text !== this._filterText) {
+      this._filterTermsCache = { text: this._filterText, terms: this._parseFilterExpression(this._filterText).terms };
+    }
+    return this._filterTermsCache.terms;
   }
 
   private _filterRows(rows: TreeTableRow[], text: string): TreeTableRow[] {
-    const predicates = this._parseFilterExpression(text);
+    const { predicates } = this._parseFilterExpression(text);
     if (predicates.length === 0) return rows;
 
     const rowById = new Map<string, TreeTableRow>();
@@ -2618,16 +2699,49 @@ export class DexTreeTable extends LitElement {
     );
   }
 
-  private _highlight(text: string): unknown {
-    if (!this._filterText || !text) return text;
+  // Marks the runs of `text` that the current search actually matched. A term the
+  // user qualified with a prefix is marked only in the column it searched:
+  // `name:double` deliberately ignores DataType, so marking `double` there would
+  // show a match the filter never made.
+  private _highlight(text: string, columnId: string): unknown {
+    if (!text) return text;
+    const terms = this._filterTerms.filter((t) => t.column === null || t.column === columnId);
+    if (terms.length === 0) return text;
+
     const lower = text.toLowerCase();
-    const term = this._filterText.toLowerCase();
-    const idx = lower.indexOf(term);
-    if (idx === -1) return text;
-    const before = text.slice(0, idx);
-    const match = text.slice(idx, idx + term.length);
-    const after = text.slice(idx + term.length);
-    return html`${before}<mark>${match}</mark>${after}`;
+    const ranges: Array<[number, number]> = [];
+    for (const { text: term } of terms) {
+      // Every occurrence, not just the first: a term can appear twice in one cell,
+      // and with several terms the user needs to see each word's hit.
+      for (let i = lower.indexOf(term); i !== -1; i = lower.indexOf(term, i + term.length)) {
+        ranges.push([i, i + term.length]);
+      }
+    }
+    if (ranges.length === 0) return text;
+
+    // Terms overlap freely — `var variable` hits `myVariable` at the same offset
+    // twice. Wrapping each hit on its own would emit the shared run twice and the
+    // cell would read `myVariableiable`, so overlapping (and touching) ranges are
+    // merged into one <mark> before any text is sliced.
+    ranges.sort((a, b) => a[0] - b[0]);
+    const merged: Array<[number, number]> = [];
+    for (const [start, end] of ranges) {
+      const last = merged[merged.length - 1];
+      if (last && start <= last[1]) last[1] = Math.max(last[1], end);
+      else merged.push([start, end]);
+    }
+
+    // Slices come from the ORIGINAL text, never the lowercased copy, so the cell
+    // still reports the entry's real casing.
+    const parts: unknown[] = [];
+    let cursor = 0;
+    for (const [start, end] of merged) {
+      if (start > cursor) parts.push(text.slice(cursor, start));
+      parts.push(html`<mark>${text.slice(start, end)}</mark>`);
+      cursor = end;
+    }
+    if (cursor < text.length) parts.push(text.slice(cursor));
+    return html`${parts}`;
   }
 
   // The Variable Editor affordance. Appended after the value text in every
@@ -2683,7 +2797,7 @@ export class DexTreeTable extends LitElement {
           </span>
           ${iconId ? html`<dex-icon class="name-icon" .iconId=${iconId} .size=${16}></dex-icon>` : ''}
           <span class="name-text"
-            ><span class="label ${isElement ? 'readonly' : ''}">${this._highlight(label)}</span
+            ><span class="label ${isElement ? 'readonly' : ''}">${this._highlight(label, columnId)}</span
             >${qualifier
               ? html`<span class="name-qualifier" title=${row._blockPath || nothing}
                   >${'(' + qualifier + ')'}</span
@@ -2723,12 +2837,12 @@ export class DexTreeTable extends LitElement {
 
       if (linkTarget) {
         return html`<a class="value-link" href="#" @click=${(e: Event) => this._onLinkClick(linkTarget, e)}
-            >${this._highlight(text)}</a
+            >${this._highlight(text, columnId)}</a
           >${this._renderMatrixGlyph(row)}`;
       }
 
       const isObject = text.startsWith('<') && text.endsWith('>');
-      return html`<span class="${isObject ? 'value-object' : ''}">${this._highlight(text)}</span
+      return html`<span class="${isObject ? 'value-object' : ''}">${this._highlight(text, columnId)}</span
         >${this._renderMatrixGlyph(row)}`;
     }
 
@@ -2739,7 +2853,7 @@ export class DexTreeTable extends LitElement {
           (p: { property: string; paramName: string; source: string; linkTarget: string }, i: number) =>
             html`${i > 0 ? ', ' : ''}<span class="param-property">${p.property + '='}</span
               ><a class="value-link" href="#" @click=${(e: Event) => this._onLinkClick(p.linkTarget, e)}
-                >${this._highlight(p.paramName)}</a
+                >${this._highlight(p.paramName, columnId)}</a
               >${p.source ? html`<span class="param-source">${'(' + p.source + ')'}</span>` : ''}`,
         )}`;
       }
@@ -2750,7 +2864,7 @@ export class DexTreeTable extends LitElement {
                 class="value-link"
                 href="#"
                 @click=${(e: Event) => this._onLinkClick(link.linkTarget, e)}
-                >${this._highlight(link.text)}</a
+                >${this._highlight(link.text, columnId)}</a
               >`,
         )}`;
       }
@@ -2758,20 +2872,20 @@ export class DexTreeTable extends LitElement {
       const dtLink = val.linkTarget;
       if (dtLink) {
         return html`<a class="value-link" href="#" @click=${(e: Event) => this._onLinkClick(dtLink, e)}
-          >${this._highlight(dtText)}</a
+          >${this._highlight(dtText, columnId)}</a
         >`;
       }
-      return html`<span>${this._highlight(dtText)}</span>`;
+      return html`<span>${this._highlight(dtText, columnId)}</span>`;
     }
 
     if (columnId === 'Class') {
       const val = cellText(row.Class);
-      return html`<span class="readonly-cell">${this._highlight(val)}</span>`;
+      return html`<span class="readonly-cell">${this._highlight(val, columnId)}</span>`;
     }
 
     if (columnId === 'Kind') {
       const val = cellText(row.Kind);
-      return html`<span class="readonly-cell">${this._highlight(val)}</span>`;
+      return html`<span class="readonly-cell">${this._highlight(val, columnId)}</span>`;
     }
 
     if (columnId === 'Description') {
@@ -2784,7 +2898,7 @@ export class DexTreeTable extends LitElement {
           @blur=${this._onEditBlur}
         />`;
       }
-      return html`<span>${this._highlight(val)}</span>`;
+      return html`<span>${this._highlight(val, columnId)}</span>`;
     }
 
     if (columnId === 'UsedBy') {
@@ -2795,7 +2909,7 @@ export class DexTreeTable extends LitElement {
           (p: { property: string; paramName: string; source: string; linkTarget: string }, i: number) =>
             html`${i > 0 ? ', ' : ''}<span class="param-property">${p.property + '='}</span
               ><a class="value-link" href="#" @click=${(e: Event) => this._onLinkClick(p.linkTarget, e)}
-                >${this._highlight(p.paramName)}</a
+                >${this._highlight(p.paramName, columnId)}</a
               >${p.source ? html`<span class="param-source">${'(' + p.source + ')'}</span>` : ''}`,
         )}`;
       }
@@ -2818,7 +2932,7 @@ export class DexTreeTable extends LitElement {
                     href="#"
                     title=${b.blockPath || nothing}
                     @click=${(e: Event) => this._onLinkClick(b.linkTarget, e)}
-                    >${this._highlight(b.blockName)}</a
+                    >${this._highlight(b.blockName, columnId)}</a
                   >`,
             )}${group.modelName ? html`<span class="param-source">${'(' + group.modelName + ')'}</span>` : ''}`,
         )}`;
@@ -2830,7 +2944,7 @@ export class DexTreeTable extends LitElement {
                 class="value-link"
                 href="#"
                 @click=${(e: Event) => this._onLinkClick(link.linkTarget, e)}
-                >${this._highlight(link.text)}</a
+                >${this._highlight(link.text, columnId)}</a
               >`,
         )}`;
       }
@@ -2838,15 +2952,15 @@ export class DexTreeTable extends LitElement {
       const linkTarget = (val as { linkTarget?: string }).linkTarget;
       if (linkTarget) {
         return html`<a class="value-link" href="#" @click=${(e: Event) => this._onLinkClick(linkTarget, e)}
-          >${this._highlight(text)}</a
+          >${this._highlight(text, columnId)}</a
         >`;
       }
-      return html`<span>${this._highlight(text)}</span>`;
+      return html`<span>${this._highlight(text, columnId)}</span>`;
     }
 
     if (columnId === 'Status') {
       const val = cellText(row.Status);
-      return html`<span class="${val ? 'status-modified' : ''}">${val}</span>`;
+      return html`<span class="${val ? 'status-modified' : ''}">${this._highlight(val, columnId)}</span>`;
     }
 
     // Generic branch for schema-driven columns (storageClass, alignment,
@@ -2884,8 +2998,8 @@ export class DexTreeTable extends LitElement {
         // Editable cells render as plain (editable) text; only genuinely
         // read-only columns get the dimmed readonly-cell treatment.
         return editable
-          ? html`<span>${this._highlight(val)}</span>`
-          : html`<span class="readonly-cell">${this._highlight(val)}</span>`;
+          ? html`<span>${this._highlight(val, columnId)}</span>`
+          : html`<span class="readonly-cell">${this._highlight(val, columnId)}</span>`;
       }
     }
     return html``;

@@ -429,6 +429,11 @@ describe('feedback when a search matches nothing', () => {
 });
 
 describe('matched text is highlighted', () => {
+  const marks = (table: DexTreeTable, rowId: string, col: string): string[] => {
+    const cell = table.shadowRoot!.querySelector(`tr[data-row-id="${rowId}"] td.col-${col}`) as HTMLElement;
+    return Array.from(cell.querySelectorAll('mark')).map((m) => m.textContent || '');
+  };
+
   it('the matching run is wrapped in a mark so the user can see why a row matched', async () => {
     const table = await mount(CATALOG);
     await search(table, 'gain');
@@ -454,6 +459,79 @@ describe('matched text is highlighted', () => {
     const typeCell = table.shadowRoot!.querySelector('tr[data-row-id="p1"] td.col-DataType') as HTMLElement;
     expect(typeCell.querySelector('mark')).toBeNull();
     expect(typeCell.textContent).toContain('double');
+    table.remove();
+  });
+
+  // Regression: highlighting re-derived its search term from the raw filter text
+  // instead of from the tokens the row predicates were built from. A multi-word
+  // query therefore looked for the literal string `double gain` in every cell,
+  // found it nowhere, and marked nothing — the rows narrowed correctly but the
+  // user was left to work out by eye which of their words each row matched.
+  it('every word of a multi-word search is marked, in whichever column it hit', async () => {
+    const table = await mount(CATALOG);
+    await search(table, 'double gain');
+    expect(marks(table, 'p1', 'Name')).toEqual(['gain']);
+    expect(marks(table, 'p1', 'DataType')).toEqual(['double']);
+    table.remove();
+  });
+
+  it('a quoted phrase is marked as the one run the user searched for', async () => {
+    // The phrase is a single token, so its space must not split the mark in two.
+    const table = await mount(CATALOG);
+    await search(table, '"my param"');
+    expect(marks(table, 'sp', 'Name')).toEqual(['my param']);
+    table.remove();
+  });
+
+  it('a prefixed term is marked only in the column it searched', async () => {
+    // `name:double` deliberately ignores the DataType column; marking `double`
+    // there would show the user a match the filter did not actually make.
+    const table = await mount([makeRow('a', null, 'double', { DataType: 'double' })]);
+    await search(table, 'name:double');
+    expect(marks(table, 'a', 'Name')).toEqual(['double']);
+    expect(marks(table, 'a', 'DataType')).toEqual([]);
+    table.remove();
+  });
+
+  it('a term repeated inside one cell is marked at every occurrence', async () => {
+    const table = await mount([makeRow('a', null, 'gain_of_gain')]);
+    await search(table, 'gain');
+    expect(marks(table, 'a', 'Name')).toEqual(['gain', 'gain']);
+    table.remove();
+  });
+
+  it('two terms overlapping the same characters produce one mark, not duplicated text', async () => {
+    // `var` and `variable` both hit `myVariable` at the same offset. Marking each
+    // independently would emit the overlapping run twice and the cell would read
+    // `myVariableiable`.
+    const table = await mount([makeRow('a', null, 'myVariable')]);
+    await search(table, 'var variable');
+    expect(marks(table, 'a', 'Name')).toEqual(['Variable']);
+    const cell = table.shadowRoot!.querySelector('tr[data-row-id="a"] td.col-Name') as HTMLElement;
+    expect(cell.textContent).toContain('myVariable');
+    table.remove();
+  });
+
+  it('a numeric comparison marks nothing, having no text to point at', async () => {
+    const table = await mount([makeRow('a', null, 'a', { Value: '100' })]);
+    await search(table, 'value:>50');
+    expect(marks(table, 'a', 'Value')).toEqual([]);
+    table.remove();
+  });
+
+  it('a Status hit is marked like any other column', async () => {
+    const table = await mount(CATALOG);
+    await search(table, 'status:Modified');
+    expect(marks(table, 'p1', 'Status')).toEqual(['Modified']);
+    table.remove();
+  });
+
+  it('an incomplete prefix marks nothing rather than every character', async () => {
+    // `name:` matches every row while the user is still typing; its empty term
+    // must not be treated as a match at every offset in every cell.
+    const table = await mount(CATALOG);
+    await search(table, 'name:');
+    expect(marks(table, 'p1', 'Name')).toEqual([]);
     table.remove();
   });
 });
