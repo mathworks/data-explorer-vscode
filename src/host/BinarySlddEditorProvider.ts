@@ -1015,7 +1015,20 @@ ${LOADING_OVERLAY_HTML}`,
     ctx: vscode.CustomDocumentBackupContext,
     _token: vscode.CancellationToken,
   ): Promise<vscode.CustomDocumentBackup> {
-    await this.writeTo(document, ctx.destination);
+    // 'backup', NOT 'save' — and this is the difference the user feels most.
+    //
+    // VS Code asks for a hot-exit backup about a second after every edit to a dirty
+    // custom document, and this used to run the save gate: on a real 2.6 MB dictionary
+    // that is 3.1 s of re-parse plus 0.7 s of zip, all of it synchronous on the
+    // extension host. So an undo pressed just after an edit did not wait on the undo —
+    // which is 0.3 ms of entry ops — it waited behind THIS. (Redo felt instant because
+    // the undo had returned the document to clean, so VS Code deleted the backup
+    // instead of writing another one.)
+    //
+    // A backup is a scratch copy of what the editor already holds, so verifying it
+    // proves nothing the save gate will not prove again before the user's file on disk
+    // is touched.
+    await this.writeTo(document, ctx.destination, 'backup');
     return {
       id: ctx.destination.toString(),
       delete: async () => {
@@ -1051,20 +1064,38 @@ ${LOADING_OVERLAY_HTML}`,
     }
   }
 
-  // Save gate: re-parse chunkXml before zipping. On failure, throw — VS Code keeps
-  // the document dirty and shows the error; the on-disk file is never touched. This
-  // is the call site the reads-as-empty rule in readSlddParts matters most for: a
-  // chunk the reader cannot read yields a dictionary with no entries, and zipping
-  // that over the file on disk would take every entry with it, silently.
-  private async writeTo(document: BinarySlddDocument, dest: vscode.Uri): Promise<void> {
-    try {
-      readSlddParts(document.chunkXml, document.zipMeta);
-    } catch (err) {
-      throw new Error('Refusing to save: the document did not re-parse (' + (err as Error).message + ').');
+  // Write chunkXml + the pass-through zip parts back out as a .sldd.
+  //
+  // Two callers, and they want different things from it:
+  //
+  //  - 'save' overwrites a file the user owns, so it is GATED: re-parse chunkXml first
+  //    and throw on failure — VS Code then keeps the document dirty and shows the
+  //    error, and the on-disk file is never touched. This is the call site the
+  //    reads-as-empty rule in readSlddParts matters most for: a chunk the reader cannot
+  //    read yields a dictionary with no entries, and zipping that over the file on disk
+  //    would take every entry with it, silently. It also compresses properly, because
+  //    the result is what the user keeps.
+  //
+  //  - 'backup' writes VS Code's hot-exit scratch copy, which is thrown away when the
+  //    document goes clean or closes cleanly. It skips the gate (see
+  //    backupCustomDocument — that parse is seconds of extension-host time between an
+  //    edit and the next thing the user does) and compresses at level 1, which on a
+  //    2.6 MB dictionary is 0.65 s against 0.74 s for a file nobody keeps.
+  private async writeTo(
+    document: BinarySlddDocument,
+    dest: vscode.Uri,
+    mode: 'save' | 'backup' = 'save',
+  ): Promise<void> {
+    if (mode === 'save') {
+      try {
+        readSlddParts(document.chunkXml, document.zipMeta);
+      } catch (err) {
+        throw new Error('Refusing to save: the document did not re-parse (' + (err as Error).message + ').');
+      }
     }
     const zipEntries: Record<string, Uint8Array> = { ...document.zipMeta };
     zipEntries['data/chunk0.xml'] = new TextEncoder().encode(document.chunkXml);
-    const zipped = zipSync(zipEntries, { level: 6 });
+    const zipped = zipSync(zipEntries, { level: mode === 'save' ? 6 : 1 });
     await vscode.workspace.fs.writeFile(dest, zipped);
   }
 }
