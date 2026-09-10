@@ -215,6 +215,114 @@ describe('paramLinks — the cell a block row shows', () => {
   });
 });
 
+// A MASK is the origin that is not a file, so it is the one the two fields of a ParamLink
+// mean something else for — see `toParamLink`. Core's rule (v1.14.0) is that a masked
+// subsystem's parameters are a scope its inner blocks resolve in, and that each mask
+// parameter's VALUE is an expression evaluated outside the mask, which makes it a
+// parameter of the masked block itself. Both halves reach a cell, and they reach
+// different ones: the inner block's row shows `Gain=g1 (MulAdd)` and the masked block's
+// own row shows `g1=g1_param`.
+//
+// Which is exactly MATLAB's answer for the model this came from. `Simulink.findVars` on
+// it reports `g1` in the mask workspace `mWhereUsedRefVars/MulAdd` used by
+// `mWhereUsedRefVars/MulAdd/Gain`, and `g1_param` in the model workspace used by
+// `mWhereUsedRefVars/MulAdd` — the inner Gain is NOT a user of `g1_param`. The two-hop
+// chain is the fact; the tests below are that both hops land in a cell.
+describe('paramLinks — a mask parameter, the origin that is not a file', () => {
+  // A masked subsystem: `MulAdd` (SID 158) declares `g1 = g1_param` and holds an inner
+  // `Gain` (SID 154) whose gain is `g1`. Written as raw part XML, the same shape core's
+  // own fixtures use, because a mask lives in `<Mask>` next to the `<P>` list rather
+  // than in it.
+  const MASKED =
+    `<Block BlockType="SubSystem" Name="MulAdd" SID="158">` +
+    `<Mask><MaskParameter Name="g1" Type="edit"><Value>g1_param</Value></MaskParameter></Mask>` +
+    `<System><Block BlockType="Gain" Name="Gain" SID="154"><P Name="Gain">g1</P></Block></System>` +
+    `</Block>`;
+  // `g1_param` has to be a real model-workspace variable for the outer hop to resolve,
+  // and `Vec` is what the committed workspace MAT holds — so the mask parameter is
+  // valued `2*Vec` in the outer-hop test below and `g1_param` only where the row's own
+  // resolution is beside the point.
+  const withWorkspace = (blocks: string): RawSource =>
+    source(PLANT, '/w/plant.slx', slxBytes({ blocks, workspaceMat: matBytes() }));
+
+  it('names the masked BLOCK as the source and routes the click to the blocks channel', () => {
+    // The inner hop. `(MulAdd)` rather than `(plant.slx)`: the file would be the open
+    // model, the qualifier a model view drops as noise, while the block is the thing a
+    // reader cannot see from the row. And `blocks:` because core answered with the
+    // block's KEY — its SID — so the `workspace:` channel would send the click looking
+    // for a variable named `158`.
+    const g = graphOf([withWorkspace(MASKED)]);
+    expect(g.paramLinks(PLANT, '154')).toEqual([
+      { property: 'Gain', paramName: 'g1', source: 'MulAdd', linkTarget: `blocks:158@${PLANT}` },
+    ]);
+  });
+
+  it('shows the mask parameter itself on the masked block’s row, resolved outward', () => {
+    // The outer hop, and the one that gives `Vec` a user at all. It is an ordinary
+    // model-workspace param — the mask does not resolve its own values — so it takes the
+    // plain arm: no source, `workspace:` channel.
+    const g = graphOf([
+      withWorkspace(
+        `<Block BlockType="SubSystem" Name="MulAdd" SID="158">` +
+          `<Mask><MaskParameter Name="g1" Type="edit"><Value>2*Vec</Value></MaskParameter></Mask>` +
+          `<System><Block BlockType="Gain" Name="Gain" SID="154"><P Name="Gain">g1</P></Block></System>` +
+          `</Block>`,
+      ),
+    ]);
+    expect(g.paramLinks(PLANT, '158')).toEqual([
+      { property: 'g1', paramName: '2*Vec', source: '', linkTarget: `workspace:Vec@${PLANT}` },
+    ]);
+    // And the credit lands on the MASKED block, not on the inner Gain that reads `g1`.
+    expect(g.blocksUsing(PLANT, 'Vec').map((b) => b.blockPath)).toEqual(['MulAdd']);
+  });
+
+  it('labels a masked block the file left nameless the way its own row reads', () => {
+    // `blockLabel` is core's, so the source here and the Name cell of the row the link
+    // reaches are the same string. Spelling `<SID: 158>` a second time in this file is
+    // how the two come to disagree about a block Simulink recorded without a name.
+    const g = graphOf([
+      withWorkspace(
+        `<Block BlockType="SubSystem" Name="" SID="158">` +
+          `<Mask><MaskParameter Name="g1" Type="edit"><Value>g1_param</Value></MaskParameter></Mask>` +
+          `<System><Block BlockType="Gain" Name="Gain" SID="154"><P Name="Gain">g1</P></Block></System>` +
+          `</Block>`,
+      ),
+    ]);
+    expect(g.paramLinks(PLANT, '154')[0].source).toBe('<SID: 158>');
+  });
+
+  it('resolves the innermost mask when two of them declare the same name', () => {
+    // Nested masks both declaring `g1`: the inner one wins, so the cell has to name IT.
+    // A cell that named the outer mask would point a reader at a value the block never
+    // reads.
+    const g = graphOf([
+      withWorkspace(
+        `<Block BlockType="SubSystem" Name="Outer" SID="6">` +
+          `<Mask><MaskParameter Name="g1" Type="edit"><Value>g1_param</Value></MaskParameter></Mask>` +
+          `<System><Block BlockType="SubSystem" Name="Inner" SID="8">` +
+          `<Mask><MaskParameter Name="g1" Type="edit"><Value>g1_param</Value></MaskParameter></Mask>` +
+          `<System><Block BlockType="Gain" Name="Gain" SID="9"><P Name="Gain">g1</P></Block></System>` +
+          `</Block></System>` +
+          `</Block>`,
+      ),
+    ]);
+    expect(g.paramLinks(PLANT, '9')).toEqual([
+      { property: 'Gain', paramName: 'g1', source: 'Inner', linkTarget: `blocks:8@${PLANT}` },
+    ]);
+  });
+
+  it('renders as `property=name(source)` in the text a user copies and sorts by', () => {
+    // The cell's payload is only half the answer: the Usage column's TEXT — what the
+    // filter bar, the sort and a copy see — is built from the same three fields, and a
+    // mask source that only reached the template would copy as `Gain=g1`.
+    const g = graphOf([withWorkspace(MASKED)]);
+    const rows: any[] = [{ Name: { label: 'Gain' }, _isBlockRow: true, _blockKey: '154' }];
+    annotateModelViewRows(PLANT, rows, g);
+    const links: ParamLink[] = rows[0].UsedBy.paramLinks;
+    expect(links.map((p) => `${p.property}=${p.paramName}(${p.source})`)).toEqual(['Gain=g1(MulAdd)']);
+  });
+});
+
 // One engine settles a variable's Usage cell. The rows arrive carrying whatever the
 // node layer put there, and the node layer answers from core's SESSION — the models
 // whose editor happens to be open — so honouring that cell made the column say
