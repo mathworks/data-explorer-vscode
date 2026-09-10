@@ -41,6 +41,7 @@ import {
   isSupportedPath,
   isGraphPath,
   refModelExt,
+  projectName,
 } from '../src/common/fileTypes.js';
 
 const root = join(import.meta.dirname, '..');
@@ -161,6 +162,49 @@ describe('model-name helpers', () => {
   });
 });
 
+// The other name reduction this host makes, and the reason it is a function rather than
+// two `replace` calls: one of its two callers labels a tree row with the answer and the
+// other hands it to core's parser as the project's name. Those must be the same string
+// for the same file, and there was nothing keeping them so.
+describe('projectName', () => {
+  it('takes the `.prj` off, in either case', () => {
+    expect(projectName('MyProj.prj')).toBe('MyProj');
+    expect(projectName('MyProj.PRJ')).toBe('MyProj');
+  });
+
+  it('keeps the rest of the name exactly as written', () => {
+    // It is a LABEL: the case and the dots belong to whoever named the project.
+    expect(projectName('My.Big.Project.prj')).toBe('My.Big.Project');
+    expect(projectName('ABS_Model.PRJ')).toBe('ABS_Model');
+  });
+
+  it('leaves a name with no `.prj` alone', () => {
+    // Both callers reach it having already decided the source is a project, so this arm
+    // is defensive — but returning '' or null here would label a group with nothing.
+    expect(projectName('MyProj')).toBe('MyProj');
+    expect(projectName('')).toBe('');
+  });
+
+  it('strips only the LAST extension', () => {
+    expect(projectName('old.prj.bak')).toBe('old.prj.bak');
+    expect(projectName('renamed.prj.prj')).toBe('renamed.prj');
+  });
+
+  it('answers what core’s projectNameOf answers, which is what replaces it', () => {
+    // Written against the cases core's own tests use, because this function exists only
+    // until the pin moves past the version publishing `projectNameOf` — at which point
+    // both this and `refModelExt` delete and delegate, and these expectations are what
+    // say the delete changed nothing. The two cannot be compared directly today: the
+    // pinned core does not export it yet.
+    expect(projectName('work.prj')).toBe('work');
+    expect(projectName('Work.PRJ')).toBe('Work');
+    expect(projectName('My.Big.Project.prj')).toBe('My.Big.Project');
+    expect(projectName('work')).toBe('work');
+    expect(projectName('work.prj.bak')).toBe('work.prj.bak');
+    expect(projectName('old.prj.prj')).toBe('old.prj');
+  });
+});
+
 // The scan. A stray literal is not a style problem: it is a second copy of the
 // list that will not be updated next time a format is added.
 describe('no consumer keeps its own copy of the list', () => {
@@ -177,6 +221,10 @@ describe('no consumer keeps its own copy of the list', () => {
     'src/host/slxStructure.ts',
     'src/host/SlddModel.ts',
     'src/host/BinaryEditorProvider.ts',
+    // graphModel.ts classifies nothing — it is handed a `type` already decided — but it
+    // does REDUCE a name: a project group is labelled with its `.prj`'s stem. That is the
+    // same kind of second copy, so it is held to the same scan.
+    'src/host/graphModel.ts',
   ];
 
   // Comments are stripped before scanning. A comment that mentions the old literal,
@@ -201,12 +249,22 @@ describe('no consumer keeps its own copy of the list', () => {
   // nothing. Ask core: isSlddFile/isMatFile/isProjectFile/isModelFile.
   const ENDSWITH_EXT = new RegExp(`endsWith\\((['"])\\.(${SUPPORTED_EXTS.join('|')})\\1\\)`, 'i');
 
+  // A single extension anchored at the end, e.g. `/\.prj$/i` — the shape the alternation
+  // above does not catch, because one extension is not an alternation. It is how the same
+  // rule got written twice here: `graphModel` labelling a project group and
+  // `structuralIndex` naming a project for core's parser each spelled
+  // `basename(p).replace(/\.prj$/i, '')`, and a label a user reads has to agree with the
+  // name the parser is told. Both now call `projectName`, which is the local mirror of
+  // core's `projectNameOf` until the pin moves — and this is what stops a third copy.
+  const SINGLE_EXT_ANCHOR = new RegExp(`\\\\\\.(${SUPPORTED_EXTS.join('|')})\\$`, 'i');
+
   for (const file of CONSUMERS) {
     it(`${file} names no glob or extension test of its own`, () => {
       const src = code(file);
       expect(GLOB_LITERAL.test(src), `${file} should use SUPPORTED_GLOB/GRAPH_GLOB`).toBe(false);
       expect(EXT_ALTERNATION.test(src), `${file} should use a shared matcher`).toBe(false);
       expect(ENDSWITH_EXT.test(src), `${file} should use one of core's kind tests`).toBe(false);
+      expect(SINGLE_EXT_ANCHOR.test(src), `${file} should use a shared matcher or reducer`).toBe(false);
     });
   }
 

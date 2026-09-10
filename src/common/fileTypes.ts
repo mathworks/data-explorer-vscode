@@ -97,3 +97,26 @@ export function isGraphPath(path: string): boolean {
 export function refModelExt(path: string): string {
   return /\.mdl$/i.test(path) ? '.mdl' : '.slx';
 }
+
+/**
+ * A project's NAME, given the basename of its `.prj` — the file's name with the
+ * extension taken off.
+ *
+ * Two callers in this host need it, and they needed it for different reasons, which is
+ * why they each grew their own copy of the strip. `graphModel` labels a project group
+ * with it, and that label is what a user reads in the relationship tree. `structuralIndex`
+ * hands it to core's `parseProject`, which takes a project NAME rather than a filename
+ * because that is what a `.prj` calls itself in its own metadata — the argument is the
+ * fallback when the store carries no name, and core also uses it as the sentinel for
+ * "the store has not supplied one yet".
+ *
+ * Nothing in this host reads `parsed.name` back today, so that second caller's strip is
+ * currently inert; it is still the argument that decides the field, which is why it goes
+ * through the same function rather than being simplified away.
+ *
+ * Mirrors core's published `projectNameOf`, and — like `refModelExt` above — exists here
+ * only until the core pin moves past the version that publishes it. Both delete together.
+ */
+export function projectName(basename: string): string {
+  return basename.replace(/\.prj$/i, '');
+}

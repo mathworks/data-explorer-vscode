@@ -26,6 +26,7 @@ import { serializeEntryToXml, DataModel, type ParseWarning } from 'data-explorer
 // that a dictionary this host could not read is not passed on as an empty one, which
 // the reader itself no longer enforces (it recovers and warns instead).
 import { readSlddParts } from './slddContent.js';
+import { DATA_PART_XML } from '../common/slddParts.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { findOwningEntry, resolveSectionForPaste, buildDragSnapshot } from './structuralEdit.js';
 import { copyEntryToClipboard } from './clipboardAction.js';
@@ -46,9 +47,9 @@ import {
   entryRecord,
   findEntryByName,
   findEntryBySelector,
-  insertAnchorOf,
   insertOp,
   mutateEntry,
+  opsOfPastedEntries,
   patchOfPairs,
   removeOp,
   replaceOp,
@@ -127,6 +128,34 @@ interface ParsedChunk {
   warnings: ParseWarning[];
 }
 
+/**
+ * The zip members a document carries through untouched: every member except the one its
+ * entries live in, which this editor holds as `chunkXml` and re-inserts on save.
+ *
+ * One function for the two reads that need it — the one that OPENS a document and the one
+ * that REPLACES an open one — because the exclusion is a single rule, and a second copy of
+ * it that missed would not throw.
+ *
+ * What it would cost is worth stating precisely, because it is NOT correctness today and a
+ * comment claiming otherwise invites someone to "prove" it with a test that cannot exist.
+ * Measured against the pinned core: a bag that still held the data member would be ignored
+ * by `readSlddParts` (`parseBinarySlddParts` reads only `metadata/mwcoreProperties.xml` and
+ * the System Composer part out of that bag) and then overwritten by `writeTo`, which
+ * re-inserts the member from `chunkXml` after spreading the bag. So the saved package would
+ * be byte-identical.
+ *
+ * The cost is memory: a second copy of the whole payload held for the lifetime of every open
+ * document, which on the 47.8 MB dictionary this editor exists for is 47.8 MB of duplicate.
+ * And it is a correctness cost the moment core starts reading the data member out of the bag
+ * it is handed — which is why the exclusion stays, and why the test that pins it asserts the
+ * BAG (integration: `binarySlddEdit.test.ts`) rather than the saved bytes, which cannot tell.
+ */
+function passThroughParts(zip: Record<string, Uint8Array>): Record<string, Uint8Array> {
+  const parts: Record<string, Uint8Array> = {};
+  for (const [member, data] of Object.entries(zip)) if (member !== DATA_PART_XML) parts[member] = data;
+  return parts;
+}
+
 class BinarySlddDocument implements vscode.CustomDocument {
   chunkXml: string;
   readonly zipMeta: Record<string, Uint8Array>;
@@ -154,6 +183,29 @@ class BinarySlddDocument implements vscode.CustomDocument {
 
   get srcId(): string {
     return SRC_PREFIX + this.uri.toString();
+  }
+
+  /**
+   * The `meta.path` this document's source is registered with. NOT a display name: the
+   * tree node is named from `srcId` (`SlddNode.parse` takes it as the node's name), the
+   * `source-empty` warning quotes `srcId` too, and this extension's webview never reads
+   * the DTO's `path`. Its one live reader is core's `openSourceNamed`, which is how a
+   * model's `gravity@params.sldd` link finds an already-open dictionary.
+   *
+   * From `uri.path`, which is DECODED, rather than from the srcId, which is not. That
+   * lookup tries the srcId's own basename first, and for this provider the srcId is
+   * `SRC_PREFIX + uri.toString()` — percent-encoded, so a dictionary named `my
+   * params.sldd` is `my%20params.sldd` there and matches nothing a model recorded. The
+   * decoded basename is the only spelling that answers for a file with a space in its
+   * name, which on the paths MATLAB projects live on is the common case, not the corner.
+   *
+   * One getter rather than a `basename(...)` at each registration because this document
+   * is registered from TWO places under the same srcId — `resolveCustomEditor`, for every
+   * paint and mid-transform rebuild, and `reBaseline` after a save — and if they
+   * disagreed, saving would change whether a model's link to this dictionary resolves.
+   */
+  get metaPath(): string {
+    return basename(this.uri.path) || 'document';
   }
 
   /**
@@ -201,7 +253,7 @@ class BinarySlddDocument implements vscode.CustomDocument {
    */
   resetParts(zip: Record<string, Uint8Array>): void {
     for (const member of Object.keys(this.zipMeta)) delete this.zipMeta[member];
-    for (const [member, data] of Object.entries(zip)) if (member !== 'data/chunk0.xml') this.zipMeta[member] = data;
+    Object.assign(this.zipMeta, passThroughParts(zip));
   }
 
   /**
@@ -265,12 +317,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     const source = openContext.backupId ? vscode.Uri.parse(openContext.backupId) : uri;
     const bytes = await vscode.workspace.fs.readFile(source);
     const zip = unzipSync(bytes);
-    const chunk = zip['data/chunk0.xml'];
-    if (!chunk) throw new Error('Missing data/chunk0.xml in binary SLDD');
+    const chunk = zip[DATA_PART_XML];
+    if (!chunk) throw new Error(`Missing ${DATA_PART_XML} in binary SLDD`);
     const chunkXml = new TextDecoder().decode(chunk);
-    const zipMeta: Record<string, Uint8Array> = {};
-    for (const [k, v] of Object.entries(zip)) if (k !== 'data/chunk0.xml') zipMeta[k] = v;
-    const doc = new BinarySlddDocument(uri, chunkXml, zipMeta);
+    const doc = new BinarySlddDocument(uri, chunkXml, passThroughParts(zip));
     // Relay the document's edit events to the provider-level emitter VS Code listens on.
     doc.onDidChangeCustomDocument((e) => this._onDidChangeCustomDocument.fire(e));
     return doc;
@@ -286,7 +336,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     webview.options = { enableScripts: true, localResourceRoots: [distRoot] };
     webviewPanel.iconPath = new vscode.ThemeIcon('table');
     const uriString = document.uri.toString();
-    const name = basename(document.uri.path) || 'document';
+    const name = document.metaPath;
 
     // Register `xml` as this document's source and answer the tree. Every rebuild in
     // this provider goes through here — paint, the two mid-transform rebuilds — so
@@ -798,12 +848,15 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // so whatever it added is the tail this count marks off.
         const addedFrom = (section.children as any[]).length;
         const { newText, selectId } = pasteEntryXml(working, section, clip.payload);
-        for (const entry of (section.children as any[]).slice(addedFrom)) {
-          // The one thing attaching a node does not do: put it in the session's index.
-          DataModel.indexSubtree(entry);
-          pairs.push({ redo: insertOp(entry), undo: removeOp(entry.id) });
-          applied.push({ kind: 'insert', entry, beforeRowId: insertAnchorOf(entry) });
-        }
+        // Indexing each new subtree and describing it for the undo stack is entryOps' job —
+        // the same call the JSON provider makes from its own paste and drop. The loop was
+        // written out here and in applyDrop instead, putting one rule in three places, and
+        // of those two copies only this one still said why the indexing is owed: a node id
+        // is a PATH, so an entry that joined the tree outside an op is in no index, and the
+        // row the paste selects would not resolve for the next edit.
+        const added = opsOfPastedEntries(section, addedFrom);
+        pairs.push(...added.pairs);
+        applied.push(...added.applied);
         document.pushEdit('Paste', before, newText, narrow ? patchOfPairs(pairs) : undefined);
         if (narrow) document.repaintOps(applied);
         else document.repaintAll();
@@ -927,11 +980,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // foldPasteEntries), appending — so what it added is the tail after this count.
         const addedFrom = (section.children as any[]).length;
         const { newText, selectIds } = pasteEntriesXml(working, section, payloads);
-        for (const entry of (section.children as any[]).slice(addedFrom)) {
-          DataModel.indexSubtree(entry);
-          pairs.push({ redo: insertOp(entry), undo: removeOp(entry.id) });
-          applied.push({ kind: 'insert', entry, beforeRowId: insertAnchorOf(entry) });
-        }
+        // Same call, and for the same reason, as applyPaste above.
+        const added = opsOfPastedEntries(section, addedFrom);
+        pairs.push(...added.pairs);
+        applied.push(...added.applied);
         document.pushEdit(isMove ? 'Move' : 'Copy', before, newText, narrow ? patchOfPairs(pairs) : undefined);
         if (narrow) document.repaintOps(applied);
         else document.repaintAll();
@@ -1033,7 +1085,7 @@ ${BANNERS_HTML}
   async revertCustomDocument(document: BinarySlddDocument, _token: vscode.CancellationToken): Promise<void> {
     const bytes = await vscode.workspace.fs.readFile(document.uri);
     const zip = unzipSync(bytes);
-    const chunk = zip['data/chunk0.xml'];
+    const chunk = zip[DATA_PART_XML];
     if (chunk) {
       document.chunkXml = new TextDecoder().decode(chunk);
       // The parts too, and for the same reason: an edit can have patched one of them (a
@@ -1104,7 +1156,7 @@ ${BANNERS_HTML}
       const node = DataModel.addDataSource(
         document.srcId,
         content,
-        { path: basename(document.uri.path) || 'document' },
+        { path: document.metaPath },
         warnings,
       );
       captureBaseline(document.uri.toString(), node);
@@ -1150,7 +1202,7 @@ ${BANNERS_HTML}
       }
     }
     const zipEntries: Record<string, Uint8Array> = { ...document.zipMeta };
-    zipEntries['data/chunk0.xml'] = new TextEncoder().encode(document.chunkXml);
+    zipEntries[DATA_PART_XML] = new TextEncoder().encode(document.chunkXml);
     const zipped = zipSync(zipEntries, { level: mode === 'save' ? 6 : 1 });
     await vscode.workspace.fs.writeFile(dest, zipped);
     return gated;

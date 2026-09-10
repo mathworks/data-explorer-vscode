@@ -96,6 +96,41 @@ describe('opening and closing', () => {
     expect(document.activeElement).toBe(anchor);
   });
 
+  it('closes on Escape and on nothing else, so the grid keeps its own keys', async () => {
+    // The keydown listener is on the DOCUMENT, so it sees every key the user
+    // presses inside the grid too. Closing on anything but Escape would shut the
+    // editor on the first ArrowRight and make a matrix impossible to walk.
+    const el = await open();
+    const closedBy: string[] = [];
+    for (const k of ['ArrowRight', 'ArrowDown', 'Home', 'End', 'PageDown', 'Enter', 'Tab', 'a', 'Esc']) {
+      docKey(k);
+      await el.updateComplete;
+      if (!el.hasAttribute('open')) closedBy.push(k);
+    }
+    expect(closedBy).toEqual([]);
+  });
+
+  it('leaves no document listeners behind when it is closed before its first frame', async () => {
+    // show() defers its listeners by a frame so the click that opened the editor
+    // cannot immediately dismiss it. If the host closes the editor inside that
+    // frame — setRows does, whenever new rows arrive — the deferred work has to be
+    // abandoned: close() has already run its removeEventListener calls, so
+    // listeners added after them stay on the document for the life of the webview,
+    // and the next stray keystroke or click runs a dismissal for a dead popover.
+    editor = new DexVariableEditor();
+    document.body.appendChild(editor);
+    await editor.updateComplete;
+    editor.show(makeAnchor(), payload());
+    editor.close();
+    await frame();
+    await editor.updateComplete;
+    const spy = vi.spyOn(editor, 'close');
+    docKey('Escape');
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true }));
+    window.dispatchEvent(new Event('scroll'));
+    expect(spy).not.toHaveBeenCalled();
+  });
+
   it('closes on the close button and returns focus to the anchor', async () => {
     const el = await open();
     el.shadowRoot!.querySelector<HTMLButtonElement>('.close')!.click();
@@ -241,6 +276,24 @@ describe('positioning is below-left of the anchor, clamped into the viewport', (
     editor.reposition();
     expect(Number.parseInt(editor.style.left, 10)).toBeGreaterThanOrEqual(0);
     expect(Number.parseInt(editor.style.top, 10)).toBeGreaterThanOrEqual(0);
+  });
+
+  it('is a no-op when there is nothing on screen to position', async () => {
+    // reposition() is public and there is no guarantee the panel exists when it is
+    // called: a frame queued by show() can land after a close, and the panel only
+    // exists while open. Measuring a panel or an anchor that is not there throws
+    // inside whichever handler made the call — for the queued frame, that is an
+    // unhandled error with no stack the user could act on.
+    editor = new DexVariableEditor();
+    document.body.appendChild(editor);
+    await editor.updateComplete;
+    expect(() => editor!.reposition()).not.toThrow();
+    expect(editor.style.left).toBe('');
+    // Same again once it has been open and closed, which is the path that happens.
+    editor.show(makeAnchor(), payload());
+    editor.close();
+    await editor.updateComplete;
+    expect(() => editor!.reposition()).not.toThrow();
   });
 
   it('closes on a scroll anywhere, rather than floating away from its anchor', async () => {

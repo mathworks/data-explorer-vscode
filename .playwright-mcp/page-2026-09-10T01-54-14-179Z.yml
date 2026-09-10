@@ -1,0 +1,22 @@
+- generic [active] [ref=f1e1]:
+  - heading "A. CONTROL (ring on the row, no frozen cell) — the target geometry" [level=3] [ref=f1e2]
+  - table [ref=f1e5]:
+    - rowgroup [ref=f1e6]:
+      - row [ref=f1e7]:
+        - cell "Nm" [ref=f1e8]
+        - cell "Value" [ref=f1e9]
+        - cell "DT" [ref=f1e10]
+  - heading "B. FIX v1 — ::after at inset:0" [level=3] [ref=f1e11]
+  - table [ref=f1e14]:
+    - rowgroup [ref=f1e15]:
+      - row [ref=f1e16]:
+        - cell "Nm" [ref=f1e17]
+        - cell "Value" [ref=f1e18]
+        - cell "DT" [ref=f1e19]
+  - heading "C. FIX v2 — ::after at inset:0 0 -1px 0" [level=3] [ref=f1e20]
+  - table [ref=f1e23]:
+    - rowgroup [ref=f1e24]:
+      - row [ref=f1e25]:
+        - cell "Nm" [ref=f1e26]
+        - cell "Value" [ref=f1e27]
+        - cell "DT" [ref=f1e28]

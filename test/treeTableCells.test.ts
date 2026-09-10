@@ -875,6 +875,24 @@ describe('a null or shapeless cell degrades to blank, not to a broken table', ()
     table.remove();
   });
 
+  it('a schema column cell with no text reads blank on screen and in a sort', async () => {
+    // The columns above are read through cellText(); a schema column reads
+    // row[columnId] itself, so it needs the same guard in its own path. A property
+    // the entry has never had set arrives as an object with no text. The sort/search
+    // reading is guarded once and once only, so the last assertion here is what
+    // stops the word "undefined" becoming an orderable, findable cell value; the
+    // rendered text is guarded twice over (here and in _highlight) and needs both
+    // to fail before it shows.
+    const table = await mount([
+      makeRow('ro', 'RO', { storageClass: { text: undefined } as any }),
+      makeRow('rw', 'RW', { storageClass: { editable: true } as any }),
+    ]);
+    expect(text(table, 'ro', 'storageClass')).toBe('');
+    expect(text(table, 'rw', 'storageClass')).toBe('');
+    expect((table as any)._getCellText(table.rows[0], 'storageClass')).toBe('');
+    table.remove();
+  });
+
   it('a null Value is not treated as an editable cell', async () => {
     // The editability flag lives on the object form; reading it off null threw
     // before the guard, so a double-click on such a cell took the table down.

@@ -7,6 +7,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { unzipSync } from 'fflate';
+import { DataModel } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 
 function ctx(): vscode.ExtensionContext {
@@ -59,6 +60,89 @@ suite('BinarySlddEditorProvider', () => {
     assert.ok(panel.webview.html.includes('dex-tree-table'), 'render shell present');
     panel.dispose();
     doc.dispose();
+  });
+
+  // The pass-through bag is the one place the data member must NOT appear, and this is the
+  // only test that can say so. The saved bytes cannot: `writeTo` spreads the bag and then
+  // re-inserts the member from `chunkXml`, so a bag that wrongly carried it still saves
+  // byte-identically, and core's reader ignores that member in the bag it is handed. So a
+  // missing exclusion is invisible everywhere except here — while costing a duplicate copy
+  // of the whole payload, per open document, for a file this editor exists because it is
+  // 47.8 MB.
+  //
+  // Asserted on both bags that get built: the one `openCustomDocument` makes and the one
+  // `resetParts` makes when an external change replaces an already-open document. They are
+  // one rule with two callers, which is why they share a function — and asserting only the
+  // first would let the second drift.
+  test('the pass-through parts exclude the member the chunk is edited as', async () => {
+    const uri = wsUri('binary.sldd');
+    const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
+    const members = Object.keys(unzipSync(await vscode.workspace.fs.readFile(uri)));
+
+    // The file really does carry the member, so "absent from zipMeta" means excluded and
+    // not merely missing from this fixture.
+    assert.ok(members.includes('data/chunk0.xml'), 'fixture carries the data member');
+    assert.ok(
+      !Object.keys((doc as any).zipMeta).includes('data/chunk0.xml'),
+      'openCustomDocument excluded the data member from zipMeta',
+    );
+    // Everything else came through, byte-for-byte — the exclusion must take exactly one
+    // member, not filter by a prefix that also swallows a sibling part.
+    assert.deepStrictEqual(
+      Object.keys((doc as any).zipMeta).sort(),
+      members.filter((m) => m !== 'data/chunk0.xml').sort(),
+      'every other member carried through',
+    );
+
+    (doc as any).resetParts(unzipSync(await vscode.workspace.fs.readFile(uri)));
+    assert.ok(
+      !Object.keys((doc as any).zipMeta).includes('data/chunk0.xml'),
+      'resetParts excluded it too',
+    );
+    assert.deepStrictEqual(
+      Object.keys((doc as any).zipMeta).sort(),
+      members.filter((m) => m !== 'data/chunk0.xml').sort(),
+      'resetParts carried every other member through',
+    );
+    doc.dispose();
+  });
+
+  // `meta.path` is what lets a model's `x@my params.sldd` link find this open dictionary:
+  // core tries the srcId's own basename first, and this provider's srcId is built from
+  // `uri.toString()`, which percent-encodes. A space is the everyday case on the paths
+  // MATLAB projects live on, so the encoded srcId matching nothing is not a corner.
+  //
+  // Asserted after BOTH registrations — the paint and the post-save reBaseline — because
+  // they are two callers of one rule, and a save that registered a different spelling
+  // would silently change whether a model's link resolves. Only an integration test can
+  // see this: the provider imports `vscode`, so the vitest suite cannot reach it, and the
+  // saved bytes do not carry `meta.path` at all.
+  test('registers the source under the DECODED basename, before and after a save', async () => {
+    const src = wsUri('binary.sldd');
+    const dst = wsUri('my params.sldd');
+    await vscode.workspace.fs.copy(src, dst, { overwrite: true });
+    const doc = await provider.openCustomDocument(dst, {} as vscode.CustomDocumentOpenContext, token());
+    const panel = makePanel();
+    // Cleaned up in a `finally` because the copy lands in the workspace folder that
+    // sectionsTree's test enumerates: leaking it on a failure here fails that test too,
+    // and a second red herring is the last thing a failure needs.
+    try {
+      await provider.resolveCustomEditor(doc, panel, token());
+      await new Promise((r) => setTimeout(r, 500));
+
+      // The srcId really is encoded, so "meta.path differs from it" means the decode is
+      // load-bearing and not a restatement of the same string.
+      assert.ok((doc as any).srcId.includes('my%20params.sldd'), 'srcId is percent-encoded');
+      const registered = () => (DataModel.getDataSource((doc as any).srcId) as any)?.meta?.path;
+      assert.strictEqual(registered(), 'my params.sldd', 'paint registered the decoded basename');
+
+      await provider.saveCustomDocument(doc, token());
+      assert.strictEqual(registered(), 'my params.sldd', 'reBaseline registered the same spelling');
+    } finally {
+      panel.dispose();
+      doc.dispose();
+      await vscode.workspace.fs.delete(dst);
+    }
   });
 
   // Both shapes of unreadable chunkXml, because the reader no longer throws for

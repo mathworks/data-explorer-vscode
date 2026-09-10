@@ -28,6 +28,8 @@
 // that they agree with jsonc-parser's tree element for element is pinned in
 // entrySpliceScan.test.ts.
 
+import { CONTENT_PART_PATH } from '../common/slddParts.js';
+
 /** One element of the entries array, as text. */
 export interface EntryElementSpan {
   offset: number;
@@ -72,14 +74,23 @@ const COLON = 0x3a; // :
 const COMMA = 0x2c; // ,
 const NAME_KEY = '"name"';
 
-// The fixed path to the entries array, spelled exactly as the writer spells it:
+// The fixed path to the entries array:
 //   root → "__MW_TEXT_PARTS__" → "__MW_TEXT_PART__/data/chunk0"
 //        → "__MW_TEXT_content" → "entries"[]
-// The same walk entrySplice.ts does with a parse tree — kept in step with it by hand
-// because this half cannot afford the parse. All four keys are long and unlikely to
-// occur as text elsewhere; a false anchor would still have to survive the caller's
+// The only walk of these keys in this host: entrySplice.ts asks this scan for the same
+// answer rather than building a parse tree for it (see the header), so there is no second
+// copy of the walk to keep in step by hand. All four keys are long and unlikely to occur
+// as text elsewhere; a false anchor would still have to survive the caller's
 // element-count check.
-const PATH_KEYS = ['__MW_TEXT_PARTS__', '__MW_TEXT_PART__/data/chunk0', '__MW_TEXT_content'];
+//
+// The three container keys come from common/slddParts.ts, the one place this host names
+// them, because this scanner is the reason they have to be named at all: every other
+// reader here holds a parsed object and asks core's `slddChunkContent`, and this one
+// walks the raw text for byte OFFSETS, so it needs the strings. Spelling them here again
+// would put a second copy in the file least able to notice being wrong — a missed key
+// silently yields "no entries array" and the edit falls back to rewriting the document.
+// `entries` stays below, where the walk stops being a container lookup.
+const PATH_KEYS = CONTENT_PART_PATH;
 
 // The index just past the closing quote of the string starting at `open`, or -1.
 //
