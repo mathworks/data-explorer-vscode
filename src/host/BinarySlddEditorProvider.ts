@@ -21,12 +21,15 @@ import { unzipSync, zipSync } from 'fflate';
 import { renderWebviewHtml, BANNERS_HTML } from './webviewHtml.js';
 import { buildRows, buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { sectionRules } from './sectionRules.js';
-import { serializeEntryToXml, DataModel, type ParseWarning } from 'data-explorer-core';
+// DATA_PART_XML is core's name for the one zip member holding the entries, and the four
+// sites below are three roles of one rule: two lookups, the exclusion in
+// `passThroughParts`, and the re-insert in `writeTo`. Drift between them does not throw —
+// see `passThroughParts` — so they take the name core's own reader looks up.
+import { serializeEntryToXml, DataModel, DATA_PART_XML, type ParseWarning } from 'data-explorer-core';
 // Never parseBinarySlddParts directly: readSlddParts is the same read plus the rule
 // that a dictionary this host could not read is not passed on as an empty one, which
 // the reader itself no longer enforces (it recovers and warns instead).
 import { readSlddParts } from './slddContent.js';
-import { DATA_PART_XML } from '../common/slddParts.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { findOwningEntry, resolveSectionForPaste, buildDragSnapshot } from './structuralEdit.js';
 import { copyEntryToClipboard } from './clipboardAction.js';

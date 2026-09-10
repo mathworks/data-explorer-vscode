@@ -28,7 +28,7 @@
 // that they agree with jsonc-parser's tree element for element is pinned in
 // entrySpliceScan.test.ts.
 
-import { CONTENT_PART_PATH } from '../common/slddParts.js';
+import { DATA_PART_KEY, TEXT_CONTENT, TEXT_PARTS } from 'data-explorer-core';
 
 /** One element of the entries array, as text. */
 export interface EntryElementSpan {
@@ -83,14 +83,17 @@ const NAME_KEY = '"name"';
 // as text elsewhere; a false anchor would still have to survive the caller's
 // element-count check.
 //
-// The three container keys come from common/slddParts.ts, the one place this host names
-// them, because this scanner is the reason they have to be named at all: every other
-// reader here holds a parsed object and asks core's `slddChunkContent`, and this one
-// walks the raw text for byte OFFSETS, so it needs the strings. Spelling them here again
-// would put a second copy in the file least able to notice being wrong — a missed key
-// silently yields "no entries array" and the edit falls back to rewriting the document.
-// `entries` stays below, where the walk stops being a container lookup.
-const PATH_KEYS = CONTENT_PART_PATH;
+// The three container keys are CORE's, published for exactly this. Every other reader in
+// this host holds a parsed object and asks core's `slddChunkContent`; this one walks the
+// raw text for byte OFFSETS, so it is the one place that needs the strings themselves —
+// which is why the host kept a copy of them for as long as core did not publish them, and
+// why that copy sat in the file least able to notice being wrong: a missed key silently
+// yields "no entries array", and the edit falls back to rewriting the whole document.
+//
+// The ORDER is this file's own — core names the three keys, not the walk between them —
+// and it is pinned by a real dictionary MATLAB wrote as text, where the wrong order
+// returns -1. `entries` stays below, where the walk stops being a container lookup.
+const PATH_KEYS = [TEXT_PARTS, DATA_PART_KEY, TEXT_CONTENT] as const;
 
 // The index just past the closing quote of the string starting at `open`, or -1.
 //
