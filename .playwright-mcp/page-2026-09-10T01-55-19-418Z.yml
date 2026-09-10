@@ -1,0 +1,43 @@
+- generic [active] [ref=f2e1]:
+  - heading "PROBE — red ::after inset:-8px. If overflow:hidden clips it, red stops at the cell's padding box." [level=3] [ref=f2e2]
+  - table [ref=f2e5]:
+    - rowgroup [ref=f2e6]:
+      - row [ref=f2e7]:
+        - cell "Nm" [ref=f2e8]
+        - cell "Value" [ref=f2e9]
+        - cell "DT" [ref=f2e10]
+  - heading "A. CONTROL — target geometry" [level=3] [ref=f2e11]
+  - table [ref=f2e14]:
+    - rowgroup [ref=f2e15]:
+      - row [ref=f2e16]:
+        - cell "Nm" [ref=f2e17]
+        - cell "Value" [ref=f2e18]
+        - cell "DT" [ref=f2e19]
+  - heading "B. CANDIDATE — outline on the frozen cell itself" [level=3] [ref=f2e20]
+  - table [ref=f2e23]:
+    - rowgroup [ref=f2e24]:
+      - row [ref=f2e25]:
+        - cell "Nm" [ref=f2e26]
+        - cell "Value" [ref=f2e27]
+        - cell "DT" [ref=f2e28]
+  - heading "C. CANDIDATE at 1x, scrolled right (does the extra right-edge dash read as clutter?)" [level=3] [ref=f2e29]
+  - table [ref=f2e31]:
+    - rowgroup [ref=f2e32]:
+      - row [ref=f2e33]:
+        - cell "Alpha" [ref=f2e34]
+        - cell "Value" [ref=f2e35]
+        - cell "DataType" [ref=f2e36]
+        - cell "Usage" [ref=f2e37]
+        - cell "St" [ref=f2e38]
+      - row [ref=f2e39]:
+        - cell "CopiedRow" [ref=f2e40]
+        - cell "3.14" [ref=f2e41]
+        - cell "double" [ref=f2e42]
+        - cell "model_a" [ref=f2e43]
+        - cell "OK" [ref=f2e44]
+      - row [ref=f2e45]:
+        - cell "Gamma" [ref=f2e46]
+        - cell "Value" [ref=f2e47]
+        - cell "DataType" [ref=f2e48]
+        - cell "Usage" [ref=f2e49]
+        - cell "St" [ref=f2e50]

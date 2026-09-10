@@ -15,6 +15,7 @@ import {
   slddChunkContent,
 } from 'data-explorer-core';
 import { basename } from '../common/pathUtil.js';
+import { projectName } from '../common/fileTypes.js';
 
 export interface RawFile {
   uriString: string;
@@ -50,7 +51,7 @@ export function buildGraphSource(file: RawFile): GraphSource {
       return { ...base, modelRefs: s.modelReferences, dataSources: s.externalDataSources, dataDictionary: s.dataDictionary };
     }
     if (type === 'project' && file.projectFiles) {
-      const name = basename(file.path).replace(/\.prj$/i, '');
+      const name = projectName(basename(file.path));
       const parsed = parseProject(file.projectFiles, name);
       // Member files (basenames) nest under the project; referenced projects too.
       const projectFiles = parsed.files.filter((f) => !f.isFolder).map((f) => basename(f.path));

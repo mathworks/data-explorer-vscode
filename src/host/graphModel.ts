@@ -4,6 +4,7 @@
 // or containing folder; within a group the existing relationship model applies.
 import { refBasename } from './slddRefs.js';
 import { basename, dirname } from '../common/pathUtil.js';
+import { projectName } from '../common/fileTypes.js';
 
 export type SourceType = 'model' | 'sldd' | 'mat' | 'project';
 export type NodeKind = SourceType | 'missing' | 'group';
@@ -70,7 +71,7 @@ export class RelGraph {
       .filter((s) => s.type === 'project')
       .map((s) => ({
         dir: dirname(s.path),
-        label: basename(s.path).replace(/\.prj$/i, ''),
+        label: projectName(basename(s.path)),
         uriString: s.uriString,
       }))
       .sort((a, b) => b.dir.length - a.dir.length);

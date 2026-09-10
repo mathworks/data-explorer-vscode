@@ -1,0 +1,37 @@
+- generic [active] [ref=e1]:
+  - heading "A. CONTROL — no sticky/opaque first cell" [level=3] [ref=e2]
+  - table [ref=e4]:
+    - rowgroup [ref=e5]:
+      - row [ref=e6]:
+        - cell "NameCell" [ref=e7]
+        - cell "Value" [ref=e8]
+        - cell "DataType" [ref=e9]
+        - cell "Usage" [ref=e10]
+        - cell "Status" [ref=e11]
+  - heading "B. SHIPPED — sticky opaque first cell, z-index 1" [level=3] [ref=e12]
+  - table [ref=e14]:
+    - rowgroup [ref=e15]:
+      - row [ref=e16]:
+        - cell "NameCell" [ref=e17]
+        - cell "Value" [ref=e18]
+        - cell "DataType" [ref=e19]
+        - cell "Usage" [ref=e20]
+        - cell "Status" [ref=e21]
+  - heading "C. SHIPPED minus z-index (still sticky + opaque)" [level=3] [ref=e22]
+  - table [ref=e24]:
+    - rowgroup [ref=e25]:
+      - row [ref=e26]:
+        - cell "NameCell" [ref=e27]
+        - cell "Value" [ref=e28]
+        - cell "DataType" [ref=e29]
+        - cell "Usage" [ref=e30]
+        - cell "Status" [ref=e31]
+  - heading "D. CANDIDATE FIX — pseudo-element ring on the frozen cell" [level=3] [ref=e32]
+  - table [ref=e34]:
+    - rowgroup [ref=e35]:
+      - row [ref=e36]:
+        - cell "NameCell" [ref=e37]
+        - cell "Value" [ref=e38]
+        - cell "DataType" [ref=e39]
+        - cell "Usage" [ref=e40]
+        - cell "Status" [ref=e41]
