@@ -16,6 +16,7 @@
 # Local-only notes and scratch state (gitignored).
 CLAUDE.md
 .superpowers/**
+.playwright-mcp/**
 .DS_Store
 **/.DS_Store
 
