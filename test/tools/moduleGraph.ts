@@ -153,12 +153,7 @@ export function readModuleGraph(root: string): ModuleGraph {
       if (specifier.startsWith('.')) {
         // TS writes `.js` in the specifier and means the `.ts` beside it.
         const base = toPosix(relative(root, resolve(dirname(abs), specifier))).replace(/\.js$/, '');
-        for (const candidate of [`${base}.ts`, `${base}/index.ts`]) {
-          if (known.has(candidate)) {
-            to = candidate;
-            break;
-          }
-        }
+        to = [`${base}.ts`, `${base}/index.ts`].find((candidate) => known.has(candidate)) ?? null;
       }
       const line = text.slice(0, match.index).split('\n').length + (match[1] === '\n' ? 1 : 0);
       edges.push({ from: file, specifier, to, typeOnly, line });

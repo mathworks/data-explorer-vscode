@@ -129,8 +129,8 @@ describe('the BYTES decide the format, not the filename', () => {
 // the pin here bumps past that, `src/common/fileTypes.ts` deletes its copy and delegates,
 // and this test is what proves the delete changed nothing.
 describe('the tree and the graph complete a bare reference the same way', () => {
-  const treeRefs = (buf: ArrayBuffer, name: string, uri = `refs://${name}`): string[] =>
-    buildRows(getModelFromBytes(uri, name, buf))
+  const treeRefs = (buf: ArrayBuffer, name: string): string[] =>
+    buildRows(getModelFromBytes(`refs://${name}`, name, buf))
       .filter((r: any) => r.parent === 'section:references')
       .map((r: any) => (typeof r.Name === 'object' ? r.Name.label : r.Name))
       .sort();
@@ -146,10 +146,11 @@ describe('the tree and the graph complete a bare reference the same way', () => 
 
   for (const fixture of [MODERN, CLASSIC, SLX_TWIN]) {
     it(`names the same reference files on both paths for ${fixture}`, () => {
-      const tree = treeRefs(bytes(fixture), fixture);
+      const buf = bytes(fixture);
+      const tree = treeRefs(buf, fixture);
       // A fixture with no references would make this test pass while pinning nothing.
       expect(tree.length, `${fixture} must HAVE a model reference`).toBeGreaterThan(0);
-      expect(graphRefs(bytes(fixture), fixture)).toEqual(tree);
+      expect(graphRefs(buf, fixture)).toEqual(tree);
     });
 
     it(`applies the completion rule itself to ${fixture}, not just consistently`, () => {
@@ -159,12 +160,13 @@ describe('the tree and the graph complete a bare reference the same way', () => 
       // bare one takes the parent's container. Both cases occur across these fixtures
       // (MODERN records `plant.slx` outright; CLASSIC records a bare `plant`), so this
       // covers the fire and no-fire arms without either being written down as a literal.
-      const want = rawRefs(bytes(fixture), fixture)
+      const buf = bytes(fixture);
+      const want = rawRefs(buf, fixture)
         .map((n) => (isModelFile(n) ? n : n + refModelExt(fixture)))
         .sort();
       expect(want.length, `${fixture} must HAVE a model reference`).toBeGreaterThan(0);
-      expect(treeRefs(bytes(fixture), fixture)).toEqual(want);
-      expect(graphRefs(bytes(fixture), fixture)).toEqual(want);
+      expect(treeRefs(buf, fixture)).toEqual(want);
+      expect(graphRefs(buf, fixture)).toEqual(want);
     });
   }
 
@@ -175,7 +177,7 @@ describe('the tree and the graph complete a bare reference the same way', () => 
     // therefore yield `.slx` references — on both paths.
     const buf = bytes(CLASSIC);
     expect(graphRefs(buf, 'renamed.slx')).toEqual(['plant.slx']);
-    expect(treeRefs(buf, 'renamed.slx', 'refs://renamed.slx')).toEqual(['plant.slx']);
+    expect(treeRefs(buf, 'renamed.slx')).toEqual(['plant.slx']);
   });
 
   it('leaves an already-suffixed reference alone on both paths', () => {
@@ -183,7 +185,7 @@ describe('the tree and the graph complete a bare reference the same way', () => 
     // fire; a copy that appended unconditionally would produce `plant.slx.mdl` here.
     const buf = bytes(MODERN);
     expect(graphRefs(buf, 'shouted.MDL')).toEqual(['plant.slx']);
-    expect(treeRefs(buf, 'shouted.MDL', 'refs://shouted.MDL')).toEqual(['plant.slx']);
+    expect(treeRefs(buf, 'shouted.MDL')).toEqual(['plant.slx']);
   });
 });
 
