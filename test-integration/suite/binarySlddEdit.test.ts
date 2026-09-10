@@ -61,6 +61,51 @@ suite('BinarySlddEditorProvider', () => {
     doc.dispose();
   });
 
+  // The pass-through bag is the one place the data member must NOT appear, and this is the
+  // only test that can say so. The saved bytes cannot: `writeTo` spreads the bag and then
+  // re-inserts the member from `chunkXml`, so a bag that wrongly carried it still saves
+  // byte-identically, and core's reader ignores that member in the bag it is handed. So a
+  // missing exclusion is invisible everywhere except here — while costing a duplicate copy
+  // of the whole payload, per open document, for a file this editor exists because it is
+  // 47.8 MB.
+  //
+  // Asserted on both bags that get built: the one `openCustomDocument` makes and the one
+  // `resetParts` makes when an external change replaces an already-open document. They are
+  // one rule with two callers, which is why they share a function — and asserting only the
+  // first would let the second drift.
+  test('the pass-through parts exclude the member the chunk is edited as', async () => {
+    const uri = wsUri('binary.sldd');
+    const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
+    const members = Object.keys(unzipSync(await vscode.workspace.fs.readFile(uri)));
+
+    // The file really does carry the member, so "absent from zipMeta" means excluded and
+    // not merely missing from this fixture.
+    assert.ok(members.includes('data/chunk0.xml'), 'fixture carries the data member');
+    assert.ok(
+      !Object.keys((doc as any).zipMeta).includes('data/chunk0.xml'),
+      'openCustomDocument excluded the data member from zipMeta',
+    );
+    // Everything else came through, byte-for-byte — the exclusion must take exactly one
+    // member, not filter by a prefix that also swallows a sibling part.
+    assert.deepStrictEqual(
+      Object.keys((doc as any).zipMeta).sort(),
+      members.filter((m) => m !== 'data/chunk0.xml').sort(),
+      'every other member carried through',
+    );
+
+    (doc as any).resetParts(unzipSync(await vscode.workspace.fs.readFile(uri)));
+    assert.ok(
+      !Object.keys((doc as any).zipMeta).includes('data/chunk0.xml'),
+      'resetParts excluded it too',
+    );
+    assert.deepStrictEqual(
+      Object.keys((doc as any).zipMeta).sort(),
+      members.filter((m) => m !== 'data/chunk0.xml').sort(),
+      'resetParts carried every other member through',
+    );
+    doc.dispose();
+  });
+
   // Both shapes of unreadable chunkXml, because the reader no longer throws for
   // either: it reports `source-unreadable` and answers an empty dictionary, which
   // is right for an open and is the content the save gate must refuse to write.

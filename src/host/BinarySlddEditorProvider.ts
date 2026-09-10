@@ -128,6 +128,34 @@ interface ParsedChunk {
   warnings: ParseWarning[];
 }
 
+/**
+ * The zip members a document carries through untouched: every member except the one its
+ * entries live in, which this editor holds as `chunkXml` and re-inserts on save.
+ *
+ * One function for the two reads that need it — the one that OPENS a document and the one
+ * that REPLACES an open one — because the exclusion is a single rule, and a second copy of
+ * it that missed would not throw.
+ *
+ * What it would cost is worth stating precisely, because it is NOT correctness today and a
+ * comment claiming otherwise invites someone to "prove" it with a test that cannot exist.
+ * Measured against the pinned core: a bag that still held the data member would be ignored
+ * by `readSlddParts` (`parseBinarySlddParts` reads only `metadata/mwcoreProperties.xml` and
+ * the System Composer part out of that bag) and then overwritten by `writeTo`, which
+ * re-inserts the member from `chunkXml` after spreading the bag. So the saved package would
+ * be byte-identical.
+ *
+ * The cost is memory: a second copy of the whole payload held for the lifetime of every open
+ * document, which on the 47.8 MB dictionary this editor exists for is 47.8 MB of duplicate.
+ * And it is a correctness cost the moment core starts reading the data member out of the bag
+ * it is handed — which is why the exclusion stays, and why the test that pins it asserts the
+ * BAG (integration: `binarySlddEdit.test.ts`) rather than the saved bytes, which cannot tell.
+ */
+function passThroughParts(zip: Record<string, Uint8Array>): Record<string, Uint8Array> {
+  const parts: Record<string, Uint8Array> = {};
+  for (const [member, data] of Object.entries(zip)) if (member !== DATA_PART_XML) parts[member] = data;
+  return parts;
+}
+
 class BinarySlddDocument implements vscode.CustomDocument {
   chunkXml: string;
   readonly zipMeta: Record<string, Uint8Array>;
@@ -202,7 +230,7 @@ class BinarySlddDocument implements vscode.CustomDocument {
    */
   resetParts(zip: Record<string, Uint8Array>): void {
     for (const member of Object.keys(this.zipMeta)) delete this.zipMeta[member];
-    for (const [member, data] of Object.entries(zip)) if (member !== DATA_PART_XML) this.zipMeta[member] = data;
+    Object.assign(this.zipMeta, passThroughParts(zip));
   }
 
   /**
@@ -269,9 +297,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     const chunk = zip[DATA_PART_XML];
     if (!chunk) throw new Error(`Missing ${DATA_PART_XML} in binary SLDD`);
     const chunkXml = new TextDecoder().decode(chunk);
-    const zipMeta: Record<string, Uint8Array> = {};
-    for (const [k, v] of Object.entries(zip)) if (k !== DATA_PART_XML) zipMeta[k] = v;
-    const doc = new BinarySlddDocument(uri, chunkXml, zipMeta);
+    const doc = new BinarySlddDocument(uri, chunkXml, passThroughParts(zip));
     // Relay the document's edit events to the provider-level emitter VS Code listens on.
     doc.onDidChangeCustomDocument((e) => this._onDidChangeCustomDocument.fire(e));
     return doc;
