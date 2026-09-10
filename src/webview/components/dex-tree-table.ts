@@ -221,6 +221,17 @@ export interface BlockLinkGroup {
   blocks: { blockName: string; blockPath: string; linkTarget: string }[];
 }
 
+// One entry of a `paramLinks` cell, as the host's usageCells.ParamLink builds it.
+// `linkTarget` is EMPTY for a parameter whose value the graph could not resolve to
+// anything in this workspace, which is a normal answer and not a defect — see
+// `_renderParamLinks`, the one place that decides what an empty target renders as.
+interface ParamLinkCell {
+  property: string;
+  paramName: string;
+  source: string;
+  linkTarget: string;
+}
+
 // A Usage cell's block links, one group per model: `AFR, AFRMonitor,
 // MixTarget(EngineCtrl); AFRConst, AFRCheck(FuelInjector)`. A dictionary variable is
 // used by as many blocks as a model has, so naming the model once per block spent most
@@ -2811,6 +2822,32 @@ export class DexTreeTable extends LitElement {
     return html`<dex-matrix-open .matrix=${row._matrix} .rowId=${row.ID}></dex-matrix-open>`;
   }
 
+  // A `paramLinks` list — `Gain=Kp (dict.sldd)` — rendered once for the two columns
+  // that carry one (DataType and UsedBy). It used to be spelled twice, which is how
+  // it came to disagree with itself: the Value branch above gates its anchor on
+  // `linkTarget`, both copies of this did not, and so a param the graph could NOT
+  // resolve still painted accent-blue, underlined on hover, and dispatched a click
+  // carrying an empty target that routes nowhere. Three ways of saying "link" and
+  // nothing behind any of them.
+  //
+  // An unresolved param is not a rendering accident to hide — MATLAB itself reports
+  // `Gain = finalGain` as a real variable reference when `finalGain` lives in the BASE
+  // workspace, which is a live MATLAB session and not a file anything here can open.
+  // So the value stays visible and only its linkhood goes. The TEXT is untouched
+  // either way (`_getCellText` builds it from the same list), so what a user sorts,
+  // filters and copies does not depend on whether the target resolved.
+  private _renderParamLinks(paramLinks: ParamLinkCell[], columnId: string): unknown {
+    return html`${paramLinks.map((p, i) => {
+      const name = this._highlight(p.paramName, columnId);
+      return html`${i > 0 ? ', ' : ''}<span class="param-property">${p.property + '='}</span
+        >${p.linkTarget
+          ? html`<a class="value-link" href="#" @click=${(e: Event) => this._onLinkClick(p.linkTarget, e)}
+              >${name}</a
+            >`
+          : name}${p.source ? html`<span class="param-source">${'(' + p.source + ')'}</span>` : ''}`;
+    })}`;
+  }
+
   private _renderCellValue(row: TreeTableRow, columnId: string): unknown {
     const isEditing = this._editingCell?.rowId === row.ID && this._editingCell?.columnId === columnId;
 
@@ -2908,13 +2945,7 @@ export class DexTreeTable extends LitElement {
     if (columnId === 'DataType') {
       const val = isCellObject(row.DataType) ? (row.DataType as any) : { text: cellText(row.DataType) };
       if ('paramLinks' in val) {
-        return html`${val.paramLinks.map(
-          (p: { property: string; paramName: string; source: string; linkTarget: string }, i: number) =>
-            html`${i > 0 ? ', ' : ''}<span class="param-property">${p.property + '='}</span
-              ><a class="value-link" href="#" @click=${(e: Event) => this._onLinkClick(p.linkTarget, e)}
-                >${this._highlight(p.paramName, columnId)}</a
-              >${p.source ? html`<span class="param-source">${'(' + p.source + ')'}</span>` : ''}`,
-        )}`;
+        return this._renderParamLinks(val.paramLinks, columnId);
       }
       if ('links' in val) {
         return html`${val.links.map(
@@ -2964,13 +2995,7 @@ export class DexTreeTable extends LitElement {
       if (!row.UsedBy) return html``;
       const val = isCellObject(row.UsedBy) ? (row.UsedBy as any) : { text: cellText(row.UsedBy) };
       if ('paramLinks' in val) {
-        return html`${(val as any).paramLinks.map(
-          (p: { property: string; paramName: string; source: string; linkTarget: string }, i: number) =>
-            html`${i > 0 ? ', ' : ''}<span class="param-property">${p.property + '='}</span
-              ><a class="value-link" href="#" @click=${(e: Event) => this._onLinkClick(p.linkTarget, e)}
-                >${this._highlight(p.paramName, columnId)}</a
-              >${p.source ? html`<span class="param-source">${'(' + p.source + ')'}</span>` : ''}`,
-        )}`;
+        return this._renderParamLinks((val as any).paramLinks, columnId);
       }
       if ('blockLinks' in val) {
         // One `(model)` per group, after its last block. The qualifier is dropped

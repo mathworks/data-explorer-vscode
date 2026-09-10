@@ -332,6 +332,100 @@ describe('links navigate rather than following an href', () => {
     table.remove();
   });
 
+  // A param the graph could not resolve is a NORMAL answer, not a defect to hide. MATLAB
+  // itself calls `Gain = finalGain` a real variable reference when `finalGain` lives in
+  // the BASE workspace — a live MATLAB session, which is not a file anything here can
+  // open. Every other unresolved case (a Bus Selector's `OutputSignals = a,b`, a Math
+  // block's `Operator = square`) has nothing to open either.
+  //
+  // So the value must READ but not CLAIM to be clickable. It used to claim it: both
+  // paramLinks columns wrote the anchor unconditionally while the Value column next to
+  // them gated on `linkTarget`, so an unresolvable param painted accent-blue, underlined
+  // on hover, and fired a navigation carrying an empty target. One rule, three spellings.
+  describe('a param the graph could not resolve is text, not a dead link', () => {
+    const UNRESOLVED = { property: 'Gain', paramName: 'finalGain', source: '', linkTarget: '' };
+
+    it('renders no anchor, in either column that carries paramLinks', async () => {
+      const table = await mount([
+        makeRow('u', 'u', { UsedBy: { paramLinks: [UNRESOLVED] } as any }),
+        makeRow('d', 'd', { DataType: { paramLinks: [UNRESOLVED] } as any }),
+      ]);
+      expect(cell(table, 'u', 'UsedBy').querySelector('a.value-link')).toBeNull();
+      expect(cell(table, 'd', 'DataType').querySelector('a.value-link')).toBeNull();
+      table.remove();
+    });
+
+    it('still shows the property and the value, so nothing is lost by not linking it', async () => {
+      const table = await mount([makeRow('u', 'u', { UsedBy: { paramLinks: [UNRESOLVED] } as any })]);
+      const td = cell(table, 'u', 'UsedBy');
+      expect(td.querySelector('.param-property')!.textContent).toBe('Gain=');
+      expect(text(table, 'u', 'UsedBy')).toBe('Gain=finalGain');
+      table.remove();
+    });
+
+    it('leaves the cell TEXT identical to a resolved one, so sorting and copying do not shift', async () => {
+      // The text comes from `_getCellText`, which reads the same list and knows nothing
+      // about targets. Gating the anchor must not become a second, quieter answer to
+      // "what does this cell say".
+      const table = await mount([
+        makeRow('n', 'n', { UsedBy: { paramLinks: [UNRESOLVED] } as any }),
+        makeRow('y', 'y', { UsedBy: { paramLinks: [{ ...UNRESOLVED, linkTarget: 'workspace:finalGain@f' }] } as any }),
+      ]);
+      const [n, y] = table.rows;
+      expect((table as any)._getCellText(n, 'UsedBy')).toBe((table as any)._getCellText(y, 'UsedBy'));
+      table.remove();
+    });
+
+    it('links only the resolved entries of a cell that holds both', async () => {
+      // The ordinary case for a block: `Operator=square` resolves to nothing while the
+      // gain beside it resolves to a dictionary. A cell that linked both would send one
+      // of the two clicks nowhere; a cell that linked neither would lose a real jump.
+      const table = await mount([
+        makeRow('u', 'u', {
+          UsedBy: {
+            paramLinks: [
+              { property: 'Operator', paramName: 'square', source: '', linkTarget: '' },
+              { property: 'Gain', paramName: 'Kp', source: 'params.sldd', linkTarget: 'Kp@file:///w/params.sldd' },
+            ],
+          } as any,
+        }),
+      ]);
+      const td = cell(table, 'u', 'UsedBy');
+      const links = Array.from(td.querySelectorAll('a.value-link'));
+      expect(links.map((a) => a.textContent!.trim())).toEqual(['Kp']);
+      expect(text(table, 'u', 'UsedBy')).toBe('Operator=square, Gain=Kp(params.sldd)');
+      table.remove();
+    });
+
+    it('cannot dispatch a navigation with an empty target', async () => {
+      // The defect as the user met it: the value looked like a link, the click was
+      // swallowed by preventDefault, and `dex-link-clicked` carried '' — which routes
+      // nowhere, so nothing happened at all.
+      const table = await mount([makeRow('u', 'u', { UsedBy: { paramLinks: [UNRESOLVED] } as any })]);
+      const clicked: string[] = [];
+      table.addEventListener('dex-link-clicked', (e) => clicked.push((e as CustomEvent).detail.target));
+      // Whatever the cell offers as clickable, clicking it must not ask the host to
+      // navigate to nothing. Asserted by exercising every link in the cell rather than
+      // by counting them, so this stays a statement about behaviour and not about markup.
+      for (const a of Array.from(cell(table, 'u', 'UsedBy').querySelectorAll('a.value-link'))) {
+        (a as HTMLElement).click();
+      }
+      expect(clicked).toEqual([]);
+      table.remove();
+    });
+
+    it('is still highlighted by a search that matches it', async () => {
+      // Highlighting is about finding the text, which is there whether or not it links.
+      const table = await mount([makeRow('u', 'u', { UsedBy: { paramLinks: [UNRESOLVED] } as any })]);
+      const input = table.shadowRoot!.querySelector('.filter-input') as HTMLInputElement;
+      input.value = 'final';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      await table.updateComplete;
+      expect(cell(table, 'u', 'UsedBy').querySelector('mark')!.textContent).toBe('final');
+      table.remove();
+    });
+  });
+
   it('blockLinks name the block and its model', async () => {
     // Two models can hold blocks with the same name, so the model qualifier is
     // what makes the reference identifiable.
