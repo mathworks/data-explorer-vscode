@@ -463,6 +463,33 @@ describe('the width floor and the frozen Name column', () => {
     expect(css).toContain('tr.data-row.copy-flash td:first-child { animation: copy-flash-cell');
   });
 
+  it('the copied row keeps its dashed ring across the frozen cell', () => {
+    // The ring is an OUTLINE on the <tr>, and Blink paints an element's outline BELOW
+    // its positioned descendants — so the frozen cell's own layer covers the three
+    // segments that cross it, and the row reads as ringed everywhere except the one
+    // column that says WHICH row is on the clipboard. That is the opposite of what
+    // CSS 2.1 appendix E step 10 reads like, which is why the ring was the one row
+    // affordance the frozen column shipped without a mirror.
+    const row = ruleFor('tr.data-row.copied');
+    const mirror = ruleFor('tr.data-row.copied td:first-child::after');
+    // Pinned against each OTHER, not each against a literal: a mirror that drifts
+    // from the ring it continues is worse than no mirror, because the seam lands
+    // mid-row where the eye is already following a line.
+    const stroke = row.match(/outline: (.+?);/)![1];
+    expect(mirror, stroke).toContain(stroke);
+    // Right edge open, exactly as the drop rings leave theirs: the ring carries on
+    // into the next cell, and a segment there would box the Name column off on its
+    // own. A border, not a box-shadow, because a shadow cannot be dashed.
+    expect(mirror).toContain('border-right: none');
+    // Tracks the cell rather than being a fixed strip, so it follows a resized or
+    // re-weighted Name column with no help from script.
+    expect(mirror).toContain('position: absolute');
+    expect(mirror).toContain('inset: 0');
+    // Name is the editable rename cell: a layer over it that swallowed clicks would
+    // trade a missing ring for a dead double-click.
+    expect(mirror).toContain('pointer-events: none');
+  });
+
   it('the table keeps its borders separate, so the frozen edge can be cast at all', async () => {
     // Blink will not paint an OUTER box-shadow on a cell of a border-collapse:collapse
     // table — silently, so the frozen edge below was twice tuned against a declaration

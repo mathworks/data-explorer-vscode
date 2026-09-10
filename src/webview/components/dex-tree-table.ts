@@ -880,6 +880,31 @@ export class DexTreeTable extends LitElement {
         transition: none;
       }
 
+      /* The copy ring is the fourth row affordance this column has to redraw, and it
+         hides for a different reason than the three above: it is an OUTLINE on the
+         <tr>, and Blink paints an element's outline BELOW its positioned descendants,
+         so the sticky cell lands on top of it whatever its background does. (The
+         opposite of how CSS 2.1 appendix E step 10 reads, which is why this was the
+         one affordance that shipped here without a mirror — it looked like the case
+         that needed none.) So the three segments crossing this column are redrawn on
+         a pseudo-element, using a BORDER because a box-shadow cannot be dashed, with
+         the right edge open where the ring carries on into the next cell — a segment
+         there would box the Name column off on its own. Being its own box, this is
+         also the one ring here exempt from restating --dex-frozen-edge: it draws
+         beside the cell's box-shadow instead of replacing it. It is clipped to the
+         cell's padding box, so its bottom segment rides the row separator's 1px above
+         the row's own; at 1.5px dashed that is not a seam the eye can find. */
+      tr.data-row.copied td:first-child::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border: 1.5px dashed var(--dex-color-accent, #0078d4);
+        border-right: none;
+        /* Name is the editable rename cell, and this layer covers all of it: without
+           this it would swallow the double-click that starts the rename. */
+        pointer-events: none;
+      }
+
       .empty-state {
         display: flex;
         align-items: center;
