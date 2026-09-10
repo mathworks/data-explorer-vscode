@@ -20,6 +20,14 @@
 // vscode needs it for — a `findFiles` glob and the `package.json` selector — neither
 // of which core has any concept of.
 //
+// The two name REDUCTIONS this module used to hold went the same way, and for the same
+// reason. Which extension completes a bare model reference (`refModelExt`) and what a
+// `.prj` calls itself (`projectNameOf`) are properties of the formats; core decides both
+// for its own tree and publishes them, so a host keeping its own copy was a second
+// opinion about a string a user READS — a graph group label beside the name core's parser
+// was told. Both are core's calls now, at the three sites that used to import them from
+// here, and the literal scan in test/fileTypes.test.ts is what stops a fourth.
+//
 // Those two are not independent: a format present in the list but in none of core's
 // tests is discovered and then unclassifiable, and one in core's tests but absent from
 // the list is never discovered at all. test/fileTypes.test.ts pins them against each
@@ -81,42 +89,4 @@ export function isSupportedPath(path: string): boolean {
  */
 export function isGraphPath(path: string): boolean {
   return isModelFile(path) || isSlddFile(path) || isMatFile(path);
-}
-
-/**
- * The model extension to give a reference found INSIDE the model at `path`.
- *
- * A model file names its references without an extension, but the graph resolves
- * edges by filename, so the bare name has to be completed. It takes the parent
- * model's own extension: a reference is far likelier to be the same generation of
- * file as the model referencing it — a legacy `.mdl` hierarchy is legacy
- * throughout — and a `.mdl` model whose children were all labelled `.slx` would
- * link to nothing. Mirrors core's `ModelSectionNode.addReferenceEntry`, which
- * completes the same names for the tree that this completes for the graph.
- */
-export function refModelExt(path: string): string {
-  return /\.mdl$/i.test(path) ? '.mdl' : '.slx';
-}
-
-/**
- * A project's NAME, given the basename of its `.prj` — the file's name with the
- * extension taken off.
- *
- * Two callers in this host need it, and they needed it for different reasons, which is
- * why they each grew their own copy of the strip. `graphModel` labels a project group
- * with it, and that label is what a user reads in the relationship tree. `structuralIndex`
- * hands it to core's `parseProject`, which takes a project NAME rather than a filename
- * because that is what a `.prj` calls itself in its own metadata — the argument is the
- * fallback when the store carries no name, and core also uses it as the sentinel for
- * "the store has not supplied one yet".
- *
- * Nothing in this host reads `parsed.name` back today, so that second caller's strip is
- * currently inert; it is still the argument that decides the field, which is why it goes
- * through the same function rather than being simplified away.
- *
- * Mirrors core's published `projectNameOf`, and — like `refModelExt` above — exists here
- * only until the core pin moves past the version that publishes it. Both delete together.
- */
-export function projectName(basename: string): string {
-  return basename.replace(/\.prj$/i, '');
 }

@@ -12,10 +12,10 @@ import {
   isModelFile,
   isProjectFile,
   parseProject,
+  projectNameOf,
   slddChunkContent,
 } from 'data-explorer-core';
 import { basename } from '../common/pathUtil.js';
-import { projectName } from '../common/fileTypes.js';
 
 export interface RawFile {
   uriString: string;
@@ -51,7 +51,11 @@ export function buildGraphSource(file: RawFile): GraphSource {
       return { ...base, modelRefs: s.modelReferences, dataSources: s.externalDataSources, dataDictionary: s.dataDictionary };
     }
     if (type === 'project' && file.projectFiles) {
-      const name = projectName(basename(file.path));
+      // parseProject takes a project NAME, not a filename — that is what a `.prj` calls
+      // itself in its own metadata, and this argument is the fallback when the store
+      // carries none. So the reduction is core's to make, and it is the same call
+      // graphModel labels a project group with.
+      const name = projectNameOf(basename(file.path));
       const parsed = parseProject(file.projectFiles, name);
       // Member files (basenames) nest under the project; referenced projects too.
       const projectFiles = parsed.files.filter((f) => !f.isFolder).map((f) => basename(f.path));

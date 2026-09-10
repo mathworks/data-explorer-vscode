@@ -4,7 +4,9 @@
 // or containing folder; within a group the existing relationship model applies.
 import { refBasename } from './slddRefs.js';
 import { basename, dirname } from '../common/pathUtil.js';
-import { projectName } from '../common/fileTypes.js';
+// projectNameOf, not a `.prj` strip of its own: this label and the name structuralIndex
+// hands core's parseProject are the same string for the same file, and core owns it.
+import { projectNameOf } from 'data-explorer-core';
 
 export type SourceType = 'model' | 'sldd' | 'mat' | 'project';
 export type NodeKind = SourceType | 'missing' | 'group';
@@ -71,7 +73,7 @@ export class RelGraph {
       .filter((s) => s.type === 'project')
       .map((s) => ({
         dir: dirname(s.path),
-        label: projectName(basename(s.path)),
+        label: projectNameOf(basename(s.path)),
         uriString: s.uriString,
       }))
       .sort((a, b) => b.dir.length - a.dir.length);
