@@ -19,12 +19,13 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { parseModel } from 'data-explorer-core';
+import { isModelFile, parseModel } from 'data-explorer-core';
 import { extractSlxStructure } from '../src/host/slxStructure.js';
 import { buildGraphSource } from '../src/host/structuralIndex.js';
 import { getModelFromBytes } from '../src/host/SlddModel.js';
 import { buildRows } from '../src/host/rowBuilder.js';
 import { namesFromSlx } from '../src/host/nameExtract.js';
+import { refModelExt } from '../src/common/fileTypes.js';
 
 function bytes(name: string): ArrayBuffer {
   const b = readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
@@ -104,6 +105,85 @@ describe('the BYTES decide the format, not the filename', () => {
   it('still returns empty relationships for bytes that are neither', () => {
     const s = extractSlxStructure(new ArrayBuffer(4), 'bad.mdl');
     expect(s).toEqual({ dataDictionary: null, modelReferences: [], externalDataSources: [] });
+  });
+});
+
+// The one rule that has to hold on TWO paths, pinned BETWEEN them rather than on each
+// side on its own.
+//
+// A model names its references without an extension. Core completes the bare name for the
+// TREE (`ModelNode.fromParsed` → `addReferenceEntry`, with the parent model's extension),
+// and this host completes it again for the GRAPH (`slxStructure`, via
+// `common/fileTypes.refModelExt`), because a graph resolves edges by filename and so
+// cannot use a bare name either. Both sides had independently spelled
+// `/\.mdl$/i.test(name) ? '.mdl' : '.slx'`.
+//
+// When two copies of one rule drift, the reference row you can SEE and the edge that
+// actually RESOLVES name two different files, and neither side looks wrong by itself —
+// it surfaces only as a phantom unresolved reference. The test that existed asserted one
+// fixture's literal answer (`'plant.mdl'`), which pins core's path but would not notice
+// the host's copy changing underneath it.
+//
+// So this compares core's answer to the host's, for every container, instead of comparing
+// either to a literal. Core now publishes `refModelExt` from its `fileKinds` module; when
+// the pin here bumps past that, `src/common/fileTypes.ts` deletes its copy and delegates,
+// and this test is what proves the delete changed nothing.
+describe('the tree and the graph complete a bare reference the same way', () => {
+  const treeRefs = (buf: ArrayBuffer, name: string, uri = `refs://${name}`): string[] =>
+    buildRows(getModelFromBytes(uri, name, buf))
+      .filter((r: any) => r.parent === 'section:references')
+      .map((r: any) => (typeof r.Name === 'object' ? r.Name.label : r.Name))
+      .sort();
+
+  const graphRefs = (buf: ArrayBuffer, name: string): string[] =>
+    [...extractSlxStructure(buf, name).modelReferences].sort();
+
+  // The reference names as the FILE records them — before either path completes them.
+  const rawRefs = (buf: ArrayBuffer, name: string): string[] =>
+    ((parseModel(buf, name) as any).modelReferences ?? [])
+      .map((r: any) => r.modelName)
+      .filter((n: unknown): n is string => typeof n === 'string' && n.length > 0);
+
+  for (const fixture of [MODERN, CLASSIC, SLX_TWIN]) {
+    it(`names the same reference files on both paths for ${fixture}`, () => {
+      const tree = treeRefs(bytes(fixture), fixture);
+      // A fixture with no references would make this test pass while pinning nothing.
+      expect(tree.length, `${fixture} must HAVE a model reference`).toBeGreaterThan(0);
+      expect(graphRefs(bytes(fixture), fixture)).toEqual(tree);
+    });
+
+    it(`applies the completion rule itself to ${fixture}, not just consistently`, () => {
+      // Ties both paths to the RULE rather than only to each other — two copies that
+      // drifted the SAME way would still agree with one another. The expectation is
+      // derived from the raw parse: a name core reports already complete is left alone, a
+      // bare one takes the parent's container. Both cases occur across these fixtures
+      // (MODERN records `plant.slx` outright; CLASSIC records a bare `plant`), so this
+      // covers the fire and no-fire arms without either being written down as a literal.
+      const want = rawRefs(bytes(fixture), fixture)
+        .map((n) => (isModelFile(n) ? n : n + refModelExt(fixture)))
+        .sort();
+      expect(want.length, `${fixture} must HAVE a model reference`).toBeGreaterThan(0);
+      expect(treeRefs(bytes(fixture), fixture)).toEqual(want);
+      expect(graphRefs(bytes(fixture), fixture)).toEqual(want);
+    });
+  }
+
+  it('completes from the NAME it was given, even when the bytes are another format', () => {
+    // parseModel decides the FORMAT from the bytes; the extension to COMPLETE with has to
+    // come from the name, because the name is what the file is called on disk and so what
+    // a sibling reference will be called too. Classic-brace bytes under a `.slx` name must
+    // therefore yield `.slx` references — on both paths.
+    const buf = bytes(CLASSIC);
+    expect(graphRefs(buf, 'renamed.slx')).toEqual(['plant.slx']);
+    expect(treeRefs(buf, 'renamed.slx', 'refs://renamed.slx')).toEqual(['plant.slx']);
+  });
+
+  it('leaves an already-suffixed reference alone on both paths', () => {
+    // The MODERN fixture records `plant.slx` outright, so the completion rule must not
+    // fire; a copy that appended unconditionally would produce `plant.slx.mdl` here.
+    const buf = bytes(MODERN);
+    expect(graphRefs(buf, 'shouted.MDL')).toEqual(['plant.slx']);
+    expect(treeRefs(buf, 'shouted.MDL', 'refs://shouted.MDL')).toEqual(['plant.slx']);
   });
 });
 
