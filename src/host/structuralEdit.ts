@@ -24,9 +24,44 @@ import { generateUuid, getSectionMetadata } from 'data-explorer-core';
 import { buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
 import type { DragRegisterItem } from './dragState.js';
 
+/** One byte-scoped replacement of a document's text: `length` bytes at `offset` become `text`. */
+export interface TextPatch {
+  offset: number;
+  length: number;
+  text: string;
+}
+
+/** The text a patch produces. The one applier, so nothing can apply one differently. */
+export function applyTextPatch(text: string, patch: TextPatch): string {
+  return text.slice(0, patch.offset) + patch.text + text.slice(patch.offset + patch.length);
+}
+
 export interface StructuralResult {
   newText: string;
   selectId: string | null;
+  /**
+   * The ONE region of the input text this edit changed, when it is one region — which every
+   * transform in this file is (see the header: an element spliced, dropped, or inserted).
+   *
+   * Reported so the host can write that region instead of the whole document: VS Code stores
+   * an edit as what it was handed, so a full-text replace makes both the edit and its undo
+   * cost a 47.8 MB rewrite to say a 1 KB thing. Optional because the multi-target paths
+   * (deleteEntriesByName) change several regions and because the XML transforms share this
+   * shape without reporting one — an absent patch simply means "write newText".
+   */
+  patch?: TextPatch;
+}
+
+/**
+ * The result of a one-region edit, with `newText` DERIVED from the patch.
+ *
+ * Which is the whole reason it is a function: a patch that disagreed with the text beside it
+ * would write a document neither the model nor the user asked for, and the only way two
+ * accounts of one edit cannot drift is for there to be one account. Every transform below
+ * that changes a single region goes through here.
+ */
+function patchResult(text: string, patch: TextPatch, selectId: string | null): StructuralResult {
+  return { newText: applyTextPatch(text, patch), selectId, patch };
 }
 
 // Walk up from any node to its owning top-level entry (the node where
@@ -139,8 +174,7 @@ function spliceEntry(text: string, entry: any, selectId: string | null): Structu
   const entryText = reserializeEntry(entry, detectIndent(text));
   const span = findEntrySpan(text, entrySelectorOf(entry));
   if (!span) throw new Error(`Could not locate entry "${entry.name}" text.`);
-  const newText = text.slice(0, span.offset) + entryText + text.slice(span.offset + span.length);
-  return { newText, selectId };
+  return patchResult(text, { offset: span.offset, length: span.length, text: entryText }, selectId);
 }
 
 // The row id to select after removing `node` from `siblings`: the previous
@@ -164,8 +198,7 @@ export function deleteEntry(text: string, entry: any): StructuralResult {
   // name. See entrySelector.ts.
   const span = findEntryElementSpan(text, entrySelectorOf(entry));
   if (!span) throw new Error(`Could not locate entry "${entry.name}" to delete.`);
-  const newText = text.slice(0, span.offset) + text.slice(span.offset + span.length);
-  return { newText, selectId };
+  return patchResult(text, { offset: span.offset, length: span.length, text: '' }, selectId);
 }
 
 /**
@@ -355,8 +388,7 @@ export function pasteEntry(
 
   const prefix = insertion.needsLeadingComma ? ',\n' + insertion.elementIndent : insertion.elementIndent;
   const inserted = prefix + entryText;
-  const newText = text.slice(0, insertion.offset) + inserted + text.slice(insertion.offset);
-  return { newText, selectId: newNode.id };
+  return patchResult(text, { offset: insertion.offset, length: 0, text: inserted }, newNode.id);
 }
 
 /**
@@ -410,18 +442,48 @@ export function foldPasteEntries(
   section: any,
   payloads: Record<string, unknown>[],
   pasteOne: (text: string, section: any, payload: Record<string, unknown>) => StructuralResult,
-): { newText: string; selectIds: string[] } {
+): { newText: string; selectIds: string[]; patch?: TextPatch } {
   for (const payload of payloads) {
     assertTypeAllowed(section, payload);
   }
   let currentText = text;
   const selectIds: string[] = [];
+  // The insertions, folded into one — see composeInsertions for when that is possible and
+  // why it is checked rather than assumed.
+  let combined: TextPatch | null | undefined = null;
   for (const payload of payloads) {
-    const { newText, selectId } = pasteOne(currentText, section, payload);
-    currentText = newText;
-    if (selectId) selectIds.push(selectId);
+    const step = pasteOne(currentText, section, payload);
+    combined = composeInsertions(combined, step.patch);
+    currentText = step.newText;
+    if (step.selectId) selectIds.push(step.selectId);
   }
-  return { newText: currentText, selectIds };
+  return { newText: currentText, selectIds, patch: combined ?? undefined };
+}
+
+/**
+ * Fold a step's patch into the insertion built so far, or give up (undefined).
+ *
+ * A paste appends its element to the entries array, so the next paste's insertion point is
+ * exactly the end of the one before it: N pastes into one text are N appends at one place,
+ * hence a single insertion of the concatenated elements. That is what lets a multi-select
+ * drop be one narrow write.
+ *
+ * Every part of that is CHECKED, not trusted: each step must be a pure insertion (`length`
+ * 0) landing exactly where the previous one ended, and a step reporting no patch at all (the
+ * XML paste, which shares this fold) folds to nothing. Anything else returns undefined,
+ * which is the caller's cue to write the whole text — correct, just not narrow. Guessing
+ * here would write a document that has an element in it twice, or not at all.
+ *
+ * `null` means "nothing folded yet"; `undefined` means "cannot be folded".
+ */
+function composeInsertions(
+  soFar: TextPatch | null | undefined,
+  step: TextPatch | undefined,
+): TextPatch | undefined {
+  if (soFar === undefined || !step || step.length !== 0) return undefined;
+  if (soFar === null) return { ...step };
+  if (step.offset !== soFar.offset + soFar.text.length) return undefined;
+  return { offset: soFar.offset, length: 0, text: soFar.text + step.text };
 }
 
 /** Multi-paste for a JSON .sldd. See foldPasteEntries. */
@@ -429,6 +491,6 @@ export function pasteEntries(
   text: string,
   section: any,
   payloads: Record<string, unknown>[],
-): { newText: string; selectIds: string[] } {
+): { newText: string; selectIds: string[]; patch?: TextPatch } {
   return foldPasteEntries(text, section, payloads, pasteEntry);
 }
