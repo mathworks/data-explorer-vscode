@@ -77,12 +77,13 @@ const NAME_KEY = '"name"';
 // The fixed path to the entries array:
 //   root → "__MW_TEXT_PARTS__" → "__MW_TEXT_PART__/data/chunk0"
 //        → "__MW_TEXT_content" → "entries"[]
-// The same walk entrySplice.ts does with a parse tree — kept in step with it by hand
-// because this half cannot afford the parse. All four keys are long and unlikely to
-// occur as text elsewhere; a false anchor would still have to survive the caller's
+// The only walk of these keys in this host: entrySplice.ts asks this scan for the same
+// answer rather than building a parse tree for it (see the header), so there is no second
+// copy of the walk to keep in step by hand. All four keys are long and unlikely to occur
+// as text elsewhere; a false anchor would still have to survive the caller's
 // element-count check.
 //
-// The three container keys come from slddContent, which is the one place this host names
+// The three container keys come from common/slddParts.ts, the one place this host names
 // them, because this scanner is the reason they have to be named at all: every other
 // reader here holds a parsed object and asks core's `slddChunkContent`, and this one
 // walks the raw text for byte OFFSETS, so it needs the strings. Spelling them here again

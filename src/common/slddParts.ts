@@ -24,7 +24,9 @@
  * The zip member a compressed-binary `.sldd` keeps its entries in.
  *
  * The writable-binary editor looks the member up, EXCLUDES it from the pass-through parts,
- * and re-inserts it on save — five sites, each of which used to spell the name itself. The
+ * and re-inserts it on save — four places, each of which used to spell the name itself: two
+ * lookups, one exclusion (written once, though `passThroughParts` is called from two
+ * sites), one re-insert, plus the error message that names the missing member. The
  * three roles are one rule, and drift between them does not throw: an exclusion that misses
  * ships a zip carrying the entries twice, once under the name a reader looks up and once
  * under a name nothing reads, from a file that opens perfectly at both ends.
