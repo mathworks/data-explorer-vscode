@@ -47,9 +47,9 @@ import {
   entryRecord,
   findEntryByName,
   findEntryBySelector,
-  insertAnchorOf,
   insertOp,
   mutateEntry,
+  opsOfPastedEntries,
   patchOfPairs,
   removeOp,
   replaceOp,
@@ -186,6 +186,29 @@ class BinarySlddDocument implements vscode.CustomDocument {
   }
 
   /**
+   * The `meta.path` this document's source is registered with. NOT a display name: the
+   * tree node is named from `srcId` (`SlddNode.parse` takes it as the node's name), the
+   * `source-empty` warning quotes `srcId` too, and this extension's webview never reads
+   * the DTO's `path`. Its one live reader is core's `openSourceNamed`, which is how a
+   * model's `gravity@params.sldd` link finds an already-open dictionary.
+   *
+   * From `uri.path`, which is DECODED, rather than from the srcId, which is not. That
+   * lookup tries the srcId's own basename first, and for this provider the srcId is
+   * `SRC_PREFIX + uri.toString()` — percent-encoded, so a dictionary named `my
+   * params.sldd` is `my%20params.sldd` there and matches nothing a model recorded. The
+   * decoded basename is the only spelling that answers for a file with a space in its
+   * name, which on the paths MATLAB projects live on is the common case, not the corner.
+   *
+   * One getter rather than a `basename(...)` at each registration because this document
+   * is registered from TWO places under the same srcId — `resolveCustomEditor`, for every
+   * paint and mid-transform rebuild, and `reBaseline` after a save — and if they
+   * disagreed, saving would change whether a model's link to this dictionary resolves.
+   */
+  get metaPath(): string {
+    return basename(this.uri.path) || 'document';
+  }
+
+  /**
    * Push an edit onto VS Code's native undo stack.
    *
    * `patch` names the entries each direction changes, so undo and redo can bring the
@@ -313,7 +336,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     webview.options = { enableScripts: true, localResourceRoots: [distRoot] };
     webviewPanel.iconPath = new vscode.ThemeIcon('table');
     const uriString = document.uri.toString();
-    const name = basename(document.uri.path) || 'document';
+    const name = document.metaPath;
 
     // Register `xml` as this document's source and answer the tree. Every rebuild in
     // this provider goes through here — paint, the two mid-transform rebuilds — so
@@ -825,12 +848,15 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // so whatever it added is the tail this count marks off.
         const addedFrom = (section.children as any[]).length;
         const { newText, selectId } = pasteEntryXml(working, section, clip.payload);
-        for (const entry of (section.children as any[]).slice(addedFrom)) {
-          // The one thing attaching a node does not do: put it in the session's index.
-          DataModel.indexSubtree(entry);
-          pairs.push({ redo: insertOp(entry), undo: removeOp(entry.id) });
-          applied.push({ kind: 'insert', entry, beforeRowId: insertAnchorOf(entry) });
-        }
+        // Indexing each new subtree and describing it for the undo stack is entryOps' job —
+        // the same call the JSON provider makes from its own paste and drop. The loop was
+        // written out here and in applyDrop instead, putting one rule in three places, and
+        // of those two copies only this one still said why the indexing is owed: a node id
+        // is a PATH, so an entry that joined the tree outside an op is in no index, and the
+        // row the paste selects would not resolve for the next edit.
+        const added = opsOfPastedEntries(section, addedFrom);
+        pairs.push(...added.pairs);
+        applied.push(...added.applied);
         document.pushEdit('Paste', before, newText, narrow ? patchOfPairs(pairs) : undefined);
         if (narrow) document.repaintOps(applied);
         else document.repaintAll();
@@ -954,11 +980,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // foldPasteEntries), appending — so what it added is the tail after this count.
         const addedFrom = (section.children as any[]).length;
         const { newText, selectIds } = pasteEntriesXml(working, section, payloads);
-        for (const entry of (section.children as any[]).slice(addedFrom)) {
-          DataModel.indexSubtree(entry);
-          pairs.push({ redo: insertOp(entry), undo: removeOp(entry.id) });
-          applied.push({ kind: 'insert', entry, beforeRowId: insertAnchorOf(entry) });
-        }
+        // Same call, and for the same reason, as applyPaste above.
+        const added = opsOfPastedEntries(section, addedFrom);
+        pairs.push(...added.pairs);
+        applied.push(...added.applied);
         document.pushEdit(isMove ? 'Move' : 'Copy', before, newText, narrow ? patchOfPairs(pairs) : undefined);
         if (narrow) document.repaintOps(applied);
         else document.repaintAll();
@@ -1131,7 +1156,7 @@ ${BANNERS_HTML}
       const node = DataModel.addDataSource(
         document.srcId,
         content,
-        { path: basename(document.uri.path) || 'document' },
+        { path: document.metaPath },
         warnings,
       );
       captureBaseline(document.uri.toString(), node);

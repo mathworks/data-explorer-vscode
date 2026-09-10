@@ -16,9 +16,9 @@
 // publishes `DATA_PART_XML` and friends as of the version after it. When it moves, this file
 // becomes a re-export and those tests are what say the switch changed nothing.
 //
-// Pure, and in `common/` for that reason: its one hot-path caller is a scanner with no
-// imports at all, and it must not acquire the read policy's dependency on core to ask what
-// a key is called.
+// Pure, and in `common/` for that reason: its one hot-path caller is a scanner that imports
+// nothing else, and it must not acquire the read policy's dependency on core to ask what a
+// key is called.
 
 /**
  * The zip member a compressed-binary `.sldd` keeps its entries in.
