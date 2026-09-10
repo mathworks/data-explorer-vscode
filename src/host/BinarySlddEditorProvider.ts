@@ -44,6 +44,8 @@ import { catalogRenameOf, scXmlRenamePatch, type ScPartPatch } from './scRename.
 import {
   applyEntryOps,
   entryRecord,
+  findEntryByName,
+  findEntryBySelector,
   insertAnchorOf,
   insertOp,
   mutateEntry,
@@ -66,9 +68,8 @@ import {
   broadcastClipboardState,
   broadcastDragState,
   deleteFromSource,
-  type DeleteTarget,
 } from './editorHub.js';
-import { entrySelectorOf, toEntrySelector } from './entrySelector.js';
+import { entrySelectorOf } from './entrySelector.js';
 import { basename } from '../common/pathUtil.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import type { TableToHostMessage } from '../common/protocol.js';
@@ -337,18 +338,6 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         : undefined;
     };
 
-    /**
-     * The single live entry a section+name pair names, or null.
-     *
-     * Used where the thing to be found is known by NAME rather than by row id — a
-     * clipboard mark and a cross-document delete target both travel as names, because
-     * they may have been captured in another document.
-     */
-    const entryByName = (model: any, sectionName: string, entryName: string): any => {
-      const section = ((model?.children ?? []) as any[]).find((s) => s.name === sectionName);
-      return ((section?.children ?? []) as any[]).find((e) => e.name === entryName) ?? null;
-    };
-
     const post = (from: ModelSource = 'chunk') => {
       try {
         // 'registered' is only ever passed by a caller that has just registered a tree
@@ -482,7 +471,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       const ops: AppliedOp[] = [];
       const seen = new Set<string>();
       for (const mark of affected) {
-        const entry = entryByName(model, mark.section, mark.name);
+        const entry = findEntryByName(model, mark.section, mark.name);
         // Both marks can name the same entry (a copy re-taken as a cut), and its rows
         // only need painting once.
         if (!entry || seen.has(entry.id)) continue;
@@ -494,29 +483,6 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
 
     const view: DocumentView = { repaintAll: post, repaintOps };
     document.views.add(view);
-
-    /**
-     * The single live entry a delete target names, or null when the model cannot say
-     * unambiguously.
-     *
-     * The same rule the text finders use (see entrySelector.ts): match by name, and
-     * consult the uuid only when more than one entry answers to that name. Anything
-     * still ambiguous returns null, which costs the caller the wide repaint rather than
-     * risking an op against the wrong entry.
-     */
-    const findTargetEntry = (model: any, target: DeleteTarget): any => {
-      const selector = toEntrySelector(target);
-      const matches: any[] = [];
-      for (const section of (model?.children ?? []) as any[]) {
-        for (const entry of (section.children ?? []) as any[]) {
-          if (entry.name === selector.name) matches.push(entry);
-        }
-      }
-      if (matches.length <= 1) return matches[0] ?? null;
-      if (!selector.uuid) return null;
-      const byUuid = matches.filter((e) => (e.metadata as any)?.uuid === selector.uuid);
-      return byUuid.length === 1 ? byUuid[0] : null;
-    };
 
     /**
      * Run a patch/op-list builder, or give up.
@@ -550,7 +516,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       // the two halves cannot remove different entries.
       const patch = attempt<EntryPatch>(() => {
         const model = liveModel();
-        const entries = targets.map((t) => findTargetEntry(model, t));
+        const entries = targets.map((t) => findEntryBySelector(model, t));
         if (entries.some((e) => !e)) return undefined;
         return {
           // Reversed, because undo applies the inverses in reverse order — see
@@ -813,7 +779,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // would push the copy to `Name1`.
         if (isCut && sameDoc && srcName) {
           working = deleteEntriesByNameXml(working, [srcSelector]);
-          const src = findTargetEntry(model, srcSelector);
+          const src = findEntryBySelector(model, srcSelector);
           if (src) {
             pairs.push({ redo: removeOp(src.id), undo: insertOp(src) });
             applied.push(...applyEntryOps(model, [removeOp(src.id)]));
@@ -930,7 +896,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // document's originals untouched here.
         if (isMove && sameDoc && sourceTargets.length) {
           working = deleteEntriesByNameXml(working, sourceTargets);
-          const sources = sourceTargets.map((t) => findTargetEntry(model, t));
+          const sources = sourceTargets.map((t) => findEntryBySelector(model, t));
           if (sources.every((e) => !!e)) {
             const seen = new Set<string>();
             for (const src of sources) {

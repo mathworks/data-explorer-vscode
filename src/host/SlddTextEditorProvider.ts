@@ -12,13 +12,27 @@ import {
   type ClipMark,
 } from './rowBuilder.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
-import { applyEntryOps, mutateEntry } from './entryOps.js';
 import {
+  applyEntryOps,
+  findEntryByName,
+  findEntryBySelector,
+  insertOp,
+  mutateEntry,
+  opsOfPastedEntries,
+  patchOfPairs,
+  removeOp,
+  type AppliedOp,
+  type EntryOpPair,
+} from './entryOps.js';
+import {
+  isEchoOfEdit,
   planEntrySync,
   planKnownChange,
+  planKnownOps,
   planOwnEdit,
   type HostEdit,
   type KnownEdit,
+  type RangeReplacement,
 } from './jsonEntrySync.js';
 import { getClipboard, clearClipboard, clipboardState } from './clipboard.js';
 import { setDrag, getDrag, clearDrag } from './dragState.js';
@@ -45,14 +59,17 @@ import {
   reserializeEntry,
   buildDragSnapshot,
   type StructuralResult,
+  type TextPatch,
 } from './structuralEdit.js';
+import { minimalReplacement } from './minimalEdit.js';
 import { copyEntryToClipboard } from './clipboardAction.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { parsesAsJson } from './slddFormat.js';
-import { entrySelectorOf } from './entrySelector.js';
+import { entrySelectorOf, type EntrySelector } from './entrySelector.js';
 import { catalogRenameOf, scJsonRenameEdits } from './scRename.js';
+import { buildSectionRowId } from '../common/sectionRowId.js';
 import { basename } from '../common/pathUtil.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 
@@ -198,7 +215,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           initialized = true;
         }
         const modified = computeModified(uriString, node);
-        const rows = buildRows(node, modified, clipMarkOfDoc());
+        const clipMark = clipMarkOfDoc();
+        const rows = buildRows(node, modified, clipMark);
         // Every row below is built from `node`, which getModel just parsed from the live
         // text and registered as this document's source.
         modelInSync = true;
@@ -226,6 +244,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
             // a drop (dropDecision) live on dragover without a host round-trip.
             webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
             webview.postMessage({ type: 'clipboardState', ...clipboardState() });
+            // The mark these rows CARRY, not the one the clipboard holds now: a copy that
+            // happened while the rows were in flight is behind them in the webview's queue, so
+            // what is on screen is `clipMark`, and the next broadcast has to see the difference.
+            paintedMark = clipMark;
             drainNavigateSelect(webview, uriString);
           });
       } catch (err) {
@@ -300,6 +322,61 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     };
 
     /**
+     * Repaint what a STRUCTURAL change did: entries that left the table, arrived in it, or were
+     * rebuilt — as the rows those three amount to, and nothing else.
+     *
+     * The rest of this provider's narrow repaints are one entry replaced in place, which is
+     * every edit INSIDE an entry. A delete, a paste, a drop and their undos change which
+     * entries the dictionary has, so the row COUNT changes and the rows the table keeps are the
+     * ones the host never mentions. That is the whole message set: an empty replacement is a
+     * removal (see spliceEntryRows), an insert has to be told its place, and the webview
+     * answers a message it cannot place by asking for a full payload rather than guessing.
+     *
+     * Posted in THIS synchronous run for the same reason postEntryRowsNow is: a postMessage from
+     * a `.then` cannot reach the renderer until the host next yields, which on these paths is a
+     * text write away. A cold Usage graph is caught up in a second post per entry.
+     *
+     * Same shape as the binary provider's repaintOps, deliberately — a delete has to mean the
+     * same thing in the two .sldd formats, and the way these two once differed is exactly the
+     * bug class this repo keeps finding.
+     */
+    const repaintOps = (applied: readonly AppliedOp[]): void => {
+      try {
+        for (const op of applied) {
+          if (op.kind === 'remove') {
+            // An empty replacement IS the removal — see spliceEntryRows.
+            void webview.postMessage({ type: 'updateEntryRows', entryRowId: op.entryRowId, rows: [] });
+            continue;
+          }
+          const section = op.entry?.parent;
+          if (!section) throw new Error(`"${op.entry?.name}" is not in a section.`);
+          const rows = entryRowsOf(op.entry);
+          const filled = annotateDataRowsNow(uriString, rows);
+          if (op.kind === 'replace') {
+            void webview.postMessage({ type: 'updateEntryRows', entryRowId: op.entryRowId, rows });
+          } else {
+            void webview.postMessage({
+              type: 'insertEntryRows',
+              sectionRowId: buildSectionRowId(section.name),
+              beforeRowId: op.beforeRowId,
+              rows,
+            });
+          }
+          // The rows are on screen; the Usage column follows when the graph is cold. Addressed
+          // by the entry's CURRENT id, which for an insert is the run just added.
+          if (!filled) void postEntryRows(op.kind === 'replace' ? op.entryRowId : op.entry.id, op.entry);
+        }
+      } catch (err) {
+        // The model change has already landed, so the table must not be left showing the rows
+        // from before it. Repaint wide, then say so — after, because fresh rows are how the
+        // webview learns a failure is over and would wipe a banner posted first.
+        void post().then(() =>
+          webview.postMessage({ type: 'error', message: `Failed to update the row: ${(err as Error).message}` }),
+        );
+      }
+    };
+
+    /**
      * What the table edit in flight will need when its own change event arrives: the entry it
      * changed, the row id the screen holds that entry under, and the range replacement it
      * submitted.
@@ -311,6 +388,26 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * mismatch costs the wide repaint the user has always had, never a wrong row.
      */
     let hostEdit: HostEdit | null = null;
+
+    /**
+     * A write whose rows are ALREADY on screen — so the change event it fires has nothing left
+     * to paint.
+     *
+     * The structural edits (delete an entry, paste, drop, move) change the model with ops and
+     * paint before they write, exactly as a cell edit does. Their echo cannot then be a
+     * confirmation the way a cell edit's is: the bytes a delete writes are an element and a
+     * comma removed, a paste's are an element with no name in the model yet, and neither reads
+     * back as "this one entry now says that". Nothing narrow can plan them, so the change event
+     * would fall through to the wide repaint — 1.4 s on a 47.8 MB dictionary, spent rebuilding
+     * rows the user is already looking at.
+     *
+     * Same one-shot, prove-it-first rule as `hostEdit`: set immediately before the write, spent
+     * by the very next change event, and honoured only if that event is this write byte for byte
+     * (isEchoOfEdit). A write whose event never arrives leaves the flag behind, and the next
+     * change — a keystroke in the text view, an undo — cannot match it, so it costs a repaint
+     * rather than skipping one.
+     */
+    let paintedWrite: RangeReplacement | null = null;
 
     /**
      * The edits this host has written to this document, newest last — kept PAST their own
@@ -325,9 +422,16 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * undoes interactively, and the cost of a miss is the scan, which is what every undo used
      * to cost. Each holds two entry-sized strings, so this is kilobytes beside a document
      * measured in tens of megabytes.
+     *
+     * Bounded by SIZE too, since one edit is not: a same-document move writes a region reaching
+     * from the entry it took out to the end of the entries array, which on a real dictionary is
+     * megabytes of text in each direction. Sixteen of those held to save a repaint is the wrong
+     * trade — that undo repaints wide, as it always has.
      */
     const knownEdits: KnownEdit[] = [];
+    const REMEMBER_LIMIT = 1_000_000;
     const remember = (edit: KnownEdit): void => {
+      if (edit.submitted.text.length + edit.replaced.length > REMEMBER_LIMIT) return;
       knownEdits.push(edit);
       if (knownEdits.length > 16) knownEdits.shift();
     };
@@ -355,14 +459,18 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * still repaints rather than merely reconciling the model: the day the two disagree, the
      * bytes are what the user should be left looking at.
      */
-    const syncOwnEdit = (e: vscode.TextDocumentChangeEvent, hint: HostEdit | null): boolean => {
-      if (!hint) return false;
-      const changes = e.contentChanges.map((c) => ({
+    // A change event as the plain range replacements every path here reasons about. One reading
+    // of an event, so the four of them cannot disagree about what it said.
+    const changesOf = (e: vscode.TextDocumentChangeEvent): RangeReplacement[] =>
+      e.contentChanges.map((c) => ({
         rangeOffset: c.rangeOffset,
         rangeLength: c.rangeLength,
         text: c.text,
       }));
-      const plan = planOwnEdit(changes, hint);
+
+    const syncOwnEdit = (e: vscode.TextDocumentChangeEvent, hint: HostEdit | null): boolean => {
+      if (!hint) return false;
+      const plan = planOwnEdit(changesOf(e), hint);
       if (!plan) return false;
       // Same two preconditions the text-view path has: rows that match the text, and a tree
       // still registered for this document to apply the op to.
@@ -377,6 +485,44 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // instead of painting rows for an entry it did not resolve.
         if (!op || op.kind !== 'replace') return false;
         void postEntryRows(plan.entryRowId, op.entry);
+        return true;
+      } catch {
+        // The model may now be half-changed, so the caller's full repaint is the repair: it
+        // re-parses the text, which is the truth in this format.
+        invalidate(uriString);
+        modelInSync = false;
+        return false;
+      }
+    };
+
+    /**
+     * Repaint an UNDO or a REDO of one of this host's own STRUCTURAL edits — a delete, a paste,
+     * a drop, a move.
+     *
+     * The sibling below recovers a cell edit's undo by re-parsing the bytes that came back,
+     * because those bytes are one element and an element says everything about the entry it
+     * names. These edits write bytes that say nothing on their own: a deleted element and the
+     * comma that held it, an insertion the model has no name for yet, a move spanning two places
+     * at once. So what they MEANT is remembered with them as model ops, and either direction is
+     * recognised byte-for-byte at its exact offset (planKnownOps).
+     *
+     * Applying those ops is what makes the undo cost the edit: the entry comes back from the
+     * record the delete kept, rather than out of a fresh parse of 47.8 MB, and only the rows it
+     * occupies are repainted.
+     *
+     * Same two state preconditions as every narrow path — rows that match the text, and a tree
+     * still registered to apply the ops to. A refusal costs the wide repaint, which is what
+     * every structural undo used to cost.
+     */
+    const syncKnownOps = (e: vscode.TextDocumentChangeEvent): boolean => {
+      if (e.contentChanges.length !== 1 || knownEdits.length === 0) return false;
+      if (!modelInSync) return false;
+      const model = peekModel(uriString);
+      if (!model) return false;
+      const ops = planKnownOps(changesOf(e), knownEdits);
+      if (!ops || ops.length === 0) return false;
+      try {
+        repaintOps(applyEntryOps(model, ops));
         return true;
       } catch {
         // The model may now be half-changed, so the caller's full repaint is the repair: it
@@ -410,13 +556,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       if (!modelInSync) return false;
       const model = peekModel(uriString);
       if (!model) return false;
-      const changes = e.contentChanges.map((c) => ({
-        rangeOffset: c.rangeOffset,
-        rangeLength: c.rangeLength,
-        text: c.text,
-      }));
       try {
-        const plan = planKnownChange(model, changes, knownEdits);
+        const plan = planKnownChange(model, changesOf(e), knownEdits);
         if (!plan) return false;
         const entryRowId = plan.entry.id;
         const applied = applyEntryOps(model, [
@@ -498,27 +639,114 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       }
     };
 
+    /**
+     * The clipboard mark this view has already painted, and the narrow repaint that keeps it
+     * current.
+     *
+     * A cut or copy makes no document edit, yet the source row must gain or lose its affordance,
+     * so the hub asks every open table to repaint on every clipboard broadcast — and "repaint"
+     * used to mean the whole table here, which made a copy in ANY open .sldd cost this document a
+     * full re-parse and rebuild (~1.4 s on a 47.8 MB dictionary). At most TWO entries can be
+     * affected: the one that just took the mark and the one that held it before. A broadcast that
+     * changes neither — the usual case, the mark belonging to another document — now costs
+     * nothing at all.
+     *
+     * An affected entry that is no longer in the model is skipped rather than repainted wide: its
+     * rows are already gone (a cut+paste moves the very entry that held the mark), so there is
+     * nothing left to un-dim.
+     *
+     * Same shape as the binary provider's repaintClipMark, deliberately — the affordance has to
+     * mean the same thing in the two .sldd formats. The one difference is the guard below, which
+     * this format needs and that one has no equivalent of: rows here can be older than the text
+     * (see modelInSync), and only a full repaint can fix that.
+     */
+    let paintedMark: ClipMark | undefined;
+    const markKey = (mark?: ClipMark): string =>
+      mark ? JSON.stringify([mark.mode, mark.section, mark.name]) : '';
+    const repaintClipMark = (): void => {
+      const next = clipMarkOfDoc();
+      if (markKey(paintedMark) === markKey(next)) return;
+      // The rows on screen are not what the text says, so painting two entries over them would
+      // leave the rest stale — this is the wide repaint every broadcast used to be.
+      if (!modelInSync) {
+        void post();
+        return;
+      }
+      const affected = [paintedMark, next].filter((m): m is ClipMark => !!m);
+      let model: any;
+      try {
+        model = liveModel();
+      } catch {
+        // No tree to name the affected entries in — and a throw here would break the hub's
+        // broadcast to every OTHER view. The wide repaint is both the fallback and where the
+        // parse error gets reported; paintedMark is left alone because nothing was painted.
+        void post();
+        return;
+      }
+      paintedMark = next;
+      const ops: AppliedOp[] = [];
+      const seen = new Set<string>();
+      for (const mark of affected) {
+        const entry = findEntryByName(model, mark.section, mark.name);
+        // Both marks can name the same entry (a copy re-taken as a cut), and its rows only need
+        // painting once.
+        if (!entry || seen.has(entry.id)) continue;
+        seen.add(entry.id);
+        ops.push({ kind: 'replace', entryRowId: entry.id, entry });
+      }
+      if (ops.length > 0) repaintOps(ops);
+    };
+
     // Track this webview (mapped to its repaint) so clipboard-state changes from
     // any editor reach it — including a lazy cut, which only marks the clipboard
     // and needs a repaint to show the source row's affordance.
-    registerWebview(webview, post);
+    registerWebview(webview, repaintClipMark);
     // Register how to delete named entries from THIS document, so a cross-
     // document move whose SOURCE is this .sldd can complete its source-delete
     // via a format-appropriate edit (here: a full-text WorkspaceEdit).
     registerSourceDeleter(uriString, (targets) => deleteFromSourceDocument(uriString, targets));
 
-    // Apply new full text to the TextDocument via a WorkspaceEdit. This feeds
-    // VS Code's native undo stack (so undo/redo + dirty are automatic) and fires
-    // onDidChangeTextDocument, which repaints the table and any open text view.
-    const replaceAll = async (newText: string): Promise<void> => {
+    /**
+     * Write ONE region of the document. Feeds VS Code's native undo stack (so undo/redo and
+     * the dirty flag are automatic) and fires onDidChangeTextDocument, which repaints the
+     * table and any open text view.
+     *
+     * Every write in this provider is byte-scoped, because a WorkspaceEdit is stored as it was
+     * handed over: a full-document replace makes VS Code rewrite all 47.8 MB of a real
+     * dictionary to say a 1 KB thing, and keeps that rewrite as the undo step, so undoing it
+     * costs the same again. The region comes from the transform that knows it (structuralEdit's
+     * TextPatch) or, for the folded multi-step writes that cannot name one, from comparing the
+     * two texts (minimalReplacement).
+     *
+     * Throws when the document refuses the write. VS Code refuses a WorkspaceEdit whose document
+     * moved under it, and a refusal is a dropped edit — which, now that every structural path
+     * paints before it writes, would leave the table showing an edit the file never took. The
+     * callers' repair (undoPaint, or the wide repaint) is what makes that visible instead of
+     * silent.
+     */
+    const writePatch = async (patch: TextPatch): Promise<void> => {
       const edit = new vscode.WorkspaceEdit();
-      const fullRange = new vscode.Range(
-        document.positionAt(0),
-        document.positionAt(document.getText().length),
+      const range = new vscode.Range(
+        document.positionAt(patch.offset),
+        document.positionAt(patch.offset + patch.length),
       );
-      edit.replace(document.uri, fullRange, newText);
-      await vscode.workspace.applyEdit(edit);
+      edit.replace(document.uri, range, patch.text);
+      const written = await vscode.workspace.applyEdit(edit);
+      if (!written) throw new Error('the document rejected the edit (it may have changed on disk)');
     };
+
+    // The one region to write to make the document read exactly `newText`, for the folded
+    // multi-step edits that cannot name theirs. Named rather than written here, because a caller
+    // that paints before it writes has to REMEMBER what it wrote (see paintedWrite).
+    const patchFor = (result: { newText: string; patch?: TextPatch }, ownText: string): TextPatch =>
+      result.patch ?? minimalReplacement(ownText, result.newText);
+
+    // The range replacement a patch amounts to, as a change event will report it back.
+    const submittedOf = (patch: TextPatch): RangeReplacement => ({
+      rangeOffset: patch.offset,
+      rangeLength: patch.length,
+      text: patch.text,
+    });
 
     // Guard against applying an edit while the text view holds invalid JSON
     // (a mid-edit state). Returns true when the current text parses; otherwise
@@ -772,44 +1000,168 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       });
     };
 
-    // --- Shared skeleton for structural mutations (delete/addChild/paste) -------
-    // Guards JSON validity, refreshes the model from live text, locates the node,
-    // runs the pure transform, and applies the result as a WorkspaceEdit (native
-    // undo/redo). Repaint + reselect happen via onDidChangeTextDocument.
-    const applyStructural = async (
-      rowId: string,
-      transform: (currentText: string, node: any, model: any) => StructuralResult,
-    ): Promise<void> => {
+    // --- Structural edits (delete / add-child / paste / drop) -------------------
+    //
+    // Every one of them now has the shape the value edit above has — change the model, PAINT,
+    // then write the text — and for the same reason: the model can answer at once, and everything
+    // after the paint (locating the text, VS Code writing it, the change event it fires) happens
+    // with the answer already on screen. What used to happen instead was that the write's change
+    // event triggered the WIDE repaint: re-parse the document, diff every entry for its Modified
+    // mark, rebuild every row, post the lot — ~1.45 s and ~120 MB on a 47.8 MB dictionary, to add
+    // one row or take one away.
+    //
+    // What each edit changed is ALSO stated as entry-level ops, kept beside the bytes it wrote, so
+    // its undo can be applied rather than discovered (syncKnownOps). Both directions therefore
+    // cost what the edit cost.
+    //
+    // They are three functions rather than one because they differ in who is ahead of whom:
+    //   a nested child added or deleted — the transform mutates the model and reserializes the
+    //     owning entry's own span, so as far as the text is concerned it IS a value edit, and it
+    //     rides the same hostEdit/knownEdits rules;
+    //   a top-level ENTRY deleted — the transform is text-only (it needs the entry still attached
+    //     to work out where the selection lands), so the model change is an op applied beside it;
+    //   paste and drop — the transform attaches its new nodes itself (prepareEntryForPaste must,
+    //     to ask the section for a unique name), so the model is already ahead and what is owed is
+    //     the session index and the ops (opsOfPastedEntries).
+    //
+    // A structural paint is the one repaint that cannot be taken back row by row — an entry may
+    // have left the table or arrived in it — so a write that fails resyncs the whole view instead.
+    // That is the old cost, paid only when an edit did not happen.
+    const resyncWide = (message: string): void => {
+      void post().then(() => webview.postMessage({ type: 'error', message }));
+    };
+
+    /**
+     * The prologue every structural edit shares: the mid-edit JSON gate, a tree that matches the
+     * text, and the node the row names — resolved ONCE, because which shape a delete takes
+     * depends on what the row turned out to be.
+     */
+    const onStructuralTarget = async (rowId: string, run: (node: any) => Promise<void>): Promise<void> => {
+      let node: any;
       try {
         if (!ensureValidJson()) return;
-        const currentText = document.getText();
-
-        invalidate(uriString);
-        const model = getModel(uriString, name, currentText);
-        const node = findNode(uriString, rowId);
-        if (!node) {
-          webview.postMessage({ type: 'error', message: 'Could not locate the item in the model.' });
-          return;
-        }
-
-        const { newText, selectId } = transform(currentText, node, model);
-        await replaceAll(newText);
-        if (selectId) webview.postMessage({ type: 'selectRow', rowId: selectId });
+        liveModel();
+        node = findNode(uriString, rowId);
       } catch (err) {
         webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+        return;
+      }
+      if (!node) {
+        webview.postMessage({ type: 'error', message: 'Could not locate the item in the model.' });
+        return;
+      }
+      await run(node);
+    };
+
+    /**
+     * A structural edit WITHIN one entry: add a nested child, delete one.
+     *
+     * Entry-scoped in both halves — the transform reserializes the owning entry's span, and the
+     * repaint replaces that entry's run of rows — so nothing else in the table moves and nothing
+     * else in the text changes. Which also means the bytes it writes are an entry span replaced by
+     * an entry span, exactly what a cell edit writes: its echo is confirmed and its undo planned
+     * by the paths that already read an element back out of the bytes (syncOwnEdit,
+     * syncKnownChange), with no ops to remember.
+     */
+    const applyEntryStructural = async (
+      node: any,
+      transform: (text: string, node: any) => StructuralResult,
+    ): Promise<void> => {
+      // What a failure has to take back, set the moment the screen is ahead of the file. See
+      // applyEdit, whose window this is the same one.
+      let paintedRowId: string | null = null;
+      try {
+        const currentText = document.getText();
+        const entry = findOwningEntry(node);
+        if (!entry) {
+          webview.postMessage({ type: 'error', message: 'Could not locate the owning entry in the model.' });
+          return;
+        }
+        // A nested child changes nothing about the entry's own name, so the id the rows carry and
+        // the id the model spells are one id.
+        const entryRowId = entry.id;
+
+        // Through entryOps for the reason applyEdit is: the transform adds or removes a node
+        // inside this subtree, a node id is a PATH, and nothing re-indexes the ids beneath it now
+        // that the repaint no longer re-parses the document.
+        const result = mutateEntry(entry, () => transform(currentText, node));
+
+        // PAINT — in this run, before the ~100 ms span scan the transform already did and the
+        // write below.
+        paintedRowId = entryRowId;
+        postEntryRowsNow(entryRowId, entry);
+        if (result.selectId) webview.postMessage({ type: 'selectRow', rowId: result.selectId });
+
+        const patch = patchFor(result, currentText);
+        const submitted = submittedOf(patch);
+        // Set immediately before the write, so the event this write fires is the one that spends
+        // it (see hostEdit).
+        hostEdit = { entryId: entry.id, rowId: entryRowId, submitted };
+        await writePatch(patch);
+        remember({ submitted, replaced: currentText.slice(patch.offset, patch.offset + patch.length) });
+      } catch (err) {
+        hostEdit = null;
+        const message = 'Failed to apply edit: ' + (err as Error).message;
+        // The tree was mutated and the rows painted for a write that did not happen, and the text
+        // is the truth in this format.
+        if (paintedRowId) undoPaint(paintedRowId, message);
+        else webview.postMessage({ type: 'error', message });
       }
     };
 
-    // Delete transform: a top-level entry drops its array element; a nested
-    // child is removed from its parent and the owning entry is reserialized.
-    const deleteTransform = (text: string, node: any): StructuralResult =>
-      node.isEntry ? deleteEntry(text, node) : deleteChild(text, node);
+    /**
+     * Delete a top-level ENTRY: its element leaves the array, its run of rows leaves the table.
+     *
+     * The one shape whose transform touches no model at all, because it needs the entry where it
+     * stands: which element to cut is the entry's selector, and where the selection lands is its
+     * neighbour's row. So the model change is an op applied beside it — and captured BEFORE it,
+     * while the entry still has a section and a position for an undo to put it back in.
+     */
+    const applyDeleteEntry = async (entry: any): Promise<void> => {
+      let painted = false;
+      try {
+        const currentText = document.getText();
+        const model = peekModel(uriString);
+        if (!model) throw new Error('the document has no model to edit');
+        const entryRowId = entry.id;
+        const pairs: EntryOpPair[] = [{ redo: removeOp(entryRowId), undo: insertOp(entry) }];
+
+        const result = deleteEntry(currentText, entry);
+        // Model, then paint: the removal takes the entry out of the tree and its rows out of the
+        // table, and the row id is all either of them needs.
+        const applied = applyEntryOps(model, [pairs[0].redo]);
+        painted = true;
+        repaintOps(applied);
+        if (result.selectId) webview.postMessage({ type: 'selectRow', rowId: result.selectId });
+
+        const patch = patchFor(result, currentText);
+        const submitted = submittedOf(patch);
+        // The rows are already on screen, and the bytes this writes — an element and the comma
+        // that held it, gone — are not an element anything can read back. Both facts are what the
+        // change event needs to be told (paintedWrite), and what its undo needs (the ops).
+        paintedWrite = submitted;
+        await writePatch(patch);
+        remember({
+          submitted,
+          replaced: currentText.slice(patch.offset, patch.offset + patch.length),
+          patch: patchOfPairs(pairs),
+        });
+      } catch (err) {
+        paintedWrite = null;
+        const message = 'Failed to apply edit: ' + (err as Error).message;
+        if (painted) resyncWide(message);
+        else webview.postMessage({ type: 'error', message });
+      }
+    };
 
     const applyDelete = (msg: { rowId: string }): Promise<void> =>
-      applyStructural(msg.rowId, deleteTransform);
+      onStructuralTarget(msg.rowId, (node) =>
+        // A top-level entry leaves the dictionary; a nested child leaves its entry.
+        node.isEntry ? applyDeleteEntry(node) : applyEntryStructural(node, deleteChild),
+      );
 
     const applyAddChild = (msg: { rowId: string }): Promise<void> =>
-      applyStructural(msg.rowId, (text, node) => addChildEdit(text, node));
+      onStructuralTarget(msg.rowId, (node) => applyEntryStructural(node, addChildEdit));
 
     // Cut is LAZY: it only marks the entry on the clipboard (in cut mode) and
     // makes no text edit yet. The source is removed at PASTE time — so a
@@ -860,12 +1212,48 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       }
     };
 
-    // Paste resolves its TARGET SECTION from the right-clicked row, which may be
-    // a section HEADER (`section:<name>`) — the only clickable target when the
-    // section is empty. findNode can't resolve a header id, so paste does its own
-    // section resolution (resolveSectionForPaste) instead of going through
-    // applyStructural's node-lookup, which would bail on a header row.
+    // The target section of a paste or a drop, from the row that was clicked or dropped on —
+    // which may be a section HEADER (`section:<name>`), the only target an empty section has.
+    // findNode cannot resolve a header id, which is why these two paths resolve their own
+    // section rather than going through onStructuralTarget, whose node lookup would bail.
+    const targetSection = (model: any, rowId: string): any =>
+      resolveSectionForPaste(model, findNode(uriString, rowId), rowId);
+
+    /**
+     * A same-document move's REMOVALS, stated as ops and applied to the live model — or nothing,
+     * which means this move cannot take the narrow path at all.
+     *
+     * Nothing is the honest answer for two different reasons, and the caller owes the same thing
+     * for both: re-read the model from the trimmed text, as this path always used to. The model it
+     * is holding would otherwise keep an entry the text has just lost — and that is not only a
+     * stale row, it is a WRONG PASTE: `prepareEntryForPaste` asks the section for a unique name,
+     * so a source still standing there pushes the copy to "PI1" and the move renames what it
+     * moved.
+     *
+     * Narrow only for a SINGLE source. An undo replays the inverse ops in reverse order
+     * (patchOfPairs), and each insert names the index its entry held while the others were still
+     * in place — true of one entry, and not of several taken out of one section: putting the later
+     * one back first leaves it a slot short of where it was. Cut-and-paste always moves one entry;
+     * a multi-select drag-move is the rare case, and the wide repaint is what it has always cost.
+     */
+    const moveRemovals = (
+      model: any,
+      targets: readonly EntrySelector[],
+    ): { pairs: EntryOpPair[]; applied: AppliedOp[] } | null => {
+      if (targets.length !== 1) return null;
+      const source = findEntryBySelector(model, targets[0]);
+      if (!source) return null;
+      const pairs: EntryOpPair[] = [{ redo: removeOp(source.id), undo: insertOp(source) }];
+      try {
+        return { pairs, applied: applyEntryOps(model, [pairs[0].redo]) };
+      } catch {
+        // Half-applied at worst, and the caller's re-read discards it whole.
+        return null;
+      }
+    };
+
     const applyPaste = async (msg: { rowId: string }): Promise<void> => {
+      let painted = false;
       try {
         if (!ensureValidJson()) return;
         const clip = getClipboard();
@@ -876,11 +1264,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
         // Resolve the target section first, so we can detect a same-section cut
         // (a no-op the same-document drag path also refuses) before any edit.
-        let currentText = document.getText();
-        invalidate(uriString);
-        let model = getModel(uriString, name, currentText);
-        let node = findNode(uriString, msg.rowId);
-        let section = resolveSectionForPaste(model, node, msg.rowId);
+        const docText = document.getText();
+        let model = liveModel();
+        let section = targetSection(model, msg.rowId);
         if (!section) {
           webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
           return;
@@ -902,25 +1288,71 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           return;
         }
 
+        // What the edit amounts to in the model, and what it leaves to repaint: the removals a
+        // move makes, then the entries the paste attaches.
+        const pairs: EntryOpPair[] = [];
+        const applied: AppliedOp[] = [];
+        let narrow = true;
+
         // A same-document cut is a MOVE: remove the source first (in the same
-        // text) so the paste keeps the original name, then re-resolve against
-        // the trimmed model. This makes the whole move ONE WorkspaceEdit = one
-        // undo step (mirrors the same-document drag-move).
+        // text) so the paste keeps the original name. This makes the whole move ONE
+        // WorkspaceEdit = one undo step (mirrors the same-document drag-move).
+        //
+        // And with it goes the paste's ability to name the region it changes: its patch is stated
+        // against this trimmed text, not against the document, so only the two texts together say
+        // what to write.
+        let workingText = docText;
+        let againstDocument = true;
         if (isCut && sameDoc && srcName) {
-          currentText = deleteEntriesByName(currentText, [srcSelector]);
-          invalidate(uriString);
-          model = getModel(uriString, name, currentText);
-          node = findNode(uriString, msg.rowId);
-          section = resolveSectionForPaste(model, node, msg.rowId);
-          if (!section) {
-            webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
-            return;
+          workingText = deleteEntriesByName(docText, [srcSelector]);
+          againstDocument = false;
+          const removals = moveRemovals(model, [srcSelector]);
+          if (removals) {
+            pairs.push(...removals.pairs);
+            applied.push(...removals.applied);
+          } else {
+            narrow = false;
+            modelInSync = false;
+            invalidate(uriString);
+            model = getModel(uriString, name, workingText);
+            section = targetSection(model, msg.rowId);
+            if (!section) {
+              webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
+              return;
+            }
           }
         }
 
-        const { newText, selectId } = pasteEntry(currentText, section, clip.payload);
-        await replaceAll(newText);
-        if (selectId) webview.postMessage({ type: 'selectRow', rowId: selectId });
+        // Read AFTER any removal, because a move within one section shortens the very array the
+        // paste is about to append to. Everything from here on is what the paste added.
+        const addedFrom = (section.children as any[]).length;
+        const pasted = pasteEntry(workingText, section, clip.payload);
+        if (narrow) {
+          const added = opsOfPastedEntries(section, addedFrom);
+          pairs.push(...added.pairs);
+          applied.push(...added.applied);
+          // PAINT — the model already holds the pasted entry (prepareEntryForPaste attached it),
+          // so the rows go out now, ahead of the write.
+          painted = true;
+          repaintOps(applied);
+        } else {
+          // The tree registered above describes the trimmed text, not the document: the change
+          // event this write fires has to repaint the old way, from a re-parse.
+          modelInSync = false;
+        }
+        if (pasted.selectId) webview.postMessage({ type: 'selectRow', rowId: pasted.selectId });
+
+        const patch = againstDocument ? patchFor(pasted, docText) : minimalReplacement(docText, pasted.newText);
+        const submitted = submittedOf(patch);
+        if (narrow) paintedWrite = submitted;
+        await writePatch(patch);
+        if (narrow) {
+          remember({
+            submitted,
+            replaced: docText.slice(patch.offset, patch.offset + patch.length),
+            patch: patchOfPairs(pairs),
+          });
+        }
 
         try {
           // A cross-document cut removes the source from ITS document via that
@@ -939,13 +1371,22 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           // reporting a copy the user must finish by hand; a throw is the same
           // situation and must not behave differently. A copy stays on the
           // clipboard for re-paste.
+          //
+          // The broadcast's repaint costs this view nothing: the only row here the emptied
+          // clipboard could change is the cut source's, and a same-document cut has just removed
+          // it, so repaintClipMark finds nothing to un-dim.
           if (isCut) {
             clearClipboard();
             broadcastClipboardState();
           }
         }
       } catch (err) {
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+        paintedWrite = null;
+        const message = `Failed to apply edit: ${(err as Error).message}`;
+        // Rows for entries that arrived or left cannot be put back one run at a time — the wide
+        // repaint is the repair, and it is only ever reached by an edit that did not happen.
+        if (painted) resyncWide(message);
+        else webview.postMessage({ type: 'error', message });
       }
     };
 
@@ -988,6 +1429,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // own edit. The target section is resolved from the dropped-on row, which may
     // be a section header (an empty section's only drop target).
     const applyDrop = async (msg: { rowId: string; mode: 'copy' | 'move' }): Promise<void> => {
+      let painted = false;
       try {
         if (!ensureValidJson()) return;
         const drag = getDrag();
@@ -1005,26 +1447,74 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           .map((it) => entrySelectorOf(it.payload))
           .filter((s) => s.name.length > 0);
 
-        let currentText = document.getText();
-        // A same-document move removes the originals first so the pasted copies
-        // keep their names (mirrors cut-then-paste). A copy, or a cross-document
-        // move, leaves this document's originals untouched here.
-        if (isMove && sameDoc) {
-          currentText = deleteEntriesByName(currentText, sourceTargets);
-        }
-
-        invalidate(uriString);
-        const model = getModel(uriString, name, currentText);
-        const node = findNode(uriString, msg.rowId);
-        const section = resolveSectionForPaste(model, node, msg.rowId);
+        const docText = document.getText();
+        let model = liveModel();
+        let section = targetSection(model, msg.rowId);
         if (!section) {
           webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
           return;
         }
 
-        const { newText, selectIds } = pasteEntries(currentText, section, payloads);
-        await replaceAll(newText);
+        const pairs: EntryOpPair[] = [];
+        const applied: AppliedOp[] = [];
+        let narrow = true;
+
+        // A same-document move removes the originals first so the pasted copies
+        // keep their names (mirrors cut-then-paste). A copy, or a cross-document
+        // move, leaves this document's originals untouched here.
+        //
+        // And with it goes the paste's ability to name the region it changes: its patch is
+        // stated against this trimmed text, not against the document.
+        let workingText = docText;
+        let againstDocument = true;
+        if (isMove && sameDoc) {
+          workingText = deleteEntriesByName(docText, sourceTargets);
+          againstDocument = false;
+          const removals = moveRemovals(model, sourceTargets);
+          if (removals) {
+            pairs.push(...removals.pairs);
+            applied.push(...removals.applied);
+          } else {
+            // See moveRemovals: the model has to be re-read from the trimmed text, or the paste
+            // renames the entries it is moving.
+            narrow = false;
+            modelInSync = false;
+            invalidate(uriString);
+            model = getModel(uriString, name, workingText);
+            section = targetSection(model, msg.rowId);
+            if (!section) {
+              webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
+              return;
+            }
+          }
+        }
+
+        // After the removals, for the same reason applyPaste reads it there.
+        const addedFrom = (section.children as any[]).length;
+        const dropped = pasteEntries(workingText, section, payloads);
+        if (narrow) {
+          const added = opsOfPastedEntries(section, addedFrom);
+          pairs.push(...added.pairs);
+          applied.push(...added.applied);
+          painted = true;
+          repaintOps(applied);
+        } else {
+          modelInSync = false;
+        }
+        const selectIds = dropped.selectIds;
         if (selectIds.length) webview.postMessage({ type: 'selectRow', rowId: selectIds[selectIds.length - 1] });
+
+        const patch = againstDocument ? patchFor(dropped, docText) : minimalReplacement(docText, dropped.newText);
+        const submitted = submittedOf(patch);
+        if (narrow) paintedWrite = submitted;
+        await writePatch(patch);
+        if (narrow) {
+          remember({
+            submitted,
+            replaced: docText.slice(patch.offset, patch.offset + patch.length),
+            patch: patchOfPairs(pairs),
+          });
+        }
 
         // Cross-document move: remove the originals from the SOURCE document via
         // ITS OWN format-appropriate deleter (the source may be a binary .sldd),
@@ -1037,7 +1527,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         clearDrag();
         broadcastDragState();
       } catch (err) {
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+        paintedWrite = null;
+        const message = `Failed to apply edit: ${(err as Error).message}`;
+        if (painted) resyncWide(message);
+        else webview.postMessage({ type: 'error', message });
       }
     };
 
@@ -1069,8 +1562,15 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       }
       const trimmed = deleteEntriesByName(srcText, targets);
       if (trimmed === srcText) return;
+      // Byte-scoped, for the same reason every write to THIS document is: the source may be
+      // another 47.8 MB dictionary, and removing one entry from it should not rewrite it.
+      const patch = minimalReplacement(srcText, trimmed);
       const edit = new vscode.WorkspaceEdit();
-      edit.replace(uri, new vscode.Range(srcDoc.positionAt(0), srcDoc.positionAt(srcText.length)), trimmed);
+      const range = new vscode.Range(
+        srcDoc.positionAt(patch.offset),
+        srcDoc.positionAt(patch.offset + patch.length),
+      );
+      edit.replace(uri, range, patch.text);
       await vscode.workspace.applyEdit(edit);
     };
 
@@ -1134,11 +1634,19 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       // that survived its own event must not be waiting for the next one.
       const hint = hostEdit;
       hostEdit = null;
+      // Spent on the same terms, and first: a structural edit painted its own rows before it
+      // wrote, so if this event is that write there is nothing left to do. Checked before
+      // anything that reads the document, since being sure costs three comparisons.
+      const painted = paintedWrite;
+      paintedWrite = null;
+      if (painted && isEchoOfEdit(changesOf(e), painted)) return;
       // The host's own edit first, since it is the one case that needs no discovery at all.
       if (syncOwnEdit(e, hint)) return;
       // Then an undo or a redo of an edit it wrote earlier: the other change it needs no
       // discovery for, and the one the recovery path below was making the user wait ~175 ms of
-      // reading and walking for.
+      // reading and walking for. Structural first — a delete's undo and a cell edit's are
+      // recognised the same way, but only one of them has an element in the bytes to read.
+      if (syncKnownOps(e)) return;
       if (syncKnownChange(e)) return;
       if (syncOneEntry(e, hint)) return;
       void post();

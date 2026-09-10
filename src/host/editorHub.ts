@@ -56,6 +56,12 @@ export function unregisterSourceDeleter(uriString: string): void {
 // Broadcast the clipboard state (+ repaint) to every live webview across both
 // providers, so a cut/copy in any .sldd enables Paste and shows the affordance
 // in every other open .sldd — including across the JSON/binary format boundary.
+//
+// The repaint exists for the LAZY CUT, which makes no document edit at all and so
+// has nothing else to bring the dimmed affordance onto its source row. Both
+// providers register a repaint scoped to the at most two entries a clipboard mark
+// can move between, so this fan-out costs a table nothing when the mark it holds
+// did not change (see repaintClipMark).
 export function broadcastClipboardState(): void {
   for (const [wv, repaint] of liveWebviews) {
     wv.postMessage({ type: 'clipboardState', ...clipboardState() });

@@ -25,7 +25,7 @@
 // mis-paint a row until the next full repaint, not write anything wrong to disk.
 
 import { locateChangedEntry, type ChangeRegion } from './jsonEntryScan.js';
-import type { EntryOp, EntryRecord } from './entryOps.js';
+import type { EntryOp, EntryPatch, EntryRecord } from './entryOps.js';
 
 /** The one entry a change touched, and the record the text now spells for it. */
 export interface EntrySyncPlan {
@@ -100,6 +100,12 @@ export interface KnownEdit {
   submitted: RangeReplacement;
   /** The text it wrote over — what an undo of it writes back. */
   replaced: string;
+  /**
+   * The model ops that restore either side of it, for a STRUCTURAL edit — one whose meaning
+   * cannot be read back out of the bytes it writes (see planKnownOps). A cell edit needs none:
+   * the bytes it writes are one element, and re-parsing that element says everything.
+   */
+  patch?: EntryPatch;
 }
 
 /**
@@ -295,6 +301,38 @@ export function planKnownChange(
     if (isEchoOfEdit(changes, past.submitted) || isUndoOfEdit(changes, past)) {
       return planFromElementText(model, changes[0].text);
     }
+  }
+  return null;
+}
+
+/**
+ * The model ops an undo or a redo of one of the host's own STRUCTURAL edits amounts to.
+ *
+ * planKnownChange above recovers a cell edit's undo by re-parsing the bytes that came back,
+ * which works because those bytes are one element and an element says everything about the
+ * entry it names. A structural edit's bytes do not. A delete writes back an element AND the
+ * comma that separated it; a paste's undo writes back nothing at all; a move's write spans two
+ * places at once. There is no element to read, so what the change MEANS is not in its text — it
+ * is in what the host knew when it made the edit, which is why the ops are remembered with it.
+ *
+ * Recognition is the same byte-exact test in both directions (isEchoOfEdit for a redo,
+ * isUndoOfEdit for an undo), against the same newest-first ring, and inherits the same guards:
+ * an edit anywhere else shifts the offset and the match fails, and a batch is refused because
+ * its later offsets are stated against the text before it. An edit remembered without ops
+ * answers null and is left to the paths that read bytes.
+ *
+ * A miss costs the wide repaint, which is what every structural undo used to cost.
+ */
+export function planKnownOps(
+  changes: readonly RangeReplacement[],
+  known: readonly KnownEdit[],
+): EntryOp[] | null {
+  if (changes.length !== 1) return null;
+  for (let i = known.length - 1; i >= 0; i--) {
+    const past = known[i];
+    if (!past.patch) continue;
+    if (isEchoOfEdit(changes, past.submitted)) return past.patch.redo;
+    if (isUndoOfEdit(changes, past)) return past.patch.undo;
   }
   return null;
 }

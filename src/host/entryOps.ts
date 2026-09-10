@@ -32,6 +32,7 @@
 // with the wide repaint, which rebuilds from the text that is already correct.
 
 import { DataModel } from 'data-explorer-core';
+import { toEntrySelector, type EntrySelector } from './entrySelector.js';
 
 /** One entry serialized the way `SectionNode.parseEntry` takes it back. */
 export type EntryRecord = Record<string, unknown>;
@@ -170,6 +171,75 @@ export function insertAnchorOf(entry: any): string | undefined {
   const siblings = (entry?.parent?.children ?? []) as any[];
   const next = siblings[siblings.indexOf(entry) + 1];
   return next ? next.id : undefined;
+}
+
+/**
+ * The live entry a clipboard or drag selector means, or nothing.
+ *
+ * A move deletes its source by NAME (that is all a payload carries across documents), and
+ * both providers need the model node behind that name to state the removal as an op. Same
+ * rule as the text splices in `deleteEntriesByName`: match on name, and consult the uuid only
+ * when more than one entry answers to it — because a .sldd holds several namespaces, so two
+ * entries legitimately share a name.
+ *
+ * Answers null rather than guessing when the name is ambiguous and the uuid cannot settle it.
+ * The caller's fallback is the wide repaint, which is slow; moving an entry the user did not
+ * touch is wrong.
+ */
+export function findEntryBySelector(model: any, target: string | EntrySelector): any {
+  const selector = toEntrySelector(target);
+  const matches: any[] = [];
+  for (const section of (model?.children ?? []) as any[]) {
+    for (const entry of (section.children ?? []) as any[]) {
+      if (entry.name === selector.name) matches.push(entry);
+    }
+  }
+  if (matches.length <= 1) return matches[0] ?? null;
+  if (!selector.uuid) return null;
+  const byUuid = matches.filter((e) => (e.metadata as any)?.uuid === selector.uuid);
+  return byUuid.length === 1 ? byUuid[0] : null;
+}
+
+/**
+ * The single live entry a section+name pair names, or null.
+ *
+ * Used where the thing to be found is known by SECTION AND NAME rather than by row id: a
+ * clipboard mark travels that way, because it may have been captured in another document and
+ * a row id is a path into this one. Which also settles the ambiguity findEntryBySelector has
+ * to consult a uuid for — a .sldd holds several namespaces, so two entries legitimately share
+ * a name, but only one per section can.
+ */
+export function findEntryByName(model: any, sectionName: string, entryName: string): any {
+  const section = ((model?.children ?? []) as any[]).find((s) => s.name === sectionName);
+  return ((section?.children ?? []) as any[]).find((e) => e.name === entryName) ?? null;
+}
+
+/**
+ * The ops and the repaint for entries a paste has ALREADY attached to `section`.
+ *
+ * Paste is the one transform that runs ahead of its ops: `prepareEntryForPaste` has to attach
+ * the new node before it can ask the section for a unique name, so by the time the caller
+ * looks there is nothing left to apply — the model is already right, except for the session
+ * index. Hence this shape, which does the two things that are still owed: index each new
+ * subtree (a node id is a PATH, so an entry that joined the tree outside an op is in no
+ * index, and the row the paste selects would not resolve for the next edit), and describe
+ * what happened for the undo stack and the repaint.
+ *
+ * `addedFrom` is the section's child count read BEFORE the transform. Everything from there
+ * on is new, in the order it was pasted, because parseEntry appends.
+ */
+export function opsOfPastedEntries(
+  section: any,
+  addedFrom: number,
+): { pairs: EntryOpPair[]; applied: AppliedOp[] } {
+  const pairs: EntryOpPair[] = [];
+  const applied: AppliedOp[] = [];
+  for (const entry of ((section?.children ?? []) as any[]).slice(addedFrom)) {
+    DataModel.indexSubtree(entry);
+    pairs.push({ redo: insertOp(entry), undo: removeOp(entry.id) });
+    applied.push({ kind: 'insert', entry, beforeRowId: insertAnchorOf(entry) });
+  }
+  return { pairs, applied };
 }
 
 /**
