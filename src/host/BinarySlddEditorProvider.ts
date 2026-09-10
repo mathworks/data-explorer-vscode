@@ -26,6 +26,7 @@ import { serializeEntryToXml, DataModel, type ParseWarning } from 'data-explorer
 // that a dictionary this host could not read is not passed on as an empty one, which
 // the reader itself no longer enforces (it recovers and warns instead).
 import { readSlddParts } from './slddContent.js';
+import { DATA_PART_XML } from '../common/slddParts.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { findOwningEntry, resolveSectionForPaste, buildDragSnapshot } from './structuralEdit.js';
 import { copyEntryToClipboard } from './clipboardAction.js';
@@ -201,7 +202,7 @@ class BinarySlddDocument implements vscode.CustomDocument {
    */
   resetParts(zip: Record<string, Uint8Array>): void {
     for (const member of Object.keys(this.zipMeta)) delete this.zipMeta[member];
-    for (const [member, data] of Object.entries(zip)) if (member !== 'data/chunk0.xml') this.zipMeta[member] = data;
+    for (const [member, data] of Object.entries(zip)) if (member !== DATA_PART_XML) this.zipMeta[member] = data;
   }
 
   /**
@@ -265,11 +266,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     const source = openContext.backupId ? vscode.Uri.parse(openContext.backupId) : uri;
     const bytes = await vscode.workspace.fs.readFile(source);
     const zip = unzipSync(bytes);
-    const chunk = zip['data/chunk0.xml'];
-    if (!chunk) throw new Error('Missing data/chunk0.xml in binary SLDD');
+    const chunk = zip[DATA_PART_XML];
+    if (!chunk) throw new Error(`Missing ${DATA_PART_XML} in binary SLDD`);
     const chunkXml = new TextDecoder().decode(chunk);
     const zipMeta: Record<string, Uint8Array> = {};
-    for (const [k, v] of Object.entries(zip)) if (k !== 'data/chunk0.xml') zipMeta[k] = v;
+    for (const [k, v] of Object.entries(zip)) if (k !== DATA_PART_XML) zipMeta[k] = v;
     const doc = new BinarySlddDocument(uri, chunkXml, zipMeta);
     // Relay the document's edit events to the provider-level emitter VS Code listens on.
     doc.onDidChangeCustomDocument((e) => this._onDidChangeCustomDocument.fire(e));
@@ -1033,7 +1034,7 @@ ${BANNERS_HTML}
   async revertCustomDocument(document: BinarySlddDocument, _token: vscode.CancellationToken): Promise<void> {
     const bytes = await vscode.workspace.fs.readFile(document.uri);
     const zip = unzipSync(bytes);
-    const chunk = zip['data/chunk0.xml'];
+    const chunk = zip[DATA_PART_XML];
     if (chunk) {
       document.chunkXml = new TextDecoder().decode(chunk);
       // The parts too, and for the same reason: an edit can have patched one of them (a
@@ -1150,7 +1151,7 @@ ${BANNERS_HTML}
       }
     }
     const zipEntries: Record<string, Uint8Array> = { ...document.zipMeta };
-    zipEntries['data/chunk0.xml'] = new TextEncoder().encode(document.chunkXml);
+    zipEntries[DATA_PART_XML] = new TextEncoder().encode(document.chunkXml);
     const zipped = zipSync(zipEntries, { level: mode === 'save' ? 6 : 1 });
     await vscode.workspace.fs.writeFile(dest, zipped);
     return gated;

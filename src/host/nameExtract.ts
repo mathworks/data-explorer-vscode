@@ -9,7 +9,7 @@
 // it answers only "what entry names exist, and where", never how they resolve or
 // relate. Duplicate names across files are preserved (each becomes its own record)
 // so a global "search entries by name" can list every occurrence.
-import { blockKey, blockLabel, joinBlockPath } from 'data-explorer-core';
+import { blockKey, blockLabel, joinBlockPath, slddChunkContent } from 'data-explorer-core';
 import { uriBasename } from '../common/pathUtil.js';
 
 export type EntryKind = 'sldd' | 'mat' | 'workspace' | 'block';
@@ -52,13 +52,17 @@ function nameRecords<T>(
   return records;
 }
 
-// Entry names from an .sldd (JSON or binary/zip; both share the in-memory
-// __MW_TEXT_PARTS__ shape). Traversal mirrors usageGraph's slddSummary:
-// content.__MW_TEXT_PARTS__['__MW_TEXT_PART__/data/chunk0'].__MW_TEXT_content.entries[].name.
+// Entry names from an .sldd (JSON or binary/zip; both share the same in-memory shape).
+//
+// Reached through core's `slddChunkContent`, which is the accessor core publishes for
+// exactly this walk. This function used to spell the three-key path itself — a fourth
+// reader of a path core's two writers build — and the drift it invited is silent in the
+// worst way: one wrong key yields no entries, so a dictionary full of definitions
+// contributes nothing to the name index and search simply does not find it. There is no
+// error to see and no row missing from a table. structuralIndex.ts had already switched;
+// this was the straggler.
 export function namesFromSldd(content: Record<string, unknown>, sourceUri: string): NameRecord[] {
-  const parts = content?.__MW_TEXT_PARTS__ as Record<string, unknown> | undefined;
-  const chunk = parts?.['__MW_TEXT_PART__/data/chunk0'] as Record<string, unknown> | undefined;
-  const inner = chunk?.__MW_TEXT_content as Record<string, unknown> | undefined;
+  const inner = slddChunkContent(content);
   const entries = (inner?.entries as { name?: string }[] | undefined) ?? [];
   return nameRecords(entries, (entry) => entry?.name, sourceUri, 'sldd');
 }
