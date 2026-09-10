@@ -24,7 +24,7 @@
 //
 // usageGraph.ts adds the vscode file I/O in front of this and nothing else, so a
 // test here drives the same path the extension runs.
-import { buildUsageIndex, type NodeUsage, type ParamOrigin, type UsageIndex } from 'data-explorer-core';
+import { blockLabel, buildUsageIndex, type NodeUsage, type ParamOrigin, type UsageIndex } from 'data-explorer-core';
 import { uriBasename } from '../common/pathUtil.js';
 
 // A file the graph is built from, already read. `path` decides how it is parsed
@@ -71,6 +71,12 @@ export interface BlockLink {
 }
 
 // One parameter of a block, with where its value came from: `Gain=Kp (dict.sldd)`.
+//
+// `source` is that place as a reader should see it, which is not one kind of string: a
+// linked file is its basename, a mask parameter is the masked BLOCK it belongs to, and
+// the block's own model workspace is BLANK — the one scope a model view already names.
+// Which of the three a cell has is not recoverable from here, and does not need to be;
+// `linkTarget` carries the channel that navigates to it. See `toParamLink`.
 export interface ParamLink {
   property: string;
   paramName: string;
@@ -141,6 +147,31 @@ function toBlockLink(usage: NodeUsage, modelNames: Map<string, string>): BlockLi
 }
 
 function toParamLink(origin: ParamOrigin): ParamLink {
+  // A mask parameter is the one origin that is not a file: `Gain = g1` inside a masked
+  // subsystem reads that subsystem's own `g1`, which lives in the model the block is
+  // already in. So the two fields both mean something else here.
+  //
+  // The SOURCE names the masked BLOCK (`Gain=g1 (MulAdd)`) rather than a basename,
+  // because a basename would be the open model's own name — the qualifier every other
+  // arm below deliberately drops as noise — while the block is the thing a reader
+  // cannot otherwise see. It earns a qualifier for the same reason a `.sldd` does: the
+  // value came from somewhere other than the one implicit scope.
+  //
+  // The TARGET is the `blocks:` channel, because core answers a mask origin with the
+  // masked block's KEY and not a name (see ParamOrigin.linkTarget). Which is also the
+  // more useful click: there is no row anywhere named `g1`, and the row the target does
+  // reach — MulAdd's — is the one whose own cell reads `g1=g1_param`. Two hops, the
+  // shape MATLAB gives the same chain.
+  if (origin.kind === 'mask' && origin.maskBlock) {
+    return {
+      property: origin.property,
+      paramName: origin.expression,
+      // The block's LABEL, through core's own rule, so a masked block Simulink recorded
+      // with no name reads `<SID: 65>` here exactly as it does in its own row.
+      source: blockLabel(origin.maskBlock.blockName, origin.maskBlock.sid),
+      linkTarget: `blocks:${origin.linkTarget}`,
+    };
+  }
   // A param resolved to the block's OWN model workspace needs no source suffix — the
   // value alone (e.g. `Gain=Kp`) is unambiguous in a model view. Only an EXTERNAL
   // source (linked .sldd/.mat) gets a `(basename)` qualifier, since that is where
