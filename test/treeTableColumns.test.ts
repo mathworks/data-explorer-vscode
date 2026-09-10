@@ -394,6 +394,33 @@ describe('the column menu responds to real DOM events', () => {
     table.remove();
   });
 
+  it('a drag over the upper half of an item drops the column BEFORE it', async () => {
+    // Which side of an item the cursor is on is decided by comparing the pointer
+    // against the item's midpoint, and it is the only thing that distinguishes
+    // "insert above" from "insert below". Get it the wrong way round and every
+    // reorder lands one slot away from where the user aimed. The test above covers
+    // the lower half, which is what happy-dom's all-zero rects produce by default,
+    // so the item's box is stubbed here to put the pointer genuinely above the mid.
+    //
+    // The dragover is dispatched as a MouseEvent: happy-dom's DragEvent is a bare
+    // Event that drops clientX/clientY, so a DragEvent here would arrive with no
+    // pointer position at all and could only ever produce 'bottom'. The handler
+    // reads nothing a MouseEvent lacks.
+    const table = await openMenu();
+    const target = menuItem(table, 'Value');
+    const box = { x: 0, y: 100, top: 100, left: 0, right: 200, bottom: 120, width: 200, height: 20 };
+    target.getBoundingClientRect = () => ({ ...box, toJSON: () => box }) as DOMRect;
+
+    const dt = new DataTransfer();
+    drag(menuItem(table, 'Status'), 'dragstart', dt);
+    target.dispatchEvent(new MouseEvent('dragover', { bubbles: true, cancelable: true, clientY: 104 }));
+    expect((table as any)._menuDragOverSide).toBe('top');
+    drag(target, 'drop', dt);
+    const order = (table as any)._orderedColumns as string[];
+    expect(order.indexOf('Status')).toBe(order.indexOf('Value') - 1);
+    table.remove();
+  });
+
   it('the drop is accepted by preventing the default, or the browser would discard it', async () => {
     const table = await openMenu();
     const dt = new DataTransfer();

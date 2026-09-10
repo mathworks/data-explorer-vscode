@@ -154,6 +154,28 @@ describe('only a window of rows is rendered', () => {
     expect(renderedIds(table)).toEqual(['r0', 'r1', 'r2', 'r3', 'r4']);
     table.remove();
   });
+
+  it('measures a row at --dex-row-height, which is what the rows are painted at', async () => {
+    // One row height, two readers. The stylesheet paints every row at
+    // var(--dex-row-height) — global.css ships 28px, and a theme or a density
+    // setting can ship another — while the arithmetic here decides how tall the
+    // scrollable area is and which slice of rows to put in it. If that arithmetic
+    // read the rowHeight property instead, the two would disagree by a couple of
+    // pixels per row, which compounds: a few hundred rows down, the slice the
+    // scrollbar says you are looking at is a whole screen away from the rows on
+    // screen. Every other case in this file runs with the variable unset, so this
+    // is the only one that reads it at all.
+    const table = await mountLarge(100);
+    table.style.setProperty('--dex-row-height', '40px');
+    table.requestUpdate();
+    await table.updateComplete;
+    const spacer = table.shadowRoot!.querySelector('.virtual-spacer') as HTMLElement;
+    expect(spacer.style.height).toBe(`${100 * 40 + 40}px`);
+    await scrollTo(table, 2000);
+    // (2000 - 40 header) / 40 = row 49, less the 10-row buffer above it.
+    expect(renderedIds(table)[0]).toBe('r39');
+    table.remove();
+  });
 });
 
 describe('scrolling a selected row into view', () => {

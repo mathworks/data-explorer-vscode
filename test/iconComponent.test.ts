@@ -6,7 +6,7 @@
 // binds it; this component maps the id onto a file under media/icons/ and renders
 // an <img>. The alias table exists because the data model names kinds ('struct',
 // 'bus') while the shipped assets use MathWorks icon names ('typeStruct').
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { DexIcon } from '../src/webview/components/dex-icon.js';
@@ -56,6 +56,25 @@ describe('rendering an icon', () => {
     const el = await makeIcon('blocks');
     expect(src(el).endsWith('icons/blocks.svg')).toBe(true);
     expect(src(el).startsWith('icons/blocks.svg')).toBe(false);
+  });
+
+  it('still resolves from the root when the bundler hands it an empty BASE_URL', async () => {
+    // The base is read once per element, at construction, and pasted straight in
+    // front of `icons/…`. An empty BASE_URL with no fallback would emit the
+    // RELATIVE src `icons/blocks.svg`, which resolves against the webview's own
+    // vscode-webview:// document URL rather than the resource root — outside
+    // localResourceRoots, so the CSP blocks it and every row loses its icon.
+    // Restored by hand rather than with unstubAllEnvs, which puts BASE_URL back
+    // as '' and would leave every later case in this file measuring the fallback
+    // instead of the real base.
+    const real = import.meta.env.BASE_URL;
+    vi.stubEnv('BASE_URL', '');
+    try {
+      const el = await makeIcon('blocks');
+      expect(src(el)).toBe('/icons/blocks.svg');
+    } finally {
+      vi.stubEnv('BASE_URL', real);
+    }
   });
 
   it('sizes the image on both axes so rows do not shift while icons load', async () => {

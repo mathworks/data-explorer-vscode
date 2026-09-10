@@ -159,6 +159,20 @@ describe('opening an editor', () => {
     table.remove();
   });
 
+  it('an editable cell whose object carries no text opens an EMPTY editor', async () => {
+    // A schema column for a property the entry has never had set arrives as
+    // {editable: true} with no text at all. Stringifying that puts the word
+    // "undefined" in the input, and because the editor commits whatever the input
+    // holds, pressing Enter on it writes the literal string "undefined" into the
+    // user's file as that property's value.
+    const table = await mount([makeRow('a', 'A', { storageClass: { editable: true } as any })]);
+    dblClickCell(table, 'a', 'storageClass');
+    await table.updateComplete;
+    expect((table as any)._editingCell).toMatchObject({ rowId: 'a', columnId: 'storageClass', value: '' });
+    expect(editor(table).value).toBe('');
+    table.remove();
+  });
+
   it('a second double-click while editing leaves the first editor in place', async () => {
     const table = await mount([
       makeRow('a', 'A', { Value: { text: 'aVal', editable: true } }),

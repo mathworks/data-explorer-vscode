@@ -355,6 +355,19 @@ describe('Enter starts an edit', () => {
     table.remove();
   });
 
+  it('does nothing when rows exist but none is focused', async () => {
+    // The Enter counterpart of 'an arrow key with nothing selected starts from the
+    // top' below. The arrows clamp a missing cursor to row 0; Enter has no row to
+    // clamp to, and index -1 into the visible rows hands the edit path an
+    // undefined row whose .Name it then reads. Called directly rather than
+    // dispatched, because a throw from inside a listener is swallowed by the event
+    // machinery and would not fail this test.
+    const table = await mount([makeRow('a', null, 'A', { Value: { text: 'v1', editable: true } })]);
+    expect(() => (table as any)._onTableKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }))).not.toThrow();
+    expect((table as any)._editingCell).toBeNull();
+    table.remove();
+  });
+
   it('navigation keys are inert while an editor is open', async () => {
     // Arrow keys belong to the text cursor inside the editor; moving the row
     // selection would tear the editor down mid-typing and lose the edit.

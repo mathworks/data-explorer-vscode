@@ -86,6 +86,22 @@ describe('a 2-D matrix renders in reading order with MATLAB headers', () => {
     expect(last.getAttribute('aria-label')).toBe('A(2,3)');
   });
 
+  it('indexes a cell array with braces, the way MATLAB addresses one', async () => {
+    // `A{2,3}` versus `A(2,3)` is not decoration: it is the expression the user
+    // would type to get this element back, and it is the spelling core already
+    // uses for the matching element row in the tree beside the grid. Announcing a
+    // cell array's element as `A(2,3)` hands a screen-reader user an expression
+    // that returns a 1x1 cell, not the value they are being read.
+    const el = await makeGrid(payload([2, 3], ['1', '2', '3', '4', '5', '6'], { className: 'cell' }));
+    expect(cellEls(el)[5].getAttribute('aria-label')).toBe('A{2,3}');
+    el.remove();
+    // The page subscripts belong INSIDE the braces, for the same reason.
+    const nd = await makeGrid(payload([1, 2, 2], ['1', '2', '3', '4'], { name: 'C', className: 'cell' }));
+    nd.page = 1;
+    await nd.updateComplete;
+    expect(cellEls(nd)[1].getAttribute('aria-label')).toBe('C{1,2,2}');
+  });
+
   it('right-aligns numbers and left-aligns anything else', async () => {
     const nums = await makeGrid(payload([1, 2], ['1', '-2.5e3']));
     expect(cellEls(nums)[0].classList.contains('num')).toBe(true);
@@ -269,5 +285,28 @@ describe('degenerate payloads render nothing rather than throwing', () => {
   it('renders a cell short payload as blanks instead of "undefined"', async () => {
     const el = await makeGrid(payload([1, 3], ['1', '2']));
     expect(textRows(el)).toEqual([['1', '2', '']]);
+  });
+
+  it('renders nothing for a payload with fewer than two dimensions', async () => {
+    // effectiveDims is contracted to hold at least two extents. If a shorter one
+    // ever arrives, the missing extent has to read as zero so the guard in render
+    // catches it: an extent of `undefined` is not `<= 0`, so render proceeds and
+    // lays out a headers-only grid — an empty bordered box that reads as data
+    // that failed to load rather than as no data.
+    const oneD = await makeGrid(payload([3], ['1', '2', '3']));
+    expect(oneD.shadowRoot!.querySelector('[role="grid"]')).toBeNull();
+    oneD.remove();
+    const noDims = await makeGrid(payload([], []));
+    expect(noDims.shadowRoot!.querySelector('[role="grid"]')).toBeNull();
+  });
+
+  it('reads a cell out of an empty grid as blank rather than throwing', async () => {
+    // cellText is public and render is not its only caller, so it cannot assume a
+    // payload is present: the shell nulls the matrix out on close while a queued
+    // frame may still be asking the grid what it is showing.
+    grid = new DexMatrixGrid();
+    document.body.appendChild(grid);
+    await grid.updateComplete;
+    expect(grid.cellText(0, 0)).toBe('');
   });
 });
