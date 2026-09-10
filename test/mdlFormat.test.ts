@@ -19,13 +19,12 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { isModelFile, parseModel } from 'data-explorer-core';
+import { isModelFile, parseModel, refModelExt } from 'data-explorer-core';
 import { extractSlxStructure } from '../src/host/slxStructure.js';
 import { buildGraphSource } from '../src/host/structuralIndex.js';
 import { getModelFromBytes } from '../src/host/SlddModel.js';
 import { buildRows } from '../src/host/rowBuilder.js';
 import { namesFromSlx } from '../src/host/nameExtract.js';
-import { refModelExt } from '../src/common/fileTypes.js';
 
 function bytes(name: string): ArrayBuffer {
   const b = readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
@@ -113,10 +112,9 @@ describe('the BYTES decide the format, not the filename', () => {
 //
 // A model names its references without an extension. Core completes the bare name for the
 // TREE (`ModelNode.fromParsed` → `addReferenceEntry`, with the parent model's extension),
-// and this host completes it again for the GRAPH (`slxStructure`, via
-// `common/fileTypes.refModelExt`), because a graph resolves edges by filename and so
-// cannot use a bare name either. Both sides had independently spelled
-// `/\.mdl$/i.test(name) ? '.mdl' : '.slx'`.
+// and this host completes it again for the GRAPH (`slxStructure`), because a graph resolves
+// edges by filename and so cannot use a bare name either. Both sides had independently
+// spelled `/\.mdl$/i.test(name) ? '.mdl' : '.slx'`.
 //
 // When two copies of one rule drift, the reference row you can SEE and the edge that
 // actually RESOLVES name two different files, and neither side looks wrong by itself —
@@ -125,9 +123,10 @@ describe('the BYTES decide the format, not the filename', () => {
 // the host's copy changing underneath it.
 //
 // So this compares core's answer to the host's, for every container, instead of comparing
-// either to a literal. Core now publishes `refModelExt` from its `fileKinds` module; when
-// the pin here bumps past that, `src/common/fileTypes.ts` deletes its copy and delegates,
-// and this test is what proves the delete changed nothing.
+// either to a literal — and it is what proved the host's copy could go. It has: both paths
+// now call core's published `refModelExt`, so what this pins today is the agreement between
+// core's TREE completion and the completion the host applies to the graph, which are still
+// two different code paths over one rule.
 describe('the tree and the graph complete a bare reference the same way', () => {
   const treeRefs = (buf: ArrayBuffer, name: string): string[] =>
     buildRows(getModelFromBytes(`refs://${name}`, name, buf))
@@ -243,8 +242,8 @@ describe('getModelFromBytes opens a .mdl as a model tree', () => {
 
   it('names a classic .mdl’s reference row plant.mdl, matching the graph', () => {
     // Core's ModelSectionNode.addReferenceEntry completes the bare name for the
-    // TREE; slxStructure.refModelExt completes it for the GRAPH. They have to agree
-    // or the tree row and the graph edge point at two different files.
+    // TREE; slxStructure completes it for the GRAPH, with core's refModelExt. They
+    // have to agree or the tree row and the graph edge point at two different files.
     const node = getModelFromBytes(`test://a/${CLASSIC}`, CLASSIC, bytes(CLASSIC));
     const rows = buildRows(node);
     const refNames = rows

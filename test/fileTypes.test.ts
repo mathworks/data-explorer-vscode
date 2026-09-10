@@ -31,7 +31,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { isMatFile, isModelFile, isProjectFile, isSlddFile } from 'data-explorer-core';
+import { isMatFile, isModelFile, isProjectFile, isSlddFile, projectNameOf, refModelExt } from 'data-explorer-core';
 import {
   MODEL_EXTS,
   SUPPORTED_EXTS,
@@ -40,8 +40,6 @@ import {
   GRAPH_GLOB,
   isSupportedPath,
   isGraphPath,
-  refModelExt,
-  projectName,
 } from '../src/common/fileTypes.js';
 
 const root = join(import.meta.dirname, '..');
@@ -151,57 +149,52 @@ describe('the host’s two routing questions', () => {
   });
 });
 
+// The two name reductions this host used to make for itself, now core's — asserted here on
+// the cases the local copies asserted, which is what said the copies could go.
+//
+// They stay for the same reason the kind tests above do: core is a PINNED dependency, so
+// these are the consumer's side of a contract, and a consumer-side pin is the only kind
+// that notices an upstream behaviour change when the pin moves. Core's own
+// `test/fileKinds.test.ts` covers both functions more thoroughly, but it would be edited in
+// the same commit that changed them; this file would not.
 describe('model-name helpers', () => {
   it('completes a reference with the PARENT model’s own extension', () => {
     // A legacy hierarchy is legacy throughout: a .mdl model's references are .mdl
-    // siblings, and labelling them .slx resolves to nothing. Mirrors core's
-    // ModelSectionNode.addReferenceEntry.
+    // siblings, and labelling them .slx resolves to nothing. The same call completes
+    // these names for core's own tree (ModelSectionNode.addReferenceEntry), which is
+    // why keeping a second copy here was a second opinion about one string.
     expect(refModelExt('/w/legacy.mdl')).toBe('.mdl');
     expect(refModelExt('/w/modern.slx')).toBe('.slx');
     expect(refModelExt('/w/Legacy.MDL')).toBe('.mdl');
   });
 });
 
-// The other name reduction this host makes, and the reason it is a function rather than
-// two `replace` calls: one of its two callers labels a tree row with the answer and the
-// other hands it to core's parser as the project's name. Those must be the same string
-// for the same file, and there was nothing keeping them so.
-describe('projectName', () => {
+// The other reduction, and the reason it is a function rather than two `replace` calls: one
+// of its two callers labels a tree row with the answer and the other hands it to core's
+// parser as the project's name. Those must be the same string for the same file, and there
+// was nothing keeping them so until both asked core.
+describe('projectNameOf', () => {
   it('takes the `.prj` off, in either case', () => {
-    expect(projectName('MyProj.prj')).toBe('MyProj');
-    expect(projectName('MyProj.PRJ')).toBe('MyProj');
+    expect(projectNameOf('MyProj.prj')).toBe('MyProj');
+    expect(projectNameOf('MyProj.PRJ')).toBe('MyProj');
   });
 
   it('keeps the rest of the name exactly as written', () => {
     // It is a LABEL: the case and the dots belong to whoever named the project.
-    expect(projectName('My.Big.Project.prj')).toBe('My.Big.Project');
-    expect(projectName('ABS_Model.PRJ')).toBe('ABS_Model');
+    expect(projectNameOf('My.Big.Project.prj')).toBe('My.Big.Project');
+    expect(projectNameOf('ABS_Model.PRJ')).toBe('ABS_Model');
   });
 
   it('leaves a name with no `.prj` alone', () => {
     // Both callers reach it having already decided the source is a project, so this arm
     // is defensive — but returning '' or null here would label a group with nothing.
-    expect(projectName('MyProj')).toBe('MyProj');
-    expect(projectName('')).toBe('');
+    expect(projectNameOf('MyProj')).toBe('MyProj');
+    expect(projectNameOf('')).toBe('');
   });
 
   it('strips only the LAST extension', () => {
-    expect(projectName('old.prj.bak')).toBe('old.prj.bak');
-    expect(projectName('renamed.prj.prj')).toBe('renamed.prj');
-  });
-
-  it('answers what core’s projectNameOf answers, which is what replaces it', () => {
-    // Written against the cases core's own tests use, because this function exists only
-    // until the pin moves past the version publishing `projectNameOf` — at which point
-    // both this and `refModelExt` delete and delegate, and these expectations are what
-    // say the delete changed nothing. The two cannot be compared directly today: the
-    // pinned core does not export it yet.
-    expect(projectName('work.prj')).toBe('work');
-    expect(projectName('Work.PRJ')).toBe('Work');
-    expect(projectName('My.Big.Project.prj')).toBe('My.Big.Project');
-    expect(projectName('work')).toBe('work');
-    expect(projectName('work.prj.bak')).toBe('work.prj.bak');
-    expect(projectName('old.prj.prj')).toBe('old.prj');
+    expect(projectNameOf('old.prj.bak')).toBe('old.prj.bak');
+    expect(projectNameOf('renamed.prj.prj')).toBe('renamed.prj');
   });
 });
 
@@ -254,8 +247,8 @@ describe('no consumer keeps its own copy of the list', () => {
   // rule got written twice here: `graphModel` labelling a project group and
   // `structuralIndex` naming a project for core's parser each spelled
   // `basename(p).replace(/\.prj$/i, '')`, and a label a user reads has to agree with the
-  // name the parser is told. Both now call `projectName`, which is the local mirror of
-  // core's `projectNameOf` until the pin moves — and this is what stops a third copy.
+  // name the parser is told. Both now call core's `projectNameOf` — and this is what stops
+  // a third copy from growing here, in either repo's absence of a shared test.
   const SINGLE_EXT_ANCHOR = new RegExp(`\\\\\\.(${SUPPORTED_EXTS.join('|')})\\$`, 'i');
 
   for (const file of CONSUMERS) {
