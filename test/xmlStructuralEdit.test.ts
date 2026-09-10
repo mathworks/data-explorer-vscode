@@ -222,6 +222,40 @@ describe('XML structural edits against text the model no longer matches', () => 
   });
 });
 
+// A delete is two halves — the text splice in deleteEntryXml, and a `remove` op on
+// the model beside it — and which runs first is the CALLER's discipline rather than
+// something this function is told. BinarySlddEditorProvider.applyDeleteEntry splices
+// first on purpose, because the splice picks the row to select next out of the
+// victim's siblings and the victim has to still be among them. Reverse the two (or
+// route a node that some earlier failed edit already detached) and the entry arrives
+// here with no parent at all: the naive `entry.parent.children` throws, and a delete
+// that has ALREADY happened in the model comes back to the user as "Failed to apply
+// edit" with the entry's <Object> still in the file and its row gone from the table.
+// The fragment has to come out either way; only the selection is forfeit.
+describe('deleteEntryXml on an entry the model has already detached', () => {
+  it('still removes the fragment, and asks for no selection it cannot resolve', () => {
+    const { model, xml } = load('mem://xse-detached');
+    const section = model.getSection('design');
+    const victim = section.children[0];
+    const survivor = section.children[1];
+    const victimName = victim.name;
+    // Exactly what applyEntryOps' `remove` does to it: section.removeChild, which nulls
+    // the removed node's parent.
+    section.removeChild(victim);
+    expect(victim.parent, 'the entry is genuinely off the tree').toBeFalsy();
+
+    const { newText, selectId } = deleteEntryXml(xml, victim);
+    // The delete still happened, and it took exactly the one fragment it was aimed at.
+    expect(findEntryObjectSpan(newText, victimName)).toBeNull();
+    expect(siblingIdentical(xml, newText, survivor.name)).toBe(true);
+    expect(reparse('mem://xse-detached2', newText)).not.toContain(victimName);
+    // No siblings left to walk and no section to name, so the selection falls all the
+    // way back to a bare section row id — a row the table will not find, which is the
+    // honest answer here and is why the provider keeps the entry attached.
+    expect(selectId).toBe('section:');
+  });
+});
+
 // pasteEntryXml inserts a NEW entry, which needs a place to put it: the offset
 // just before the trailing DD.DICTIONARYREFERENCE / DD.Dictionary objects. A
 // chunk0.xml missing both is what a truncated or partially-written file looks

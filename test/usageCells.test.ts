@@ -19,9 +19,11 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { zipSync, strToU8 } from 'fflate';
 import {
+  annotateModelViewRows,
   annotateVariableRows,
   buildUsageGraph,
   type BlockLink,
+  type ParamLink,
   type RawSource,
   type UsageGraph,
 } from '../src/host/usageCells.js';
@@ -371,5 +373,75 @@ describe('annotateVariableRows names the model in every usage', () => {
     const graph = graphSaying({ [`${SRC}\n`]: [link('B', 'plant', 'file:///w/plant.slx')] });
     expect(annotateVariableRows(SRC, rows, graph)).toBe(false);
     expect(rows[0].UsedBy).toBeUndefined();
+  });
+});
+
+// A MODEL view's block rows are the other half of the same column, and they are joined to
+// the graph by the block's KEY — its SID. The two properties below are about what happens
+// when that join comes back empty, which is the direction a wrong answer is silent in: the
+// row arrives already carrying a paramLinks-shaped Usage cell from core's own
+// `ModelBlockNode.toRow` remap, so a block the workspace graph could not answer for keeps
+// showing parameters that were never cross-file resolved unless the cell is actively
+// cleared. That is the opposite rule to a variable row — which is LEFT ALONE when the graph
+// is silent, because a variable's absence from the graph is a gap in what was read rather
+// than an answer — and the two are only distinguishable if both are pinned.
+describe('annotateModelViewRows — a block row the graph cannot answer for', () => {
+  const MODEL = 'file:///w/plant.slx';
+  const blockRow = (name: string, blockKey: string | undefined, UsedBy?: unknown): any => ({
+    Name: { label: name },
+    UsedBy,
+    _isBlockRow: true,
+    ...(blockKey === undefined ? {} : { _blockKey: blockKey }),
+  });
+  const param = (property: string, paramName: string): ParamLink => ({
+    property,
+    paramName,
+    source: 'params.sldd',
+    linkTarget: `${paramName}@file:///w/params.sldd`,
+  });
+  // A stub, because these two are about the JOIN and not about what core knows: the
+  // shaping of a real param link is asserted over real bytes further up this file. It
+  // records the keys it was asked with, which is the only way to state "asked by SID and
+  // never by the Name label" as an assertion rather than as a hope.
+  const graphAsked = (answers: Record<string, ParamLink[]>, asked: string[]): UsageGraph => ({
+    blocksUsing: () => [],
+    paramLinks: (modelUri, blockKey) => {
+      asked.push(blockKey);
+      return answers[`${modelUri}\n${blockKey}`] ?? [];
+    },
+  });
+
+  it('EMPTIES the cell rather than leaving the parameters the row arrived with', () => {
+    // `Gain1` resolves and keeps its links; `Probe` is a block of this same model that
+    // resolved nothing, so the graph has SEEN it and "no parameters" is an answer about it.
+    // Leaving its inherited cell would show `Gain=Kp (params.sldd)` for a block whose
+    // parameter never resolved to that file — a claim about where a value comes from that
+    // nothing in the workspace supports.
+    const stale = { paramLinks: [param('Gain', 'Kp')] };
+    const rows = [blockRow('Gain1', '15'), blockRow('Probe', '20', stale)];
+    const asked: string[] = [];
+    expect(
+      annotateModelViewRows(MODEL, rows, graphAsked({ [`${MODEL}\n15`]: [param('Gain', 'Kp')] }, asked)),
+    ).toBe(true);
+    expect(rows[0].UsedBy).toEqual({ paramLinks: [param('Gain', 'Kp')] });
+    // Emptied to the string the renderer treats as a blank cell — not left as `stale`, and
+    // not `{ paramLinks: [] }`, which the Usage template renders as an empty link list.
+    expect(rows[1].UsedBy).toBe('');
+    expect(asked).toEqual(['15', '20']);
+  });
+
+  it('asks with an empty key for a block row that carries none, never with its Name', () => {
+    // A block row without a `_blockKey` is what a model written before SIDs existed, or a
+    // future row shape that stops publishing it, looks like. The tempting fallback is the
+    // Name label, and that is the documented bug: a label is unique only inside one system,
+    // so two `Gain` blocks in different subsystems would take each other's parameters. An
+    // empty key answers nothing, which empties the cell — visibly missing beats confidently
+    // wrong.
+    const rows = [blockRow('Gain', undefined)];
+    const asked: string[] = [];
+    const answers = { [`${MODEL}\nGain`]: [param('Gain', 'Kp')], [`${MODEL}\n15`]: [param('Gain', 'Kp')] };
+    expect(annotateModelViewRows(MODEL, rows, graphAsked(answers, asked))).toBe(true);
+    expect(asked, 'the key asked for is the empty one, not the label').toEqual(['']);
+    expect(rows[0].UsedBy).toBe('');
   });
 });

@@ -496,6 +496,72 @@ describe('JSON .sldd narrow text sync — undo and redo of the host’s own edit
 });
 
 // ---------------------------------------------------------------------------------------
+// An entry the file spells without a uuid.
+//
+// The uuid is the rename-stable half of an entry's identity and is how every test above
+// resolves one, but a `.sldd` in the plain-text view is a text file a user can hand-author:
+// entrySelector.ts already treats "no metadata at all" as an ordinary entry shape rather
+// than a broken one, and MATLAB is not the only thing that writes these files. So the name
+// has to be the fallback — and it has to stop being one the moment two entries answer to
+// it, because resolving an ambiguous name means repainting whichever of them the walk
+// happened to see last, i.e. a row the user did not touch.
+// ---------------------------------------------------------------------------------------
+describe('JSON .sldd narrow text sync — an entry with no uuid', () => {
+  /** Replace one entry's whole element in the document text. `widePaint` rebuilds the tree. */
+  const rewriteElement = (d: ReturnType<typeof open>, name: string, element: string) => {
+    const span = findEntrySpan(d.doc.text, name);
+    expect(span, `${name} has a span in the text`).not.toBeNull();
+    d.doc.text =
+      d.doc.text.slice(0, span!.offset) + element + d.doc.text.slice(span!.offset + span!.length);
+  };
+
+  it('resolves an entry that declares no metadata at all by its name', () => {
+    const d = open('test://json-nouuid-name.sldd');
+    // No uuid to resolve through, and no namespace or isderived either — so the section
+    // check has to read "absent on both sides" as agreement rather than as a move to
+    // another section, which is the only other thing it could conclude.
+    rewriteElement(d, 'Number', '{"name": "Number", "value": 1}');
+    const before = d.widePaint();
+    expect(d.entryNamed('Number').metadata, 'the tree holds it with no metadata').toBeFalsy();
+
+    const at = only(d.doc.text, '{"name": "Number", "value": 1}');
+    const op = d.type(at + '{"name": "Number", "value": '.length, 1, '11');
+    expect(op, 'the name is the fallback when the text spells no uuid').not.toBeNull();
+    const narrow = spliceEntryRows(before, op!.rowIdOnScreen, d.narrowPaint(op!.entry));
+    expect(narrow, 'the entry the op names is on screen').not.toBeNull();
+    expect(narrow!.find((r: any) => r.ID === op!.entry.id)!.Value).toBe('11');
+    // Compare LAST: widePaint re-parses and re-registers the tree.
+    expect(narrow).toEqual(d.widePaint());
+  });
+
+  it('refuses an entry with no uuid whose name a second entry also answers to', () => {
+    // An entry copied in the text view and dropped into another section without a fresh
+    // uuid: two entries, one name, and nothing in the text to tell them apart. The scan is
+    // fine and the count is fine — it is identity that is not, and the wrong answer here
+    // repaints Design Data's `Number` with the value typed into Architectural Data's.
+    const d = open('test://json-nouuid-ambiguous.sldd');
+    const namespace = /"namespace": "([^"]+)"/.exec(text)![1];
+    rewriteElement(
+      d,
+      'PI',
+      `{"name": "Number", "metadata": {"namespace": "${namespace}", "isderived": "1"}, "value": 2.72}`,
+    );
+    d.widePaint();
+    const twins = ((peekModel('test://json-nouuid-ambiguous.sldd') as any).children as any[])
+      .flatMap((s: any) => s.children)
+      .filter((e: any) => e.name === 'Number');
+    expect(twins, 'the tree really holds two entries answering to "Number"').toHaveLength(2);
+    expect(new Set(twins.map((e: any) => e.parent.name)).size, 'in two different sections').toBe(2);
+
+    const at = only(d.doc.text, '"isderived": "1"}, "value": 2.72');
+    expect(
+      d.type(at + '"isderived": "1"}, "value": '.length, '2.72'.length, '3.14'),
+      'an ambiguous name is no answer: the fast path is refused',
+    ).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------------------
 // Everything the narrow path refuses. Each of these is answered by the full repaint, which
 // is what the user had before this path existed — so the cost of a "no" is latency.
 // ---------------------------------------------------------------------------------------
@@ -555,6 +621,57 @@ describe('JSON .sldd narrow text sync — what it refuses', () => {
     expect(closing).toBeGreaterThan(number);
     expect(d.type(closing + 1, 1, '')).toBeNull();
     expect(at).toBeGreaterThan(0);
+  });
+
+  it('refuses metadata whose isderived has stopped being a string', () => {
+    // Halfway through deleting the quotes around a metadata value. `isderived` decides the
+    // section along with `namespace` (SlddNode.getSectionKey) and both are compared as
+    // STRINGS, so a bare `0` counts as ABSENT on the record's side and `"0"` on the model's:
+    // the two now disagree about which section the entry belongs to. They do not really
+    // disagree — getSectionKey asks only whether isderived is exactly `"1"`, so `0` and `"0"`
+    // land the entry in the same place — and refusing anyway is the rule this whole path
+    // rests on. A doubt costs the repaint the user has always had; a doubt resolved wrongly
+    // costs a row that says something the file does not.
+    const d = open('test://json-refuse-unquoted-meta.sldd');
+    d.widePaint();
+    const number = only(d.doc.text, '"name": "Number"');
+    const at = d.doc.text.indexOf('"isderived": "0"', number);
+    expect(at).toBeGreaterThan(number);
+    expect(
+      d.type(at + '"isderived": '.length, '"0"'.length, '0'),
+      'a metadata value that is not a string counts as absent, and absent is not "0"',
+    ).toBeNull();
+  });
+
+  it('refuses an element whose name has been emptied', () => {
+    // Mid-rename: the old name selected and deleted, before the new one is typed. Nothing
+    // else about the element changed, so the uuid still resolves it and the count still
+    // matches — the empty name is the only thing standing between this and a row painted
+    // with a blank Name, which cannot then be clicked, sorted or edited. The full repaint
+    // shows the same file honestly, blank name and all, and the next keystroke fixes it.
+    const d = open('test://json-refuse-blank-name.sldd');
+    d.widePaint();
+    const at = only(d.doc.text, '"name": "Number"');
+    expect(
+      d.type(at + '"name": "'.length, 'Number'.length, ''),
+      'an empty name is refused, not accepted as the entry’s new one',
+    ).toBeNull();
+  });
+
+  it('refuses an element that no longer declares a name', () => {
+    // The whole `"name"` line cut out of the element — one Ctrl-X in the text view. The
+    // element still parses, the array still holds as many elements as the model has
+    // entries, and the uuid still names the entry, so every other guard says yes. What
+    // the record cannot do is say what the entry is CALLED, and an entry rebuilt from it
+    // would land under a different row id than the one on screen.
+    const d = open('test://json-refuse-no-name.sldd');
+    d.widePaint();
+    const line = '            "name": "PI",\n';
+    const at = only(d.doc.text, line);
+    expect(
+      d.type(at, line.length, ''),
+      'a record that names no entry is refused, whatever its uuid resolves to',
+    ).toBeNull();
   });
 
   it('refuses an entry it cannot tell apart from another', () => {
