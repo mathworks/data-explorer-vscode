@@ -86,6 +86,23 @@ export function isEchoOfEdit(changes: readonly RangeReplacement[], submitted: Ra
 }
 
 /**
+ * An edit the host wrote, kept AFTER its own event has come and gone — because VS Code can
+ * hand it back again, in either direction, whenever the user asks.
+ *
+ * An undo of a range replacement writes the replaced bytes back over the replacement, at the
+ * same offset; a redo writes the replacement again. So the pair is all it takes to recognise
+ * either one, and recognising it is what turns an undo from a stranger's change (find the
+ * entry: `getText()` + a full structural walk, 35 ms + 138 ms on a 47.8 MB dictionary) into an
+ * element already in hand.
+ */
+export interface KnownEdit {
+  /** The range replacement handed to the document. */
+  submitted: RangeReplacement;
+  /** The text it wrote over — what an undo of it writes back. */
+  replaced: string;
+}
+
+/**
  * What the host remembers about the edit it just submitted, until the change event arrives.
  *
  * Set immediately before the WorkspaceEdit and spent by the very next change event, once.
@@ -188,6 +205,101 @@ function resolve(model: any, uuid: string, name: string): { count: number; entry
 }
 
 /**
+ * The entry one element's text spells, resolved in the model that is already built.
+ *
+ * The half both paths share: where the element text CAME from is the only thing they disagree
+ * about (a scan of the document, or an edit the host recognises), and everything after it —
+ * does it parse, does it name an entry this model holds, does it still belong in the same
+ * section — is the same question asked of the same bytes.
+ *
+ * `arrayCount` is the number of elements the array was found to hold, for the caller that
+ * scanned for them: one element is one entry, so a count that still matches the model proves
+ * the change restructured nothing. The caller that recognised its own edit passes none, and
+ * needs none — a range replacement of one element by one element (which is what the parse
+ * below proves the text to be) cannot add or remove an element.
+ */
+function planFromElementText(model: any, elementText: string, arrayCount?: number): EntrySyncPlan | null {
+  let record: unknown;
+  try {
+    record = JSON.parse(elementText);
+  } catch {
+    return null; // mid-edit element: the full repaint reports it as the parse error it is
+  }
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+  const entryRecord = record as EntryRecord;
+  const name = entryRecord.name;
+  if (typeof name !== 'string' || name.length === 0) return null;
+
+  const { count, entry } = resolve(model, metaString(entryRecord.metadata, 'uuid'), name);
+  if (arrayCount !== undefined && count !== arrayCount) return null;
+  if (!entry) return null;
+
+  // The section an entry lands in is derived from these two metadata fields alone
+  // (SlddNode.getSectionKey). A change to either MOVES the entry to another section, which
+  // is not a replacement in place, so it is not this path's business.
+  const from = entry.metadata;
+  if (metaString(entryRecord.metadata, 'namespace') !== metaString(from, 'namespace')) return null;
+  if (metaString(entryRecord.metadata, 'isderived') !== metaString(from, 'isderived')) return null;
+
+  return { entry, record: entryRecord };
+}
+
+/**
+ * Whether a change event is `known` being UNDONE — the mirror of isEchoOfEdit.
+ *
+ * VS Code states an undo the way it states any other change: these bytes replaced those. What
+ * makes this one recognisable is that the host wrote the bytes being replaced, so it knows all
+ * three numbers in advance — same offset, a range as long as what it wrote, and the text it
+ * wrote over coming back verbatim.
+ */
+function isUndoOfEdit(changes: readonly RangeReplacement[], known: KnownEdit): boolean {
+  if (changes.length !== 1) return false;
+  const change = changes[0];
+  return (
+    change.rangeOffset === known.submitted.rangeOffset &&
+    change.rangeLength === known.submitted.text.length &&
+    change.text === known.replaced
+  );
+}
+
+/**
+ * The entry op an undo or a redo of one of the host's OWN edits amounts to — no
+ * `document.getText()`, no scan.
+ *
+ * This is the third and last of the "table → text → table" round trip. A cell edit paints from
+ * the model immediately (applyEdit) and its echo is recognised (planOwnEdit); the undo of that
+ * same edit used to arrive as a stranger and pay the full recovery — pull the whole document
+ * out as a string (35 ms on 47.8 MB) and walk it structurally to find the element the change
+ * is in (138 ms) — to learn something the host wrote down when it made the edit.
+ *
+ * `known` is the ring of edits the host still remembers, newest last; it is searched
+ * newest-first because that is the order undo works in. The plan is built from the CHANGE's
+ * own text, not from the remembered copy: the match has just proved the two are the same
+ * bytes, and planning from what the document actually now says is the version of that
+ * statement that cannot drift.
+ *
+ * Every guard that matters is inherited: recognition is byte-exact at an exact offset (an edit
+ * elsewhere shifts the offset and the match simply fails), a batch is refused because its
+ * later offsets are stated against the text before it, and the element still has to parse and
+ * still has to name an entry this model holds in the same section. A miss costs the scan,
+ * which is what every undo used to cost.
+ */
+export function planKnownChange(
+  model: any,
+  changes: readonly RangeReplacement[],
+  known: readonly KnownEdit[],
+): EntrySyncPlan | null {
+  if (changes.length !== 1) return null;
+  for (let i = known.length - 1; i >= 0; i--) {
+    const past = known[i];
+    if (isEchoOfEdit(changes, past.submitted) || isUndoOfEdit(changes, past)) {
+      return planFromElementText(model, changes[0].text);
+    }
+  }
+  return null;
+}
+
+/**
  * The entry op one text change amounts to, or null when it does not amount to one.
  *
  * `model` is the tree already built for this document, in the state the text was in
@@ -203,31 +315,14 @@ export function planEntrySync(model: any, newText: string, change: TextChange): 
   const scan = locateChangedEntry(newText, region);
   if (!scan || !scan.hit) return null;
 
-  let record: unknown;
-  try {
-    record = JSON.parse(newText.slice(scan.hit.offset, scan.hit.offset + scan.hit.length));
-  } catch {
-    return null; // mid-edit element: the full repaint reports it as the parse error it is
-  }
-  if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
-  const entryRecord = record as EntryRecord;
-  const name = entryRecord.name;
-  if (typeof name !== 'string' || name.length === 0) return null;
-
-  const { count, entry } = resolve(model, metaString(entryRecord.metadata, 'uuid'), name);
-  // THE structural guard, and the reason nothing here has to reason about what the change
-  // did to the array: one element is one entry (SectionNode.parseEntry always adds exactly
-  // one child), so a count that still matches the model proves no element was added,
-  // removed, or split. A change that restructured the array fails this and goes wide.
-  if (count !== scan.count) return null;
-  if (!entry) return null;
-
-  // The section an entry lands in is derived from these two metadata fields alone
-  // (SlddNode.getSectionKey). A change to either MOVES the entry to another section, which
-  // is not a replacement in place, so it is not this path's business.
-  const from = entry.metadata;
-  if (metaString(entryRecord.metadata, 'namespace') !== metaString(from, 'namespace')) return null;
-  if (metaString(entryRecord.metadata, 'isderived') !== metaString(from, 'isderived')) return null;
-
-  return { entry, record: entryRecord };
+  // The element the change landed in, and THE structural guard with it — the reason nothing
+  // here has to reason about what the change did to the array: one element is one entry
+  // (SectionNode.parseEntry always adds exactly one child), so a count that still matches the
+  // model proves no element was added, removed, or split. A change that restructured the array
+  // fails it and goes wide.
+  return planFromElementText(
+    model,
+    newText.slice(scan.hit.offset, scan.hit.offset + scan.hit.length),
+    scan.count,
+  );
 }

@@ -216,6 +216,11 @@ function pairsOf(uri: string, label: string, text: string): Pair[] {
 /** What one comparison needs: the rows the host would paint, and the text it spliced. */
 interface Edited {
   rows: any[];
+  /**
+   * The rows the table is given the instant the model changes, from the mutated node —
+   * before a byte of text has been written (the eager paint in applyEdit).
+   */
+  painted: any[];
   before: any[];
   newText: string;
   /** The id the rows on screen carry — pre-rename. */
@@ -274,6 +279,11 @@ function editInPlace(uri: string, label: string, text: string, pair: Pair): Edit
     `"${node.id}" is ${stillThere ? 'indexed' : 'gone'} after ${pair.columnId}`,
   ).toBe(stillThere ? node : null);
 
+  // What the table shows within a millisecond of the keystroke: the entry as the mutation left
+  // it. Built here, where the provider builds it — after the mutation, before the text is
+  // written — because that is the whole claim about it.
+  const painted = buildEntryRows(entry, sectionName, new Set<string>());
+
   const span = findEntrySpan(text, selector);
   expect(span, `the text still spells "${selector.name}"`).not.toBeNull();
   const entryText = reserializeEntry(entry, detectIndent(text));
@@ -300,6 +310,7 @@ function editInPlace(uri: string, label: string, text: string, pair: Pair): Edit
   const rows = buildEntryRows(fresh, sectionName, new Set<string>());
   return {
     rows,
+    painted,
     before,
     newText,
     rowIdOnScreen,
@@ -353,6 +364,36 @@ for (const { label, text } of FIXTURES) {
       // The sweep must actually have compared something — every pair being refused would make
       // it vacuous.
       expect(compared, 'edits that round-tripped identically').toBeGreaterThan(pairs.length / 4);
+    });
+
+    // INVARIANT 4 — what lets the table be painted before the text is written.
+    //
+    // A JSON table edit no longer waits for its own text to land. Writing 1.2 KB into a
+    // 47.8 MB TextDocument costs VS Code ~90–200 ms and the change event it fires arrives
+    // later still, so a repaint gated on that event is a repaint the user waits a quarter of a
+    // second for — while the answer has been sitting in the model since millisecond one. So
+    // applyEdit paints the mutated entry immediately and lets the echo confirm it.
+    //
+    // "Confirm" is only true if the two agree, which is what this sweeps: for every cell the
+    // table can commit, the rows built from the mutated node must equal the rows read back out
+    // of the text that mutation was written as. A disagreement is not a slow repaint, it is a
+    // value the user watches change under them ~200 ms after they typed it — the three
+    // model-layer bugs the header lists were exactly that, which is why this claim could not
+    // have been made before they were fixed.
+    it('paints from the model what the text goes on to confirm', () => {
+      let compared = 0;
+      let showedTheEdit = 0;
+      for (const pair of pairs) {
+        const done = editInPlace(uri, label, text, pair);
+        if (!done) continue;
+        expect(done.painted, `${pair.columnId} := ${JSON.stringify(pair.value)} on "${pair.nodeId}"`).toEqual(done.rows);
+        compared++;
+        // Non-vacuity: an equality between two things that both say what the row said BEFORE
+        // the edit would pass without the paint carrying anything.
+        if (JSON.stringify(done.painted) !== JSON.stringify(done.before)) showedTheEdit++;
+      }
+      expect(compared, 'edits compared').toBeGreaterThan(pairs.length / 4);
+      expect(showedTheEdit, 'of which the eager paint visibly carried the edit').toBeGreaterThan(compared / 2);
     });
 
     // The reason the repaint carries a row id of its own rather than reading the model's.

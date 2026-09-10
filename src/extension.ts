@@ -121,15 +121,26 @@ export function activate(context: vscode.ExtensionContext): void {
   // encodes each row's state into its resourceUri; this provider renders it.
   const healthProvider = new HealthDecorationProvider();
 
-  // Refresh the tree AND re-query decorations together — the tree rebuild
-  // recomputes cycle state and re-emits resourceUris, and the decoration
-  // provider must re-read them.
+  // What changed ON DISK: re-read the folder into the tree AND re-query decorations
+  // together — the tree rebuild recomputes cycle state and re-emits resourceUris, and
+  // the decoration provider must re-read them.
   const refreshAll = (): void => {
-    provider.refresh();
+    provider.rebuild();
     healthProvider.refresh();
     // The block<->param usage graph spans all workspace files, so any add/
     // remove/change can alter an edge — drop it so the next query rebuilds.
     invalidateUsageGraph();
+  };
+
+  // What changed in a BUFFER: the modified badge, and nothing else. Both caches behind the
+  // tree are built from the files on disk (readForScan — never an editor buffer), so an
+  // unsaved edit cannot move an edge in either; re-reading the folder to rebuild the graph
+  // they already had costs ~5.7 s each over a folder of real dictionaries, on every
+  // keystroke, undo and redo. Re-rendering the rows is what the badge needs, and all the
+  // badge is is `getTreeItem` asking each document whether it is dirty.
+  const refreshBadges = (): void => {
+    provider.refresh();
+    healthProvider.refresh();
   };
 
   // Watch the workspace for supported files so the tree stays in sync with
@@ -185,8 +196,18 @@ export function activate(context: vscode.ExtensionContext): void {
       void reindexFile(uri);
       refreshAll();
     }),
-    // Live edits in an open editor: invalidate the cached model and refresh.
+    // Live edits in an open editor: invalidate the cached model and re-badge. Nothing
+    // built from DISK is dropped here — see refreshBadges.
     vscode.workspace.onDidChangeTextDocument((e) => {
+      // A dirty-state transition arrives as a change event carrying NO changes (VS Code
+      // fires one after every edit, and another when a save clears it). Nothing derived
+      // from the TEXT can be stale because of it, so only the badge is refreshed: the
+      // model re-parse and the name reindex below both re-read the whole buffer, which on
+      // a 47.8 MB dictionary is ~250 ms of work for a change that did not happen.
+      if (e.contentChanges.length === 0) {
+        refreshBadges();
+        return;
+      }
       if (isSlddUri(e.document.uri)) {
         invalidate(e.document.uri.toString());
       }
@@ -196,15 +217,8 @@ export function activate(context: vscode.ExtensionContext): void {
       // open .sldd); reindexFile is a no-op until the index is first built.
       if (isSupportedPath(e.document.uri.path)) {
         void reindexFile(e.document.uri);
-        refreshAll();
+        refreshBadges();
       }
-    }),
-    // Opening/closing editor tabs changes the set of files the usage graph
-    // parses (open tabs are unioned into it so single-file Cmd+O opens resolve
-    // their own intra-model usage). The workspace watcher doesn't fire for files
-    // outside the workspace folder, so invalidate on tab changes too.
-    vscode.window.tabGroups.onDidChangeTabs(() => {
-      invalidateUsageGraph();
     }),
     // Adding or removing a workspace folder changes which files exist as far as
     // every workspace-wide cache is concerned — the tree graph, the usage graph,

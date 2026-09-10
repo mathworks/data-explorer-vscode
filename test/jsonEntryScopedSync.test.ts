@@ -36,7 +36,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel } from 'data-explorer-core';
 import { findEntriesArrayStart, scanEntries, locateChangedEntry } from '../src/host/jsonEntryScan.js';
-import { planEntrySync } from '../src/host/jsonEntrySync.js';
+import {
+  planEntrySync,
+  planKnownChange,
+  type KnownEdit,
+  type RangeReplacement,
+} from '../src/host/jsonEntrySync.js';
 import { applyEntryOps } from '../src/host/entryOps.js';
 import { getModel, invalidate, peekModel } from '../src/host/SlddModel.js';
 import { findEntrySpan } from '../src/host/entrySplice.js';
@@ -107,6 +112,52 @@ function openDoc(uri: string) {
     return { rowIdOnScreen, entry: (applied[0] as any).entry };
   };
 
+  /**
+   * A change the host RECOGNISES: splice it into the document and plan it from the change's
+   * own text, against the edits the host remembers writing.
+   *
+   * The document is spliced first because that is the order reality has — the text has
+   * already changed when the event arrives — but note what is NOT passed on: `doc.text`. That
+   * is the whole difference between this path and `type` above, and it is stated by the
+   * signature rather than by a timing assertion.
+   */
+  const known = (change: RangeReplacement, ring: readonly KnownEdit[]) => {
+    doc.text =
+      doc.text.slice(0, change.rangeOffset) +
+      change.text +
+      doc.text.slice(change.rangeOffset + change.rangeLength);
+    const model = peekModel(uri);
+    expect(model, 'the document has a registered tree to update').not.toBeNull();
+    const plan = planKnownChange(model, [change], ring);
+    if (!plan) return null;
+    const rowIdOnScreen = plan.entry.id;
+    const applied = applyEntryOps(model, [{ kind: 'replace', rowId: plan.entry.id, record: plan.record }]);
+    expect(applied).toHaveLength(1);
+    expect(applied[0].kind).toBe('replace');
+    return { rowIdOnScreen, entry: (applied[0] as any).entry };
+  };
+
+  /**
+   * What the host wrote over one entry, and what it wrote over — the pair it remembers so it
+   * can recognise the same edit coming back as an undo or a redo.
+   *
+   * Applies the edit for real (text and model) so the state afterwards is the state an undo
+   * would arrive into.
+   */
+  const hostWrote = (entryName: string, rewrite: (element: string) => string): KnownEdit => {
+    const span = findEntrySpan(doc.text, entryName);
+    expect(span, `${entryName} has a span in the text`).not.toBeNull();
+    const replaced = doc.text.slice(span!.offset, span!.offset + span!.length);
+    const written = rewrite(replaced);
+    expect(written, 'the edit changed something').not.toBe(replaced);
+    const op = type(span!.offset, span!.length, written);
+    expect(op, `the ${entryName} edit applied`).not.toBeNull();
+    return {
+      submitted: { rangeOffset: span!.offset, rangeLength: span!.length, text: written },
+      replaced,
+    };
+  };
+
   const entryNamed = (name: string) =>
     ((peekModel(uri) as any)?.children ?? [])
       .flatMap((s: any) => s.children)
@@ -118,7 +169,7 @@ function openDoc(uri: string) {
     invalidate(uri);
   };
 
-  return { doc, build, widePaint, narrowPaint, type, entryNamed, dispose };
+  return { doc, build, widePaint, narrowPaint, type, known, hostWrote, entryNamed, dispose };
 }
 
 const openDocs: Array<() => void> = [];
@@ -316,6 +367,131 @@ describe('JSON .sldd narrow text sync — narrow === wide', () => {
     const others = (rows: any[]) => rows.filter((r) => !r.ID.startsWith(op.entry.id));
     expect(others(narrow)).toEqual(others(before));
     expect(narrow.length).toBe(before.length);
+  });
+});
+
+// ---------------------------------------------------------------------------------------
+// An undo or a redo of an edit the host itself wrote.
+//
+// It arrives as a stranger's change — VS Code says only "these bytes replaced those" — and
+// the recovery path answers it by finding the entry again: `document.getText()` (35 ms on a
+// 47.8 MB dictionary) plus a full structural walk of it (138 ms). But an undo of a range
+// replacement is not a stranger: it writes back, at the same offset, exactly the bytes that
+// edit wrote over. So the host remembers the pair — what it submitted, and what it replaced —
+// and recognises either direction of it, byte for byte. Then the changed element is the text
+// in hand, and nothing has to be looked for.
+//
+// What makes recognising it safe is the same thing that makes the echo path safe: the event
+// must PROVE it is that edit at that offset. A miss costs the scan, which is what an undo
+// used to cost always.
+// ---------------------------------------------------------------------------------------
+describe('JSON .sldd narrow text sync — undo and redo of the host’s own edit', () => {
+  /** The change VS Code reports when `written` is undone: the pair, the other way round. */
+  const undoOf = (known: KnownEdit): RangeReplacement => ({
+    rangeOffset: known.submitted.rangeOffset,
+    rangeLength: known.submitted.text.length,
+    text: known.replaced,
+  });
+
+  it('plans an undo from the bytes it wrote over — narrow === wide', () => {
+    const d = open('test://json-known-undo.sldd');
+    const before = d.widePaint();
+    const written = d.hostWrote('PI', (el) => el.replace('3.141592653589793', '3.14'));
+
+    const op = d.known(undoOf(written), [written]);
+    expect(op, 'an undo of a remembered edit is one entry op').not.toBeNull();
+    const narrow = spliceEntryRows(before, op!.rowIdOnScreen, d.narrowPaint(op!.entry));
+    expect(narrow, 'the entry the op names is on screen').not.toBeNull();
+    // Back to the value the file opened with, and back to unmodified with it.
+    const row = narrow!.find((r: any) => r.ID === op!.entry.id)!;
+    expect(row.Value).toBe('3.141592653589793');
+    expect(row.Status).not.toBe('Modified');
+    // Compare LAST: widePaint re-parses and re-registers the tree.
+    expect(narrow).toEqual(d.widePaint());
+  });
+
+  it('plans a redo — the same edit, forwards', () => {
+    const d = open('test://json-known-redo.sldd');
+    d.widePaint();
+    const written = d.hostWrote('PI', (el) => el.replace('3.141592653589793', '3.14'));
+    // Undone, then done again: what the second Ctrl-Y reports is the original submission.
+    expect(d.known(undoOf(written), [written])).not.toBeNull();
+    const before = d.widePaint();
+
+    const op = d.known(written.submitted, [written]);
+    expect(op, 'a redo of a remembered edit is one entry op').not.toBeNull();
+    const narrow = spliceEntryRows(before, op!.rowIdOnScreen, d.narrowPaint(op!.entry));
+    expect(narrow!.find((r: any) => r.ID === op!.entry.id)!.Value).toBe('3.14');
+    expect(narrow).toEqual(d.widePaint());
+  });
+
+  it('resolves an undone rename through the uuid, not the name', () => {
+    // The one case where the name in hand is NOT the name the model holds: the model was
+    // renamed by the edit being undone. The uuid is what survives it (see resolve).
+    const d = open('test://json-known-rename.sldd');
+    d.widePaint();
+    const written = d.hostWrote('Number', (el) => el.replace('"name": "Number"', '"name": "Numeral"'));
+    const before = d.widePaint();
+
+    const op = d.known(undoOf(written), [written]);
+    expect(op, 'the entry still answers to the uuid the undone text spells').not.toBeNull();
+    expect(op!.rowIdOnScreen, 'the rows on screen carry the renamed id').toContain('/Numeral');
+    expect(op!.entry.id, 'and the rebuilt entry carries the name that came back').toContain('/Number');
+    const narrow = spliceEntryRows(before, op!.rowIdOnScreen, d.narrowPaint(op!.entry));
+    expect(narrow).not.toBeNull();
+    expect(narrow).toEqual(d.widePaint());
+  });
+
+  it('recognises an older edit in the ring — two edits, undone in reverse', () => {
+    // VS Code undoes as far back as the user asks, so one remembered edit is not enough: the
+    // second undo is of the FIRST edit, whose offset is only meaningful once the second has
+    // been taken back.
+    const d = open('test://json-known-ring.sldd');
+    const first = d.hostWrote('Number', (el) => el.replace('"value": 1', '"value": 11'));
+    const second = d.hostWrote('PI', (el) => el.replace('3.141592653589793', '3.14'));
+    const ring = [first, second];
+
+    expect(d.known(undoOf(second), ring), 'the newest edit comes back first').not.toBeNull();
+    const before = d.widePaint();
+    const op = d.known(undoOf(first), ring);
+    expect(op, 'and then the one before it').not.toBeNull();
+    const narrow = spliceEntryRows(before, op!.rowIdOnScreen, d.narrowPaint(op!.entry));
+    expect(narrow!.find((r: any) => r.ID === op!.entry.id)!.Value).toBe('1');
+    expect(narrow).toEqual(d.widePaint());
+  });
+
+  it('refuses a change at an offset the remembered edit does not name', () => {
+    // The guard that matters: an edit elsewhere shifts everything after it, so the same undo
+    // now lands at a different offset — and an offset that is off by any amount means the
+    // bytes in hand describe some other part of the file. Recognition is exact or it is not
+    // recognition.
+    const d = open('test://json-known-shifted.sldd');
+    d.widePaint();
+    const written = d.hostWrote('PI', (el) => el.replace('3.141592653589793', '3.14'));
+    const shifted = { ...undoOf(written), rangeOffset: written.submitted.rangeOffset + 1 };
+    expect(d.known(shifted, [written])).toBeNull();
+  });
+
+  it('refuses a change that is neither direction of a remembered edit', () => {
+    const d = open('test://json-known-other.sldd');
+    d.widePaint();
+    const written = d.hostWrote('PI', (el) => el.replace('3.141592653589793', '3.14'));
+    // Same span, different text: someone typed over the entry the host last wrote.
+    const typed: RangeReplacement = {
+      rangeOffset: written.submitted.rangeOffset,
+      rangeLength: written.submitted.text.length,
+      text: written.submitted.text.replace('3.14', '2.72'),
+    };
+    expect(d.known(typed, [written])).toBeNull();
+    expect(d.known(undoOf(written), []), 'and nothing is recognised against an empty ring').toBeNull();
+  });
+
+  it('refuses a batch, whose offsets are stated against the text before it', () => {
+    const d = open('test://json-known-batch.sldd');
+    d.widePaint();
+    const written = d.hostWrote('PI', (el) => el.replace('3.141592653589793', '3.14'));
+    const undo = undoOf(written);
+    expect(planKnownChange(peekModel('test://json-known-batch.sldd'), [undo, undo], [written])).toBeNull();
   });
 });
 

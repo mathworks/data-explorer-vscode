@@ -470,7 +470,7 @@ describe('RelGraph folder/project grouping', () => {
   });
 });
 
-// SectionsTreeProvider.refresh() throws the RelGraph away (this.graph = null) and
+// SectionsTreeProvider.rebuild() throws the RelGraph away (this.graph = null) and
 // fires onDidChangeTreeData, but VS Code keeps the TreeItems it already rendered
 // and may call getChildren with one of them AFTER the next graph is built — a
 // user deleting/renaming files while the tree is expanded does exactly this.

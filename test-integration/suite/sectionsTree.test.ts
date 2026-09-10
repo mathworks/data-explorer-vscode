@@ -129,7 +129,7 @@ suite('SectionsTreeProvider', () => {
     }
   });
 
-  test('refresh() rebuilds the graph and fires the change event', async () => {
+  test('refresh() fires the change event and leaves the graph queryable', async () => {
     await provider.getChildren(); // prime the cached graph
     let fired = false;
     const sub = provider.onDidChangeTreeData(() => (fired = true));
@@ -137,7 +137,8 @@ suite('SectionsTreeProvider', () => {
     sub.dispose();
     assert.ok(fired, 'refresh emits onDidChangeTreeData');
 
-    // The graph is still queryable (rebuilt lazily on the next getChildren).
+    // The graph is still queryable — refresh() re-renders from the one it has, and
+    // rebuild() is what re-reads the folder (see treeRefreshKeepsGraph).
     const roots = await provider.getChildren();
     assert.strictEqual(roots.length, 1);
   });

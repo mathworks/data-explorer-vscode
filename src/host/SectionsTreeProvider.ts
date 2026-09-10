@@ -36,9 +36,23 @@ export class SectionsTreeProvider implements vscode.TreeDataProvider<SlddTreeNod
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
+  /**
+   * Re-render the rows from the graph this provider already has.
+   *
+   * For what changes about a row without changing the folder — today that is the modified
+   * badge, which `getTreeItem` reads off the live TextDocument. The graph is built from the
+   * files ON DISK (readForScan, never a buffer), so an unsaved edit cannot move an edge in it:
+   * dropping it here would re-read every file in the folder to rebuild the graph it had, which
+   * on a folder of real dictionaries is ~5.7 s per keystroke.
+   */
   refresh(): void {
-    this.graph = null;
     this._onDidChangeTreeData.fire(undefined);
+  }
+
+  /** Re-read the folder, for the events that change it: create, delete, save, folder added. */
+  rebuild(): void {
+    this.graph = null;
+    this.refresh();
   }
 
   getTreeItem(el: SlddTreeNode): vscode.TreeItem {
@@ -149,8 +163,7 @@ export class SectionsTreeProvider implements vscode.TreeDataProvider<SlddTreeNod
       }
       return buildGraphSource(raw);
     });
-    const graph = new RelGraph(sources);
-    return graph;
+    return new RelGraph(sources);
   }
 
   // The single most-severe health state for a real-file row, or null if healthy.

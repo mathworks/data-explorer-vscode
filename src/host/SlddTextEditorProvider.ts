@@ -13,7 +13,13 @@ import {
 } from './rowBuilder.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
 import { applyEntryOps, mutateEntry } from './entryOps.js';
-import { planEntrySync, planOwnEdit, type HostEdit } from './jsonEntrySync.js';
+import {
+  planEntrySync,
+  planKnownChange,
+  planOwnEdit,
+  type HostEdit,
+  type KnownEdit,
+} from './jsonEntrySync.js';
 import { getClipboard, clearClipboard, clipboardState } from './clipboard.js';
 import { setDrag, getDrag, clearDrag } from './dragState.js';
 import {
@@ -41,7 +47,7 @@ import {
   type StructuralResult,
 } from './structuralEdit.js';
 import { copyEntryToClipboard } from './clipboardAction.js';
-import { annotateDataRows } from './usageGraph.js';
+import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { parsesAsJson } from './slddFormat.js';
@@ -180,7 +186,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // webview. Called on open, on every text change that is not a single entry's
     // (see syncOneEntry), and on save. The Usage column is filled asynchronously
     // from the shared workspace usage graph.
-    const post = () => {
+    //
+    // Returns when the rows are on the wire, for the same reason postEntryRows does: a banner
+    // that has to outlive a repaint has to be posted after it.
+    const post = (): Promise<void> => {
       try {
         invalidate(uriString);
         const node = getModel(uriString, name, document.getText());
@@ -196,7 +205,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // Fill the Usage column from the shared usage graph, then post. The graph
         // builds lazily on first use and is cached, so only the very first open in
         // a session pays the scan cost; subsequent posts resolve near-instantly.
-        void annotateDataRows(uriString, rows)
+        return annotateDataRows(uriString, rows)
           .catch(() => false)
           .then(() => {
             webview.postMessage({
@@ -228,20 +237,16 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           type: 'error',
           message: `Failed to parse ${name}: ${(err as Error).message}`,
         });
+        return Promise.resolve();
       }
     };
 
-    // Repaint ONE entry: rebuild its rows from the model and splice them over the run the
-    // table already holds under `entryRowId`.
-    //
-    // The per-entry form of post(): the two whole-model passes it runs are asked about a
-    // single entry here (computeModified would serialize all 64,700 entries of a big
-    // dictionary to answer about one), and the Usage column is filled from the same cached
-    // graph, so the rows are the ones a full rebuild would have produced for that entry.
-    // Everything else about the view — columns, banners, section rules, the clipboard
-    // state — is what the last setRows left, because none of it can change under a text
-    // edit inside one entry.
-    const postEntryRows = (entryRowId: string, entry: any): void => {
+    // One entry's rows, as a full rebuild would have built them: the two whole-model passes
+    // post() runs are asked about a single entry here (computeModified would serialize all
+    // 64,700 entries of a big dictionary to answer about one). Everything else about the view —
+    // columns, banners, section rules, the clipboard state — is what the last setRows left,
+    // because none of it can change under an edit inside one entry.
+    const entryRowsOf = (entry: any): any[] => {
       const modified = new Set<string>();
       if (isEntryModified(uriString, entry)) modified.add(entry.name);
       const mark = clipMarkOfDoc();
@@ -250,12 +255,48 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       // within a section, not across the file, so only the marked entry's own section
       // may carry the mark.
       const sectionMark = mark && mark.section === sectionName ? mark : undefined;
-      const rows = buildEntryRows(entry, sectionName, modified, sectionMark);
-      void annotateDataRows(uriString, rows)
+      return buildEntryRows(entry, sectionName, modified, sectionMark);
+    };
+
+    /**
+     * Repaint ONE entry: splice its rows over the run the table already holds under `entryRowId`.
+     *
+     * Returns the promise, for the callers that have something to say AFTER the rows: fresh rows
+     * clear the error banner (see the webview's `updateEntryRows`), so a banner posted beside
+     * them has to come second or it is wiped by them.
+     */
+    const postEntryRows = (entryRowId: string, entry: any): Promise<void> => {
+      const rows = entryRowsOf(entry);
+      return annotateDataRows(uriString, rows)
         .catch(() => false)
         .then(() => {
-          webview.postMessage({ type: 'updateEntryRows', entryRowId, rows });
+          void webview.postMessage({ type: 'updateEntryRows', entryRowId, rows });
         });
+    };
+
+    /**
+     * The same repaint, posted in THIS synchronous run — which is the only way an edit can be on
+     * screen before the host goes off to do the rest of the work.
+     *
+     * A postMessage issued from a promise callback cannot reach the renderer until the host next
+     * yields, and on the edit path that is ~100 ms of span scan away. Measured in real VS Code
+     * against a host that then blocks for 120 ms: posted synchronously the renderer has it in
+     * 1 ms, posted from a `.then` it has it in 120 ms. Which makes the await for the Usage graph —
+     * the only asynchronous thing about a repaint — the difference between an edit that appears
+     * instantly and one that appears when the scan is done.
+     *
+     * When the graph is COLD the rows still go out now, and the Usage column catches up in a
+     * second post. Usage is the one cell this document cannot answer on its own, and the graph
+     * that answers it spans the workspace: over a folder of real dictionaries a rebuild costs
+     * ~5.8 s (measured; 4 files, 98 MB). Holding 180 ms of finished rows for it is how an undo
+     * came to take seven seconds. A column that fills in a moment later is the smaller cost,
+     * and it is only ever paid when something invalidated the graph.
+     */
+    const postEntryRowsNow = (entryRowId: string, entry: any): void => {
+      const rows = entryRowsOf(entry);
+      const filled = annotateDataRowsNow(uriString, rows);
+      void webview.postMessage({ type: 'updateEntryRows', entryRowId, rows });
+      if (!filled) void postEntryRows(entryRowId, entry);
     };
 
     /**
@@ -272,6 +313,26 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     let hostEdit: HostEdit | null = null;
 
     /**
+     * The edits this host has written to this document, newest last — kept PAST their own
+     * events, because VS Code can hand any of them back at any time as an undo or a redo.
+     *
+     * That is the whole reason an undo was slow: the change event says only "these bytes
+     * replaced those", so the host went looking for the entry it had already written down —
+     * `document.getText()` (35 ms on a 47.8 MB dictionary) and a full structural walk of it
+     * (138 ms), for an element it could name from memory. See planKnownChange.
+     *
+     * Bounded, because undo history is not: the last sixteen edits cover the depth anyone
+     * undoes interactively, and the cost of a miss is the scan, which is what every undo used
+     * to cost. Each holds two entry-sized strings, so this is kilobytes beside a document
+     * measured in tens of megabytes.
+     */
+    const knownEdits: KnownEdit[] = [];
+    const remember = (edit: KnownEdit): void => {
+      knownEdits.push(edit);
+      if (knownEdits.length > 16) knownEdits.shift();
+    };
+
+    /**
      * Repaint the entry THIS host just wrote, from the bytes it wrote.
      *
      * The whole point of step 2: the change event a table edit fires tells the host nothing it
@@ -286,6 +347,13 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * own bytes, so a mutation the format cannot express (a rename with nowhere to go, a
      * Description that is never serialized, an architectural kind that is re-derived on read)
      * shows on screen as what the file will say, not as what the user typed.
+     *
+     * For a table edit those rows are now a CONFIRMATION: applyEdit painted the same entry from
+     * the mutated node before it wrote a byte, because waiting for this event costs ~200 ms on a
+     * big dictionary and the model had the answer immediately. So this is where the file gets the
+     * last word — over a paint it agrees with cell for cell, swept in jsonHostEditRepaint. It
+     * still repaints rather than merely reconciling the model: the day the two disagree, the
+     * bytes are what the user should be left looking at.
      */
     const syncOwnEdit = (e: vscode.TextDocumentChangeEvent, hint: HostEdit | null): boolean => {
       if (!hint) return false;
@@ -308,7 +376,60 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // per op. Checked rather than asserted so a shape change falls back to the full repaint
         // instead of painting rows for an entry it did not resolve.
         if (!op || op.kind !== 'replace') return false;
-        postEntryRows(plan.entryRowId, op.entry);
+        void postEntryRows(plan.entryRowId, op.entry);
+        return true;
+      } catch {
+        // The model may now be half-changed, so the caller's full repaint is the repair: it
+        // re-parses the text, which is the truth in this format.
+        invalidate(uriString);
+        modelInSync = false;
+        return false;
+      }
+    };
+
+    /**
+     * Repaint the entry an UNDO or a REDO of one of this host's own edits touched.
+     *
+     * The last leg of the round trip. A table edit paints from the model at once and its echo
+     * is recognised (syncOwnEdit) — but pressing Cmd+Z on that same edit arrived as a
+     * stranger's change and paid the full recovery below, ~175 ms of reading and walking 47.8 MB
+     * to find an element the host wrote itself. Now the pair it wrote is remembered
+     * (knownEdits) and either direction of it is matched byte-for-byte at its exact offset, so
+     * the changed element is the text already in hand.
+     *
+     * The row id comes from the entry as the MODEL now holds it, read before the op detaches
+     * it: an undo and its edit are one document apart, so by the time this runs the rows on
+     * screen are the ones that edit painted — including the name a rename gave them, which is
+     * the id the undone rows have to be spliced over.
+     *
+     * Same two state preconditions as the paths either side of it, and a refusal costs the
+     * recovery path, which is what an undo used to cost always.
+     */
+    const syncKnownChange = (e: vscode.TextDocumentChangeEvent): boolean => {
+      if (e.contentChanges.length !== 1 || knownEdits.length === 0) return false;
+      if (!modelInSync) return false;
+      const model = peekModel(uriString);
+      if (!model) return false;
+      const changes = e.contentChanges.map((c) => ({
+        rangeOffset: c.rangeOffset,
+        rangeLength: c.rangeLength,
+        text: c.text,
+      }));
+      try {
+        const plan = planKnownChange(model, changes, knownEdits);
+        if (!plan) return false;
+        const entryRowId = plan.entry.id;
+        const applied = applyEntryOps(model, [
+          { kind: 'replace', rowId: plan.entry.id, record: plan.record },
+        ]);
+        const op = applied[0];
+        // PRECONDITION (untested): applyEntryOps answers a `replace` op with a `replace`, one
+        // per op. Checked rather than asserted so a shape change falls back to the full repaint
+        // instead of painting rows for an entry it did not resolve.
+        if (!op || op.kind !== 'replace') return false;
+        // In THIS run, so the undone value is on screen ~1 ms after Cmd+Z — see
+        // postEntryRowsNow.
+        postEntryRowsNow(entryRowId, op.entry);
         return true;
       } catch {
         // The model may now be half-changed, so the caller's full repaint is the repair: it
@@ -363,7 +484,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // one per op. Checked rather than asserted so a shape change here falls back to the
         // full repaint instead of painting rows for an entry it did not resolve.
         if (!op || op.kind !== 'replace') return false;
-        postEntryRows(entryRowId, op.entry);
+        // In THIS run, not from a promise: an undo, a redo and a keystroke in the text view all
+        // arrive here, and the rows are already built — see postEntryRowsNow.
+        postEntryRowsNow(entryRowId, op.entry);
         return true;
       } catch {
         // The model may now be half-changed, so the caller's full repaint is not just a
@@ -415,19 +538,73 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       return false;
     };
 
+    /**
+     * Take back a paint the text never confirmed, and say why.
+     *
+     * The price of painting before writing: for the ~200 ms between the two the screen is ahead
+     * of the file, and every way out of that window that is not a successful write has to put
+     * the file's answer back — or the user is left looking at an edit that did not happen.
+     *
+     * Re-reads the text (the truth in this format, and the repair for a tree that was mutated
+     * for a write that failed), repaints the entry from it, and posts the banner AFTER those
+     * rows: fresh rows are how the webview learns a failure is over, so a banner posted before
+     * them is one they wipe (see the `updateEntryRows` handler in table-main).
+     */
+    const undoPaint = (entryRowId: string, message: string): void => {
+      rebuildModel();
+      const fresh = findNode(uriString, entryRowId);
+      if (fresh) {
+        void postEntryRows(entryRowId, fresh).then(() => webview.postMessage({ type: 'error', message }));
+      } else {
+        // The re-read cannot find what was painted — pathological (the write that failed is the
+        // reason the entry is still spelled the way the rows say), and the one case where
+        // correcting the screen is worth the ~700 ms a full repaint costs on a big dictionary.
+        void post().then(() => webview.postMessage({ type: 'error', message }));
+      }
+    };
+
     // --- Value edit / rename (byte-scoped entry-span splice) --------------------
     //
     // The edit path, and the one place in this provider where nothing is re-discovered: it
-    // changes the tree it is already holding, writes the entry it changed, and repaints that
-    // entry from what it wrote (syncOwnEdit). What it used to do first — parse the document to
-    // check it is valid, then parse it again to rebuild a model that was already right — cost
-    // ~282 ms of the ~290 ms an edit spent on a 47.8 MB dictionary before anything changed.
+    // changes the tree it is already holding, paints the entry it changed, and then writes it.
+    // What it used to do first — parse the document to check it is valid, then parse it again to
+    // rebuild a model that was already right — cost ~282 ms of the ~290 ms an edit spent on a
+    // 47.8 MB dictionary before anything changed.
+    //
+    // The ORDER of what is left is the point, and it is cheapest-first on purpose:
+    //
+    //   mutate the model          ~0.2 ms
+    //   PAINT                     ~0.3 ms  posted synchronously, so the table has the answer
+    //                                      ~1 ms after the keystroke — see postEntryRowsNow
+    //   locate the entry's text  ~100 ms   a full structural walk of 47.8 MB (findEntrySpan)
+    //   write the text          ~90–200 ms VS Code's cost for a 1.2 KB splice into a 1.6 M-line
+    //                                      document, plus the change event it fires later still
+    //
+    // Locating first would read better — refuse before touching anything — but it puts the whole
+    // ~100 ms scan ahead of the paint and hands back none of the win, which is the entire reason
+    // the order is this way round. The cost of paying it in this order is that everything after
+    // the paint can still fail, so both exits below (no span, anything thrown) call undoPaint.
+    //
+    // The paint used to be last, on that change event: the host wrote the text, waited for VS
+    // Code to hand it back, and rebuilt the entry from the bytes (syncOwnEdit). Correct, and a
+    // quarter of a second of waiting for an answer the model had all along — which is why a
+    // binary dictionary, whose provider paints from the mutated node and touches no
+    // TextDocument at all, felt immediate on the same file. The echo repaint still runs and is
+    // still what the file says; it now CONFIRMS a paint rather than being it. The two agree
+    // cell for cell — swept over every editable cell of three dictionaries in
+    // jsonHostEditRepaint.test.ts, which is what makes painting early honest rather than
+    // optimistic.
     const applyEdit = async (msg: {
       rowId: string;
       columnId: string;
       oldValue: string;
       newValue: string;
     }): Promise<void> => {
+      // The entry this edit has already changed in the model and shown the user, if it got that
+      // far — what a failure has to take back. Set the moment the mutation succeeds, so it reads
+      // as "the screen and the tree may be ahead of the file", which is the exact window
+      // undoPaint exists to close. Null before that: nothing to take back.
+      let paintedRowId: string | null = null;
       try {
         if (!ensureValidJson()) return;
         const currentText = document.getText();
@@ -478,26 +655,33 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
             invalidValue: msg.newValue,
             previousValue: msg.oldValue,
           });
-          postEntryRows(entryRowIdOnScreen, entry);
+          void postEntryRows(entryRowIdOnScreen, entry);
           return;
         }
-        // After a rename node.id reflects the new name — re-select that row once
-        // the rebuilt rows arrive.
-        const newSelectId: string | null = isRename ? node.id : null;
 
+        // PAINT — synchronously, and before anything expensive: the model now says what the user
+        // typed, and the renderer has it ~1 ms after the keystroke. Everything below this line
+        // (~100 ms of span scan, ~90–200 ms of VS Code writing the text, and the change event it
+        // fires later still) happens with the answer already on screen.
+        //
+        // From here to the write the screen is ahead of the file, so every way out of that
+        // window that is not a write has to take the paint back (undoPaint).
+        paintedRowId = entryRowIdOnScreen;
+        postEntryRowsNow(entryRowIdOnScreen, entry);
+        // After a rename node.id reflects the new name, and the rows just posted carry it —
+        // so the row to re-select exists by the time this arrives.
+        if (isRename) webview.postMessage({ type: 'selectRow', rowId: node.id });
+
+        // --- and only now the expensive half: where in 47.8 MB of text that entry lives ------
         const indent = detectIndent(currentText);
         const entryText = reserializeEntry(entry, indent);
-
         const span = findEntrySpan(currentText, entrySelectorForLookup);
         if (!span) {
-          // The tree has been mutated and the text cannot be, so the two now disagree — and
-          // the text is the truth here. Re-read it, or the next edit builds on a change this
-          // one failed to make.
-          rebuildModel();
-          webview.postMessage({ type: 'error', message: 'Could not locate the entry text to update.' });
+          // The tree has been mutated and painted, and the text cannot be — so the two now
+          // disagree, and the text is the truth here.
+          undoPaint(entryRowIdOnScreen, 'Could not locate the entry text to update.');
           return;
         }
-
         // The System Composer interface dictionary is a part of THIS document, and it lists
         // the entry BY NAME — so a rename that changes only the entry leaves the file
         // saying two different things: the entry is no longer classified (a struct type
@@ -533,25 +717,42 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // is not an echo of one entry span and not a change any narrow path can plan, so it
         // takes the wide repaint. Said here rather than discovered there — a rename that
         // reclassifies an entry is exactly the case whose rows have to come from a re-read.
+        const submitted = { rangeOffset: span.offset, rangeLength: span.length, text: entryText };
         hostEdit =
           scEdits.length > 0
             ? null
-            : {
-                entryId: entry.id,
-                rowId: entryRowIdOnScreen,
-                submitted: { rangeOffset: span.offset, rangeLength: span.length, text: entryText },
-              };
-        await vscode.workspace.applyEdit(edit);
-        // onDidChangeTextDocument repaints — narrowly, since the edit is one entry's
-        // span (setRows and the splice both preserve expansion + selection). For a
-        // rename, re-select by the new id.
-        if (newSelectId) webview.postMessage({ type: 'selectRow', rowId: newSelectId });
+            : { entryId: entry.id, rowId: entryRowIdOnScreen, submitted };
+        // Awaited but no longer waited ON: the table was painted before this line and the echo
+        // this fires only confirms it (syncOwnEdit). What the await is still for is the answer —
+        // VS Code refuses a WorkspaceEdit whose document moved under it, and a refusal is a
+        // dropped edit, which the tree, the rows and the file would otherwise disagree about in
+        // silence. Thrown so the one repair below covers it too.
+        const written = await vscode.workspace.applyEdit(edit);
+        if (!written) throw new Error('the document rejected the edit (it may have changed on disk)');
+        // Remembered only now that the document really holds it, and only for the single-span
+        // shape: an undo of this edit will write `replaced` back over `entryText` at the same
+        // offset, which is a change the host can recognise instead of going looking for
+        // (syncKnownChange). A rename that carried the catalog with it is several ranges, whose
+        // undo reports several changes and is planned by nothing narrow.
+        if (scEdits.length === 0) {
+          remember({
+            submitted,
+            replaced: currentText.slice(span.offset, span.offset + span.length),
+          });
+        }
       } catch (err) {
         hostEdit = null;
-        // Same repair as the missing span above, for the same reason: whatever threw may have
-        // left the tree saying something the document does not.
-        rebuildModel();
-        webview.postMessage({ type: 'error', message: 'Failed to apply edit: ' + (err as Error).message });
+        const message = 'Failed to apply edit: ' + (err as Error).message;
+        if (paintedRowId) {
+          // Whatever threw may have left the tree saying something the document does not — and,
+          // since it threw after the paint, the screen too.
+          undoPaint(paintedRowId, message);
+        } else {
+          // Nothing was painted and nothing was mutated, so the rows on screen are the ones the
+          // last repaint left and they still say what the file says. The banner is the whole
+          // answer.
+          webview.postMessage({ type: 'error', message });
+        }
       }
     };
 
@@ -876,7 +1077,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // --- Message wiring ---------------------------------------------------------
     const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
       if (msg?.type === 'ready') {
-        post();
+        void post();
       } else if (msg?.type === 'select') {
         this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
       } else if (msg?.type === 'edit') {
@@ -918,14 +1119,29 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // expansion and re-applies selection, so the tree doesn't collapse under the user.
     const changeSub = vscode.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.toString() !== uriString) return;
+      // An event carrying NO content changes changed no text, so nothing on screen can be
+      // stale because of it. VS Code fires one for the dirty-state flip after every edit (and
+      // again when a save clears it), and the narrow repaint refuses any change count but one
+      // — so this phantom went wide: re-parse the document, rebuild every row, postMessage the
+      // lot. ~1.6 s on a 47.8 MB dictionary, after every edit, undo, redo and save, behind
+      // which the user's next keystroke waited.
+      //
+      // Returned BEFORE the hint is spent, deliberately: which of the two events arrives first
+      // is VS Code's business, and an expectation dropped by the empty one would send the
+      // host's own edit down the recovery path it exists to avoid.
+      if (e.contentChanges.length === 0) return;
       // Spent or dropped here, exactly once, whichever branch the event takes: an expectation
       // that survived its own event must not be waiting for the next one.
       const hint = hostEdit;
       hostEdit = null;
       // The host's own edit first, since it is the one case that needs no discovery at all.
       if (syncOwnEdit(e, hint)) return;
+      // Then an undo or a redo of an edit it wrote earlier: the other change it needs no
+      // discovery for, and the one the recovery path below was making the user wait ~175 ms of
+      // reading and walking for.
+      if (syncKnownChange(e)) return;
       if (syncOneEntry(e, hint)) return;
-      post();
+      void post();
     });
 
     // On save, re-capture the baseline so per-row "Modified" marks clear.
@@ -937,7 +1153,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         } catch {
           /* leave baseline as-is on parse failure */
         }
-        post();
+        void post();
       }
     });
 

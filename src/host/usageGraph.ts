@@ -32,15 +32,56 @@ import {
 export type { BlockLink, ParamLink } from './usageCells.js';
 
 let graphPromise: Promise<UsageGraph> | null = null;
+// The same graph, once it exists, reachable WITHOUT an await — see annotateDataRowsNow.
+let graphNow: UsageGraph | null = null;
+// The open tabs the cached graph was built from, as one comparable string.
+let builtFrom: string | null = null;
 
-// Drop the cached graph; the next query rebuilds it. Called on any workspace
-// file create/delete/change (see extension.ts).
+// Drop the cached graph; the next query rebuilds it. Called when the FOLDER changes —
+// a supported file created, deleted, or saved, or a workspace folder added (see
+// extension.ts). NOT on a keystroke: the graph is built from the files on disk
+// (readForScan), so an unsaved edit cannot move an edge in it, and rebuilding it over a
+// folder of real dictionaries costs ~5.8 s.
 export function invalidateUsageGraph(): void {
   graphPromise = null;
+  graphNow = null;
+  builtFrom = null;
+}
+
+// Sorted, so the same tabs in a different order — a split, a drag, a tab going dirty —
+// are the same inputs. Only the tabs the scan would actually read are in it (isGraphPath).
+function tabKey(tabs: vscode.Uri[]): string {
+  return tabs
+    .map((u) => u.toString())
+    .sort()
+    .join('\n');
+}
+
+/**
+ * Drop the graph if the tabs it read are not the tabs open now.
+ *
+ * The graph's inputs are the workspace files plus the open tabs, and it is the only thing
+ * that knows which tabs those were — so it decides this, rather than an event handler
+ * guessing from a tab-change event. `onDidChangeTabs` fires for a tab going DIRTY as
+ * loudly as for one opening, and invalidating on it threw the graph away after every
+ * edit, undo and redo, to rebuild it byte for byte.
+ */
+function dropIfTabsChanged(): void {
+  if (graphPromise && builtFrom !== tabKey(openTabUris())) invalidateUsageGraph();
 }
 
 export function ensureUsageGraph(): Promise<UsageGraph> {
-  if (!graphPromise) graphPromise = buildGraph();
+  dropIfTabsChanged();
+  if (!graphPromise) {
+    // ONE read of the tabs, both recorded and built from: a list captured separately from
+    // the one the build unions is a list the next query can disagree with.
+    const tabs = openTabUris();
+    builtFrom = tabKey(tabs);
+    graphPromise = buildGraph(tabs).then((g) => {
+      graphNow = g;
+      return g;
+    });
+  }
   return graphPromise;
 }
 
@@ -60,7 +101,7 @@ function openTabUris(): vscode.Uri[] {
     .filter((u): u is vscode.Uri => !!u && isGraphPath(u.path));
 }
 
-async function buildGraph(): Promise<UsageGraph> {
+async function buildGraph(tabs: vscode.Uri[]): Promise<UsageGraph> {
   let found: vscode.Uri[] = [];
   try {
     found = await vscode.workspace.findFiles(GRAPH_GLOB);
@@ -71,7 +112,7 @@ async function buildGraph(): Promise<UsageGraph> {
   // Union workspace files with open tabs, deduped by uriString. The graph keys
   // on full uriStrings, so a file present in both sources contributes once.
   const byUri = new Map<string, vscode.Uri>();
-  for (const uri of [...found, ...openTabUris()]) byUri.set(uri.toString(), uri);
+  for (const uri of [...found, ...tabs]) byUri.set(uri.toString(), uri);
   const uris = [...byUri.values()];
 
   // Read the files a few at a time and hand the bytes to the pure builder. The
@@ -122,8 +163,24 @@ export async function paramLinksForBlock(modelUri: string, blockKey: string): Pr
 // that use them (links back to each block's model). `sourceUri` is the open
 // file's uriString.
 export async function annotateDataRows(sourceUri: string, rows: any[]): Promise<boolean> {
-  const g = await ensureUsageGraph();
-  return annotateVariableRows(sourceUri, rows, g);
+  return annotateVariableRows(sourceUri, rows, await ensureUsageGraph());
+}
+
+/**
+ * The same annotation, without the await — or false if it cannot be done that way.
+ *
+ * For the one caller that cannot afford a promise: a repaint posted from a promise callback
+ * cannot reach the webview until the extension host next yields, and the JSON table edit path
+ * paints ~100 ms of span scan BEFORE its next yield (measured: 1 ms to the renderer against
+ * 120 ms). The await above is the only asynchronous thing about a repaint, and after the first
+ * query there is nothing left for it to wait for — so this hands back the built graph, and
+ * false while there is none, which is the caller's cue to take the slow path.
+ */
+export function annotateDataRowsNow(sourceUri: string, rows: any[]): boolean {
+  dropIfTabsChanged();
+  if (!graphNow) return false;
+  annotateVariableRows(sourceUri, rows, graphNow);
+  return true;
 }
 
 // Model view (.slx): rewrite block-row Usage cells with resolved param links
