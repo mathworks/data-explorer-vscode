@@ -19,6 +19,7 @@
 import type { SectionRule } from '../host/sectionRules.js';
 import type { DragDescriptor } from '../host/dragState.js';
 import type { ClipboardMode } from '../host/clipboard.js';
+import type { DropFacts } from '../host/dropFacts.js';
 import type { WarningBanner } from '../host/parseWarnings.js';
 
 // --- Host -> Webview (table view: table-main.ts) ------------------------------
@@ -112,6 +113,12 @@ export interface ClipboardStateMessage {
   type: 'clipboardState';
   canPaste: boolean;
   mode: ClipboardMode | null;
+  /**
+   * What the clipboard holds, payload-free — so the menu can ask the target section
+   * whether a paste may land there before offering it, exactly as a dragover asks.
+   * Never the entry records: on a 47.8 MB dictionary that is a 67 MB postMessage.
+   */
+  items: DropFacts[];
 }
 
 /** Broadcast the in-flight drag descriptor (null when no drag is active). */
@@ -197,21 +204,29 @@ export interface EditMessage {
   newValue: string;
 }
 
-/** Structural clipboard/tree actions, all targeting a single row. */
+/**
+ * Structural clipboard/tree actions.
+ *
+ * Copy/Cut/Delete carry the whole SELECTION, because the user's gesture was made over
+ * it; the host resolves what that means (whole entries for copy/cut, rows for delete —
+ * an operation's granularity follows whether it needs a destination). Paste and Add
+ * Child carry one row: paste needs a single destination section, and Add Child a single
+ * parent, so both are offered only at a single-row selection.
+ */
 export interface CopyMessage {
   type: 'copy';
-  rowId: string;
+  rowIds: string[];
 }
 export interface CutMessage {
   type: 'cut';
-  rowId: string;
-}
-export interface PasteMessage {
-  type: 'paste';
-  rowId: string;
+  rowIds: string[];
 }
 export interface DeleteMessage {
   type: 'delete';
+  rowIds: string[];
+}
+export interface PasteMessage {
+  type: 'paste';
   rowId: string;
 }
 export interface AddChildMessage {

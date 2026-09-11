@@ -88,9 +88,10 @@ function navigatorIsMac(): boolean {
 // Map a keydown to the context-menu action it should trigger, or null if the
 // chord isn't a recognized shortcut. Mirrors the shortcuts the menu advertises:
 //   Cmd/Ctrl+C -> copy, Cmd/Ctrl+X -> cut, Cmd/Ctrl+V -> paste (no Shift/Alt),
-//   Delete / Backspace -> delete (no modifier). Enablement (editable, clipboard
-//   state, per-row flags) is enforced by the caller before dispatch — this only
-//   classifies the gesture. Pure, so it's unit-testable without a DOM.
+//   Delete / Backspace -> delete (no modifier). This ONLY classifies the gesture:
+//   the caller enables it by building the menu for the current selection and reading
+//   the matching item, so a chord and its menu item cannot disagree. Pure, so it's
+//   unit-testable without a DOM.
 export type ShortcutAction = 'copy' | 'cut' | 'paste' | 'delete';
 export function resolveShortcutAction(e: KeyboardEvent): ShortcutAction | null {
   const mod = e.metaKey || e.ctrlKey;

@@ -10,9 +10,11 @@ import { renderBanners } from './banners.js';
 import { nextExpandedIds, nextStickyIds, spliceEntryRows, insertEntryRows } from './rowUpdates.js';
 import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from './menuItems.js';
 import { dropDecision, type DragMode, type DropTarget, type DragSource } from './dropDecision.js';
+import { sectionRowIdOf } from './operands.js';
+import type { ContextMenuItem } from './components/dex-context-menu.js';
 import type { SectionRule } from '../host/sectionRules.js';
 import type { DragDescriptor } from '../host/dragState.js';
-import { isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
+import { sectionNameFromRowId } from '../common/sectionRowId.js';
 import type { HostToTableMessage } from '../common/protocol.js';
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
@@ -51,7 +53,7 @@ let editable = false;
 // Whether the document has a plain-text view "Location in Text" can reveal a row
 // in (JSON .sldd yes, compressed-binary .sldd no). Gates that menu item + Cmd+L.
 let hasTextView = false;
-let clipboardState: ClipboardState = { canPaste: false, mode: null };
+let clipboardState: ClipboardState = { canPaste: false, mode: null, items: [] };
 // The row id under the last right-click, relayed with the chosen action.
 let lastContextRowId: string | null = null;
 
@@ -65,18 +67,60 @@ let sectionRulesList: SectionRule[] = [];
 // dataTransfer — is the authoritative source of what is being dragged.
 let dragDescriptor: DragDescriptor | null = null;
 
-// Resolve the section a row belongs to: a section header (`section:<name>`) is
-// that section; a data row carries its section via its `parent` (also a header
-// id). Returns the matching SectionRule, or null if it can't be resolved.
+// Resolve the section a row belongs to, at any depth — the rule a paste into it or a drop
+// on it has to satisfy. The walk lives in operands.ts because that is where the host's own
+// walk is mirrored and tested; a one-level lookup here used to answer null for a nested
+// child, which now reads as "no destination" and would refuse a paste the host accepts.
 function sectionRuleForRow(rowId: string): SectionRule | null {
-  let sectionName = sectionNameFromRowId(rowId);
-  if (sectionName == null) {
-    const row = (table.rows ?? []).find((r: { ID: string; parent?: string | null }) => r.ID === rowId);
-    const parent = row?.parent;
-    if (typeof parent === 'string') sectionName = sectionNameFromRowId(parent);
-  }
+  const sectionRowId = sectionRowIdOf(rowId, (table.rows ?? []) as MenuRow[]);
+  const sectionName = sectionRowId == null ? null : sectionNameFromRowId(sectionRowId);
   if (sectionName == null) return null;
   return sectionRulesList.find((r) => r.sectionName === sectionName) ?? null;
+}
+
+// The menu for the CURRENT selection, anchored at `anchorRowId` (the right-clicked row,
+// or the primary selection for a keyboard chord).
+//
+// Both triggers go through here so they cannot disagree — the keyboard does not re-derive
+// enablement, it builds this and reads the item. That is what makes "a shortcut can never
+// do something the menu wouldn't" true rather than commented.
+function menuFor(anchorRowId: string | null): ContextMenuItem[] {
+  const rule = anchorRowId ? sectionRuleForRow(anchorRowId) : null;
+  return buildContextMenuItems({
+    rows: (table.rows ?? []) as MenuRow[],
+    selectedRowIds: selectedRowIds(),
+    anchorRowId,
+    clipboard: clipboardState,
+    editable,
+    hasTextView,
+    // Paste's allow-check needs the target section's rules; without them the item is
+    // offered only as far as "the clipboard is non-empty" can justify.
+    pasteTarget: rule
+      ? { sectionLabel: rule.sectionLabel, isDerived: rule.isDerived, allowedTypes: rule.allowedTypes }
+      : null,
+  });
+}
+
+function selectedRowIds(): string[] {
+  const ids = table.selectedRowIds;
+  return Array.isArray(ids) ? (ids as string[]) : [];
+}
+
+// Send an action to the host with the operand shape that action takes: Copy/Cut/Delete
+// carry the selection (the host resolves it), the rest carry the one row they act on.
+const SELECTION_ACTIONS = new Set(['copy', 'cut', 'delete']);
+
+function postAction(actionId: string, anchorRowId: string | null): void {
+  if (actionId === 'undo' || actionId === 'redo') {
+    vscode.postMessage({ type: actionId });
+    return;
+  }
+  if (SELECTION_ACTIONS.has(actionId)) {
+    vscode.postMessage({ type: actionId, rowIds: selectedRowIds() });
+    return;
+  }
+  if (!anchorRowId) return;
+  vscode.postMessage({ type: actionId, rowId: anchorRowId });
 }
 
 // The predictor injected into the table: given the row under the cursor and the
@@ -287,7 +331,11 @@ window.addEventListener('message', (event: MessageEvent) => {
     pendingSelectId = typeof msg.rowId === 'string' ? msg.rowId : null;
     applyPendingSelection();
   } else if (msg.type === 'clipboardState') {
-    clipboardState = { canPaste: !!msg.canPaste, mode: msg.mode ?? null };
+    clipboardState = {
+      canPaste: !!msg.canPaste,
+      mode: msg.mode ?? null,
+      items: Array.isArray(msg.items) ? msg.items : [],
+    };
   } else if (msg.type === 'sectionRules') {
     docUri = typeof msg.docUri === 'string' ? msg.docUri : docUri;
     sectionRulesList = Array.isArray(msg.rules) ? msg.rules : [];
@@ -335,23 +383,19 @@ table.addEventListener(
 );
 
 // Cmd/Ctrl+L: jump to the selected row's location in the plain-text view — the
-// keyboard equivalent of the "Location in Text" context-menu action. Gated on
-// editable (read-only formats have no text view). Uses the same host message the
-// menu dispatches, so the resolution path (row → owning entry → span) is shared.
+// keyboard equivalent of the "Location in Text" menu action, and gated by that item.
 table.addEventListener(
   'keydown',
   (e: Event) => {
     const ev = e as KeyboardEvent;
     if ((ev.key === 'l' || ev.key === 'L') && (ev.metaKey || ev.ctrlKey) && !ev.shiftKey && !ev.altKey) {
-      // No text view (compressed-binary .sldd) → no "Location in Text" target.
-      if (!editable || !hasTextView) return;
-      const selected = Array.isArray(table.selectedRowIds) ? table.selectedRowIds : [];
-      const rowId = selected[0];
-      // Section rows carry no owning entry; the host would reject them, so skip.
-      if (typeof rowId !== 'string' || isSectionRowId(rowId)) return;
+      const anchorRowId = selectedRowIds()[0] ?? null;
+      if (!anchorRowId) return;
+      const item = menuFor(anchorRowId).find((i) => i.id === 'locateInText');
+      if (!item || item.disabled) return;
       ev.preventDefault();
       ev.stopPropagation();
-      vscode.postMessage({ type: 'locateInText', rowId });
+      postAction('locateInText', anchorRowId);
     }
   },
   true,
@@ -374,14 +418,12 @@ table.addEventListener(
   true,
 );
 
-// Cut/Copy/Paste/Delete keyboard shortcuts — the keyboard equivalents of the
-// context-menu actions (whose labels advertise these chords). Enablement mirrors
-// buildContextMenuItems exactly (same editable / clipboard / per-row-flag gates),
-// so a shortcut can never do something the menu wouldn't. Capture phase, so it
-// runs before the table component's own key handling; skipped while a cell
-// editor or the filter input is focused (there the chord is text editing). The
-// selected row is the target — copy/cut/delete/addChild carry its id; paste
-// targets its owning section (host resolves that from the row id).
+// Cut/Copy/Paste/Delete keyboard shortcuts — the keyboard half of the context-menu
+// actions (whose labels advertise these chords). Enablement is not re-derived here: the
+// menu for the current selection IS the authority, so the chord does exactly what
+// clicking that item would, on exactly the same rows. Capture phase, so it runs before
+// the table component's own key handling; skipped while a cell editor or the filter
+// input is focused (there the chord is text editing).
 table.addEventListener(
   'keydown',
   (e: Event) => {
@@ -398,53 +440,37 @@ table.addEventListener(
       return;
     }
 
-    const rowId = (Array.isArray(table.selectedRowIds) ? table.selectedRowIds : [])[0];
-    // Every action needs a selected row. Paste accepts a section header (it
-    // targets that section); the rest need a data row, since section headers
-    // carry no capability flags.
-    if (typeof rowId !== 'string') return;
-    if (action !== 'paste' && isSectionRowId(rowId)) return;
-    const row = (table.rows ?? []).find((r: MenuRow) => r.ID === rowId) ?? null;
-    // Gate on the same capability the menu uses, so shortcuts match the menu.
-    const enabled =
-      action === 'copy'
-        ? !!row?._canCopy
-        : action === 'cut' || action === 'delete'
-          ? !!row?._canDelete
-          : /* paste */ clipboardState.canPaste;
-    if (!enabled) return;
+    // The primary selection anchors the gesture, the same way the right-clicked row
+    // does: it is what a paste targets the section of.
+    const anchorRowId = selectedRowIds()[0] ?? null;
+    if (!anchorRowId) return;
+    // Absent (a section selection offers no Copy at all) or disabled → do nothing, and
+    // let the key through rather than swallowing it.
+    const item = menuFor(anchorRowId).find((i) => i.id === action);
+    if (!item || item.disabled) return;
 
     ev.preventDefault();
     ev.stopPropagation();
-    vscode.postMessage({ type: action, rowId });
+    postAction(action, anchorRowId);
   },
   true,
 );
 
-// Right-click: build the menu synchronously from the selected row's flags and
-// the cached clipboard/editable state, then show it. The table component has
-// already selected the row and prevented the native browser menu.
+// Right-click: build the menu for the current selection synchronously, anchored at
+// the clicked row, then show it. The table component has already settled the
+// selection (a click outside it replaces it) and prevented the native browser menu.
 table.addEventListener('dex-table-context-menu', (e: Event) => {
   // Read-only documents (.mat/.slx/.prj, binary/zip .sldd) have no menu at all:
   // no cell editor and no right-click actions.
   if (!shouldShowContextMenu(editable)) return;
   const detail = (e as CustomEvent).detail;
   lastContextRowId = detail.rowId ?? null;
-  const row = (table.rows ?? []).find((r: MenuRow) => r.ID === detail.rowId) ?? null;
-  const items = buildContextMenuItems(row, clipboardState, editable, hasTextView);
-  contextMenu.show(detail.x, detail.y, items);
+  contextMenu.show(detail.x, detail.y, menuFor(lastContextRowId));
 });
 
-// A menu item was chosen: relay it to the host. Undo/Redo are document-level
-// (no row); the rest carry the right-clicked row id.
+// A menu item was chosen: relay it to the host with that action's operands.
 contextMenu.addEventListener('dex-action', (e: Event) => {
-  const actionId = (e as CustomEvent).detail.actionId as string;
-  if (actionId === 'undo' || actionId === 'redo') {
-    vscode.postMessage({ type: actionId });
-    return;
-  }
-  if (!lastContextRowId) return;
-  vscode.postMessage({ type: actionId, rowId: lastContextRowId });
+  postAction((e as CustomEvent).detail.actionId as string, lastContextRowId);
 });
 
 // Inject the drop predictor so the table can render live cursor + tooltip

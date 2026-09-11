@@ -997,8 +997,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // --- Copy (read-only; snapshots the entry into the host clipboard) ----------
     // Shared with the binary provider, which is what makes a failed copy report
     // the same way in both formats (it used to be silent here).
-    const applyCopy = (msg: { rowId: string }, mode: 'cut' | 'copy'): void => {
-      copyEntriesToClipboard([msg.rowId], mode, uriString, {
+    const applyCopy = (rowIds: readonly string[], mode: 'cut' | 'copy'): void => {
+      copyEntriesToClipboard(rowIds, mode, uriString, {
         refresh: () => {
           const currentText = document.getText();
           invalidate(uriString);
@@ -1287,7 +1287,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // same-document move becomes a single combined WorkspaceEdit (one undo step)
     // and the cut source row can show its dimmed affordance until pasted. This
     // mirrors data explorer's ClipboardService, whose cut() marks only.
-    const applyCut = (msg: { rowId: string }): void => applyCopy(msg, 'cut');
+    const applyCut = (rowIds: readonly string[]): void => applyCopy(rowIds, 'cut');
 
     // --- Location in Text (reveal the row's entry in the plain-text view) -------
     // Resolve the right-clicked row to its owning top-level entry, locate that
@@ -1722,14 +1722,13 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       } else if (msg?.type === 'edit') {
         void applyEdit(msg);
       } else if (msg?.type === 'copy') {
-        applyCopy(msg, 'copy');
+        applyCopy(msg.rowIds, 'copy');
       } else if (msg?.type === 'delete') {
-        // The webview still names one row; the wrapper goes when its message names them all.
-        void applyDelete({ rowIds: [msg.rowId] });
+        void applyDelete(msg);
       } else if (msg?.type === 'addChild') {
         void applyAddChild(msg);
       } else if (msg?.type === 'cut') {
-        applyCut(msg);
+        applyCut(msg.rowIds);
       } else if (msg?.type === 'paste') {
         void applyPaste(msg);
       } else if (msg?.type === 'dragStart') {

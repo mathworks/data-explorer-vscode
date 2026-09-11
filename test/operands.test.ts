@@ -4,7 +4,7 @@
 // "which rows does this action act on". These cases are the shapes a real selection
 // takes; the menu/keyboard agreement itself is pinned in multiSelectInvariants.test.ts.
 import { describe, it, expect } from 'vitest';
-import { resolveOperands, type OperandRow } from '../src/webview/operands.js';
+import { resolveOperands, sectionRowIdOf, type OperandRow } from '../src/webview/operands.js';
 
 // A minimal two-section table: Design Data holds Bus A (children x, y) and plain V;
 // Architectural Data holds Bus B (child z).
@@ -117,5 +117,32 @@ describe('resolveOperands', () => {
       entryIds: ['lone'],
       sections: [],
     });
+  });
+});
+
+// The destination half of the same walk: what section a row would paste into. It is the
+// menu's paste target, and the host answers the identical question with
+// findOwningEntry(node).parent — so the two must agree at every depth.
+describe('sectionRowIdOf', () => {
+  it('answers a section header with itself', () => {
+    // The only paste target an empty section has.
+    expect(sectionRowIdOf('section:design', ROWS)).toBe('section:design');
+  });
+
+  it('answers a top-level entry with its section', () => {
+    expect(sectionRowIdOf('A', ROWS)).toBe('section:design');
+  });
+
+  it('answers a NESTED CHILD with its section, not with nothing', () => {
+    // The regression this exists for: a child's immediate parent is its entry, not a
+    // header, so a one-level lookup answered null — and a null paste target reads as
+    // "no destination", greying out a Paste on a bus element that the host accepts.
+    expect(sectionRowIdOf('A/x', ROWS)).toBe('section:design');
+    expect(sectionRowIdOf('B/z', ROWS)).toBe('section:arch');
+  });
+
+  it('answers null for a row the table does not hold, or a chain that leaves it', () => {
+    expect(sectionRowIdOf('WasDeletedLastEdit', ROWS)).toBeNull();
+    expect(sectionRowIdOf('lone', [{ ID: 'lone', parent: 'missing' }])).toBeNull();
   });
 });

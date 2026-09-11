@@ -869,8 +869,8 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     };
 
     // Shared with the JSON provider so both formats report an identical failure.
-    const applyCopy = (rowId: string, mode: 'cut' | 'copy') => {
-      copyEntriesToClipboard([rowId], mode, uriString, {
+    const applyCopy = (rowIds: readonly string[], mode: 'cut' | 'copy') => {
+      copyEntriesToClipboard(rowIds, mode, uriString, {
         // From the model as it stands. A cut/copy changes no text at all, so a re-parse
         // here could only reproduce the tree that is already there — and on a real
         // customer dictionary that is ~3s to serialize one entry.
@@ -1114,9 +1114,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       if (msg?.type === 'ready') post();
       else if (msg?.type === 'select') this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
       else if (msg?.type === 'edit') applyEdit(msg);
-      else if (msg?.type === 'copy') applyCopy(msg.rowId, 'copy');
-      else if (msg?.type === 'cut') applyCopy(msg.rowId, 'cut');
-      else if (msg?.type === 'delete') applyDelete([msg.rowId]);
+      else if (msg?.type === 'copy') applyCopy(msg.rowIds, 'copy');
+      else if (msg?.type === 'cut') applyCopy(msg.rowIds, 'cut');
+      else if (msg?.type === 'delete') applyDelete(msg.rowIds);
       else if (msg?.type === 'addChild') applyStructural(msg.rowId, (xml, node) => addChildXml(xml, node), 'Add child');
       else if (msg?.type === 'paste') void applyPaste(msg.rowId);
       else if (msg?.type === 'dragStart') applyDragStart(msg);

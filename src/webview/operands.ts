@@ -60,6 +60,32 @@ function owningEntryId(rowId: string, byId: Map<string, OperandRow>): string {
   return id;
 }
 
+// The section header a row belongs to, given a built index: its owning entry's parent.
+// Null when the chain leaves the table, which is a row no destination can be derived from.
+function sectionIdOfEntry(entryId: string, byId: Map<string, OperandRow>): string | null {
+  const parent = byId.get(entryId)?.parent;
+  return typeof parent === 'string' && isSectionRowId(parent) ? parent : null;
+}
+
+/**
+ * The section header row one row belongs to, at any depth — or null if the table can't say.
+ *
+ * A header answers for itself: it is the only paste target an empty section has. A data row
+ * answers with its owning ENTRY's parent, which is the walk the HOST does through
+ * `findOwningEntry(node).parent` (structuralEdit.resolveSectionForPaste). Mirroring that walk
+ * is the point: the menu offers Paste against the section the host will actually paste into,
+ * so a Paste on a bus element is offered exactly when the host would accept it. Looking only
+ * at the row's immediate parent would refuse it — silently, since a target that cannot be
+ * resolved has no reason to show.
+ */
+export function sectionRowIdOf(rowId: string, rows: readonly OperandRow[]): string | null {
+  if (typeof rowId !== 'string') return null;
+  if (isSectionRowId(rowId)) return rowId;
+  const byId = new Map<string, OperandRow>();
+  for (const row of rows) byId.set(row.ID, row);
+  return sectionIdOfEntry(owningEntryId(rowId, byId), byId);
+}
+
 // Whether any row STRICTLY above `rowId` is selected. Deleting an ancestor already
 // removes this row, so listing both is redundant — and double-handling would throw
 // on the second model op (the hazard BinarySlddEditorProvider's drop path guards
@@ -121,8 +147,8 @@ export function resolveOperands(
       seenEntry.add(entryId);
       entryIds.push(entryId);
     }
-    const sectionId = byId.get(entryId)?.parent;
-    if (typeof sectionId === 'string' && isSectionRowId(sectionId) && !seenSection.has(sectionId)) {
+    const sectionId = sectionIdOfEntry(entryId, byId);
+    if (sectionId && !seenSection.has(sectionId)) {
       seenSection.add(sectionId);
       sections.push(sectionId);
     }
