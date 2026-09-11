@@ -233,12 +233,24 @@ export function buildContextMenuItems(input: MenuInput): ContextMenuItem[] {
       : {}),
   };
 
+  // Two ways to be unavailable, and they want different sentences. Too many rows is the
+  // user's to fix, so it says what to do. A row that takes no children is a fact about
+  // the row — nothing to change, which is why the OTHER unavailable-for-a-property case
+  // (a row action on a section) is omitted instead. Add Child cannot be: it is a fixed
+  // item people go looking for, and dropping it would move everything under it. So it
+  // stays, and says which of the two it is, because "greyed out" alone reads as the
+  // selection being wrong. Which items take children is not a type list — a bus and a
+  // scalar struct do, a struct ARRAY does not — so the sentence names the row, not a rule.
   const addChild: ContextMenuItem = {
     id: 'addChild',
     label: 'Add Child',
     icon: 'addChild',
     disabled: !editable || n > 1 || !soleRow?._canAddChild,
-    ...(n > 1 ? { reason: 'Select a single item to add a child' } : {}),
+    ...(n > 1
+      ? { reason: 'Select a single item to add a child' }
+      : soleRow && !soleRow._canAddChild
+        ? { reason: 'This item takes no children' }
+        : {}),
   };
 
   const del: ContextMenuItem = {

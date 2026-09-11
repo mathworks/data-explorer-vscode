@@ -217,8 +217,27 @@ describe('enablement', () => {
     expect(byId(items, 'paste')!.disabled).toBe(true); // empty clipboard
   });
 
-  it('enables Add Child for a struct/bus entry', () => {
-    expect(byId(menu(), 'addChild')!.disabled).toBe(false);
+  it('enables Add Child for a struct/bus entry, and gives it nothing to explain', () => {
+    const addChild = byId(menu(), 'addChild')!;
+    expect(addChild.disabled).toBe(false);
+    expect(addChild.reason, 'an available item has no reason to give').toBeUndefined();
+  });
+
+  it('says which kind of unavailable Add Child is', () => {
+    // The two ways it can be off want different sentences, and only one of them is the
+    // user's to fix. Both are tooltips now, so saying so costs the row nothing — and
+    // "greyed out" with no sentence at all reads as the SELECTION being wrong, which for
+    // a leaf row it is not.
+    const tooMany = menu({
+      selectedRowIds: ['u/design/A', 'u/design/B'],
+      anchorRowId: 'u/design/A',
+    });
+    expect(byId(tooMany, 'addChild')!.reason).toBe('Select a single item to add a child');
+
+    // B is a scalar: one row, and nothing about the selection to change.
+    const leaf = menu({ selectedRowIds: ['u/design/B'], anchorRowId: 'u/design/B' });
+    expect(byId(leaf, 'addChild')!.disabled).toBe(true);
+    expect(byId(leaf, 'addChild')!.reason).toBe('This item takes no children');
   });
 
   it('Paste tracks clipboard state (and requires editable)', () => {
