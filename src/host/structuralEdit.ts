@@ -225,6 +225,16 @@ export function deleteEntry(text: string, entry: any): StructuralResult {
   return patchResult(text, { offset: span.offset, length: span.length, text: '' }, selectId);
 }
 
+// Whether a node may be removed from its parent: a child of a container (Bus/Struct/
+// Enum), never a top-level entry (a SECTION has no canRemoveChild) and never a detached
+// node. One predicate because removeChildrenFromModel has to answer it for a whole group
+// BEFORE it removes any of them, and a second copy of the condition is how the group
+// check and the single check would come to disagree.
+function removableChild(node: any): boolean {
+  const parent = node?.parent;
+  return !!parent && typeof parent.canRemoveChild === 'function' && parent.canRemoveChild();
+}
+
 /**
  * Remove a nested child from the in-memory model, reporting the entry whose text
  * has to be reserialized and where the selection should land. This is the part of
@@ -234,9 +244,7 @@ export function deleteEntry(text: string, entry: any): StructuralResult {
  */
 export function removeChildFromModel(node: any): { entry: any; selectId: string } {
   const parent = node.parent;
-  if (!parent || typeof parent.canRemoveChild !== 'function' || !parent.canRemoveChild()) {
-    throw new Error('This item cannot be deleted.');
-  }
+  if (!removableChild(node)) throw new Error('This item cannot be deleted.');
   // PRECONDITION (untested): the canRemoveChild guard above already restricts
   // `node` to a child of a container (Bus/Struct/Enum), and every container in a
   // parsed model sits under a top-level entry — a SECTION has no canRemoveChild,
@@ -276,6 +284,75 @@ export function addChildToModel(node: any): { entry: any; selectId: string } {
 /** Delete a nested child: remove it from its parent, reserialize the owning entry. */
 export function deleteChild(text: string, node: any): StructuralResult {
   const { entry, selectId } = removeChildFromModel(node);
+  return spliceEntry(text, entry, selectId);
+}
+
+/**
+ * Remove SEVERAL nested children of ONE entry from the model, reporting the entry to
+ * reserialize and where the selection should land.
+ *
+ * `removeChildFromModel` is this with a list of one; what N adds is a single splice
+ * afterwards, which is the bug this exists to prevent. Calling deleteChild twice for two
+ * fields of one struct splices the entry twice, and the second splice searches text the
+ * first has already rewritten — the span it finds is the wrong length and its write lands
+ * over the entry's neighbour. Same reason foldPasteEntries folds N pastes into one
+ * insertion instead of writing N times.
+ *
+ * ALL the children must share one entry, and that is checked rather than assumed: one
+ * splice can only rewrite one entry, so a mixed list would drop the other entry's
+ * removals from the text while keeping them in the model — a table that disagrees with
+ * its own file. The caller that groups them (deletionPlan.planDeletion) guarantees it;
+ * this is what makes the guarantee testable.
+ *
+ * Both checks run over the WHOLE group before anything is removed, so a group this
+ * refuses leaves the model exactly as it found it. Validating as it went would half-apply
+ * a gesture that then threw, and the live model would keep those removals until the next
+ * re-parse — a table showing a delete the file never received.
+ *
+ * The selection is the last removal's answer, but only if it survived: reselectAfterRemoval
+ * answers per removal, so an earlier one may have taken away the sibling a later one
+ * chose. Falling back to the entry keeps the selection on a row that still exists.
+ *
+ * Both .sldd formats share this and differ only in the splice that follows — see
+ * deleteChildren below and deleteChildrenXml in xmlStructuralEdit.ts.
+ */
+export function removeChildrenFromModel(nodes: readonly any[]): { entry: any; selectId: string } {
+  if (!nodes.length) throw new Error('Nothing to delete.');
+  const entry = findOwningEntry(nodes[0]);
+  if (!entry) throw new Error('Could not locate the owning entry.');
+  for (const node of nodes) {
+    if (findOwningEntry(node) !== entry) {
+      throw new Error('These items are not all in the same entry.');
+    }
+    if (!removableChild(node)) throw new Error('This item cannot be deleted.');
+  }
+  // Removals first, one splice after: the text must be rewritten from the entry as it
+  // ends up, not once per child.
+  const selectIds: string[] = [];
+  for (const node of nodes) {
+    selectIds.push(removeChildFromModel(node).selectId);
+  }
+  // reselectAfterRemoval answers per removal, so a later answer can name a sibling an
+  // earlier removal already took away. Checked against the tree rather than the node
+  // index, because that index is mid-mutation here — mutateEntry re-keys the subtree only
+  // after this returns, so findNodeById would still resolve a node that has left.
+  const live = subtreeIds(entry);
+  const survivor = selectIds.filter((id) => live.has(id)).pop();
+  return { entry, selectId: survivor ?? entry.id };
+}
+
+// Every id in a subtree as it stands now. An id is a name-path, so a removal does not
+// change what its surviving siblings answer to — which is what makes this comparable
+// against ids captured before it.
+function subtreeIds(node: any, out = new Set<string>()): Set<string> {
+  out.add(node.id);
+  for (const child of (node.children ?? []) as any[]) subtreeIds(child, out);
+  return out;
+}
+
+/** Delete several nested children of one entry, reserializing that entry once. */
+export function deleteChildren(text: string, nodes: readonly any[]): StructuralResult {
+  const { entry, selectId } = removeChildrenFromModel(nodes);
   return spliceEntry(text, entry, selectId);
 }
 
