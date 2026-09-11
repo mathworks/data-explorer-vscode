@@ -31,12 +31,19 @@ import { serializeEntryToXml, DataModel, DATA_PART_XML, type ParseWarning } from
 // the reader itself no longer enforces (it recovers and warns instead).
 import { readSlddParts } from './slddContent.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
-import { findOwningEntry, resolveSectionForPaste, buildDragSnapshot } from './structuralEdit.js';
+import {
+  findOwningEntry,
+  resolveSectionForPaste,
+  buildDragSnapshot,
+  reselectAfterRemoval,
+} from './structuralEdit.js';
+import { planDeletion } from './deletionPlan.js';
 import { copyEntriesToClipboard } from './clipboardAction.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
 import {
   deleteEntryXml,
   deleteChildXml,
+  deleteChildrenXml,
   addChildXml,
   pasteEntriesXml,
   deleteEntriesByNameXml,
@@ -681,22 +688,101 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     };
 
     /**
-     * Delete whichever the target row is: one nested child, or a whole entry.
+     * Delete SEVERAL rows as ONE edit.
      *
-     * The two are different SHAPES of change rather than two cases of one — deleting a
-     * child leaves the dictionary's entry list alone, so it is a `replace` of the owning
-     * entry, while deleting an entry is a `remove` — so they split here, before either
-     * path decides anything.
+     * Delete acts on ROWS (see webview/operands.ts), so its operands can mix whole entries
+     * with nested children of other entries. This format's undo stack is this document's
+     * own and steps by pushEdit, so the whole gesture is ONE push: one `after` string built
+     * by folding every removal, and one op list describing all of them. applyDrop already
+     * has this shape for N payloads — deliberately, because a drop IS a paste and a delete
+     * of the same N.
+     *
+     * READ THE MODEL FIRST, for the reason the JSON path does: a removal takes its node out
+     * of the tree, so the selectors the splice needs, the row to select afterwards, and the
+     * records the ops carry are all read while the nodes are still attached. A child group's
+     * UNDO record in particular has to be captured before its children go — after, it would
+     * describe the entry the delete produced, and undo would restore the deletion.
      */
-    const applyDelete = (rowId: string) => {
+    const applyDeleteMany = (rowIds: readonly string[]) => {
+      const model = liveModel();
+      const plan = planDeletion(rowIds, (rowId) => findNode(rowId));
+      if (!plan.entries.length && !plan.childGroups.length) {
+        webview.postMessage({ type: 'error', message: 'Could not locate the items in the model.' });
+        return;
+      }
+      // Read off the live tree, before anything leaves it.
+      const selectors = plan.entries.map((entry) => entrySelectorOf(entry));
+      const entryPairs = attempt<EntryOpPair[]>(() =>
+        plan.entries.map((entry) => ({ redo: removeOp(entry.id), undo: insertOp(entry) })),
+      );
+      const doomed = new Set<any>(plan.entries);
+      const lastEntry = plan.entries[plan.entries.length - 1];
+      const entrySelectId = lastEntry
+        ? reselectAfterRemoval(
+            ((lastEntry.parent?.children ?? []) as any[]).filter((e) => e === lastEntry || !doomed.has(e)),
+            lastEntry,
+            buildSectionRowId(lastEntry.parent?.name ?? ''),
+          )
+        : null;
+
+      try {
+        const before = document.chunkXml;
+        let working = before;
+        const childPairs: EntryOpPair[] = [];
+        const applied: AppliedOp[] = [];
+        let childSelectId: string | null = null;
+        for (const group of plan.childGroups) {
+          // Before the removal: this record is what an undo restores.
+          const undoOp = attempt(() => replaceOp(group.entry, group.entry.id));
+          const result = mutateEntry(group.entry, () => deleteChildrenXml(working, group.children));
+          working = result.newText;
+          childSelectId = result.selectId ?? childSelectId;
+          const redoOp = attempt(() => replaceOp(group.entry, group.entry.id));
+          if (undoOp && redoOp) childPairs.push({ redo: redoOp, undo: undoOp });
+          applied.push({ kind: 'replace', entryRowId: group.entry.id, entry: group.entry });
+        }
+        working = deleteEntriesByNameXml(working, selectors);
+
+        // The op list is all-or-nothing: a group whose record would not serialize left no
+        // pair, and a patch missing one op would restore a partial state. No patch means
+        // both directions repaint wide, which is merely slow (see `attempt`).
+        const complete = !!entryPairs && childPairs.length === plan.childGroups.length;
+        const patch = complete ? patchOfPairs([...childPairs, ...entryPairs]) : undefined;
+
+        applied.push(...applyEntryOps(model, (entryPairs ?? []).map((p) => p.redo)));
+        document.pushEdit('Delete', before, working, patch);
+        document.repaintOps(applied);
+        const landing = entrySelectId ?? childSelectId;
+        if (landing) webview.postMessage({ type: 'selectRow', rowId: landing });
+      } catch (err) {
+        // Nothing was pushed, so chunkXml is untouched; the model may not be — the child
+        // removals happen before the splice. Rebuild from the text, then say so (the
+        // repaint clears the banner, so it goes first).
+        document.repaintAll();
+        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+      }
+    };
+
+    /**
+     * Delete whichever rows the gesture named.
+     *
+     * One row keeps the two shapes it already had — a child leaving is a `replace` of its
+     * owning entry, an entry leaving is a `remove` — because they are cheaper and
+     * better-tested than the fold, and because a single delete is the common case.
+     */
+    const applyDelete = (rowIds: readonly string[]) => {
+      if (rowIds.length !== 1) {
+        applyDeleteMany(rowIds);
+        return;
+      }
       liveModel();
-      const node = findNode(rowId);
+      const node = findNode(rowIds[0]);
       if (!node) {
         webview.postMessage({ type: 'error', message: 'Could not locate the item in the model.' });
         return;
       }
       if (node.isEntry) applyDeleteEntry(node);
-      else applyStructural(rowId, (xml, n) => deleteChildXml(xml, n), 'Delete');
+      else applyStructural(rowIds[0], (xml, n) => deleteChildXml(xml, n), 'Delete');
     };
 
     // Value edit / rename: mutate node, reserialize its owning entry, splice.
@@ -1030,7 +1116,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       else if (msg?.type === 'edit') applyEdit(msg);
       else if (msg?.type === 'copy') applyCopy(msg.rowId, 'copy');
       else if (msg?.type === 'cut') applyCopy(msg.rowId, 'cut');
-      else if (msg?.type === 'delete') applyDelete(msg.rowId);
+      else if (msg?.type === 'delete') applyDelete([msg.rowId]);
       else if (msg?.type === 'addChild') applyStructural(msg.rowId, (xml, node) => addChildXml(xml, node), 'Add child');
       else if (msg?.type === 'paste') void applyPaste(msg.rowId);
       else if (msg?.type === 'dragStart') applyDragStart(msg);
