@@ -23,6 +23,7 @@ import { entrySelectorOf, type EntrySelector } from './entrySelector.js';
 import { generateUuid, getSectionMetadata } from 'data-explorer-core';
 import { buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
 import type { DragRegisterItem } from './dragState.js';
+import { dropFactsOf } from './dropFacts.js';
 
 /** One byte-scoped replacement of a document's text: `length` bytes at `offset` become `text`. */
 export interface TextPatch {
@@ -135,18 +136,7 @@ export function buildDragSnapshot(
     if (seen.has(entry)) continue;
     seen.add(entry);
     const payload = entry.serialize() as Record<string, unknown>;
-    const value = payload.value as Record<string, unknown> | undefined;
-    // An empty `_array_class` means "not an object array", i.e. a plain MATLAB
-    // variable — the same falsy-is-absent rule the parser's envelope uses.
-    const arrayClass = (value && typeof value === 'object' && (value._array_class as string)) || '';
-    items.push({
-      payload,
-      className: entry.className ?? '',
-      arrayClass,
-      kind: entry.kind ?? '',
-      isMatlabVariable: !arrayClass,
-      isScalarNumeric: entry.isScalarNumeric === true,
-    });
+    items.push({ payload, ...dropFactsOf(entry, payload) });
     const section = entry.parent;
     if (section) {
       sourceSection = section.name ?? '';
