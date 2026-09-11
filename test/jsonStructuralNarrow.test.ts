@@ -55,6 +55,7 @@ import {
   deleteChildren,
   deleteEntriesByName,
   deleteEntry,
+  pasteEntries,
   pasteEntry,
   type TextPatch,
 } from '../src/host/structuralEdit.js';
@@ -354,6 +355,51 @@ describe('JSON .sldd structural edit — narrow === wide', () => {
     const narrow = d.paintOps(before, applied);
     expect(narrow.length).toBe(before.length);
     expect(narrow).toEqual(d.widePaint());
+  });
+
+  it('a TWO-source move: both sources leave, both copies arrive, and undo puts them back', () => {
+    // The claim `moveRemovals` rests on now that it no longer refuses N>1: each undo op is
+    // captured against the model as it stands at that moment, and patchOfPairs REVERSES
+    // the undo list, so the inverses replay last-removed-first and every insert names the
+    // index its entry actually held. Captured up front instead, the second insert would
+    // name a slot that the first insert had already shifted.
+    const d = open('test://struct-move-two.sldd');
+    const before = d.widePaint();
+    const textBefore = d.doc.text;
+    const section = d.model().children[0];
+
+    const sources = ['PI', 'Number'].map((n) => d.entryNamed(n));
+    const payloads = sources.map((s: any) => s.serialize());
+    const selectors = payloads.map((p: any) => entrySelectorOf(p));
+
+    // The sources go first, from the text AND the model: the paste's uniqueness check reads
+    // the namespace, and a source still standing would push its own copy to "PI1".
+    const trimmed = deleteEntriesByName(d.doc.text, selectors);
+    const pairs: EntryOpPair[] = [];
+    const applied: AppliedOp[] = [];
+    for (const source of sources) {
+      const pair: EntryOpPair = { redo: removeOp(source.id), undo: insertOp(source) };
+      pairs.push(pair);
+      applied.push(...applyEntryOps(d.model(), [pair.redo]));
+    }
+
+    const addedFrom = section.children.length;
+    const pasted = pasteEntries(trimmed, section, payloads);
+    const added = opsOfPastedEntries(section, addedFrom);
+    pairs.push(...added.pairs);
+    applied.push(...added.applied);
+    d.doc.text = pasted.newText;
+
+    expect(added.applied.map((op: any) => op.entry.name), 'both copies keep their names').toEqual(['PI', 'Number']);
+    const moved = d.paintOps(before, applied);
+    expect(moved.length).toBe(before.length);
+    expect(moved, 'the narrow paint of a two-source move').toEqual(d.widePaint());
+
+    // Cmd+Z. The text comes back as it was (that is VS Code's job); what is under test is
+    // that replaying the REVERSED inverses over the model produces the same table.
+    d.doc.text = textBefore;
+    const undone = d.paintOps(moved, applyEntryOps(d.model(), patchOfPairs(pairs).undo));
+    expect(undone, 'undo of a two-source move').toEqual(d.widePaint());
   });
 });
 

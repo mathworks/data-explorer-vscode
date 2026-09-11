@@ -227,6 +227,13 @@ export function findEntryByName(model: any, sectionName: string, entryName: stri
  *
  * `addedFrom` is the section's child count read BEFORE the transform. Everything from there
  * on is new, in the order it was pasted, because parseEntry appends.
+ *
+ * Which is also why every one of these inserts is anchored at the END of the section rather
+ * than on its own next sibling. The run is the section's tail, so with N > 1 an entry's next
+ * sibling is the NEXT ENTRY OF THE SAME RUN — a row the table does not hold yet, because the
+ * rows go out one message per op. `insertEntryRows` answers a place it cannot find with null,
+ * and the webview answers null by asking for a full repaint, so a two-item paste would give
+ * up the narrow path it had already half-taken. Appended in order, the run lands in order.
  */
 export function opsOfPastedEntries(
   section: any,
@@ -237,7 +244,7 @@ export function opsOfPastedEntries(
   for (const entry of ((section?.children ?? []) as any[]).slice(addedFrom)) {
     DataModel.indexSubtree(entry);
     pairs.push({ redo: insertOp(entry), undo: removeOp(entry.id) });
-    applied.push({ kind: 'insert', entry, beforeRowId: insertAnchorOf(entry) });
+    applied.push({ kind: 'insert', entry, beforeRowId: undefined });
   }
   return { pairs, applied };
 }
