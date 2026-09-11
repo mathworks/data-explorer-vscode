@@ -1256,7 +1256,10 @@ export class DexTreeTable extends LitElement {
 
   private _visibleRowsCache: TreeTableRow[] | null = null;
   private _depthCache: Map<string, number> = new Map();
-  private _childrenCache: Set<string> = new Set();
+  // Row id → how many rows name it as their parent. Presence answers "can this row
+  // expand" (the ▶/▼ glyph, aria-expanded, the Space key); the number is what a
+  // section header shows as its entry count.
+  private _childCounts: Map<string, number> = new Map();
   private _lastRowsRef: TreeTableRow[] | null = null;
 
   override connectedCallback(): void {
@@ -1897,20 +1900,20 @@ export class DexTreeTable extends LitElement {
   private _invalidateCache(): void {
     this._visibleRowsCache = null;
     this._depthCache.clear();
-    this._childrenCache.clear();
+    this._childCounts.clear();
   }
 
   private _buildCaches(): void {
     if (this._lastRowsRef !== this.rows) {
       this._lastRowsRef = this.rows;
       this._depthCache.clear();
-      this._childrenCache.clear();
+      this._childCounts.clear();
 
       const rowById = new Map<string, TreeTableRow>();
       for (const r of this.rows) {
         rowById.set(r.ID, r);
         if (r.parent !== null) {
-          this._childrenCache.add(r.parent);
+          this._childCounts.set(r.parent, (this._childCounts.get(r.parent) ?? 0) + 1);
         }
       }
 
@@ -2542,7 +2545,7 @@ export class DexTreeTable extends LitElement {
       }
       case ' ': {
         e.preventDefault();
-        if (this.selectedRowId && this._childrenCache.has(this.selectedRowId)) {
+        if (this.selectedRowId && this._childCounts.has(this.selectedRowId)) {
           this._toggleExpand(this.selectedRowId);
         }
         break;
@@ -2852,7 +2855,7 @@ export class DexTreeTable extends LitElement {
     const isEditing = this._editingCell?.rowId === row.ID && this._editingCell?.columnId === columnId;
 
     if (columnId === 'Name') {
-      const hasChildren = this._childrenCache.has(row.ID);
+      const hasChildren = this._childCounts.has(row.ID);
       const expanded = this._expandedIds.has(row.ID);
       const depth = this._depthCache.get(row.ID) || 0;
       // Gray ONLY positional array/cell/string elements (synthetic index names).
@@ -2860,6 +2863,16 @@ export class DexTreeTable extends LitElement {
       // entries and struct fields always render in normal color.
       const isElement = row.Name?.element ?? false;
       const label = row.Name?.label || '';
+      // How many entries a section holds, shown after its name as `Design Data (102)`.
+      // COUNTED HERE, not sent by the host: an entry-scoped repaint rewrites one
+      // entry's rows and never the section header above them, so a count stamped
+      // upstream would go stale the first time the user pasted or deleted an entry.
+      // Derived from `rows`, so it is the section's whole population — an active
+      // search narrows the list below the header, not the size of the section.
+      // `(0)` is rendered rather than suppressed: an empty section is exactly what a
+      // reader wants the number for.
+      const sectionCount =
+        row.ID.indexOf('section:') === 0 ? (this._childCounts.get(row.ID) ?? 0) : null;
       // The systems enclosing a block row, shown after its label as `Gain (Controller)`.
       // A block NAME is unique only inside its own system, so a model view can list four
       // rows reading `Gain` — separate rows with separate parameters and separate links,
@@ -2893,7 +2906,8 @@ export class DexTreeTable extends LitElement {
           </span>
           ${iconId ? html`<dex-icon class="name-icon" .iconId=${iconId} .size=${16}></dex-icon>` : ''}
           <span class="name-text"
-            ><span class="label ${isElement ? 'readonly' : ''}">${this._highlight(label, columnId)}</span
+            ><span class="label ${isElement ? 'readonly' : ''}"
+              >${this._highlight(label, columnId)}${sectionCount === null ? '' : ` (${sectionCount})`}</span
             >${qualifier
               ? html`<span class="name-qualifier" title=${row._blockPath || nothing}
                   >${'(' + qualifier + ')'}</span
@@ -3305,7 +3319,7 @@ export class DexTreeTable extends LitElement {
                 // depth via indentation and ▶/▼ via a glyph, neither of which a
                 // screen reader can see, so without these a blind user cannot
                 // tell nesting level or whether a row can be expanded at all.
-                const hasChildren = this._childrenCache.has(row.ID);
+                const hasChildren = this._childCounts.has(row.ID);
                 return html`
                   <tr
                     role="row"

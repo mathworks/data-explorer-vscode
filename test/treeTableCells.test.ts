@@ -1019,6 +1019,92 @@ describe('section header rows', () => {
   });
 });
 
+// `Design Data (102)` / `Other Data (0)`. The number is how many entries the section
+// holds, and it is COUNTED FROM `rows` on every render rather than stamped onto the
+// header by the host: the host repaints an edit one entry at a time (a paste inserts
+// that entry's rows, a delete splices them out) and never rewrites the section header
+// above them, so an upstream count would be wrong from the first paste onward.
+describe('a section header states how many entries it holds', () => {
+  // The Name cell's own text, without the ▶/▼ toggle glyph a parent row also renders.
+  const nameLabel = (table: DexTreeTable, rowId: string): string =>
+    (
+      table.shadowRoot!.querySelector(`tr[data-row-id="${rowId}"] .name-cell .label`)?.textContent || ''
+    ).trim();
+
+  const SECTIONED = [
+    makeRow('section:design', 'Design Data'),
+    makeRow('Bus', 'Bus', { parent: 'section:design' }),
+    makeRow('Bus/e1', 'e1', { parent: 'Bus' }),
+    makeRow('K', 'K', { parent: 'section:design' }),
+    makeRow('section:other', 'Other Data'),
+  ];
+
+  it('counts the entries in the section', async () => {
+    const table = await mount(SECTIONED);
+    expect(nameLabel(table, 'section:design')).toBe('Design Data (2)');
+    table.remove();
+  });
+
+  it('counts entries only, not the fields nested inside them', async () => {
+    // `Bus/e1` is a bus element, not a dictionary entry: counting the flattened
+    // subtree would report a number the user cannot find in the section.
+    const table = await mount(SECTIONED);
+    expect(nameLabel(table, 'section:design')).not.toContain('(3)');
+    table.remove();
+  });
+
+  it('shows (0) for an empty section rather than nothing', async () => {
+    // The empty case is the one a reader most wants the number for.
+    const table = await mount(SECTIONED);
+    expect(nameLabel(table, 'section:other')).toBe('Other Data (0)');
+    table.remove();
+  });
+
+  it('follows an entry-scoped repaint, so a paste or delete is reflected', async () => {
+    const table = await mount(SECTIONED);
+    table.rows = SECTIONED.filter((r) => r.ID !== 'K');
+    await table.updateComplete;
+    expect(nameLabel(table, 'section:design')).toBe('Design Data (1)');
+
+    table.rows = [...SECTIONED, makeRow('New', 'New', { parent: 'section:design' })];
+    await table.updateComplete;
+    expect(nameLabel(table, 'section:design')).toBe('Design Data (3)');
+    table.remove();
+  });
+
+  it('states the size of the section, which a search does not change', async () => {
+    // The header answers "how big is this section", not "how many of it am I
+    // currently looking at" — the filtered list below already answers that.
+    const table = await mount(SECTIONED);
+    (table as any)._filterText = 'K';
+    (table as any)._visibleRowsCache = null;
+    table.requestUpdate();
+    await table.updateComplete;
+    expect(nameLabel(table, 'section:design')).toBe('Design Data (2)');
+    table.remove();
+  });
+
+  it('leaves an ordinary parent row uncounted', async () => {
+    // Only a section header carries the count; an entry with children says how many
+    // by expanding, and a number after its name would read as part of the name.
+    const table = await mount(SECTIONED);
+    (table as any)._expandedIds = new Set(['section:design', 'Bus']);
+    (table as any)._visibleRowsCache = null;
+    table.requestUpdate();
+    await table.updateComplete;
+    expect(nameLabel(table, 'Bus')).toBe('Bus');
+    table.remove();
+  });
+
+  it('keeps the count out of the sortable and searchable text', async () => {
+    // `_getCellText` is what sorting, the filter and clipboard copy read. A count in
+    // there would let a search for `2` hit a section that contains no such name.
+    const table = await mount(SECTIONED);
+    expect((table as any)._getCellText(SECTIONED[0], 'Name')).toBe('Design Data');
+    table.remove();
+  });
+});
+
 describe('a matrix Value cell carries the Variable Editor glyph', () => {
   const MAT = { name: 'Mat', className: 'double', dims: [2, 2], cells: ['1', '2', '3', '4'] };
 
