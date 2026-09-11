@@ -19,7 +19,7 @@
 import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
 import { renderWebviewHtml, BANNERS_HTML } from './webviewHtml.js';
-import { buildRows, buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
+import { buildRows, buildEntryRows, clipMarkKey, splitClipMarkKey, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { sectionRules } from './sectionRules.js';
 // DATA_PART_XML is core's name for the one zip member holding the entries, and the four
 // sites below are three roles of one rule: two lookups, the exclusion in
@@ -383,15 +383,18 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // The clipboard mark this document's rows should carry, if any. Shared by the
     // full and entry-scoped repaints so a cut/copied entry renders its affordance
     // the same way whichever one painted it.
-    // A ClipMark still names ONE entry, so a clipboard holding several marks only the
-    // first of them — the rest of the cut sources show no affordance until the mark
-    // becomes a set of keys.
+    // Every entry the clipboard holds carries the mark, each keyed by its OWN source
+    // section: a multi-row cut can span sections, so one shared section would dim the
+    // wrong rows.
     const clipMarkOfDoc = (): ClipMark | undefined => {
       const clip = getClipboard();
-      const first = clip?.items[0];
-      return clip && clip.sourceDocUri === uriString && first?.payload.name
-        ? { name: first.payload.name as string, section: first.sourceSection, mode: clip.mode }
-        : undefined;
+      if (!clip || clip.sourceDocUri !== uriString) return undefined;
+      const keys = new Set<string>();
+      for (const it of clip.items) {
+        const name = it.payload.name;
+        if (typeof name === 'string' && name) keys.add(clipMarkKey(it.sourceSection, name));
+      }
+      return keys.size ? { keys, mode: clip.mode } : undefined;
     };
 
     const post = (from: ModelSource = 'chunk') => {
@@ -442,11 +445,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       // lets it CLEAR a stale mark — see the Status comment in rowBuilder.
       const modified = new Set<string>();
       if (isEntryModified(uriString, entry)) modified.add(entry.name);
-      const mark = clipMarkOfDoc();
-      // Pre-matched by section exactly as buildRows does it: entry names are only
-      // unique within a section, so only the marked entry's own section may carry it.
-      const sectionMark = mark && mark.section === section.name ? mark : undefined;
-      return buildEntryRows(entry, section.name, modified, sectionMark);
+      return buildEntryRows(entry, section.name, modified, clipMarkOfDoc());
     };
 
     /**
@@ -506,30 +505,34 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
      * A cut or copy makes no document edit, yet the source row must gain or lose its
      * affordance, so the hub asks every open table to repaint on every clipboard
      * broadcast — and "repaint" used to mean the whole table, which made a copy in ANY
-     * open .sldd cost this document a full re-parse. At most TWO entries can be
-     * affected: the one that just took the mark and the one that held it before. A
-     * broadcast that changes neither (the usual case — the mark belongs to another
-     * document) now costs nothing at all.
+     * open .sldd cost this document a full re-parse. Only the entries the two marks
+     * name can be affected: the ones the clipboard just took and the ones it held
+     * before. A broadcast that changes neither (the usual case — the mark belongs to
+     * another document) now costs nothing at all.
      *
      * An affected entry that is no longer in the model is skipped rather than repainted
      * wide: its rows are already gone (a cut+paste moves the very entry that held the
      * mark), so there is nothing left to un-dim.
      */
     let paintedMark: ClipMark | undefined;
+    // Order-independent: the same entries marked in a different order is the SAME mark,
+    // and repainting for it would be a repaint the user's rows do not need.
     const markKey = (mark?: ClipMark): string =>
-      mark ? JSON.stringify([mark.mode, mark.section, mark.name]) : '';
+      mark ? JSON.stringify([mark.mode, [...mark.keys].sort()]) : '';
     const repaintClipMark = () => {
       const next = clipMarkOfDoc();
       if (markKey(paintedMark) === markKey(next)) return;
-      const affected = [paintedMark, next].filter((m): m is ClipMark => !!m);
+      // Every entry either mark names: the ones losing the affordance and the ones
+      // gaining it. A key present in both yields one repaint (the `seen` guard below),
+      // as does a copy re-taken as a cut.
+      const affected = new Set<string>([...(paintedMark?.keys ?? []), ...(next?.keys ?? [])]);
       paintedMark = next;
       const model = liveModel();
       const ops: AppliedOp[] = [];
       const seen = new Set<string>();
-      for (const mark of affected) {
-        const entry = findEntryByName(model, mark.section, mark.name);
-        // Both marks can name the same entry (a copy re-taken as a cut), and its rows
-        // only need painting once.
+      for (const key of affected) {
+        const { section, name } = splitClipMarkKey(key);
+        const entry = findEntryByName(model, section, name);
         if (!entry || seen.has(entry.id)) continue;
         seen.add(entry.id);
         ops.push({ kind: 'replace', entryRowId: entry.id, entry });
