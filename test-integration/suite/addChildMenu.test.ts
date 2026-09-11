@@ -18,7 +18,7 @@ import { getModel, findNode, invalidate } from '../../src/host/SlddModel';
 import { buildRows } from '../../src/host/rowBuilder';
 import { buildContextMenuItems, type ClipboardState } from '../../src/webview/menuItems';
 
-const NO_CLIP: ClipboardState = { canPaste: false, mode: null };
+const NO_CLIP: ClipboardState = { canPaste: false, mode: null, items: [] };
 
 async function readFixture(name: string): Promise<{ uri: string; text: string }> {
   const ws = vscode.workspace.workspaceFolders?.[0];
@@ -28,22 +28,39 @@ async function readFixture(name: string): Promise<{ uri: string; text: string }>
   return { uri: fileUri.toString(), text: Buffer.from(bytes).toString('utf8') };
 }
 
-// Build the row and live model node for a named top-level entry.
-function entryRowAndNode(uri: string, text: string, name: string): { row: any; node: any } {
+// Build the row and live model node for a named top-level entry. The whole row
+// list comes back too: the menu resolves its operands by walking `parent`
+// through the table, so it needs the table, not just the row that was clicked.
+function entryRowAndNode(
+  uri: string,
+  text: string,
+  name: string,
+): { rows: any[]; row: any; node: any } {
   invalidate(uri);
   const model = getModel(uri, 'params.sldd', text);
-  const row = buildRows(model).find(
+  const rows = buildRows(model) as any[];
+  const row = rows.find(
     (r: any) => r.Name?.label === name && !String(r.ID).startsWith('section:'),
   );
   assert.ok(row, `entry "${name}" is present`);
-  return { row, node: findNode(uri, row.ID) };
+  return { rows, row, node: findNode(uri, row.ID) };
 }
 
 // The Add Child menu item's disabled state for a named entry, computed through
-// the real rowBuilder -> buildContextMenuItems path (editable document).
+// the real rowBuilder -> buildContextMenuItems path (editable document), for a
+// selection of that one row.
 function addChildDisabled(uri: string, text: string, name: string): boolean {
-  const { row } = entryRowAndNode(uri, text, name);
-  const items = buildContextMenuItems(row, NO_CLIP, true);
+  const { rows, row } = entryRowAndNode(uri, text, name);
+  const items = buildContextMenuItems({
+    rows,
+    selectedRowIds: [row.ID],
+    anchorRowId: row.ID,
+    clipboard: NO_CLIP,
+    editable: true,
+    hasTextView: true,
+    // Nothing to paste, so no target is needed to answer for Add Child.
+    pasteTarget: null,
+  });
   return items.find((i) => i.id === 'addChild')!.disabled === true;
 }
 
