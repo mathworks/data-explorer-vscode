@@ -10,15 +10,22 @@
 // and a clipboard still holding whatever was there before, which the next paste
 // then lands.
 //
-// Everything format-specific is injected, mirroring buildDragSnapshot: getting a
-// live model is the ONLY real difference between the two providers here, never
-// what copying a row means.
+// Everything format-specific is injected, mirroring buildDragSnapshot: `refresh`
+// (bring the model up to date with the live content) and `findNode` (resolve a row id
+// against it) are the ONLY real difference between the two providers here, never what
+// copying a row means.
 import { setClipboard, type ClipboardMode } from './clipboard.js';
-import { findOwningEntry } from './structuralEdit.js';
+import { buildClipboardSnapshot } from './structuralEdit.js';
 
 export interface CopyDeps {
-  /** Refresh this format's model from its live content and resolve a row id. */
-  resolveNode: (rowId: string) => any;
+  /**
+   * Bring this format's model up to date with its live content. Called ONCE per
+   * copy, however many rows it covers: the JSON provider re-parses the document here,
+   * which is ~190 ms on a real customer dictionary — per row it would be per row.
+   */
+  refresh: () => void;
+  /** Resolve a row id against the refreshed model. */
+  findNode: (rowId: string) => any;
   /** Post to the owning webview. Only ever used for failures. */
   post: (message: { type: 'error'; message: string }) => void;
   /**
@@ -30,40 +37,51 @@ export interface CopyDeps {
 }
 
 /**
- * Snapshot the row's owning entry onto the host clipboard in `mode`.
+ * Snapshot every entry the rows resolve to onto the host clipboard in `mode`.
  *
- * `uriString` is recorded with the payload because a cut is LAZY — the source
+ * Rows are deduped by owning entry (buildClipboardSnapshot), so selecting a bus and two
+ * of its elements copies ONE bus. That is the spec's rule: Copy needs a destination, so
+ * it stays entry-granular even when Delete on the same selection is row-granular.
+ *
+ * `uriString` is recorded with the payloads because a cut is LAZY — the source
  * delete is deferred to paste time, and the paste may land in a different .sldd
  * tab, so the clipboard must remember which document to delete from.
  *
- * Returns whether the entry reached the clipboard. Callers do not need the
- * result (every failure has already been reported to the webview); it exists so
- * the outcome is assertable.
+ * Returns whether anything reached the clipboard. Callers do not need the result
+ * (every failure has already been reported to the webview); it exists so the
+ * outcome is assertable.
  */
-export function copyEntryToClipboard(
-  rowId: string,
+export function copyEntriesToClipboard(
+  rowIds: readonly string[],
   mode: ClipboardMode,
   uriString: string,
   deps: CopyDeps,
 ): boolean {
   try {
-    const node = deps.resolveNode(rowId);
-    if (!node) {
-      deps.post({ type: 'error', message: `Could not ${mode} the selected item.` });
+    deps.refresh();
+    // Two passes over the same refreshed model (both are index lookups). Separating
+    // "no row resolved" from "rows resolved but no entry behind them" is what keeps
+    // the two failures distinguishable to the user: the first is a stale table, the
+    // second is a row that has no entry to copy, like a section header.
+    if (!rowIds.some((id) => !!deps.findNode(id))) {
+      deps.post({
+        type: 'error',
+        message: `Could not ${mode} the selected item${rowIds.length === 1 ? '' : 's'}.`,
+      });
       return false;
     }
-    const entry = findOwningEntry(node);
-    if (!entry) {
+    const items = buildClipboardSnapshot(rowIds, deps.findNode);
+    if (!items.length) {
       deps.post({ type: 'error', message: 'Could not locate the owning entry in the model.' });
       return false;
     }
-    setClipboard(entry.serialize() as Record<string, unknown>, mode, entry.parent?.name ?? '', uriString);
+    setClipboard(items, mode, uriString);
     // Broadcast so every open table (not just this one) enables Paste and
-    // repaints — the cut/copied source row shows its affordance.
+    // repaints — the cut/copied source rows show their affordance.
     deps.broadcast();
     return true;
   } catch (err) {
-    // Reached when the model refresh itself fails: resolveNode re-parses the live
+    // Reached when the model refresh itself fails: `refresh` re-parses the live
     // content, so a half-typed edit in the JSON .sldd's plain-text view makes
     // JSON.parse throw right here.
     deps.post({ type: 'error', message: `Failed to ${mode}: ${(err as Error).message}` });

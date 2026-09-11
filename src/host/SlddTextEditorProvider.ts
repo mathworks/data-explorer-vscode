@@ -51,7 +51,6 @@ import {
   deleteEntry,
   deleteChild,
   addChild as addChildEdit,
-  pasteEntry,
   pasteEntries,
   deleteEntriesByName,
   findOwningEntry,
@@ -62,7 +61,7 @@ import {
   type TextPatch,
 } from './structuralEdit.js';
 import { minimalReplacement } from './minimalEdit.js';
-import { copyEntryToClipboard } from './clipboardAction.js';
+import { copyEntriesToClipboard } from './clipboardAction.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
@@ -151,10 +150,14 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // Shared by the full and entry-scoped repaints, so a cut affordance renders the same
     // way whichever one painted it: one that appeared or vanished depending on which
     // repaint the user happened to trigger would be a bug visible only after an edit.
+    // A ClipMark still names ONE entry, so a clipboard holding several marks only the
+    // first of them — the rest of the cut sources show no affordance until the mark
+    // becomes a set of keys.
     const clipMarkOfDoc = (): ClipMark | undefined => {
       const clip = getClipboard();
-      return clip && clip.sourceDocUri === uriString && clip.payload.name
-        ? { name: clip.payload.name as string, section: clip.sourceSection, mode: clip.mode }
+      const first = clip?.items[0];
+      return clip && clip.sourceDocUri === uriString && first?.payload.name
+        ? { name: first.payload.name as string, section: first.sourceSection, mode: clip.mode }
         : undefined;
     };
 
@@ -988,13 +991,13 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // Shared with the binary provider, which is what makes a failed copy report
     // the same way in both formats (it used to be silent here).
     const applyCopy = (msg: { rowId: string }, mode: 'cut' | 'copy'): void => {
-      copyEntryToClipboard(msg.rowId, mode, uriString, {
-        resolveNode: (rowId) => {
+      copyEntriesToClipboard([msg.rowId], mode, uriString, {
+        refresh: () => {
           const currentText = document.getText();
           invalidate(uriString);
           getModel(uriString, name, currentText);
-          return findNode(uriString, rowId);
         },
+        findNode: (rowId) => findNode(uriString, rowId),
         post: (message) => webview.postMessage(message),
         broadcast: broadcastClipboardState,
       });
@@ -1230,28 +1233,44 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * so a source still standing there pushes the copy to "PI1" and the move renames what it
      * moved.
      *
-     * Narrow only for a SINGLE source. An undo replays the inverse ops in reverse order
-     * (patchOfPairs), and each insert names the index its entry held while the others were still
-     * in place — true of one entry, and not of several taken out of one section: putting the later
-     * one back first leaves it a slot short of where it was. Cut-and-paste always moves one entry;
-     * a multi-select drag-move is the rare case, and the wide repaint is what it has always cost.
+     * Narrow for ANY number of sources. An undo replays the inverse ops in reverse order
+     * (patchOfPairs) and each insert names the index its entry held when it was taken out, not
+     * before the others — which is why the capture below is interleaved with the removals rather
+     * than done up front. The binary provider's drop has always removed N this way.
      */
     const moveRemovals = (
       model: any,
       targets: readonly EntrySelector[],
     ): { pairs: EntryOpPair[]; applied: AppliedOp[] } | null => {
-      if (targets.length !== 1) return null;
-      const source = findEntryBySelector(model, targets[0]);
-      if (!source) return null;
-      const pairs: EntryOpPair[] = [{ redo: removeOp(source.id), undo: insertOp(source) }];
+      const pairs: EntryOpPair[] = [];
+      const applied: AppliedOp[] = [];
       try {
-        return { pairs, applied: applyEntryOps(model, [pairs[0].redo]) };
+        // INTERLEAVED on purpose: each undo op is captured against the model as it
+        // stands at that moment, then applied. `insertOp` reads the entry's index at
+        // call time and `patchOfPairs` REVERSES the undo list, so the inverses replay
+        // last-removed-first — each insert restoring into the section it was taken
+        // from. Worked through: [P,Q,R], remove P then Q -> insertOp(P) captures 0,
+        // insertOp(Q) captures 0 (Q slid down), and the reverse replay inserts Q at 0
+        // then P at 0, yielding [P,Q,R]. Capturing all the ops up front is what would
+        // be wrong here.
+        for (const target of targets) {
+          const source = findEntryBySelector(model, target);
+          if (!source) return null;
+          const pair: EntryOpPair = { redo: removeOp(source.id), undo: insertOp(source) };
+          pairs.push(pair);
+          applied.push(...applyEntryOps(model, [pair.redo]));
+        }
       } catch {
         // Half-applied at worst, and the caller's re-read discards it whole.
         return null;
       }
+      return { pairs, applied };
     };
 
+    // Now that the clipboard carries N items, this body and applyDrop's are the same
+    // shape end to end — which is the point: a paste IS a drop whose source register is
+    // the clipboard rather than the drag register. Left as two functions for now; the
+    // duplication is noted here so the next reader knows it is seen, not missed.
     const applyPaste = async (msg: { rowId: string }): Promise<void> => {
       let painted = false;
       try {
@@ -1274,15 +1293,18 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
         const isCut = clip.mode === 'cut';
         const sameDoc = clip.sourceDocUri === uriString;
-        // The cut entry's identity, carried on the payload the clipboard snapped
-        // at cut time — so the source-delete removes the entry the user actually
-        // cut, not a same-named entry in another section's namespace.
-        const srcSelector = entrySelectorOf(clip.payload);
-        const srcName = srcSelector.name;
+        // Each cut entry's identity, carried on the payload the clipboard snapped at
+        // cut time — so the source-delete removes the entries the user actually cut,
+        // not same-named entries in another section's namespace.
+        const srcSelectors = clip.items.map((it) => entrySelectorOf(it.payload));
+        const named = srcSelectors.filter((s) => !!s.name);
 
-        // A cut pasted back into the very section it came from is a no-op:
-        // deleting then re-adding the same entry would just churn the document.
-        if (isCut && sameDoc && clip.sourceSection === section.name) {
+        // A cut pasted back into the very section every item came from is a no-op:
+        // deleting then re-adding the same entries would just churn the document. With
+        // mixed sources it is NOT a no-op — the items from elsewhere really do move —
+        // so the whole paste proceeds, and the same-section ones are removed and
+        // re-added under the names they already had.
+        if (isCut && sameDoc && clip.items.every((it) => it.sourceSection === section.name)) {
           clearClipboard();
           broadcastClipboardState();
           return;
@@ -1303,10 +1325,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // what to write.
         let workingText = docText;
         let againstDocument = true;
-        if (isCut && sameDoc && srcName) {
-          workingText = deleteEntriesByName(docText, [srcSelector]);
+        if (isCut && sameDoc && named.length) {
+          workingText = deleteEntriesByName(docText, named);
           againstDocument = false;
-          const removals = moveRemovals(model, [srcSelector]);
+          const removals = moveRemovals(model, named);
           if (removals) {
             pairs.push(...removals.pairs);
             applied.push(...removals.applied);
@@ -1326,7 +1348,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // Read AFTER any removal, because a move within one section shortens the very array the
         // paste is about to append to. Everything from here on is what the paste added.
         const addedFrom = (section.children as any[]).length;
-        const pasted = pasteEntry(workingText, section, clip.payload);
+        const pasted = pasteEntries(workingText, section, clip.items.map((it) => it.payload));
         if (narrow) {
           const added = opsOfPastedEntries(section, addedFrom);
           pairs.push(...added.pairs);
@@ -1340,7 +1362,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           // event this write fires has to repaint the old way, from a re-parse.
           modelInSync = false;
         }
-        if (pasted.selectId) webview.postMessage({ type: 'selectRow', rowId: pasted.selectId });
+        const selectIds = pasted.selectIds;
+        if (selectIds.length) webview.postMessage({ type: 'selectRow', rowId: selectIds[selectIds.length - 1] });
 
         const patch = againstDocument ? patchFor(pasted, docText) : minimalReplacement(docText, pasted.newText);
         const submitted = submittedOf(patch);
@@ -1359,8 +1382,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           // document's own format-appropriate deleter (the source may be a binary
           // .sldd), a second native undo step — exactly a cut in one file + paste
           // in another. The hub dispatches to whichever provider owns the source.
-          if (isCut && !sameDoc && clip.sourceDocUri && srcName) {
-            await deleteFromSource(clip.sourceDocUri, [srcSelector]);
+          if (isCut && !sameDoc && clip.sourceDocUri && named.length) {
+            await deleteFromSource(clip.sourceDocUri, named);
           }
         } finally {
           // The cut is consumed by the paste that already succeeded above, so it

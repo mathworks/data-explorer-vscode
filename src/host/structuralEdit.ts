@@ -23,6 +23,7 @@ import { entrySelectorOf, type EntrySelector } from './entrySelector.js';
 import { generateUuid, getSectionMetadata } from 'data-explorer-core';
 import { buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
 import type { DragRegisterItem } from './dragState.js';
+import type { ClipboardItem } from './clipboard.js';
 import { dropFactsOf } from './dropFacts.js';
 
 /** One byte-scoped replacement of a document's text: `length` bytes at `offset` become `text`. */
@@ -94,6 +95,36 @@ export function resolveSectionForPaste(model: any, node: any, rowId: string): an
 }
 
 /**
+ * Each row id's owning ENTRY, deduped, in selection order.
+ *
+ * The one walk behind both registers a paste can come from — the drag register
+ * (buildDragSnapshot) and the clipboard (buildClipboardSnapshot). Rows are deduped BY
+ * OWNING ENTRY because a gesture carries whole entries while a selection is a set of
+ * ROWS, and several rows can share one entry: shift-selecting a bus and two elements
+ * nested under it is three rows and one entry. Snapshotting per row made a drag paste
+ * the bus three times while the move deleted the single source once.
+ *
+ * Identity, not name: two same-named entries in different sections are genuinely two
+ * entries, and both may legitimately be carried at once.
+ *
+ * A row id that resolves to nothing, or to a node with no owning entry (a section
+ * header, a detached node), contributes nothing rather than aborting the gesture.
+ */
+function owningEntriesOf(rowIds: unknown, findNode: (rowId: string) => any): any[] {
+  const entries: any[] = [];
+  const seen = new Set<any>();
+  for (const rowId of Array.isArray(rowIds) ? rowIds : []) {
+    const node = findNode(rowId);
+    if (!node) continue;
+    const entry = findOwningEntry(node);
+    if (!entry || !entry.isEntry || seen.has(entry)) continue;
+    seen.add(entry);
+    entries.push(entry);
+  }
+  return entries;
+}
+
+/**
  * Snapshot the rows a drag started on into the drag-register shape.
  *
  * Shared by BOTH table providers (SlddTextEditorProvider and
@@ -102,17 +133,9 @@ export function resolveSectionForPaste(model: any, node: any, rowId: string): an
  * 35-line copies. A divergence between them would show up as a drag from one
  * .sldd format predicting a different drop than the same drag from the other.
  *
- * `findNode` is injected because that IS the per-format difference. A row id
- * that resolves to nothing, or to a node with no owning entry (a section header,
- * a detached node), contributes nothing rather than aborting the whole drag.
- *
- * Rows are DEDUPED BY OWNING ENTRY. A drag carries whole entries, but a
- * multi-selection is a set of ROWS, and several rows can share one entry — a
- * user shift-selecting a bus and the elements nested under it selects three rows
- * belonging to one entry. Snapshotting per row instead of per entry made that
- * drag paste the bus three times (DataInterface1, DataInterface2,
- * DataInterface3) while a move deleted the single source once, so the user got
- * three copies of what they dragged once.
+ * `findNode` is injected because that IS the per-format difference. Which rows become
+ * which entries — the dedupe by owning entry, and the rows that contribute nothing — is
+ * `owningEntriesOf`, shared with the clipboard so the two registers cannot disagree.
  *
  * The section facts come from the LAST contributing row, matching how a
  * multi-select drag is only ever within one section.
@@ -122,19 +145,10 @@ export function buildDragSnapshot(
   findNode: (rowId: string) => any,
 ): { items: DragRegisterItem[]; sourceSection: string; sourceSectionLabel: string; sourceIsDerived: boolean } {
   const items: DragRegisterItem[] = [];
-  const seen = new Set<any>();
   let sourceSection = '';
   let sourceSectionLabel = '';
   let sourceIsDerived = false;
-  for (const rowId of Array.isArray(rowIds) ? rowIds : []) {
-    const node = findNode(rowId);
-    if (!node) continue;
-    const entry = findOwningEntry(node);
-    if (!entry || !entry.isEntry) continue;
-    // Identity, not name: two same-named entries in different sections are
-    // genuinely two entries, and both may legitimately be dragged at once.
-    if (seen.has(entry)) continue;
-    seen.add(entry);
+  for (const entry of owningEntriesOf(rowIds, findNode)) {
     const payload = entry.serialize() as Record<string, unknown>;
     items.push({ payload, ...dropFactsOf(entry, payload) });
     const section = entry.parent;
@@ -145,6 +159,26 @@ export function buildDragSnapshot(
     }
   }
   return { items, sourceSection, sourceSectionLabel, sourceIsDerived };
+}
+
+/**
+ * Snapshot the rows a copy/cut acts on into the clipboard shape.
+ *
+ * The same walk and the same dedupe as buildDragSnapshot — a different destination
+ * register is the only difference, which is what makes `dropDecision.ts`'s invariant
+ * ("if you can cut/copy you can drag") true by construction rather than by comment.
+ *
+ * Unlike the drag descriptor, each item keeps its OWN source section: a cut is lazy, so
+ * the source deletion at paste time must find each entry where it actually lives.
+ */
+export function buildClipboardSnapshot(
+  rowIds: unknown,
+  findNode: (rowId: string) => any,
+): ClipboardItem[] {
+  return owningEntriesOf(rowIds, findNode).map((entry) => {
+    const payload = entry.serialize() as Record<string, unknown>;
+    return { payload, sourceSection: entry.parent?.name ?? '', ...dropFactsOf(entry, payload) };
+  });
 }
 
 // Reserialize one entry to text, indented to its array depth (5 levels), the

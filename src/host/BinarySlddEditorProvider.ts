@@ -32,13 +32,12 @@ import { serializeEntryToXml, DataModel, DATA_PART_XML, type ParseWarning } from
 import { readSlddParts } from './slddContent.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { findOwningEntry, resolveSectionForPaste, buildDragSnapshot } from './structuralEdit.js';
-import { copyEntryToClipboard } from './clipboardAction.js';
+import { copyEntriesToClipboard } from './clipboardAction.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
 import {
   deleteEntryXml,
   deleteChildXml,
   addChildXml,
-  pasteEntryXml,
   pasteEntriesXml,
   deleteEntriesByNameXml,
   type StructuralResult,
@@ -384,10 +383,14 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // The clipboard mark this document's rows should carry, if any. Shared by the
     // full and entry-scoped repaints so a cut/copied entry renders its affordance
     // the same way whichever one painted it.
+    // A ClipMark still names ONE entry, so a clipboard holding several marks only the
+    // first of them — the rest of the cut sources show no affordance until the mark
+    // becomes a set of keys.
     const clipMarkOfDoc = (): ClipMark | undefined => {
       const clip = getClipboard();
-      return clip && clip.sourceDocUri === uriString && clip.payload.name
-        ? { name: clip.payload.name as string, section: clip.sourceSection, mode: clip.mode }
+      const first = clip?.items[0];
+      return clip && clip.sourceDocUri === uriString && first?.payload.name
+        ? { name: first.payload.name as string, section: first.sourceSection, mode: clip.mode }
         : undefined;
     };
 
@@ -778,14 +781,14 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
 
     // Shared with the JSON provider so both formats report an identical failure.
     const applyCopy = (rowId: string, mode: 'cut' | 'copy') => {
-      copyEntryToClipboard(rowId, mode, uriString, {
+      copyEntriesToClipboard([rowId], mode, uriString, {
         // From the model as it stands. A cut/copy changes no text at all, so a re-parse
         // here could only reproduce the tree that is already there — and on a real
         // customer dictionary that is ~3s to serialize one entry.
-        resolveNode: (id) => {
+        refresh: () => {
           liveModel();
-          return findNode(id);
         },
+        findNode,
         post: (message) => webview.postMessage(message),
         broadcast: broadcastClipboardState,
       });
@@ -807,14 +810,16 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         }
         const isCut = clip.mode === 'cut';
         const sameDoc = clip.sourceDocUri === uriString;
-        // Identity from the payload the clipboard snapped at cut time, so the
-        // source-delete can't hit a same-named entry in another namespace.
-        const srcSelector = entrySelectorOf(clip.payload);
-        const srcName = srcSelector.name;
+        // Identity from the payloads the clipboard snapped at cut time, so the
+        // source-delete can't hit same-named entries in another namespace.
+        const srcSelectors = clip.items.map((it) => entrySelectorOf(it.payload));
+        const named = srcSelectors.filter((s) => !!s.name);
 
-        // A cut into the SAME section is a no-op move: just clear the mark. The broadcast
-        // repaints the at-most-two rows that can carry one, and nothing else.
-        if (isCut && sameDoc && clip.sourceSection === section.name) {
+        // A cut into the SAME section every item came from is a no-op move: just clear
+        // the mark. The broadcast repaints the rows that can carry one, and nothing else.
+        // With mixed sources it is NOT a no-op — the items from elsewhere really do move
+        // — so the whole paste proceeds.
+        if (isCut && sameDoc && clip.items.every((it) => it.sourceSection === section.name)) {
           clearClipboard();
           broadcastClipboardState();
           return;
@@ -830,12 +835,20 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // source's name — from the text AND from the model, because the uniqueness check
         // inside the paste reads the MODEL's namespace and a source still standing there
         // would push the copy to `Name1`.
-        if (isCut && sameDoc && srcName) {
-          working = deleteEntriesByNameXml(working, [srcSelector]);
-          const src = findEntryBySelector(model, srcSelector);
-          if (src) {
-            pairs.push({ redo: removeOp(src.id), undo: insertOp(src) });
-            applied.push(...applyEntryOps(model, [removeOp(src.id)]));
+        if (isCut && sameDoc && named.length) {
+          working = deleteEntriesByNameXml(working, named);
+          const sources = named.map((t) => findEntryBySelector(model, t));
+          if (sources.every((e) => !!e)) {
+            const seen = new Set<string>();
+            for (const src of sources) {
+              // Two clipboard items can resolve to ONE model entry when their selectors
+              // name no distinguishing namespace, and removing it twice would throw on
+              // the second op — the same reason deleteEntriesByNameXml re-finds each span.
+              if (seen.has(src.id)) continue;
+              seen.add(src.id);
+              pairs.push({ redo: removeOp(src.id), undo: insertOp(src) });
+              applied.push(...applyEntryOps(model, [removeOp(src.id)]));
+            }
           } else {
             // The model cannot say which entry the clipboard means, so it catches up the
             // old way — and the target section has to be re-resolved against the tree
@@ -846,11 +859,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           }
         }
 
-        // pasteEntryXml attaches the new entry to the section itself (that is
+        // The fold attaches each new entry to the section itself (that is
         // prepareEntryForPaste's job, and the uniqueness check needs it), APPENDING it —
         // so whatever it added is the tail this count marks off.
         const addedFrom = (section.children as any[]).length;
-        const { newText, selectId } = pasteEntryXml(working, section, clip.payload);
+        const { newText, selectIds } = pasteEntriesXml(working, section, clip.items.map((it) => it.payload));
         // Indexing each new subtree and describing it for the undo stack is entryOps' job —
         // the same call the JSON provider makes from its own paste and drop. The loop was
         // written out here and in applyDrop instead, putting one rule in three places, and
@@ -863,13 +876,13 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         document.pushEdit('Paste', before, newText, narrow ? patchOfPairs(pairs) : undefined);
         if (narrow) document.repaintOps(applied);
         else document.repaintAll();
-        if (selectId) webview.postMessage({ type: 'selectRow', rowId: selectId });
+        if (selectIds.length) webview.postMessage({ type: 'selectRow', rowId: selectIds[selectIds.length - 1] });
         try {
           // A cross-document cut removes the source from ITS document via that
           // document's own format-appropriate deleter (JSON or binary), a second
           // native undo step — exactly a cut in one file + paste in another.
-          if (isCut && !sameDoc && clip.sourceDocUri && srcName) {
-            await deleteFromSource(clip.sourceDocUri, [srcSelector]);
+          if (isCut && !sameDoc && clip.sourceDocUri && named.length) {
+            await deleteFromSource(clip.sourceDocUri, named);
           }
         } finally {
           // Cleared even if the source-delete throws: the paste above already
