@@ -107,6 +107,31 @@ describe('disabled reasons', () => {
     expect(paste.reason).toBe('Bus cannot be in Design Data');
   });
 
+  it('refuses pasting a MATLAB variable into Configurations', () => {
+    // REGRESSION, reported: a numeric variable could be copied (and dragged) into
+    // Configurations, which holds ConfigSet/ConfigSetRef objects and nothing else. A
+    // variable carries no _array_class, and "no class" was read as "no restriction",
+    // so this was the one payload kind the allow-list never got asked about — on all
+    // three surfaces at once (this menu, the drag cursor, and the host paste).
+    const items = menu({
+      clipboard: {
+        canPaste: true,
+        mode: 'copy',
+        items: [
+          { className: 'double', arrayClass: '', kind: 'MATLAB Variable', isMatlabVariable: true, isScalarNumeric: true },
+        ],
+      },
+      pasteTarget: {
+        sectionLabel: 'Configurations',
+        isDerived: false,
+        allowedTypes: ['Simulink.ConfigSet', 'Simulink.ConfigSetRef'],
+      },
+    });
+    const paste = byId(items, 'paste')!;
+    expect(paste.disabled).toBe(true);
+    expect(paste.reason).toBe('MATLAB Variable cannot be in Configurations');
+  });
+
   it('refuses a paste whose target is ambiguous across sections', () => {
     const items = menu({ clipboard: BUS_CLIP, selectedRowIds: ['u/design/A', 'u/arch/V'] });
     const paste = byId(items, 'paste')!;

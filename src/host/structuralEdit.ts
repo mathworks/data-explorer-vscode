@@ -373,18 +373,46 @@ function payloadClassName(payload: Record<string, unknown>): string {
   return (value && typeof value === 'object' && (value._array_class as string)) || '';
 }
 
-// Reject a payload whose class has no home in the target section. Shared by the
-// single- and multi-paste paths, which differ only in WHEN they call it: paste
-// checks its one payload, drop checks every payload up front so a rejected
-// multi-drop leaves the document untouched. A classless payload (a plain MATLAB
-// variable) and a section with no allow-list are both unrestricted. Shared with
-// the XML path too, so the two .sldd formats can't drift on what a section
-// accepts.
+/**
+ * The allow-list token a payload has to answer for. An object entry names its own
+ * class; a CLASSLESS payload — a plain MATLAB variable, or a variable whose value
+ * is a struct — names none, and its token is what it WILL BE once pasted here: a
+ * Constant in a derived section (Architectural Data), a MATLAB variable anywhere
+ * else. Every payload therefore HAS a token, which is the point: "no class" used
+ * to mean "no check", so the one payload kind that carries no class was the one
+ * kind no section could refuse.
+ *
+ * A struct is judged as 'MatlabVariable' and not 'MatlabStruct' even though both
+ * are real tokens (SectionNode.addEntry keys the registry by them). No section
+ * allows MatlabStruct without also allowing MatlabVariable, so this can only ever
+ * be the more permissive of the two — it cannot start refusing a struct anywhere a
+ * plain variable is welcome, while still refusing both where neither is.
+ */
+function payloadAllowToken(section: any, payload: Record<string, unknown>): string {
+  return (
+    payloadClassName(payload) ||
+    (getSectionMetadata(section.name).isderived === '1' ? 'Constant' : 'MatlabVariable')
+  );
+}
+
+// Reject a payload the target section cannot hold. Shared by the single- and
+// multi-paste paths, which differ only in WHEN they call it: paste checks its one
+// payload, drop checks every payload up front so a rejected multi-drop leaves the
+// document untouched. A section with no allow-list is unrestricted (SectionNode's
+// own rule). Shared with the XML path too, so the two .sldd formats can't drift on
+// what a section accepts.
 export function assertTypeAllowed(section: any, payload: Record<string, unknown>): void {
+  if (typeof section.allowsType !== 'function') return;
   const className = payloadClassName(payload);
-  if (className && typeof section.allowsType === 'function' && !section.allowsType(className)) {
-    throw new Error(`A "${className}" entry is not allowed in ${section.displayName ?? section.name}.`);
-  }
+  if (section.allowsType(payloadAllowToken(section, payload))) return;
+  const where = section.displayName ?? section.name;
+  // A classless payload has no class name to quote, so name the thing the user
+  // dragged rather than the pseudo-token we judged it by.
+  throw new Error(
+    className
+      ? `A "${className}" entry is not allowed in ${where}.`
+      : `A MATLAB variable is not allowed in ${where}.`,
+  );
 }
 
 /**
@@ -395,16 +423,21 @@ export function assertTypeAllowed(section: any, payload: Record<string, unknown>
  * ConstantNode, so we test its `isScalarNumeric`. Throws if it isn't, so both
  * keyboard/menu Paste and drop are gated (drop feedback alone is only advisory).
  * Non-variable entries (Bus, Signal, …) have no such flag and are unaffected.
+ *
+ * `isClassless` says the payload named no class, i.e. it is being MADE a Constant
+ * here — such a node must PROVE it is scalar-numeric. Trusting the flag alone was
+ * a hole: a struct payload parses to a StructNode, which exposes no
+ * `isScalarNumeric` at all, and "no flag" read as "not a variable, exempt" — so a
+ * struct landed in Architectural Data as an invalid Constant, even though the
+ * webview's drag predictor had already said no-drop for the same gesture.
  */
-export function assertConstantValueAllowed(section: any, newNode: any): void {
+export function assertConstantValueAllowed(section: any, newNode: any, isClassless = false): void {
+  if (getSectionMetadata(section.name).isderived !== '1') return;
   // Only MATLAB-variable / Constant nodes expose `isScalarNumeric`, so the typeof
-  // guard also restricts this to the variable path — object entries are exempt.
-  if (
-    getSectionMetadata(section.name).isderived === '1' &&
-    typeof newNode?.isScalarNumeric === 'boolean' &&
-    !newNode.isScalarNumeric
-  ) {
-    throw new Error(`The value for constant '${newNode.name}' must be scalar and numeric.`);
+  // guard restricts this to the variable path — object entries are exempt.
+  const mustBeScalarNumeric = isClassless || typeof newNode?.isScalarNumeric === 'boolean';
+  if (mustBeScalarNumeric && newNode?.isScalarNumeric !== true) {
+    throw new Error(`The value for constant '${newNode?.name}' must be scalar and numeric.`);
   }
 }
 
@@ -421,7 +454,8 @@ export function assertConstantValueAllowed(section: any, newNode: any): void {
  *
  * The rules, in order:
  *  - The class must have a home in the target section (a Simulink.ServiceBus
- *    cannot go into Design).
+ *    cannot go into Design), and a payload with no class is judged by the token it
+ *    becomes here — see payloadAllowToken.
  *  - The payload is deep-cloned, so a repeated paste of one clipboard entry does
  *    not alias (and then mutate) the same object.
  *  - The name is made unique across the section's whole NAMESPACE, not just the
@@ -466,7 +500,7 @@ export function prepareEntryForPaste(section: any, payload: Record<string, unkno
   // or clipboard JSON with a name) can make it null. Kept as a defensive net.
   const newNode = section.parseEntry(raw);
   if (!newNode) throw new Error('Failed to paste the entry.');
-  assertConstantValueAllowed(section, newNode);
+  assertConstantValueAllowed(section, newNode, !payloadClassName(payload));
   return newNode;
 }
 

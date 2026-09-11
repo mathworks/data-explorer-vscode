@@ -19,11 +19,11 @@ import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
 import { buildRows } from '../src/host/rowBuilder.js';
 import { sectionRules } from '../src/host/sectionRules.js';
 import { dropFactsOf } from '../src/host/dropFacts.js';
-import { buildClipboardSnapshot, buildDragSnapshot } from '../src/host/structuralEdit.js';
+import { buildClipboardSnapshot, buildDragSnapshot, pasteEntry } from '../src/host/structuralEdit.js';
 import { planDeletion } from '../src/host/deletionPlan.js';
 import { resolveOperands } from '../src/webview/operands.js';
 import { buildContextMenuItems, type MenuRow } from '../src/webview/menuItems.js';
-import { dropDecision } from '../src/webview/dropDecision.js';
+import { dropDecision, rejectReason } from '../src/webview/dropDecision.js';
 import { buildSectionRowId } from '../src/common/sectionRowId.js';
 import { blankCommentsAndKeepLines } from './tools/moduleGraph.js';
 
@@ -200,6 +200,84 @@ describe('a Paste is offered exactly where a drop would be allowed', () => {
         // And when it refuses, it refuses in the same words: a rejected drop's tooltip IS
         // the reason rejectReason gave, so there is one sentence for both surfaces.
         if (!decision.canDrop) expect(paste.reason).toBe(decision.tooltip);
+      });
+    }
+  }
+});
+
+describe('the drag predictor agrees with the host it predicts, per entry and section', () => {
+  // The block above cannot see a whole class of defect: the menu and the drag cursor are
+  // two callers of ONE function (rejectReason), so they agree by construction. What has
+  // to hold is that the PREDICTION matches the host, which is the only side that can
+  // actually refuse an edit — dropDecision exists so a dragover needs no round-trip, and
+  // a predictor that guesses differently from the authority either blocks a legal drop or
+  // invites one that then fails in a dialog.
+  //
+  // REGRESSION (both halves of one root cause). A payload with no _array_class — a plain
+  // MATLAB variable, or one whose value is a struct — was the one shape the gate ABSTAINED
+  // on, because "no class" read as "no restriction":
+  //   • both sides waived it, so a numeric variable could be dropped AND pasted into
+  //     Configurations, which holds config objects only. Same wrong answer on both paths,
+  //     so parity alone cannot catch it — the verdict itself is pinned in
+  //     structuralEdit.test.ts (host) and dropDecision.test.ts (predictor).
+  //   • a STRUCT variable is the half parity does catch: the host's Constant gate keyed off
+  //     `typeof isScalarNumeric === 'boolean'`, a StructNode exposes no such flag at all,
+  //     and "no flag" read as "exempt" — so the host accepted a struct into Architectural
+  //     Data while the cursor had already said no-drop for the same gesture.
+  // Hence the classless shapes are in this matrix explicitly, below.
+  //
+  // Only the VERDICT is compared, never the sentence: the host names the class it refused
+  // ('A "Simulink.ServiceBus" entry is not allowed in Design Data.') and the webview names
+  // the Kind on the row ('Service Interface cannot be in Design Data'). That difference is
+  // deliberate — one is an error dialog, the other a hover tooltip.
+
+  // A paste MUTATES the section it lands in (that is how a multi-drop keeps names unique),
+  // so each case gets its own model. Reusing h.model would leave every later assertion in
+  // this file reading a fixture that earlier cases had grown.
+  let n = 0;
+  const freshModel = () => {
+    const uri = `test://parity-${n++}.sldd`;
+    invalidate(uri);
+    return getModel(uri, 'arch.sldd', mixedText);
+  };
+
+  // Every entry the fixture holds, enumerated from the model rather than listed (the pair
+  // that broke was the one nobody thought to write down), PLUS the classless shapes it has
+  // no entry for. Those are built by the real parser off a scratch model — hand-made facts
+  // would only assert what the test already assumed. The struct value is spelled the way
+  // the fixture spells one (see Enumerals in arch.sldd).
+  const scratch = freshModel().getSection('design');
+  const parsed = (name: string, value: unknown) => scratch.parseEntry({ name, metadata: {}, value });
+  const ENTRIES = [
+    ...h.model.children.flatMap((s: any) => s.children),
+    parsed('PlainVar', 7),
+    parsed('ArrayVar', [1, 2, 3]),
+    parsed('StructVar', { _array_type: 'Struct', _dimensions: [1, 1], _elements: [{ a: 1, b: 2 }] }),
+  ];
+
+  it('the matrix really holds the classless shapes it claims to', () => {
+    // Guards the three above: if parseEntry stopped yielding a classless node, every pair
+    // below would silently become another object-entry case and prove nothing.
+    for (const name of ['PlainVar', 'ArrayVar', 'StructVar']) {
+      const facts = dropFactsOf(ENTRIES.find((e: any) => e.name === name));
+      expect(facts.arrayClass, `${name} carries no class`).toBe('');
+      expect(facts.isMatlabVariable, `${name} reads as a MATLAB variable`).toBe(true);
+    }
+    expect(dropFactsOf(ENTRIES.find((e: any) => e.name === 'StructVar')).isScalarNumeric).toBe(false);
+  });
+
+  for (const entry of ENTRIES) {
+    for (const rule of h.rules) {
+      it(`${entry.name} into ${rule.sectionName}`, () => {
+        const facts = dropFactsOf(entry);
+        let refused = '';
+        try {
+          pasteEntry(mixedText, freshModel().getSection(rule.sectionName), entry.serialize());
+        } catch (e: any) {
+          refused = e.message;
+        }
+        const predicted = rejectReason({ docUri: 'test://elsewhere.sldd', ...rule }, facts);
+        expect(!!refused, `host: ${refused || 'accept'} | predicted: ${predicted ?? 'accept'}`).toBe(!!predicted);
       });
     }
   }

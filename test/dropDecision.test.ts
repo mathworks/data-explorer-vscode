@@ -10,7 +10,12 @@ import { describe, it, expect } from 'vitest';
 import { dropDecision } from '../src/webview/dropDecision.js';
 
 // Allow-lists mirror SectionNode.ALLOWED_TYPES (only the classes these tests use).
+// 'MatlabVariable' and 'Constant' are in the real lists too, and they matter here:
+// a classless payload is judged by the one it will BE in the target section, so a
+// list that omitted them would refuse an ordinary variable.
 const DESIGN_ALLOWED = [
+  'MatlabVariable',
+  'MatlabStruct',
   'Simulink.Signal',
   'Simulink.Bus',
   'Simulink.ConnectionBus',
@@ -19,12 +24,22 @@ const DESIGN_ALLOWED = [
   'Simulink.NumericType',
 ];
 const ARCH_ALLOWED = [
+  'Constant',
   'Simulink.Signal',
   'Simulink.Bus',
   'Simulink.ConnectionBus',
   'Simulink.ServiceBus',
   'Simulink.ValueType',
   'Simulink.NumericType',
+];
+// Configurations: the section behind the reported defect. It holds config objects
+// and nothing else — in particular no MatlabVariable, which is why a classless
+// payload must be judged rather than waved through.
+const CONFIG_ALLOWED = [
+  'Simulink.ConfigSet',
+  'Simulink.ConfigSetRef',
+  'Simulink.VariantConfigurationData',
+  'Simulink.VariantConfigurations',
 ];
 
 function designSource(items: any[], docUri = 'a.sldd') {
@@ -44,6 +59,15 @@ function designTarget(docUri = 'a.sldd') {
 }
 function archTarget(docUri = 'a.sldd') {
   return { docUri, sectionName: 'arch', sectionLabel: 'Architectural Data', isDerived: true, allowedTypes: ARCH_ALLOWED };
+}
+function configTarget(docUri = 'a.sldd') {
+  return {
+    docUri,
+    sectionName: 'config',
+    sectionLabel: 'Configurations',
+    isDerived: false,
+    allowedTypes: CONFIG_ALLOWED,
+  };
 }
 
 // Convenience item builders. Object entries carry isScalarNumeric: false — it is
@@ -108,6 +132,38 @@ describe('dropDecision — accept/reject mirrors pasteEntry allow-check', () => 
     // Constant, so it drops into arch.
     const d = dropDecision(designSource([matlabVar()], 'b.sldd'), archTarget('a.sldd'), 'copy');
     expect(d.canDrop).toBe(true);
+  });
+});
+
+describe('dropDecision — a MATLAB variable is judged by the allow-list, not waived', () => {
+  // The reported defect, on the predictor side: a variable carries no _array_class,
+  // and "no class" was read as "no restriction" — so the cursor invited a drop into
+  // Configurations that the file format cannot hold.
+  it('rejects a scalar-numeric MATLAB variable dropped into Configurations', () => {
+    const d = dropDecision(designSource([matlabVar()], 'b.sldd'), configTarget('a.sldd'), 'copy');
+    expect(d.canDrop).toBe(false);
+    expect(d.cursor).toBe('no-drop');
+    expect(d.tooltip).toBe('MATLAB Variable cannot be in Configurations');
+  });
+
+  it('rejects a non-scalar MATLAB variable dropped into Configurations', () => {
+    const d = dropDecision(designSource([nonScalarVar()], 'b.sldd'), configTarget('a.sldd'), 'move');
+    expect(d.canDrop).toBe(false);
+    expect(d.tooltip).toBe('MATLAB Variable cannot be in Configurations');
+  });
+
+  it('rejects an object entry Configurations cannot hold either', () => {
+    // The path that already worked, kept beside the one that did not, so the pair
+    // reads as one rule rather than two.
+    const d = dropDecision(designSource([param()], 'b.sldd'), configTarget('a.sldd'), 'copy');
+    expect(d.canDrop).toBe(false);
+    expect(d.tooltip).toBe('Simulink Parameter cannot be in Configurations');
+  });
+
+  it('multi-select into Configurations: the variable rejects the whole drop', () => {
+    const d = dropDecision(designSource([matlabVar(), matlabVar()], 'b.sldd'), configTarget('a.sldd'), 'copy');
+    expect(d.canDrop).toBe(false);
+    expect(d.tooltip).toBe('MATLAB Variable cannot be in Configurations');
   });
 });
 

@@ -7,8 +7,9 @@
 // It exists so the webview can render live drag feedback WITHOUT a round-trip to
 // the host on every dragover. It must mirror the host exactly:
 //   • accept/reject mirrors pasteEntry's allow-check — a payload's array-class
-//     must be in the target section's allowed types (an empty array-class, i.e.
-//     a plain MATLAB variable, is never rejected, just like pasteEntry).
+//     must be in the target section's allowed types, and a payload with no
+//     array-class (a plain MATLAB variable) is judged by the token it becomes in
+//     the target, just like pasteEntry's payloadAllowToken.
 //   • the tooltip's Kind labels mirror the Kind an entry shows AFTER the paste:
 //     a pasted entry loses its SystemComposer classification (its new name isn't
 //     in the catalog), so its Kind comes from class + the target's derived flag.
@@ -59,26 +60,34 @@ export interface DropDecision {
 }
 
 // Why an item can't drop into a target, or null if it can. Mirrors the host:
-//   • a MATLAB variable (empty array-class) is allowed by class — BUT converting
-//     it into a Constant (a drop into derived/Architectural Data) requires a
-//     scalar-numeric value, so a non-scalar variable is rejected there;
-//   • an object entry's class must be in the target's allow-list (empty list =
-//     no restriction).
+//   • every item's token must be in the target's allow-list (empty list = no
+//     restriction) — an object entry's own class, or, for a MATLAB variable
+//     (empty array-class), the token it becomes here;
+//   • and converting a variable into a Constant (a drop into derived/Architectural
+//     Data) requires a scalar-numeric value, so a non-scalar variable is rejected
+//     there even though 'Constant' is an allowed token.
 //
 // Exported because the PASTE menu asks the same question of the same facts: the
 // clipboard now ships the items it holds, so "can this land here" is answered once
 // for both a dragover and a right-click. That is the bottom line at the top of this
 // file made executable — a Paste the menu offers is a drop dropDecision would allow.
 export function rejectReason(target: DropTarget, item: DragItem): string | null {
-  if (item.isMatlabVariable) {
-    if (target.isDerived && !item.isScalarNumeric) {
-      return `${item.kind} must be scalar and numeric to be a Constant`;
-    }
-    return null;
+  // Class check first, in the host's own order (assertTypeAllowed runs before the
+  // node is even built). EVERY item is judged: an object entry by its array-class,
+  // a MATLAB variable — which has none — by the token it will BE in this target,
+  // Constant in a derived section and MatlabVariable elsewhere, exactly as
+  // payloadAllowToken decides host-side. Waiving the check for a classless item is
+  // what let the cursor invite a variable into Configurations, a section whose
+  // allow-list holds config objects and nothing else.
+  const token = item.arrayClass || (target.isDerived ? 'Constant' : 'MatlabVariable');
+  if (target.allowedTypes.length > 0 && target.allowedTypes.indexOf(token) === -1) {
+    return `${item.kind} cannot be in ${target.sectionLabel}`;
   }
-  if (target.allowedTypes.length === 0) return null;
-  if (target.allowedTypes.indexOf(item.arrayClass) !== -1) return null;
-  return `${item.kind} cannot be in ${target.sectionLabel}`;
+  // Then the value gate: a variable allowed in as a Constant still has to be one.
+  if (item.isMatlabVariable && target.isDerived && !item.isScalarNumeric) {
+    return `${item.kind} must be scalar and numeric to be a Constant`;
+  }
+  return null;
 }
 
 // The Kind an item WILL show once dropped into `target`: class + the target's

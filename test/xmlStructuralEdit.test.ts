@@ -302,6 +302,18 @@ describe('pasteEntryXml rejects what the target section cannot hold', () => {
       "The value for constant 'Arr' must be scalar and numeric.",
     );
   });
+
+  it('refuses a classless payload in Configurations, as the JSON path does', () => {
+    // A plain MATLAB variable has no class to look up, and the gate used to abstain
+    // rather than ask what it would become — letting a double into Configurations.
+    // Asserted for BOTH formats because the check is shared: a fix on one side only
+    // is exactly the drift this file exists to catch.
+    const { model, xml } = load('mem://xse-paste-var-config');
+    const payload = { name: 'V', metadata: { uuid: 'u' }, value: 1 };
+    expect(() => pasteEntryXml(xml, model.getSection('config'), payload)).toThrow(
+      'A MATLAB variable is not allowed in Configurations.',
+    );
+  });
 });
 
 // A paste rebinds the entry to the section it lands in: fresh uuid (it is a new

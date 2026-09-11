@@ -147,40 +147,43 @@ describe('pasteEntry', () => {
     const model = freshModel(uri);
     const src = findNode(uri, buildRows(model).find((r: any) => r.Name?.label === 'Number').ID);
     const payload = src.serialize() as Record<string, unknown>;
-    // Target the "config" section (present on every SlddNode even when empty).
-    const config = model.children.find((s: any) => s.name === 'config');
-    expect(config).toBeTruthy();
+    // Target "Other Data" (present on every SlddNode even when empty) — a section
+    // in a DIFFERENT namespace from Design, which is what the rebind has to rewrite.
+    // Not Configurations: it holds config objects only, so a variable no longer
+    // reaches the rebind there at all (see the allow-list describes below).
+    const other = model.children.find((s: any) => s.name === 'other');
+    expect(other).toBeTruthy();
 
     // The namespace is derived from the target section, not passed in.
-    const { newText } = pasteEntry(fixtureText, config, payload);
+    const { newText } = pasteEntry(fixtureText, other, payload);
     expect(isValidJson(newText)).toBe(true);
-    // After reparse the pasted entry is a child of config, not design.
+    // After reparse the pasted entry is a child of other, not design.
     invalidate(uri);
     const reparsed = getModel(uri, 'data.sldd', newText);
-    const configEntries = reparsed.children.find((s: any) => s.name === 'config').children.map((c: any) => c.name);
-    expect(configEntries).toContain('Number');
+    const otherEntries = reparsed.children.find((s: any) => s.name === 'other').children.map((c: any) => c.name);
+    expect(otherEntries).toContain('Number');
   });
 
   it('rebinds the section even when the payload declares no metadata at all', () => {
     // `metadata` is null for an entry whose source .sldd never declared one (a row
     // hand-added in the text view round-trips as `"metadata": null`). Skipping the
     // namespace rebind for those left the pasted entry with no namespace, so
-    // getSectionKey fell through to its 'design' default: pasting into
-    // Configurations put the entry in Design Data instead, as if the paste had
-    // gone to the wrong section entirely.
+    // getSectionKey fell through to its 'design' default: pasting into another
+    // section put the entry in Design Data instead, as if the paste had gone to the
+    // wrong section entirely.
     const uri = 'test://paste-nometa.sldd';
     const model = freshModel(uri);
-    const config = model.children.find((s: any) => s.name === 'config');
-    expect(config).toBeTruthy();
+    const other = model.children.find((s: any) => s.name === 'other');
+    expect(other).toBeTruthy();
 
-    const { newText } = pasteEntry(fixtureText, config, { name: 'Hand', value: 5 });
+    const { newText } = pasteEntry(fixtureText, other, { name: 'Hand', value: 5 });
     expect(isValidJson(newText)).toBe(true);
 
     invalidate(uri);
     const reparsed = getModel(uri, 'data.sldd', newText);
     const sectionOf = (name: string) =>
       reparsed.children.find((s: any) => s.children.some((c: any) => c.name === name))?.name;
-    expect(sectionOf('Hand')).toBe('config');
+    expect(sectionOf('Hand')).toBe('other');
   });
 
   it('gives the pasted copy a fresh unique uuid, not the source uuid', () => {
@@ -354,6 +357,64 @@ describe('pasteEntry rejects what the target section cannot hold', () => {
     expect(() => pasteEntry(archText, model.getSection('arch'), payload)).toThrow(
       "The value for constant 'Arr' must be scalar and numeric.",
     );
+  });
+});
+
+// A payload with no `_array_class` — a plain MATLAB variable or a struct — used to
+// walk straight past the allow-list, because the gate asked "what class is this?"
+// and treated "none" as "no restriction". Configurations lists only the four config
+// classes, so the one section that most needs the question was the one never asked:
+// a double could be copied or dragged into Configurations, which Simulink cannot
+// load. The gate now asks what the payload will BECOME in the target section, which
+// is always something the allow-list has an opinion about.
+describe('pasteEntry gates a classless payload against the allow-list too', () => {
+  const designEntry = (uri: string, name: string) => {
+    const model = freshModel(uri);
+    const entry = (model.getSection('design').children as any[]).find((c) => c.name === name);
+    return { model, payload: entry.serialize() as Record<string, unknown> };
+  };
+
+  it('refuses a plain MATLAB variable in Configurations', () => {
+    // The reported defect: a numeric entry copied/moved into Configurations, which
+    // may only hold a ConfigSet or a ConfigSetRef.
+    const { model, payload } = designEntry('test://paste-var-config.sldd', 'Number');
+    expect(() => pasteEntry(fixtureText, model.getSection('config'), payload)).toThrow(
+      'A MATLAB variable is not allowed in Configurations.',
+    );
+  });
+
+  it('refuses a MATLAB struct in Configurations', () => {
+    const { model, payload } = designEntry('test://paste-struct-config.sldd', 'Struct');
+    expect(() => pasteEntry(fixtureText, model.getSection('config'), payload)).toThrow(
+      'A MATLAB variable is not allowed in Configurations.',
+    );
+  });
+
+  it('refuses a MATLAB struct in Architectural Data', () => {
+    // Arch holds a Constant, not a struct: wrapDerivedVariable deliberately leaves a
+    // StructNode alone, so this entry would sit in Architectural Data as a struct —
+    // which its allow-list has never permitted. The webview's predictor has always
+    // said no-drop here; the host used to disagree and accept a keyboard paste.
+    const { model, payload } = designEntry('test://paste-struct-arch.sldd', 'Struct');
+    expect(() => pasteEntry(fixtureText, model.getSection('arch'), payload)).toThrow(
+      /must be scalar and numeric/,
+    );
+  });
+
+  it('still accepts a plain MATLAB variable in Design Data and in Other Data', () => {
+    // The sections whose allow-lists DO name MatlabVariable must be unaffected —
+    // making the gate total must not start refusing an ordinary copy.
+    for (const section of ['design', 'other']) {
+      const { model, payload } = designEntry(`test://paste-var-${section}.sldd`, 'Number');
+      expect(() => pasteEntry(fixtureText, model.getSection(section), payload), section).not.toThrow();
+    }
+  });
+
+  it('still converts a scalar-numeric variable into a Constant in Architectural Data', () => {
+    // The Design→Arch conversion this gate must not break: the payload is classless,
+    // so the token it is judged by is the Constant it becomes, which arch allows.
+    const { model, payload } = designEntry('test://paste-var-arch.sldd', 'Number');
+    expect(() => pasteEntry(fixtureText, model.getSection('arch'), payload)).not.toThrow();
   });
 });
 
