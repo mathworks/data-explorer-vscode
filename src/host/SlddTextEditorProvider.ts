@@ -908,7 +908,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         postEntryRowsNow(entryRowIdOnScreen, entry);
         // After a rename node.id reflects the new name, and the rows just posted carry it —
         // so the row to re-select exists by the time this arrives.
-        if (isRename) webview.postMessage({ type: 'selectRow', rowId: node.id });
+        if (isRename) webview.postMessage({ type: 'selectRows', rowIds: [node.id] });
 
         // --- and only now the expensive half: where in 47.8 MB of text that entry lives ------
         const indent = detectIndent(currentText);
@@ -1100,7 +1100,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // write below.
         paintedRowId = entryRowId;
         postEntryRowsNow(entryRowId, entry);
-        if (result.selectId) webview.postMessage({ type: 'selectRow', rowId: result.selectId });
+        if (result.selectId) webview.postMessage({ type: 'selectRows', rowIds: [result.selectId] });
 
         const patch = patchFor(result, currentText);
         const submitted = submittedOf(patch);
@@ -1142,7 +1142,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         const applied = applyEntryOps(model, [pairs[0].redo]);
         painted = true;
         repaintOps(applied);
-        if (result.selectId) webview.postMessage({ type: 'selectRow', rowId: result.selectId });
+        if (result.selectId) webview.postMessage({ type: 'selectRows', rowIds: [result.selectId] });
 
         const patch = patchFor(result, currentText);
         const submitted = submittedOf(patch);
@@ -1247,7 +1247,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         painted = true;
         repaintOps(applied);
         const landing = selectId ?? childSelectId;
-        if (landing) webview.postMessage({ type: 'selectRow', rowId: landing });
+        if (landing) webview.postMessage({ type: 'selectRows', rowIds: [landing] });
 
         const patch = minimalReplacement(currentText, working);
         const submitted = submittedOf(patch);
@@ -1479,7 +1479,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           modelInSync = false;
         }
         const selectIds = pasted.selectIds;
-        if (selectIds.length) webview.postMessage({ type: 'selectRow', rowId: selectIds[selectIds.length - 1] });
+        if (selectIds.length) webview.postMessage({ type: 'selectRows', rowIds: selectIds });
 
         const patch = againstDocument ? patchFor(pasted, docText) : minimalReplacement(docText, pasted.newText);
         const submitted = submittedOf(patch);
@@ -1641,7 +1641,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           modelInSync = false;
         }
         const selectIds = dropped.selectIds;
-        if (selectIds.length) webview.postMessage({ type: 'selectRow', rowId: selectIds[selectIds.length - 1] });
+        if (selectIds.length) webview.postMessage({ type: 'selectRows', rowIds: selectIds });
 
         const patch = againstDocument ? patchFor(dropped, docText) : minimalReplacement(docText, dropped.newText);
         const submitted = submittedOf(patch);

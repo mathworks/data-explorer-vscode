@@ -37,8 +37,8 @@ export function nextExpandedIds<T extends RowLike>(prev: Set<string> | null, row
  * `_onFilterInput` / Escape in dex-tree-table.ts, which drop this set). Rows that
  * newly match are still added: this suppresses removals, never additions.
  *
- * `selectId` is the row the HOST asked us to select after this edit (its `selectRow`
- * message), and it is sticky for two reasons:
+ * `selectIds` are the rows the HOST asked us to select after this edit (its `selectRows`
+ * message), and they are sticky for two reasons:
  *
  *  - A RENAME re-keys the row, because core keys a row by its path. The row just
  *    edited out of the match therefore arrives under an id `prevVisible` has never
@@ -57,13 +57,43 @@ export function nextStickyIds<T extends RowLike>(
   filterText: string,
   prevVisible: string[],
   rows: T[],
-  selectId: string | null,
+  selectIds: readonly string[],
 ): Set<string> {
   if (!filterText) return new Set();
   const existing = new Set(rows.map((r) => r.ID));
   const sticky = new Set(prevVisible.filter((id) => existing.has(id)));
-  if (selectId !== null && existing.has(selectId)) sticky.add(selectId);
+  for (const id of selectIds) {
+    if (existing.has(id)) sticky.add(id);
+  }
   return sticky;
+}
+
+/**
+ * Which of the host's asked-for selection to apply now: all of them, or none yet.
+ *
+ * The host posts `selectRows` for rows its edit has already put in the model, but the
+ * ROWS carrying them may still be in flight — a paste's `insertEntryRows`, or, when the
+ * edit could not be painted narrowly, the whole `setRows` a re-parse produces. So the
+ * message is held and retried after every repaint, and this is the retry's decision.
+ *
+ * ALL OR NOTHING, deliberately. A selection is one thing the user is looking at, and
+ * applying the half that has arrived would both be wrong (the paste selects 2 of its 3
+ * entries) and unrecoverable — consuming the pending ids is what stops the retry, so the
+ * late arrivals would never be added. Every path that posts several ids paints them
+ * together and posts afterwards, so "all present" is reached in one step; waiting costs
+ * nothing and a partial answer cannot be corrected.
+ *
+ * Returns null for "keep holding" — distinct from an empty array, which cannot occur
+ * here (the host does not post an empty selection) but would mean "select nothing".
+ */
+export function pendingSelectionToApply<T extends RowLike>(
+  rows: T[],
+  pendingIds: readonly string[],
+): string[] | null {
+  if (pendingIds.length === 0) return null;
+  const existing = new Set(rows.map((r) => r.ID));
+  if (!pendingIds.every((id) => existing.has(id))) return null;
+  return [...pendingIds];
 }
 
 /**

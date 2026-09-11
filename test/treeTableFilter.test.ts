@@ -548,11 +548,11 @@ describe('a filtered list holds still while its rows are edited', () => {
   async function repaint(
     table: DexTreeTable,
     rows: TreeTableRow[],
-    selectId: string | null = null,
+    selectIds: string[] = [],
   ): Promise<string[]> {
     const prevVisible = (table as any)._getVisibleRows().map((r: TreeTableRow) => r.ID);
     table.rows = rows;
-    (table as any)._stickyRowIds = nextStickyIds((table as any)._filterText, prevVisible, rows, selectId);
+    (table as any)._stickyRowIds = nextStickyIds((table as any)._filterText, prevVisible, rows, selectIds);
     (table as any)._visibleRowsCache = null;
     table.requestUpdate();
     await table.updateComplete;
@@ -589,13 +589,13 @@ describe('a filtered list holds still while its rows are edited', () => {
 
   it('a renamed row stays, under the new id the host supplies', async () => {
     // The rename is what changes the Name cell out of the match, and it re-keys the
-    // row at the same time, so the sticky id has to come from the host's selectRow.
+    // row at the same time, so the sticky id has to come from the host's selectRows.
     const table = await mount(CATALOG);
     expect(await search(table, 'gain')).toEqual(['p1']);
     const renamed = CATALOG.map((r) =>
       r.ID === 'p1' ? { ...r, ID: 'p1b', Name: { label: 'plainValue' } } : r,
     );
-    expect(await repaint(table, renamed, 'p1b')).toEqual(['p1b']);
+    expect(await repaint(table, renamed, ['p1b'])).toEqual(['p1b']);
     table.remove();
   });
 
@@ -635,19 +635,34 @@ describe('a filtered list holds still while its rows are edited', () => {
     const table = await mount(tree, ['sec', 'bus']);
     expect(await search(table, 'gain')).toEqual(['sec', 'bus', 'el']);
     const renamed = tree.map((r) => (r.ID === 'el' ? { ...r, ID: 'el2', Name: { label: 'plainField' } } : r));
-    expect(await repaint(table, renamed, 'el2')).toEqual(['sec', 'bus', 'el2']);
+    expect(await repaint(table, renamed, ['el2'])).toEqual(['sec', 'bus', 'el2']);
     table.remove();
   });
 
   it('a pasted row shows even when it does not match the search', async () => {
     // Paste, add, move and the survivor of a delete all arrive on the same channel
-    // as a rename: the host names the row it wants selected. Filtering that row out
+    // as a rename: the host names the rows it wants selected. Filtering one out
     // would leave the selection on a row the user cannot see, and make the paste look
     // as though it had not happened.
     const table = await mount(CATALOG);
     await search(table, 'gain');
     const pasted = [...CATALOG, makeRow('new', null, 'copyOfOffset', { Value: '12' })];
-    expect(await repaint(table, pasted, 'new')).toEqual(['p1', 'new']);
+    expect(await repaint(table, pasted, ['new'])).toEqual(['p1', 'new']);
+    table.remove();
+  });
+
+  it('EVERY row of a multi-entry paste shows, not just the last', async () => {
+    // A paste of several entries names all of them, and the selection the user is
+    // about to act on covers all of them — so a filtered list that admitted only the
+    // last would hide rows that are selected, which is worse than hiding none.
+    const table = await mount(CATALOG);
+    await search(table, 'gain');
+    const pasted = [
+      ...CATALOG,
+      makeRow('new1', null, 'copyOfOffset', { Value: '12' }),
+      makeRow('new2', null, 'copyOfOffset1', { Value: '13' }),
+    ];
+    expect(await repaint(table, pasted, ['new1', 'new2'])).toEqual(['p1', 'new1', 'new2']);
     table.remove();
   });
 
@@ -664,7 +679,7 @@ describe('a filtered list holds still while its rows are edited', () => {
     const table = await mount(tree, ['sec']);
     expect(await search(table, 'gain')).toEqual(['sec', 'a']);
     const renamed = tree.map((r) => (r.ID === 'a' ? { ...r, ID: 'a2', Name: { label: 'plainA' } } : r));
-    expect(await repaint(table, renamed, 'a2')).toEqual(['sec', 'a2']);
+    expect(await repaint(table, renamed, ['a2'])).toEqual(['sec', 'a2']);
     table.remove();
   });
 

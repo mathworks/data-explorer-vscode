@@ -133,10 +133,18 @@ export interface SelectByNameMessage {
   name: string;
 }
 
-/** Re-select a row by id (e.g. after a rename changed its id). */
-export interface SelectRowMessage {
-  type: 'selectRow';
-  rowId: string;
+/**
+ * Select rows by id — the rows the host's edit just made the answer to "where am I".
+ *
+ * PLURAL, and the same spelling as the webview's own `select`, because the count is a
+ * property of the EDIT and not of the channel: a rename re-keys one row, a delete leaves
+ * one survivor, but a multi-entry paste or drop adds N and the user's next gesture is
+ * about all N. Sending the last of them (which is what a single `rowId` reduced this to)
+ * loses the rest silently — the entries are in the file and only one is selected.
+ */
+export interface SelectRowsMessage {
+  type: 'selectRows';
+  rowIds: string[];
 }
 
 /** Transient red error banner. */
@@ -175,7 +183,7 @@ export type HostToTableMessage =
   | ClipboardStateMessage
   | DragStateMessage
   | SelectByNameMessage
-  | SelectRowMessage
+  | SelectRowsMessage
   | ErrorMessage
   | ValidationErrorMessage;
 
