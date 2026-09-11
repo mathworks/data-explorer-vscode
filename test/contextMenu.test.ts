@@ -411,4 +411,41 @@ describe('item content', () => {
     expect(label.querySelectorAll('img').length).toBe(0);
     expect(label.textContent).toBe('<img src=x onerror=alert(1)>');
   });
+
+  it('shows a disabled item’s reason where its shortcut would go', async () => {
+    // Keyboard navigation skips disabled items, so a `title` tooltip on one can
+    // never be reached — the reason has to be on screen. The shortcut slot is free
+    // because a disabled item's shortcut would not fire anyway.
+    const el = await makeMenu([
+      { id: 'paste', label: 'Paste', shortcut: 'Cmd+V', disabled: true, reason: 'Bus cannot be in Design Data' },
+    ]);
+    const slot = el.shadowRoot!.querySelector('.item-shortcut')!;
+    expect(slot.textContent).toBe('Bus cannot be in Design Data');
+  });
+
+  it('keeps the shortcut on an enabled item even when a reason is present', async () => {
+    // A stale reason left on an enabled item must not displace the hint the user
+    // needs; `disabled` is what selects between them.
+    const el = await makeMenu([
+      { id: 'paste', label: 'Paste', shortcut: 'Cmd+V', reason: 'ignored' },
+    ]);
+    expect(el.shadowRoot!.querySelector('.item-shortcut')!.textContent).toBe('Cmd+V');
+  });
+
+  it('shows a reason on a disabled item that has no shortcut', async () => {
+    const el = await makeMenu([
+      { id: 'addChild', label: 'Add Child', disabled: true, reason: 'this item takes no children' },
+    ]);
+    expect(el.shadowRoot!.querySelector('.item-shortcut')!.textContent).toBe('this item takes no children');
+  });
+
+  it('renders a hostile reason as text, not markup', async () => {
+    // A reason embeds an entry name and a section label, both from the opened file.
+    const el = await makeMenu([
+      { id: 'x', label: 'Paste', disabled: true, reason: '<img src=x onerror=alert(1)>' },
+    ]);
+    const slot = el.shadowRoot!.querySelector('.item-shortcut')!;
+    expect(slot.querySelectorAll('img').length).toBe(0);
+    expect(slot.textContent).toBe('<img src=x onerror=alert(1)>');
+  });
 });
