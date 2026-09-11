@@ -54,22 +54,35 @@ export const PROJECT_COLUMN_LABELS: Record<string, string> = {
   Name: 'Name', Type: 'Type', Location: 'Location', Labels: 'Labels',
 };
 
-// Identifies the single entry currently marked on the host clipboard, so its
-// source row can render the cut (dimmed) / copied (dashed) affordance. Matched
-// by name AND section because entry names are only unique within a section.
+// Identifies the entries currently marked on the host clipboard, so their source rows
+// can render the cut (dimmed) / copied (dashed) affordance. A SET because the clipboard
+// holds every entry a multi-row copy resolved to, and all of their rows carry the mark.
+//
+// Keyed by section AND name because entry names are only unique within a section. The key
+// is a PATH shape rather than a bare name so that dimming an individual child row (the
+// deferred node-granular seam) widens the key instead of reshaping this.
 export interface ClipMark {
-  name: string;
-  section: string;
+  keys: Set<string>;
   mode: 'cut' | 'copy';
+}
+
+/** The mark key for one entry. `\0` cannot occur in a section or entry name. */
+export function clipMarkKey(section: string, name: string): string {
+  return `${section}\u0000${name}`;
+}
+
+/** The section and name a mark key spells. */
+export function splitClipMarkKey(key: string): { section: string; name: string } {
+  const at = key.indexOf('\u0000');
+  return at < 0
+    ? { section: '', name: key }
+    : { section: key.slice(0, at), name: key.slice(at + 1) };
 }
 
 export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: ClipMark): any[] {
   const rows: any[] = [];
   const sections = (sldd.children || []) as any[];
   for (const section of sections) {
-    // Only the section the clipboard entry lives in can carry the mark, so pass
-    // the mode down solely for that section (name uniqueness is per-section).
-    const sectionMark = clipMark && clipMark.section === section.name ? clipMark : undefined;
     // Always emit the section's parent row, even when it has no entries.
     rows.push({
       ID: buildSectionRowId(section.name),
@@ -82,7 +95,7 @@ export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: Cli
     // array (empty when the section holds nothing), so the fallback never fires.
     // Kept because a missing array here would blank the WHOLE table, not one row.
     for (const entry of (section.children || []) as any[]) {
-      rows.push(...buildEntryRows(entry, section.name, modifiedNames, sectionMark));
+      rows.push(...buildEntryRows(entry, section.name, modifiedNames, clipMark));
     }
   }
   return rows;
@@ -166,10 +179,10 @@ export function buildEntryRows(entry: any, sectionName: string, modifiedNames?: 
       if (lastModified || lastModifiedBy) {
         row = { ...row, lastModified, lastModifiedBy };
       }
-      // Clipboard affordance for the cut/copied entry (the section is pre-matched
-      // by the caller, so here just match the name). The table reads
-      // Name.clipboardMode to dim (cut) or dash-outline (copied).
-      if (clipMark && clipMark.name === entry.name && row.Name && typeof row.Name === 'object') {
+      // Clipboard affordance for a cut/copied entry. The key carries the section, so no
+      // caller has to pre-match it. The table reads Name.clipboardMode to dim (cut) or
+      // dash-outline (copied).
+      if (clipMark?.keys.has(clipMarkKey(sectionName, entry.name)) && row.Name && typeof row.Name === 'object') {
         row = { ...row, Name: { ...row.Name, clipboardMode: clipMark.mode } };
       }
     }

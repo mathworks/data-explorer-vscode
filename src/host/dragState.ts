@@ -9,18 +9,12 @@
 // DESCRIPTOR (source metadata + per-item class/kind, NOT the payloads) to every
 // webview so each can predict the drop live (dropDecision) on dragover.
 
+import type { DropFacts } from './dropFacts.js';
+
 // One dragged entry: its serialized payload (for the eventual paste) plus the
 // display facts the webview needs to render feedback without a model.
-export interface DragRegisterItem {
+export interface DragRegisterItem extends DropFacts {
   payload: Record<string, unknown>;
-  className: string;
-  arrayClass: string;
-  kind: string;
-  isMatlabVariable: boolean;
-  // Whether the entry's value is scalar-numeric. Only meaningful for a MATLAB
-  // variable; it is what decides whether the variable may CONVERT to a Constant
-  // when dropped into Architectural Data (a Constant must be scalar-numeric).
-  isScalarNumeric: boolean;
 }
 
 interface DragEntry {
@@ -39,7 +33,7 @@ export interface DragDescriptor {
   sectionName: string;
   sectionLabel: string;
   isDerived: boolean;
-  items: Array<{ className: string; arrayClass: string; kind: string; isMatlabVariable: boolean; isScalarNumeric: boolean }>;
+  items: DropFacts[];
 }
 
 let current: DragEntry | null = null;

@@ -11,6 +11,21 @@ export interface ContextMenuItem {
   shortcut?: string;
   disabled?: boolean;
   separator?: boolean;
+  /**
+   * Why this item is unavailable, shown in place of the shortcut while `disabled`.
+   *
+   * Visible rather than a tooltip because `_moveFocus` skips disabled items, so a
+   * `title` on one is unreachable by keyboard. Only set where the answer is not
+   * obvious from the row — a paste the target's rules refuse, for instance.
+   */
+  reason?: string;
+  /**
+   * The full text when the label is abbreviated — an entry name truncated to keep the
+   * menu narrow. A hover tooltip is enough here (unlike `reason`, which has to be
+   * visible because keyboard focus skips disabled items): an item whose label names an
+   * operand is an ENABLED item, so it is reachable both ways.
+   */
+  title?: string;
 }
 
 @customElement('dex-context-menu')
@@ -63,8 +78,8 @@ export class DexContextMenu extends LitElement {
     .item {
       display: flex;
       align-items: center;
-      height: 32px;
-      padding: 0 12px;
+      min-height: 32px;
+      padding: 4px 12px;
       border-radius: 4px;
       cursor: pointer;
       user-select: none;
@@ -118,6 +133,8 @@ export class DexContextMenu extends LitElement {
       color: var(--dex-color-text-muted, rgba(0, 0, 0, 0.5));
       font-size: 12px;
       margin-left: 24px;
+      max-width: 220px;
+      text-align: right;
     }
 
     .item.disabled .item-shortcut {
@@ -262,6 +279,14 @@ export class DexContextMenu extends LitElement {
     return html`<span class="item-icon">${this._getSvgIcon(icon)}</span>`;
   }
 
+  // The right-hand slot: a reason while disabled, otherwise the shortcut. One slot,
+  // because a disabled item's shortcut is not actionable, and the reason is what the
+  // user needs there instead.
+  private _renderHint(item: ContextMenuItem) {
+    const text = item.disabled && item.reason ? item.reason : item.shortcut;
+    return text ? html`<span class="item-shortcut">${text}</span>` : nothing;
+  }
+
   private _getSvgIcon(icon: string) {
     switch (icon) {
       case 'addChild':
@@ -304,6 +329,7 @@ export class DexContextMenu extends LitElement {
             <div
               class="item ${item.disabled ? 'disabled' : ''} ${isFocused ? 'focused' : ''}"
               role="menuitem"
+              title="${item.title ?? nothing}"
               tabindex="${item.disabled ? '-1' : '0'}"
               aria-disabled="${item.disabled ? 'true' : 'false'}"
               @click=${() => this._onItemClick(item)}
@@ -311,7 +337,7 @@ export class DexContextMenu extends LitElement {
             >
               ${this._renderIcon(item.icon)}
               <span class="item-label">${item.label}</span>
-              ${item.shortcut ? html`<span class="item-shortcut">${item.shortcut}</span>` : nothing}
+              ${this._renderHint(item)}
             </div>
           `;
         })}

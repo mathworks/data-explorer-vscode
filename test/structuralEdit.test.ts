@@ -11,7 +11,15 @@ import { fileURLToPath } from 'node:url';
 import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
 import { buildRows } from '../src/host/rowBuilder.js';
 import { findEntrySpan } from '../src/host/entrySplice.js';
-import { deleteEntry, deleteChild, addChild, pasteEntry, cloneForPaste } from '../src/host/structuralEdit.js';
+import {
+  deleteEntry,
+  deleteChild,
+  deleteChildren,
+  addChild,
+  pasteEntry,
+  cloneForPaste,
+} from '../src/host/structuralEdit.js';
+import { mutateEntry } from '../src/host/entryOps.js';
 
 const fixtureText = readFileSync(
   fileURLToPath(new URL('../test-integration/fixtures/workspace/data.sldd', import.meta.url)),
@@ -386,5 +394,94 @@ describe('deleteEntry reselection', () => {
     const solo = reparsed.children.find((s: any) => s.name === 'arch').children[0];
     expect(solo).toBeTruthy();
     expect(deleteEntry(newText, solo).selectId).toBe('section:arch');
+  });
+});
+
+// Any entry by name, off a model the caller already has. Straight down the tree rather
+// than through buildRows + findNode: two entries of ONE model is what the same-entry
+// guard needs to be tested against, and structEntry builds a fresh model per call.
+function entryNamed(model: any, name: string) {
+  return model.children.flatMap((s: any) => s.children).find((e: any) => e.name === name);
+}
+
+describe('deleteChildren', () => {
+  it('removes every named child and splices the owning entry ONCE', () => {
+    // Two deleteChild calls would each look for the entry's span, and the second would
+    // look in text the first had already rewritten — so the span it found would be the
+    // wrong length and its write would land over the entry's neighbour.
+    const uri = 'test://del-children.sldd';
+    const entry = entryNamed(freshModel(uri), 'Struct');
+    const [a, b] = entry.children;
+    expect(b, 'the fixture’s Struct has two fields').toBeTruthy();
+
+    const result = mutateEntry(entry, () => deleteChildren(fixtureText, [a, b]));
+
+    // The text is valid JSON and the entry holds neither field — the check a double
+    // splice fails. Read back through a reparse rather than as a substring, because this
+    // fixture's fields are named "a" and "b": every entry in the document contains those
+    // letters, so `not.toContain` could not tell a survivor from an unrelated byte.
+    expect(isValidJson(result.newText)).toBe(true);
+    invalidate(uri);
+    const reparsed = getModel(uri, 'data.sldd', result.newText);
+    const struct = reparsed.children
+      .flatMap((s: any) => s.children)
+      .find((e: any) => e.name === 'Struct');
+    expect(struct.children.map((c: any) => c.name)).toEqual([]);
+    // The neighbouring entry is byte-identical — that is where a second splice's stale
+    // span would have written.
+    expect(siblingByteIdentical(fixtureText, result.newText, 'PI')).toBe(true);
+    expect(entry.children).toHaveLength(0);
+  });
+
+  it('selects a surviving sibling, not a row it just deleted', () => {
+    // reselectAfterRemoval answers per removal, so the LAST answer can name a node that
+    // an earlier removal already took away. The selection has to survive the gesture.
+    // NestedStruct, not Struct: it has three fields, so two removals still leave one — the
+    // only shape in which the survivor arm runs at all.
+    const uri = 'test://del-children-select.sldd';
+    const entry = entryNamed(freshModel(uri), 'NestedStruct');
+    const doomed = entry.children.slice(0, 2);
+    const surviving = entry.children.slice(2).map((c: any) => c.id);
+
+    const result = mutateEntry(entry, () => deleteChildren(fixtureText, doomed));
+
+    if (surviving.length) expect(surviving).toContain(result.selectId);
+    else expect(result.selectId).toBe(entry.id);
+  });
+
+  it('refuses children of two different entries', () => {
+    // One splice can only rewrite one entry. A caller that mixed entries would silently
+    // lose the other's removals from the text while keeping them in the model.
+    const uri = 'test://del-children-mixed.sldd';
+    const model = freshModel(uri);
+    const a = entryNamed(model, 'Struct').children[0];
+    const b = entryNamed(model, 'NestedStruct').children[0];
+    expect(() => deleteChildren(fixtureText, [a, b])).toThrow(
+      'These items are not all in the same entry.',
+    );
+  });
+
+  it('refuses a child that cannot be deleted', () => {
+    // Same guard deleteChild has (removeChildFromModel), stated as one predicate so the
+    // group check and the single check cannot come to disagree.
+    const uri = 'test://del-children-refuse.sldd';
+    const entry = entryNamed(freshModel(uri), 'Number');
+    expect(() => deleteChildren(fixtureText, [entry])).toThrow('This item cannot be deleted.');
+  });
+
+  it('leaves the model untouched when only ONE of the group is refused', () => {
+    // Every check runs over the whole group before anything is removed. Validating as it
+    // went would remove the first field and then throw, and the live model would keep
+    // that removal until the next re-parse — a table showing a delete the file never got.
+    const uri = 'test://del-children-atomic.sldd';
+    const entry = entryNamed(freshModel(uri), 'Struct');
+    const before = entry.children.map((c: any) => c.name);
+    expect(before.length).toBeGreaterThan(1);
+    // The entry itself is not a removable child, so the group is refused — after the
+    // first element has already been accepted.
+    expect(() => deleteChildren(fixtureText, [entry.children[0], entry])).toThrow(
+      'This item cannot be deleted.',
+    );
+    expect(entry.children.map((c: any) => c.name)).toEqual(before);
   });
 });

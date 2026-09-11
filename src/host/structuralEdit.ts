@@ -23,6 +23,8 @@ import { entrySelectorOf, type EntrySelector } from './entrySelector.js';
 import { generateUuid, getSectionMetadata } from 'data-explorer-core';
 import { buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
 import type { DragRegisterItem } from './dragState.js';
+import type { ClipboardItem } from './clipboard.js';
+import { dropFactsOf } from './dropFacts.js';
 
 /** One byte-scoped replacement of a document's text: `length` bytes at `offset` become `text`. */
 export interface TextPatch {
@@ -93,6 +95,36 @@ export function resolveSectionForPaste(model: any, node: any, rowId: string): an
 }
 
 /**
+ * Each row id's owning ENTRY, deduped, in selection order.
+ *
+ * The one walk behind both registers a paste can come from — the drag register
+ * (buildDragSnapshot) and the clipboard (buildClipboardSnapshot). Rows are deduped BY
+ * OWNING ENTRY because a gesture carries whole entries while a selection is a set of
+ * ROWS, and several rows can share one entry: shift-selecting a bus and two elements
+ * nested under it is three rows and one entry. Snapshotting per row made a drag paste
+ * the bus three times while the move deleted the single source once.
+ *
+ * Identity, not name: two same-named entries in different sections are genuinely two
+ * entries, and both may legitimately be carried at once.
+ *
+ * A row id that resolves to nothing, or to a node with no owning entry (a section
+ * header, a detached node), contributes nothing rather than aborting the gesture.
+ */
+function owningEntriesOf(rowIds: unknown, findNode: (rowId: string) => any): any[] {
+  const entries: any[] = [];
+  const seen = new Set<any>();
+  for (const rowId of Array.isArray(rowIds) ? rowIds : []) {
+    const node = findNode(rowId);
+    if (!node) continue;
+    const entry = findOwningEntry(node);
+    if (!entry || !entry.isEntry || seen.has(entry)) continue;
+    seen.add(entry);
+    entries.push(entry);
+  }
+  return entries;
+}
+
+/**
  * Snapshot the rows a drag started on into the drag-register shape.
  *
  * Shared by BOTH table providers (SlddTextEditorProvider and
@@ -101,17 +133,9 @@ export function resolveSectionForPaste(model: any, node: any, rowId: string): an
  * 35-line copies. A divergence between them would show up as a drag from one
  * .sldd format predicting a different drop than the same drag from the other.
  *
- * `findNode` is injected because that IS the per-format difference. A row id
- * that resolves to nothing, or to a node with no owning entry (a section header,
- * a detached node), contributes nothing rather than aborting the whole drag.
- *
- * Rows are DEDUPED BY OWNING ENTRY. A drag carries whole entries, but a
- * multi-selection is a set of ROWS, and several rows can share one entry — a
- * user shift-selecting a bus and the elements nested under it selects three rows
- * belonging to one entry. Snapshotting per row instead of per entry made that
- * drag paste the bus three times (DataInterface1, DataInterface2,
- * DataInterface3) while a move deleted the single source once, so the user got
- * three copies of what they dragged once.
+ * `findNode` is injected because that IS the per-format difference. Which rows become
+ * which entries — the dedupe by owning entry, and the rows that contribute nothing — is
+ * `owningEntriesOf`, shared with the clipboard so the two registers cannot disagree.
  *
  * The section facts come from the LAST contributing row, matching how a
  * multi-select drag is only ever within one section.
@@ -121,32 +145,12 @@ export function buildDragSnapshot(
   findNode: (rowId: string) => any,
 ): { items: DragRegisterItem[]; sourceSection: string; sourceSectionLabel: string; sourceIsDerived: boolean } {
   const items: DragRegisterItem[] = [];
-  const seen = new Set<any>();
   let sourceSection = '';
   let sourceSectionLabel = '';
   let sourceIsDerived = false;
-  for (const rowId of Array.isArray(rowIds) ? rowIds : []) {
-    const node = findNode(rowId);
-    if (!node) continue;
-    const entry = findOwningEntry(node);
-    if (!entry || !entry.isEntry) continue;
-    // Identity, not name: two same-named entries in different sections are
-    // genuinely two entries, and both may legitimately be dragged at once.
-    if (seen.has(entry)) continue;
-    seen.add(entry);
+  for (const entry of owningEntriesOf(rowIds, findNode)) {
     const payload = entry.serialize() as Record<string, unknown>;
-    const value = payload.value as Record<string, unknown> | undefined;
-    // An empty `_array_class` means "not an object array", i.e. a plain MATLAB
-    // variable — the same falsy-is-absent rule the parser's envelope uses.
-    const arrayClass = (value && typeof value === 'object' && (value._array_class as string)) || '';
-    items.push({
-      payload,
-      className: entry.className ?? '',
-      arrayClass,
-      kind: entry.kind ?? '',
-      isMatlabVariable: !arrayClass,
-      isScalarNumeric: entry.isScalarNumeric === true,
-    });
+    items.push({ payload, ...dropFactsOf(entry, payload) });
     const section = entry.parent;
     if (section) {
       sourceSection = section.name ?? '';
@@ -155,6 +159,26 @@ export function buildDragSnapshot(
     }
   }
   return { items, sourceSection, sourceSectionLabel, sourceIsDerived };
+}
+
+/**
+ * Snapshot the rows a copy/cut acts on into the clipboard shape.
+ *
+ * The same walk and the same dedupe as buildDragSnapshot — a different destination
+ * register is the only difference, which is what makes `dropDecision.ts`'s invariant
+ * ("if you can cut/copy you can drag") true by construction rather than by comment.
+ *
+ * Unlike the drag descriptor, each item keeps its OWN source section: a cut is lazy, so
+ * the source deletion at paste time must find each entry where it actually lives.
+ */
+export function buildClipboardSnapshot(
+  rowIds: unknown,
+  findNode: (rowId: string) => any,
+): ClipboardItem[] {
+  return owningEntriesOf(rowIds, findNode).map((entry) => {
+    const payload = entry.serialize() as Record<string, unknown>;
+    return { payload, sourceSection: entry.parent?.name ?? '', ...dropFactsOf(entry, payload) };
+  });
 }
 
 // Reserialize one entry to text, indented to its array depth (5 levels), the
@@ -201,6 +225,16 @@ export function deleteEntry(text: string, entry: any): StructuralResult {
   return patchResult(text, { offset: span.offset, length: span.length, text: '' }, selectId);
 }
 
+// Whether a node may be removed from its parent: a child of a container (Bus/Struct/
+// Enum), never a top-level entry (a SECTION has no canRemoveChild) and never a detached
+// node. One predicate because removeChildrenFromModel has to answer it for a whole group
+// BEFORE it removes any of them, and a second copy of the condition is how the group
+// check and the single check would come to disagree.
+function removableChild(node: any): boolean {
+  const parent = node?.parent;
+  return !!parent && typeof parent.canRemoveChild === 'function' && parent.canRemoveChild();
+}
+
 /**
  * Remove a nested child from the in-memory model, reporting the entry whose text
  * has to be reserialized and where the selection should land. This is the part of
@@ -210,9 +244,7 @@ export function deleteEntry(text: string, entry: any): StructuralResult {
  */
 export function removeChildFromModel(node: any): { entry: any; selectId: string } {
   const parent = node.parent;
-  if (!parent || typeof parent.canRemoveChild !== 'function' || !parent.canRemoveChild()) {
-    throw new Error('This item cannot be deleted.');
-  }
+  if (!removableChild(node)) throw new Error('This item cannot be deleted.');
   // PRECONDITION (untested): the canRemoveChild guard above already restricts
   // `node` to a child of a container (Bus/Struct/Enum), and every container in a
   // parsed model sits under a top-level entry — a SECTION has no canRemoveChild,
@@ -252,6 +284,75 @@ export function addChildToModel(node: any): { entry: any; selectId: string } {
 /** Delete a nested child: remove it from its parent, reserialize the owning entry. */
 export function deleteChild(text: string, node: any): StructuralResult {
   const { entry, selectId } = removeChildFromModel(node);
+  return spliceEntry(text, entry, selectId);
+}
+
+/**
+ * Remove SEVERAL nested children of ONE entry from the model, reporting the entry to
+ * reserialize and where the selection should land.
+ *
+ * `removeChildFromModel` is this with a list of one; what N adds is a single splice
+ * afterwards, which is the bug this exists to prevent. Calling deleteChild twice for two
+ * fields of one struct splices the entry twice, and the second splice searches text the
+ * first has already rewritten — the span it finds is the wrong length and its write lands
+ * over the entry's neighbour. Same reason foldPasteEntries folds N pastes into one
+ * insertion instead of writing N times.
+ *
+ * ALL the children must share one entry, and that is checked rather than assumed: one
+ * splice can only rewrite one entry, so a mixed list would drop the other entry's
+ * removals from the text while keeping them in the model — a table that disagrees with
+ * its own file. The caller that groups them (deletionPlan.planDeletion) guarantees it;
+ * this is what makes the guarantee testable.
+ *
+ * Both checks run over the WHOLE group before anything is removed, so a group this
+ * refuses leaves the model exactly as it found it. Validating as it went would half-apply
+ * a gesture that then threw, and the live model would keep those removals until the next
+ * re-parse — a table showing a delete the file never received.
+ *
+ * The selection is the last removal's answer, but only if it survived: reselectAfterRemoval
+ * answers per removal, so an earlier one may have taken away the sibling a later one
+ * chose. Falling back to the entry keeps the selection on a row that still exists.
+ *
+ * Both .sldd formats share this and differ only in the splice that follows — see
+ * deleteChildren below and deleteChildrenXml in xmlStructuralEdit.ts.
+ */
+export function removeChildrenFromModel(nodes: readonly any[]): { entry: any; selectId: string } {
+  if (!nodes.length) throw new Error('Nothing to delete.');
+  const entry = findOwningEntry(nodes[0]);
+  if (!entry) throw new Error('Could not locate the owning entry.');
+  for (const node of nodes) {
+    if (findOwningEntry(node) !== entry) {
+      throw new Error('These items are not all in the same entry.');
+    }
+    if (!removableChild(node)) throw new Error('This item cannot be deleted.');
+  }
+  // Removals first, one splice after: the text must be rewritten from the entry as it
+  // ends up, not once per child.
+  const selectIds: string[] = [];
+  for (const node of nodes) {
+    selectIds.push(removeChildFromModel(node).selectId);
+  }
+  // reselectAfterRemoval answers per removal, so a later answer can name a sibling an
+  // earlier removal already took away. Checked against the tree rather than the node
+  // index, because that index is mid-mutation here — mutateEntry re-keys the subtree only
+  // after this returns, so findNodeById would still resolve a node that has left.
+  const live = subtreeIds(entry);
+  const survivor = selectIds.filter((id) => live.has(id)).pop();
+  return { entry, selectId: survivor ?? entry.id };
+}
+
+// Every id in a subtree as it stands now. An id is a name-path, so a removal does not
+// change what its surviving siblings answer to — which is what makes this comparable
+// against ids captured before it.
+function subtreeIds(node: any, out = new Set<string>()): Set<string> {
+  out.add(node.id);
+  for (const child of (node.children ?? []) as any[]) subtreeIds(child, out);
+  return out;
+}
+
+/** Delete several nested children of one entry, reserializing that entry once. */
+export function deleteChildren(text: string, nodes: readonly any[]): StructuralResult {
+  const { entry, selectId } = removeChildrenFromModel(nodes);
   return spliceEntry(text, entry, selectId);
 }
 

@@ -270,6 +270,31 @@ describe('opsOfPastedEntries — the ops for entries the paste already attached'
     expect(opsOfPastedEntries(null, 0)).toEqual({ pairs: [], applied: [] });
     d.dispose();
   });
+
+  it('anchors every op of a multi-entry run at the section’s end, not on its neighbour', () => {
+    // What a paste attaches is the section's TAIL, so each entry's own next sibling is the
+    // NEXT ENTRY OF THE SAME RUN. The host sends one insert message per op, so that anchor
+    // names a row the table does not hold yet: insertEntryRows answers null, and the webview
+    // answers null by asking for the full repaint these ops exist to avoid — after it has
+    // already applied the earlier ops of the same batch. Standing in for a paste of two: the
+    // section's last two children, read as what it just added.
+    const d = openModel('test://ops-paste-run.sldd');
+    const section = (d.model.children as any[]).find((s: any) => s.children.length >= 2);
+    expect(section, 'the fixture has a section with two entries to stand in for a run').toBeTruthy();
+    const run = (section.children as any[]).slice(-2);
+    expect(insertAnchorOf(run[0]), 'the neighbour anchor, which is the trap').toBe(run[1].id);
+
+    const { pairs, applied } = opsOfPastedEntries(section, section.children.length - 2);
+    expect(applied.map((op: any) => op.entry.name)).toEqual(run.map((e: any) => e.name));
+    expect(applied.map((op: any) => op.beforeRowId), 'both ops append').toEqual([undefined, undefined]);
+    // And the undo stack still gets real positions — appending is the REPAINT's business,
+    // not the op's.
+    expect(pairs.map((p: any) => p.redo.index)).toEqual([
+      section.children.length - 2,
+      section.children.length - 1,
+    ]);
+    d.dispose();
+  });
 });
 
 // A closing sanity check on the ops these refusals sit between: the positive control for

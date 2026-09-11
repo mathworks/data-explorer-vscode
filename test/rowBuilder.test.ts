@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getModel, getModelFromBytes } from '../src/host/SlddModel.js';
-import { buildRows, buildEntryRows } from '../src/host/rowBuilder.js';
+import { buildRows, buildEntryRows, clipMarkKey } from '../src/host/rowBuilder.js';
 
 function fixturePath(name: string): string {
   return fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
@@ -54,11 +54,16 @@ describe('buildRows host-side tree construction', () => {
 });
 
 describe('clipboard affordance — stamps Name.clipboardMode on the cut/copied source row', () => {
+  // A clipMark over one or more section/name pairs.
+  function mark(mode: 'cut' | 'copy', ...pairs: Array<[string, string]>) {
+    return { keys: new Set(pairs.map(([s, n]) => clipMarkKey(s, n))), mode };
+  }
+
   it('marks the named entry in its section as "cut" when a clipMark cut is passed', () => {
     const path = fixturePath('numeric_json.sldd');
     const text = readFileSync(path, 'utf8');
     const sldd = getModel('test://numeric_json-cut.sldd', 'numeric_json.sldd', text);
-    const rows = buildRows(sldd, undefined, { name: 'Number', section: 'design', mode: 'cut' });
+    const rows = buildRows(sldd, undefined, mark('cut', ['design', 'Number']));
 
     const numberRow = rows.find((r) => r.Name && r.Name.label === 'Number');
     expect(numberRow.Name.clipboardMode).toBe('cut');
@@ -74,19 +79,48 @@ describe('clipboard affordance — stamps Name.clipboardMode on the cut/copied s
     const path = fixturePath('numeric_json.sldd');
     const text = readFileSync(path, 'utf8');
     const sldd = getModel('test://numeric_json-copy.sldd', 'numeric_json.sldd', text);
-    const rows = buildRows(sldd, undefined, { name: 'Number', section: 'design', mode: 'copy' });
+    const rows = buildRows(sldd, undefined, mark('copy', ['design', 'Number']));
     const numberRow = rows.find((r) => r.Name && r.Name.label === 'Number');
     expect(numberRow.Name.clipboardMode).toBe('copy');
   });
 
   it('does not stamp when the clipMark section does not match the entry’s section', () => {
+    // Entry names are unique within a section, not across the file, so the section is
+    // part of the key rather than a separate pre-match the callers each have to do.
     const path = fixturePath('numeric_json.sldd');
     const text = readFileSync(path, 'utf8');
     const sldd = getModel('test://numeric_json-nomatch.sldd', 'numeric_json.sldd', text);
-    // "Number" lives in design, not in some other section.
-    const rows = buildRows(sldd, undefined, { name: 'Number', section: 'references', mode: 'cut' });
+    const rows = buildRows(sldd, undefined, mark('cut', ['references', 'Number']));
     const numberRow = rows.find((r) => r.Name && r.Name.label === 'Number');
     expect(numberRow.Name.clipboardMode).toBeUndefined();
+  });
+
+  it('marks EVERY entry the clipboard holds, across sections', () => {
+    // A copy of two entries dims/dashes two source rows. Marking only the first is
+    // what a single-entry mark would silently do.
+    const path = fixturePath('numeric_json.sldd');
+    const text = readFileSync(path, 'utf8');
+    const sldd = getModel('test://numeric_json-multi.sldd', 'numeric_json.sldd', text);
+    const named = buildRows(sldd)
+      .filter((r) => r.Name && typeof r.Name === 'object' && !String(r.ID).startsWith('section:') && r.parent?.startsWith('section:'))
+      .slice(0, 2);
+    expect(named).toHaveLength(2);
+    const pairs = named.map((r) => [String(r.parent).slice('section:'.length), r.Name.label] as [string, string]);
+    const rows = buildRows(sldd, undefined, mark('cut', ...pairs));
+    for (const r of named) {
+      const painted = rows.find((x) => x.ID === r.ID);
+      expect(painted.Name.clipboardMode).toBe('cut');
+    }
+  });
+
+  it('stamps nothing for a mark holding no keys', () => {
+    const path = fixturePath('numeric_json.sldd');
+    const text = readFileSync(path, 'utf8');
+    const sldd = getModel('test://numeric_json-emptymark.sldd', 'numeric_json.sldd', text);
+    const rows = buildRows(sldd, undefined, mark('cut'));
+    for (const r of rows) {
+      if (r.Name && typeof r.Name === 'object') expect(r.Name.clipboardMode).toBeUndefined();
+    }
   });
 
   it('stamps nothing when no clipMark is given (default behavior unchanged)', () => {

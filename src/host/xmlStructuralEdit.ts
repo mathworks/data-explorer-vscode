@@ -23,6 +23,7 @@ import {
 import {
   reselectAfterRemoval,
   removeChildFromModel,
+  removeChildrenFromModel,
   addChildToModel,
   prepareEntryForPaste,
   foldPasteEntries,
@@ -71,6 +72,12 @@ export function deleteEntryXml(text: string, entry: any): StructuralResult {
 /** Delete a nested child: mutate model, reserialize the owning entry, splice it. */
 export function deleteChildXml(text: string, node: any): StructuralResult {
   const { entry, selectId } = removeChildFromModel(node);
+  return spliceEntry(text, entry, selectId);
+}
+
+/** Delete several nested children of one entry: mutate model, reserialize that entry once. */
+export function deleteChildrenXml(text: string, nodes: readonly any[]): StructuralResult {
+  const { entry, selectId } = removeChildrenFromModel(nodes);
   return spliceEntry(text, entry, selectId);
 }
 

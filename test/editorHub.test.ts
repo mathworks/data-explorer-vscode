@@ -40,7 +40,21 @@ describe('editorHub — clipboard broadcast', () => {
     registerWebview(wvA as any, () => repaintsA++);
     registerWebview(wvB as any, () => repaintsB++);
     try {
-      setClipboard({ name: 'X' }, 'copy', 'design', 'mem://a');
+      setClipboard(
+        [
+          {
+            payload: { name: 'X' },
+            sourceSection: 'design',
+            className: 'Simulink.Parameter',
+            arrayClass: '',
+            kind: 'Parameter',
+            isMatlabVariable: true,
+            isScalarNumeric: true,
+          },
+        ],
+        'copy',
+        'mem://a',
+      );
       broadcastClipboardState();
       expect(wvA.posted.at(-1)).toMatchObject({ type: 'clipboardState', canPaste: true, mode: 'copy' });
       expect(wvB.posted.at(-1)).toMatchObject({ type: 'clipboardState', canPaste: true });

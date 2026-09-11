@@ -64,7 +64,12 @@ export interface DropDecision {
 //     scalar-numeric value, so a non-scalar variable is rejected there;
 //   • an object entry's class must be in the target's allow-list (empty list =
 //     no restriction).
-function rejectReason(target: DropTarget, item: DragItem): string | null {
+//
+// Exported because the PASTE menu asks the same question of the same facts: the
+// clipboard now ships the items it holds, so "can this land here" is answered once
+// for both a dragover and a right-click. That is the bottom line at the top of this
+// file made executable — a Paste the menu offers is a drop dropDecision would allow.
+export function rejectReason(target: DropTarget, item: DragItem): string | null {
   if (item.isMatlabVariable) {
     if (target.isDerived && !item.isScalarNumeric) {
       return `${item.kind} must be scalar and numeric to be a Constant`;

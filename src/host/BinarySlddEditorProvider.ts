@@ -19,7 +19,7 @@
 import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
 import { renderWebviewHtml, BANNERS_HTML } from './webviewHtml.js';
-import { buildRows, buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
+import { buildRows, buildEntryRows, clipMarkKey, splitClipMarkKey, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { sectionRules } from './sectionRules.js';
 // DATA_PART_XML is core's name for the one zip member holding the entries, and the four
 // sites below are three roles of one rule: two lookups, the exclusion in
@@ -31,14 +31,20 @@ import { serializeEntryToXml, DataModel, DATA_PART_XML, type ParseWarning } from
 // the reader itself no longer enforces (it recovers and warns instead).
 import { readSlddParts } from './slddContent.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
-import { findOwningEntry, resolveSectionForPaste, buildDragSnapshot } from './structuralEdit.js';
-import { copyEntryToClipboard } from './clipboardAction.js';
+import {
+  findOwningEntry,
+  resolveSectionForPaste,
+  buildDragSnapshot,
+  reselectAfterRemoval,
+} from './structuralEdit.js';
+import { planDeletion } from './deletionPlan.js';
+import { copyEntriesToClipboard } from './clipboardAction.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
 import {
   deleteEntryXml,
   deleteChildXml,
+  deleteChildrenXml,
   addChildXml,
-  pasteEntryXml,
   pasteEntriesXml,
   deleteEntriesByNameXml,
   type StructuralResult,
@@ -384,11 +390,18 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // The clipboard mark this document's rows should carry, if any. Shared by the
     // full and entry-scoped repaints so a cut/copied entry renders its affordance
     // the same way whichever one painted it.
+    // Every entry the clipboard holds carries the mark, each keyed by its OWN source
+    // section: a multi-row cut can span sections, so one shared section would dim the
+    // wrong rows.
     const clipMarkOfDoc = (): ClipMark | undefined => {
       const clip = getClipboard();
-      return clip && clip.sourceDocUri === uriString && clip.payload.name
-        ? { name: clip.payload.name as string, section: clip.sourceSection, mode: clip.mode }
-        : undefined;
+      if (!clip || clip.sourceDocUri !== uriString) return undefined;
+      const keys = new Set<string>();
+      for (const it of clip.items) {
+        const name = it.payload.name;
+        if (typeof name === 'string' && name) keys.add(clipMarkKey(it.sourceSection, name));
+      }
+      return keys.size ? { keys, mode: clip.mode } : undefined;
     };
 
     const post = (from: ModelSource = 'chunk') => {
@@ -439,11 +452,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       // lets it CLEAR a stale mark — see the Status comment in rowBuilder.
       const modified = new Set<string>();
       if (isEntryModified(uriString, entry)) modified.add(entry.name);
-      const mark = clipMarkOfDoc();
-      // Pre-matched by section exactly as buildRows does it: entry names are only
-      // unique within a section, so only the marked entry's own section may carry it.
-      const sectionMark = mark && mark.section === section.name ? mark : undefined;
-      return buildEntryRows(entry, section.name, modified, sectionMark);
+      return buildEntryRows(entry, section.name, modified, clipMarkOfDoc());
     };
 
     /**
@@ -503,30 +512,34 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
      * A cut or copy makes no document edit, yet the source row must gain or lose its
      * affordance, so the hub asks every open table to repaint on every clipboard
      * broadcast — and "repaint" used to mean the whole table, which made a copy in ANY
-     * open .sldd cost this document a full re-parse. At most TWO entries can be
-     * affected: the one that just took the mark and the one that held it before. A
-     * broadcast that changes neither (the usual case — the mark belongs to another
-     * document) now costs nothing at all.
+     * open .sldd cost this document a full re-parse. Only the entries the two marks
+     * name can be affected: the ones the clipboard just took and the ones it held
+     * before. A broadcast that changes neither (the usual case — the mark belongs to
+     * another document) now costs nothing at all.
      *
      * An affected entry that is no longer in the model is skipped rather than repainted
      * wide: its rows are already gone (a cut+paste moves the very entry that held the
      * mark), so there is nothing left to un-dim.
      */
     let paintedMark: ClipMark | undefined;
+    // Order-independent: the same entries marked in a different order is the SAME mark,
+    // and repainting for it would be a repaint the user's rows do not need.
     const markKey = (mark?: ClipMark): string =>
-      mark ? JSON.stringify([mark.mode, mark.section, mark.name]) : '';
+      mark ? JSON.stringify([mark.mode, [...mark.keys].sort()]) : '';
     const repaintClipMark = () => {
       const next = clipMarkOfDoc();
       if (markKey(paintedMark) === markKey(next)) return;
-      const affected = [paintedMark, next].filter((m): m is ClipMark => !!m);
+      // Every entry either mark names: the ones losing the affordance and the ones
+      // gaining it. A key present in both yields one repaint (the `seen` guard below),
+      // as does a copy re-taken as a cut.
+      const affected = new Set<string>([...(paintedMark?.keys ?? []), ...(next?.keys ?? [])]);
       paintedMark = next;
       const model = liveModel();
       const ops: AppliedOp[] = [];
       const seen = new Set<string>();
-      for (const mark of affected) {
-        const entry = findEntryByName(model, mark.section, mark.name);
-        // Both marks can name the same entry (a copy re-taken as a cut), and its rows
-        // only need painting once.
+      for (const key of affected) {
+        const { section, name } = splitClipMarkKey(key);
+        const entry = findEntryByName(model, section, name);
         if (!entry || seen.has(entry.id)) continue;
         seen.add(entry.id);
         ops.push({ kind: 'replace', entryRowId: entry.id, entry });
@@ -675,22 +688,101 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     };
 
     /**
-     * Delete whichever the target row is: one nested child, or a whole entry.
+     * Delete SEVERAL rows as ONE edit.
      *
-     * The two are different SHAPES of change rather than two cases of one — deleting a
-     * child leaves the dictionary's entry list alone, so it is a `replace` of the owning
-     * entry, while deleting an entry is a `remove` — so they split here, before either
-     * path decides anything.
+     * Delete acts on ROWS (see webview/operands.ts), so its operands can mix whole entries
+     * with nested children of other entries. This format's undo stack is this document's
+     * own and steps by pushEdit, so the whole gesture is ONE push: one `after` string built
+     * by folding every removal, and one op list describing all of them. applyDrop already
+     * has this shape for N payloads — deliberately, because a drop IS a paste and a delete
+     * of the same N.
+     *
+     * READ THE MODEL FIRST, for the reason the JSON path does: a removal takes its node out
+     * of the tree, so the selectors the splice needs, the row to select afterwards, and the
+     * records the ops carry are all read while the nodes are still attached. A child group's
+     * UNDO record in particular has to be captured before its children go — after, it would
+     * describe the entry the delete produced, and undo would restore the deletion.
      */
-    const applyDelete = (rowId: string) => {
+    const applyDeleteMany = (rowIds: readonly string[]) => {
+      const model = liveModel();
+      const plan = planDeletion(rowIds, (rowId) => findNode(rowId));
+      if (!plan.entries.length && !plan.childGroups.length) {
+        webview.postMessage({ type: 'error', message: 'Could not locate the items in the model.' });
+        return;
+      }
+      // Read off the live tree, before anything leaves it.
+      const selectors = plan.entries.map((entry) => entrySelectorOf(entry));
+      const entryPairs = attempt<EntryOpPair[]>(() =>
+        plan.entries.map((entry) => ({ redo: removeOp(entry.id), undo: insertOp(entry) })),
+      );
+      const doomed = new Set<any>(plan.entries);
+      const lastEntry = plan.entries[plan.entries.length - 1];
+      const entrySelectId = lastEntry
+        ? reselectAfterRemoval(
+            ((lastEntry.parent?.children ?? []) as any[]).filter((e) => e === lastEntry || !doomed.has(e)),
+            lastEntry,
+            buildSectionRowId(lastEntry.parent?.name ?? ''),
+          )
+        : null;
+
+      try {
+        const before = document.chunkXml;
+        let working = before;
+        const childPairs: EntryOpPair[] = [];
+        const applied: AppliedOp[] = [];
+        let childSelectId: string | null = null;
+        for (const group of plan.childGroups) {
+          // Before the removal: this record is what an undo restores.
+          const undoOp = attempt(() => replaceOp(group.entry, group.entry.id));
+          const result = mutateEntry(group.entry, () => deleteChildrenXml(working, group.children));
+          working = result.newText;
+          childSelectId = result.selectId ?? childSelectId;
+          const redoOp = attempt(() => replaceOp(group.entry, group.entry.id));
+          if (undoOp && redoOp) childPairs.push({ redo: redoOp, undo: undoOp });
+          applied.push({ kind: 'replace', entryRowId: group.entry.id, entry: group.entry });
+        }
+        working = deleteEntriesByNameXml(working, selectors);
+
+        // The op list is all-or-nothing: a group whose record would not serialize left no
+        // pair, and a patch missing one op would restore a partial state. No patch means
+        // both directions repaint wide, which is merely slow (see `attempt`).
+        const complete = !!entryPairs && childPairs.length === plan.childGroups.length;
+        const patch = complete ? patchOfPairs([...childPairs, ...entryPairs]) : undefined;
+
+        applied.push(...applyEntryOps(model, (entryPairs ?? []).map((p) => p.redo)));
+        document.pushEdit('Delete', before, working, patch);
+        document.repaintOps(applied);
+        const landing = entrySelectId ?? childSelectId;
+        if (landing) webview.postMessage({ type: 'selectRow', rowId: landing });
+      } catch (err) {
+        // Nothing was pushed, so chunkXml is untouched; the model may not be — the child
+        // removals happen before the splice. Rebuild from the text, then say so (the
+        // repaint clears the banner, so it goes first).
+        document.repaintAll();
+        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+      }
+    };
+
+    /**
+     * Delete whichever rows the gesture named.
+     *
+     * One row keeps the two shapes it already had — a child leaving is a `replace` of its
+     * owning entry, an entry leaving is a `remove` — because they are cheaper and
+     * better-tested than the fold, and because a single delete is the common case.
+     */
+    const applyDelete = (rowIds: readonly string[]) => {
+      if (rowIds.length !== 1) {
+        applyDeleteMany(rowIds);
+        return;
+      }
       liveModel();
-      const node = findNode(rowId);
+      const node = findNode(rowIds[0]);
       if (!node) {
         webview.postMessage({ type: 'error', message: 'Could not locate the item in the model.' });
         return;
       }
       if (node.isEntry) applyDeleteEntry(node);
-      else applyStructural(rowId, (xml, n) => deleteChildXml(xml, n), 'Delete');
+      else applyStructural(rowIds[0], (xml, n) => deleteChildXml(xml, n), 'Delete');
     };
 
     // Value edit / rename: mutate node, reserialize its owning entry, splice.
@@ -777,15 +869,15 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     };
 
     // Shared with the JSON provider so both formats report an identical failure.
-    const applyCopy = (rowId: string, mode: 'cut' | 'copy') => {
-      copyEntryToClipboard(rowId, mode, uriString, {
+    const applyCopy = (rowIds: readonly string[], mode: 'cut' | 'copy') => {
+      copyEntriesToClipboard(rowIds, mode, uriString, {
         // From the model as it stands. A cut/copy changes no text at all, so a re-parse
         // here could only reproduce the tree that is already there — and on a real
         // customer dictionary that is ~3s to serialize one entry.
-        resolveNode: (id) => {
+        refresh: () => {
           liveModel();
-          return findNode(id);
         },
+        findNode,
         post: (message) => webview.postMessage(message),
         broadcast: broadcastClipboardState,
       });
@@ -807,14 +899,16 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         }
         const isCut = clip.mode === 'cut';
         const sameDoc = clip.sourceDocUri === uriString;
-        // Identity from the payload the clipboard snapped at cut time, so the
-        // source-delete can't hit a same-named entry in another namespace.
-        const srcSelector = entrySelectorOf(clip.payload);
-        const srcName = srcSelector.name;
+        // Identity from the payloads the clipboard snapped at cut time, so the
+        // source-delete can't hit same-named entries in another namespace.
+        const srcSelectors = clip.items.map((it) => entrySelectorOf(it.payload));
+        const named = srcSelectors.filter((s) => !!s.name);
 
-        // A cut into the SAME section is a no-op move: just clear the mark. The broadcast
-        // repaints the at-most-two rows that can carry one, and nothing else.
-        if (isCut && sameDoc && clip.sourceSection === section.name) {
+        // A cut into the SAME section every item came from is a no-op move: just clear
+        // the mark. The broadcast repaints the rows that can carry one, and nothing else.
+        // With mixed sources it is NOT a no-op — the items from elsewhere really do move
+        // — so the whole paste proceeds.
+        if (isCut && sameDoc && clip.items.every((it) => it.sourceSection === section.name)) {
           clearClipboard();
           broadcastClipboardState();
           return;
@@ -830,12 +924,20 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // source's name — from the text AND from the model, because the uniqueness check
         // inside the paste reads the MODEL's namespace and a source still standing there
         // would push the copy to `Name1`.
-        if (isCut && sameDoc && srcName) {
-          working = deleteEntriesByNameXml(working, [srcSelector]);
-          const src = findEntryBySelector(model, srcSelector);
-          if (src) {
-            pairs.push({ redo: removeOp(src.id), undo: insertOp(src) });
-            applied.push(...applyEntryOps(model, [removeOp(src.id)]));
+        if (isCut && sameDoc && named.length) {
+          working = deleteEntriesByNameXml(working, named);
+          const sources = named.map((t) => findEntryBySelector(model, t));
+          if (sources.every((e) => !!e)) {
+            const seen = new Set<string>();
+            for (const src of sources) {
+              // Two clipboard items can resolve to ONE model entry when their selectors
+              // name no distinguishing namespace, and removing it twice would throw on
+              // the second op — the same reason deleteEntriesByNameXml re-finds each span.
+              if (seen.has(src.id)) continue;
+              seen.add(src.id);
+              pairs.push({ redo: removeOp(src.id), undo: insertOp(src) });
+              applied.push(...applyEntryOps(model, [removeOp(src.id)]));
+            }
           } else {
             // The model cannot say which entry the clipboard means, so it catches up the
             // old way — and the target section has to be re-resolved against the tree
@@ -846,11 +948,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           }
         }
 
-        // pasteEntryXml attaches the new entry to the section itself (that is
+        // The fold attaches each new entry to the section itself (that is
         // prepareEntryForPaste's job, and the uniqueness check needs it), APPENDING it —
         // so whatever it added is the tail this count marks off.
         const addedFrom = (section.children as any[]).length;
-        const { newText, selectId } = pasteEntryXml(working, section, clip.payload);
+        const { newText, selectIds } = pasteEntriesXml(working, section, clip.items.map((it) => it.payload));
         // Indexing each new subtree and describing it for the undo stack is entryOps' job —
         // the same call the JSON provider makes from its own paste and drop. The loop was
         // written out here and in applyDrop instead, putting one rule in three places, and
@@ -863,13 +965,13 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         document.pushEdit('Paste', before, newText, narrow ? patchOfPairs(pairs) : undefined);
         if (narrow) document.repaintOps(applied);
         else document.repaintAll();
-        if (selectId) webview.postMessage({ type: 'selectRow', rowId: selectId });
+        if (selectIds.length) webview.postMessage({ type: 'selectRow', rowId: selectIds[selectIds.length - 1] });
         try {
           // A cross-document cut removes the source from ITS document via that
           // document's own format-appropriate deleter (JSON or binary), a second
           // native undo step — exactly a cut in one file + paste in another.
-          if (isCut && !sameDoc && clip.sourceDocUri && srcName) {
-            await deleteFromSource(clip.sourceDocUri, [srcSelector]);
+          if (isCut && !sameDoc && clip.sourceDocUri && named.length) {
+            await deleteFromSource(clip.sourceDocUri, named);
           }
         } finally {
           // Cleared even if the source-delete throws: the paste above already
@@ -1012,9 +1114,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       if (msg?.type === 'ready') post();
       else if (msg?.type === 'select') this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
       else if (msg?.type === 'edit') applyEdit(msg);
-      else if (msg?.type === 'copy') applyCopy(msg.rowId, 'copy');
-      else if (msg?.type === 'cut') applyCopy(msg.rowId, 'cut');
-      else if (msg?.type === 'delete') applyDelete(msg.rowId);
+      else if (msg?.type === 'copy') applyCopy(msg.rowIds, 'copy');
+      else if (msg?.type === 'cut') applyCopy(msg.rowIds, 'cut');
+      else if (msg?.type === 'delete') applyDelete(msg.rowIds);
       else if (msg?.type === 'addChild') applyStructural(msg.rowId, (xml, node) => addChildXml(xml, node), 'Add child');
       else if (msg?.type === 'paste') void applyPaste(msg.rowId);
       else if (msg?.type === 'dragStart') applyDragStart(msg);

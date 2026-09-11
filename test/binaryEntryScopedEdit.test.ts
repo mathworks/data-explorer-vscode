@@ -40,14 +40,18 @@ import { entrySelectorOf } from '../src/host/entrySelector.js';
 import {
   addChildXml,
   deleteChildXml,
+  deleteChildrenXml,
+  deleteEntriesByNameXml,
   deleteEntryXml,
   pasteEntryXml,
 } from '../src/host/xmlStructuralEdit.js';
+import { planDeletion } from '../src/host/deletionPlan.js';
 import {
   applyEntryOps,
   entryRecord,
   insertAnchorOf,
   insertOp,
+  mutateEntry,
   patchOfPairs,
   removeOp,
   replaceOp,
@@ -490,6 +494,60 @@ describe('binary .sldd entry ops — undo, redo, delete, paste', () => {
     expect(back.id).toBe(entryRowId);
     expect(back.parent.children.indexOf(back)).toBe(index);
     expect(restored).toEqual(d.widePaint());
+    d.dispose();
+  });
+
+  it('delete of MANY rows: one op list, and narrow === wide', () => {
+    // The binary format's undo stack steps by pushEdit, so the whole gesture is one
+    // push — one `after` string and one EntryPatch, exactly as applyDrop already does
+    // for N payloads.
+    const d = openDoc('test://ops-delete-many.sldd');
+    const before = d.widePaint();
+    const struct = d.entryNamed('myStruct');
+    const other = d.entryNamed('gravity');
+    const child = struct.children[0];
+    expect(child, 'the fixture’s struct has a field').toBeTruthy();
+
+    const plan = planDeletion([other.id, child.id], (id: string) =>
+      (DataModel as any).findNodeById(id),
+    );
+    const selectors = plan.entries.map((e: any) => entrySelectorOf(e));
+    const pairs: EntryOpPair[] = plan.entries.map((e: any) => ({
+      redo: removeOp(e.id),
+      undo: insertOp(e),
+    }));
+    const childPairs: EntryOpPair[] = [];
+
+    let working = d.doc.chunkXml;
+    for (const group of plan.childGroups) {
+      // The UNDO side is the entry as it stands BEFORE its children go; the redo side is
+      // what the removal left. Captured after, the undo record would describe the entry the
+      // delete produced, and undoing would restore the deletion.
+      const undo = replaceOp(group.entry, group.entry.id);
+      working = mutateEntry(group.entry, () => deleteChildrenXml(working, group.children)).newText;
+      childPairs.push({ redo: replaceOp(group.entry, group.entry.id), undo });
+    }
+    working = deleteEntriesByNameXml(working, selectors);
+
+    const applied: AppliedOp[] = [
+      ...plan.childGroups.map((g: any) => ({
+        kind: 'replace' as const,
+        entryRowId: g.entry.id,
+        entry: g.entry,
+      })),
+      ...applyEntryOps(d.live(), pairs.map((p) => p.redo)),
+    ];
+    d.doc.chunkXml = working;
+
+    const narrow = foldOps(before, applied, d.narrowPaint);
+    expect(narrow.some((r: any) => r.ID === other.id), 'the deleted entry’s run is gone').toBe(false);
+    expect(narrow.some((r: any) => r.ID === child.id), 'the deleted field’s row is gone').toBe(false);
+    expect(narrow).toEqual(d.widePaint());
+
+    // And the whole thing undoes in ONE replay: the child replaces put their entries back
+    // as they were, the entry inserts put theirs back where they were.
+    const patch = patchOfPairs([...childPairs, ...pairs]);
+    expect(patch.undo).toHaveLength(childPairs.length + pairs.length);
     d.dispose();
   });
 
