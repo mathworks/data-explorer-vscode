@@ -23,6 +23,7 @@ import {
   opsOfPastedEntries,
   patchOfPairs,
   removeOp,
+  replaceOp,
   type AppliedOp,
   type EntryOpPair,
 } from './entryOps.js';
@@ -52,16 +53,19 @@ import { sectionRules } from './sectionRules.js';
 import {
   deleteEntry,
   deleteChild,
+  deleteChildren,
   addChild as addChildEdit,
   pasteEntries,
   deleteEntriesByName,
   findOwningEntry,
+  reselectAfterRemoval,
   resolveSectionForPaste,
   reserializeEntry,
   buildDragSnapshot,
   type StructuralResult,
   type TextPatch,
 } from './structuralEdit.js';
+import { planDeletion } from './deletionPlan.js';
 import { minimalReplacement } from './minimalEdit.js';
 import { copyEntriesToClipboard } from './clipboardAction.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
@@ -1160,11 +1164,120 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       }
     };
 
-    const applyDelete = (msg: { rowId: string }): Promise<void> =>
-      onStructuralTarget(msg.rowId, (node) =>
-        // A top-level entry leaves the dictionary; a nested child leaves its entry.
-        node.isEntry ? applyDeleteEntry(node) : applyEntryStructural(node, deleteChild),
-      );
+    /**
+     * Delete SEVERAL rows as ONE edit.
+     *
+     * Delete is the row-granular action (see webview/operands.ts): its operands can be a
+     * mix of whole entries and nested children, across sections, and all of it has to land
+     * in a single write. This format's undo stack is VS Code's own, and it steps by WRITE —
+     * so two writes would mean Cmd+Z taking back part of one gesture and leaving the rest.
+     *
+     * READ THE MODEL FIRST. Every removal takes a node out of the tree, so the selectors the
+     * text splice needs, the row to select afterwards, and the insert ops an undo needs are
+     * all read while the nodes are still attached. That ordering is the whole reason this is
+     * one function rather than a loop over applyDeleteEntry.
+     */
+    const applyDeleteMany = async (rowIds: readonly string[]): Promise<void> => {
+      let painted = false;
+      try {
+        if (!ensureValidJson()) return;
+        const model = liveModel();
+        if (!model) throw new Error('the document has no model to edit');
+        const currentText = document.getText();
+        const plan = planDeletion(rowIds, (rowId) => findNode(uriString, rowId));
+        if (!plan.entries.length && !plan.childGroups.length) {
+          webview.postMessage({ type: 'error', message: 'Could not locate the items in the model.' });
+          return;
+        }
+
+        // Read off the live tree, before anything leaves it.
+        const selectors = plan.entries.map((entry) => entrySelectorOf(entry));
+        // LAST ENTRY FIRST, not selection order. An insert op names the index its entry held
+        // while every other one was still there (insertOp), and `patchOfPairs` replays the
+        // inverses REVERSED — so the pairs go descending and the undo gets its inserts
+        // left-to-right, each landing in a section where everything before it is already
+        // back. Ascending pairs would hand the undo the rightmost entry first, counting its
+        // index past a gap no earlier insert has filled yet, and it would land a slot out.
+        // The removals themselves name a row id, so their own order is free.
+        const positionOf = (entry: any): number =>
+          ((entry.parent?.children ?? []) as any[]).indexOf(entry);
+        const entryPairs: EntryOpPair[] = [...plan.entries]
+          .sort((a, b) => positionOf(b) - positionOf(a))
+          .map((entry) => ({ redo: removeOp(entry.id), undo: insertOp(entry) }));
+        // What gets REMEMBERED is these plus one pair per child group (below). What gets
+        // applied to the model now is only the entry removals — the child removals have
+        // already happened, inside deleteChildren.
+        const pairs: EntryOpPair[] = [...entryPairs];
+        // Where the selection lands: the last entry removal's neighbour — and a neighbour
+        // that is ITSELF being deleted is not a place to leave the selection, so the doomed
+        // siblings come out of the list first. `.filter` preserves order, so the surviving
+        // neighbour it picks is the one the user will actually see. When the plan removes no
+        // whole entry, the child groups answer instead (childSelectId, below).
+        const doomed = new Set<any>(plan.entries);
+        const lastEntry = plan.entries[plan.entries.length - 1];
+        const selectId = lastEntry
+          ? reselectAfterRemoval(
+              ((lastEntry.parent?.children ?? []) as any[]).filter((e) => e === lastEntry || !doomed.has(e)),
+              lastEntry,
+              buildSectionRowId(lastEntry.parent?.name ?? ''),
+            )
+          : null;
+
+        // TEXT — children first, each group one splice; then the whole entries, by selector.
+        let working = currentText;
+        const childApplied: AppliedOp[] = [];
+        let childSelectId: string | null = null;
+        for (const group of plan.childGroups) {
+          // A child leaving rewrites its entry, so the entry's own record is what either
+          // direction restores — and the undo side is the entry WITH the child, which only
+          // exists now. Remembered as an op like everything else, because an undo of this
+          // edit is answered by planKnownOps and nothing after it looks at the bytes: the
+          // field would come back in the text and stay missing from the model and the table.
+          const undo = replaceOp(group.entry, group.entry.id);
+          const result = mutateEntry(group.entry, () => deleteChildren(working, group.children));
+          working = result.newText;
+          childSelectId = result.selectId ?? childSelectId;
+          pairs.push({ redo: replaceOp(group.entry, group.entry.id), undo });
+          childApplied.push({ kind: 'replace', entryRowId: group.entry.id, entry: group.entry });
+        }
+        working = deleteEntriesByName(working, selectors);
+
+        // MODEL, then PAINT — in this run, before the write.
+        const applied = [...childApplied, ...applyEntryOps(model, entryPairs.map((p) => p.redo))];
+        painted = true;
+        repaintOps(applied);
+        const landing = selectId ?? childSelectId;
+        if (landing) webview.postMessage({ type: 'selectRow', rowId: landing });
+
+        const patch = minimalReplacement(currentText, working);
+        const submitted = submittedOf(patch);
+        paintedWrite = submitted;
+        await writePatch(patch);
+        remember({
+          submitted,
+          replaced: currentText.slice(patch.offset, patch.offset + patch.length),
+          patch: patchOfPairs(pairs),
+        });
+      } catch (err) {
+        paintedWrite = null;
+        const message = 'Failed to apply edit: ' + (err as Error).message;
+        if (painted) resyncWide(message);
+        else webview.postMessage({ type: 'error', message });
+      }
+    };
+
+    const applyDelete = (msg: { rowIds: string[] }): Promise<void> => {
+      const rowIds = msg.rowIds;
+      // One row keeps the narrow paths it already had: an entry's element cut out of the
+      // array, or one child spliced into its entry. Both write one region the transform
+      // NAMED, which is cheaper and better-tested than a whole-text diff.
+      if (rowIds.length === 1) {
+        return onStructuralTarget(rowIds[0], (node) =>
+          node.isEntry ? applyDeleteEntry(node) : applyEntryStructural(node, deleteChild),
+        );
+      }
+      return applyDeleteMany(rowIds);
+    };
 
     const applyAddChild = (msg: { rowId: string }): Promise<void> =>
       onStructuralTarget(msg.rowId, (node) => applyEntryStructural(node, addChildEdit));
@@ -1611,7 +1724,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       } else if (msg?.type === 'copy') {
         applyCopy(msg, 'copy');
       } else if (msg?.type === 'delete') {
-        void applyDelete(msg);
+        // The webview still names one row; the wrapper goes when its message names them all.
+        void applyDelete({ rowIds: [msg.rowId] });
       } else if (msg?.type === 'addChild') {
         void applyAddChild(msg);
       } else if (msg?.type === 'cut') {

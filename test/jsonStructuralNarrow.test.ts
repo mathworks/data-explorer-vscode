@@ -52,11 +52,13 @@ import {
   addChild,
   applyTextPatch,
   deleteChild,
+  deleteChildren,
   deleteEntriesByName,
   deleteEntry,
   pasteEntry,
   type TextPatch,
 } from '../src/host/structuralEdit.js';
+import { planDeletion } from '../src/host/deletionPlan.js';
 import { minimalReplacement } from '../src/host/minimalEdit.js';
 import { getModel, invalidate, peekModel } from '../src/host/SlddModel.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from '../src/host/slddBaseline.js';
@@ -251,6 +253,57 @@ describe('JSON .sldd structural edit — narrow === wide', () => {
     expect(narrow).toEqual(d.widePaint());
   });
 
+  it('delete of MANY rows: one write, and narrow === wide', () => {
+    // The gesture the whole change is for: a mixed selection — one whole entry, one
+    // nested child of another entry — deleted as ONE edit. Two writes here would make
+    // Cmd+Z take back half of it.
+    const d = open('test://struct-delete-many.sldd');
+    const before = d.widePaint();
+    const struct = d.entryNamed('Struct');
+    const number = d.entryNamed('Number');
+    const child = struct.children[0];
+    expect(child, 'the fixture’s Struct has a field').toBeTruthy();
+    const goneIds = [number.id, child.id];
+
+    const plan = planDeletion([number.id, child.id], (id: string) => DataModel.findNodeById(id));
+    expect(plan.entries.map((e: any) => e.name)).toEqual(['Number']);
+    expect(plan.childGroups.map((g: any) => g.entry.name)).toEqual(['Struct']);
+
+    // Read off the model BEFORE anything is removed: the selectors the text splice needs,
+    // and the undo ops, which need each entry's section and index.
+    const selectors = plan.entries.map((e: any) => entrySelectorOf(e));
+    const textBefore = d.doc.text;
+    const pairs: EntryOpPair[] = plan.entries.map((e: any) => ({
+      redo: removeOp(e.id),
+      undo: insertOp(e),
+    }));
+
+    // Text: children first (each group one splice), then the whole entries.
+    let working = textBefore;
+    for (const group of plan.childGroups) {
+      working = mutateEntry(group.entry, () => deleteChildren(working, group.children)).newText;
+    }
+    working = deleteEntriesByName(working, selectors);
+
+    // Model: the entry removals only. The child removals already happened, inside
+    // deleteChildren — which is why a child group repaints as a `replace` of its owning
+    // entry and contributes nothing to applyEntryOps. It still contributes a remembered
+    // PAIR, which is what the mixed-undo test below is about.
+    const applied: AppliedOp[] = [
+      ...plan.childGroups.map((g: any) => ({ kind: 'replace' as const, entryRowId: g.entry.id, entry: g.entry })),
+      ...applyEntryOps(d.model(), pairs.map((p) => p.redo)),
+    ];
+
+    const patch = minimalReplacement(textBefore, working);
+    d.write(patch);
+
+    const narrow = d.paintOps(before, applied);
+    for (const id of goneIds) {
+      expect(narrow.some((r: any) => r.ID === id), `${id} is gone from the table`).toBe(false);
+    }
+    expect(narrow).toEqual(d.widePaint());
+  });
+
   it('paste: the new entry’s rows are inserted where a re-parse would put them', () => {
     const d = open('test://struct-paste.sldd');
     const before = d.widePaint();
@@ -365,6 +418,95 @@ describe('JSON .sldd structural edit — undo and redo, from the ops the host ke
 
     const narrow = d.paintOps(restored, applyEntryOps(d.model(), ops!));
     expect(narrow).toEqual(deleted);
+    expect(narrow).toEqual(d.widePaint());
+  });
+
+  it('undo of a many-row delete restores every row in one step', () => {
+    // One remembered edit, one patch, both directions.
+    //
+    // And the ORDER, which is what this pins: an insert op names the index its entry held
+    // while the other was still there, and patchOfPairs replays the inverses REVERSED — so
+    // the pairs go LAST ENTRY FIRST (Struct sits after Number in the section) and the undo
+    // inserts left-to-right, each into a section where everything before it is already back.
+    // The other way round, Struct's insert counts its index past the gap Number has not
+    // filled yet and lands a slot late — the table would come back with `char` above it.
+    const d = open('test://struct-undo-delete-many.sldd');
+    const before = d.widePaint();
+    const a = d.entryNamed('Number');
+    const b = d.entryNamed('Struct');
+    const textBefore = d.doc.text;
+
+    const pairs: EntryOpPair[] = [
+      { redo: removeOp(b.id), undo: insertOp(b) },
+      { redo: removeOp(a.id), undo: insertOp(a) },
+    ];
+    const working = deleteEntriesByName(textBefore, [entrySelectorOf(a), entrySelectorOf(b)]);
+    const deleted = d.paintOps(before, applyEntryOps(d.model(), pairs.map((p) => p.redo)));
+    const patch = minimalReplacement(textBefore, working);
+    d.write(patch);
+    const known = rememberOf(textBefore, patch, pairs);
+
+    const change = undoOf(known);
+    d.doc.text = applyTextPatch(d.doc.text, {
+      offset: change.rangeOffset,
+      length: change.rangeLength,
+      text: change.text,
+    });
+    const ops = planKnownOps([change], [known]);
+    expect(ops, 'the host recognises its own multi-row delete coming back').not.toBeNull();
+
+    const narrow = d.paintOps(deleted, applyEntryOps(d.model(), ops!));
+    expect(narrow, 'the table is what it was before the delete').toEqual(before);
+    expect(narrow).toEqual(d.widePaint());
+  });
+
+  it('undo of a MIXED many-row delete brings the nested child back too', () => {
+    // The entry inserts alone cannot repair this one. A child leaving rewrites its entry's
+    // span, and an undo writes that span back — but `planKnownOps` answers with ops and the
+    // handler stops there (syncKnownOps runs before syncKnownChange), so nothing re-reads
+    // those bytes. Without the owning entry among the remembered pairs the field is back in
+    // the text and still missing from the model and the table: narrow ≠ wide, and invisible
+    // until the next edit on that entry writes it out short a field.
+    //
+    // Its undo record is the entry as it was BEFORE the removal — the only direction that
+    // cannot be captured after one.
+    const d = open('test://struct-undo-delete-mixed.sldd');
+    const before = d.widePaint();
+    const struct = d.entryNamed('Struct');
+    const number = d.entryNamed('Number');
+    const child = struct.children[0];
+    const childId = child.id;
+    const textBefore = d.doc.text;
+
+    const pairs: EntryOpPair[] = [{ redo: removeOp(number.id), undo: insertOp(number) }];
+    const childUndo = replaceOp(struct, struct.id);
+    let working = mutateEntry(struct, () => deleteChildren(textBefore, [child])).newText;
+    pairs.push({ redo: replaceOp(struct, struct.id), undo: childUndo });
+    working = deleteEntriesByName(working, [entrySelectorOf(number)]);
+
+    const applied: AppliedOp[] = [
+      { kind: 'replace', entryRowId: struct.id, entry: struct },
+      ...applyEntryOps(d.model(), [pairs[0].redo]),
+    ];
+    const patch = minimalReplacement(textBefore, working);
+    d.write(patch);
+    const deleted = d.paintOps(before, applied);
+    expect(deleted.some((r: any) => r.ID === childId), 'the field is gone').toBe(false);
+    const known = rememberOf(textBefore, patch, pairs);
+
+    const change = undoOf(known);
+    d.doc.text = applyTextPatch(d.doc.text, {
+      offset: change.rangeOffset,
+      length: change.rangeLength,
+      text: change.text,
+    });
+    expect(d.doc.text, 'the undo restores the text exactly').toBe(textBefore);
+    const ops = planKnownOps([change], [known]);
+    expect(ops, 'the host recognises its own mixed delete coming back').not.toBeNull();
+
+    const narrow = d.paintOps(deleted, applyEntryOps(d.model(), ops!));
+    expect(narrow, 'the table is what it was before the delete').toEqual(before);
+    expect(DataModel.findNodeById(childId), 'and the field resolves for the next edit').toBeTruthy();
     expect(narrow).toEqual(d.widePaint());
   });
 
