@@ -12,18 +12,25 @@ export interface ContextMenuItem {
   disabled?: boolean;
   separator?: boolean;
   /**
-   * Why this item is unavailable, shown in place of the shortcut while `disabled`.
+   * Why this item is unavailable — the tooltip while `disabled`, and the accessible
+   * description announced after the label. Only set where the answer is not obvious
+   * from the row: a paste the target's rules refuse, for instance.
    *
-   * Visible rather than a tooltip because `_moveFocus` skips disabled items, so a
-   * `title` on one is unreachable by keyboard. Only set where the answer is not
-   * obvious from the row — a paste the target's rules refuse, for instance.
+   * A TOOLTIP AND NOT A COLUMN. These sentences run to ~45 characters ("This element
+   * can't be removed from its parent"), and beside the label they made the menu's width
+   * depend on which items happened to be disabled — one selection opening a 200px menu
+   * and the next a 500px one, with the same items in it. What used to rule a tooltip
+   * out was that `_moveFocus` skipped disabled items, so nothing on one could be
+   * reached; arrow keys now land on them, the way a Windows menu does. And `title` on
+   * an element that takes its accessible NAME from its content becomes that element's
+   * accessible DESCRIPTION, so a screen reader reads the label and then the reason —
+   * which is more than the visible column ever gave it, since it could not be focused.
    */
   reason?: string;
   /**
-   * The full text when the label is abbreviated — an entry name truncated to keep the
-   * menu narrow. A hover tooltip is enough here (unlike `reason`, which has to be
-   * visible because keyboard focus skips disabled items): an item whose label names an
-   * operand is an ENABLED item, so it is reachable both ways.
+   * The full text when the label does not fit — an entry name the menu's `max-width`
+   * clips with an ellipsis. Consulted only when there is no `reason` to show instead:
+   * on an item the user cannot use, why is the more useful sentence than what.
    */
   title?: string;
 }
@@ -50,7 +57,13 @@ export class DexContextMenu extends LitElement {
       box-shadow:
         0 8px 32px rgba(0, 0, 0, 0.14),
         0 2px 8px rgba(0, 0, 0, 0.06);
-      min-width: 200px;
+      /* A band, not a fitted width. The lower bound keeps a two-item section menu from
+         looking like a tooltip; the upper bound is what stops a long entry name from
+         stretching the menu across the editor — the label clips instead, and its full
+         text is a hover away. Together they are why the menu no longer changes shape
+         with the selection. */
+      min-width: 220px;
+      max-width: 320px;
       padding: 4px;
       font-family: var(--dex-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
       font-size: 13px;
@@ -96,6 +109,19 @@ export class DexContextMenu extends LitElement {
       background: var(--dex-context-menu-hover, rgba(0, 0, 0, 0.04));
     }
 
+    /* A disabled item CAN be arrowed onto now, so it needs an indication of its own —
+       otherwise the highlight vanishes as the user passes over it and the menu looks
+       stuck. A ring rather than the enabled fill, because the two states must not look
+       alike: this one says "the keyboard is here", not "Enter will do this".
+
+       The SAME ring the focus-visible rule above draws, and deliberately so. This
+       selector is three classes to that one's attribute-plus-pseudo, so it wins wherever
+       both match — a ring of its own here would mean the one item that most needs the
+       real focus ring is the one item that never gets it. */
+    .item.disabled.focused {
+      box-shadow: inset var(--dex-focus-ring, 0 0 0 2px rgba(0, 120, 212, 0.4));
+    }
+
     .item:active:not(.disabled) {
       background: var(--dex-context-menu-active, rgba(0, 0, 0, 0.06));
     }
@@ -125,15 +151,25 @@ export class DexContextMenu extends LitElement {
       fill: currentColor;
     }
 
+    /* min-width:0 is what makes the ellipsis work: a flex item defaults to
+       min-width:auto, which refuses to shrink below its content and would push the
+       menu past its max-width instead of clipping. */
     .item-label {
       flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
+    /* Never the thing that gives way: an accelerator is four characters and unreadable
+       clipped, so the label absorbs the shortfall. */
     .item-shortcut {
       color: var(--dex-color-text-muted, rgba(0, 0, 0, 0.5));
       font-size: 12px;
       margin-left: 24px;
-      max-width: 220px;
+      flex-shrink: 0;
+      white-space: nowrap;
       text-align: right;
     }
 
@@ -235,23 +271,18 @@ export class DexContextMenu extends LitElement {
     return this._items.filter(i => !i.separator);
   }
 
+  // Every item, disabled ones included — the behaviour of a Win32/Windows 11 menu, and
+  // the WAI-ARIA menu pattern's recommended choice. Skipping them hid the fact that an
+  // action exists at all from anyone not using a mouse, and left a disabled item's
+  // `title` unreachable, which is why its reason had to occupy a column. Activation is
+  // still refused: `_onItemClick` returns early on a disabled item, so Enter here does
+  // nothing but keep the highlight where the user put it.
   private _moveFocus(direction: number): void {
     const items = this._getActionItems();
     if (items.length === 0) return;
     let idx = this._focusedIndex + direction;
     if (idx < 0) idx = items.length - 1;
     if (idx >= items.length) idx = 0;
-    // Skip disabled items
-    let attempts = 0;
-    while (items[idx].disabled && attempts < items.length) {
-      idx += direction;
-      if (idx < 0) idx = items.length - 1;
-      if (idx >= items.length) idx = 0;
-      attempts++;
-    }
-    // Every item is disabled: leave focus where it was rather than parking the
-    // highlight (and DOM focus) on an item that cannot be activated.
-    if (items[idx].disabled) return;
     this._focusedIndex = idx;
   }
 
@@ -279,12 +310,17 @@ export class DexContextMenu extends LitElement {
     return html`<span class="item-icon">${this._getSvgIcon(icon)}</span>`;
   }
 
-  // The right-hand slot: a reason while disabled, otherwise the shortcut. One slot,
-  // because a disabled item's shortcut is not actionable, and the reason is what the
-  // user needs there instead.
-  private _renderHint(item: ContextMenuItem) {
-    const text = item.disabled && item.reason ? item.reason : item.shortcut;
-    return text ? html`<span class="item-shortcut">${text}</span>` : nothing;
+  // The right-hand slot holds the accelerator and nothing else, so its width is four
+  // characters whatever state the item is in.
+  private _renderShortcut(item: ContextMenuItem) {
+    return item.shortcut ? html`<span class="item-shortcut">${item.shortcut}</span>` : nothing;
+  }
+
+  // One tooltip per item: why it cannot be used, or — when it can — the whole of a label
+  // the menu's width may have clipped. `reason` wins because an item the user cannot act
+  // on raises the question this answers.
+  private _tooltipFor(item: ContextMenuItem): string | undefined {
+    return (item.disabled && item.reason) || item.title || undefined;
   }
 
   private _getSvgIcon(icon: string) {
@@ -329,7 +365,7 @@ export class DexContextMenu extends LitElement {
             <div
               class="item ${item.disabled ? 'disabled' : ''} ${isFocused ? 'focused' : ''}"
               role="menuitem"
-              title="${item.title ?? nothing}"
+              title="${this._tooltipFor(item) ?? nothing}"
               tabindex="${item.disabled ? '-1' : '0'}"
               aria-disabled="${item.disabled ? 'true' : 'false'}"
               @click=${() => this._onItemClick(item)}
@@ -337,7 +373,7 @@ export class DexContextMenu extends LitElement {
             >
               ${this._renderIcon(item.icon)}
               <span class="item-label">${item.label}</span>
-              ${this._renderHint(item)}
+              ${this._renderShortcut(item)}
             </div>
           `;
         })}
