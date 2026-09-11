@@ -45,8 +45,11 @@ export interface MenuInput {
   pasteTarget: PasteTarget | null;
 }
 
-// A display name short enough to keep the menu narrow. The whole name goes in the
-// item's `title`, which is reachable because an item that names an operand is enabled.
+// A display name short enough that the label fits the menu's max-width, with the whole
+// of it in the item's `title`. Truncating HERE rather than leaving it to the CSS ellipsis
+// is what keeps that tooltip informative: it appears only on a label that really was
+// shortened, instead of on every item, repeating what is already on screen. The ellipsis
+// stays as the backstop for a name this bound does not catch.
 const NAME_MAX = 24;
 function shortName(name: string): string {
   return name.length > NAME_MAX ? `${name.slice(0, NAME_MAX - 1)}…` : name;

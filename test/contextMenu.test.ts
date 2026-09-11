@@ -43,6 +43,17 @@ function focusedLabel(el: DexContextMenu): string | undefined {
   return active?.querySelector('.item-label')?.textContent ?? undefined;
 }
 
+// The component's stylesheet as text. Some of what this redesign is are DECLARATIONS, and
+// happy-dom has no layout engine — a measured width here would be 0 whatever the CSS says,
+// so these are read rather than rendered. A test that admits what it checks beats one that
+// measures nothing and looks like it does.
+const CSS = DexContextMenu.styles.map((s) => (s as unknown as { cssText: string }).cssText).join('\n');
+function ruleFor(selector: string): string {
+  const at = CSS.indexOf(`${selector} {`);
+  expect(at, `the stylesheet still has a ${selector} rule`).toBeGreaterThan(-1);
+  return CSS.slice(at, CSS.indexOf('}', at));
+}
+
 const ITEMS: ContextMenuItem[] = [
   { id: 'cut', label: 'Cut', icon: 'cut', shortcut: 'Cmd+X' },
   { id: 'copy', label: 'Copy', icon: 'copy', shortcut: 'Cmd+C' },
@@ -192,50 +203,95 @@ describe('keyboard navigation', () => {
     expect(el.shadowRoot!.querySelectorAll('.item.focused').length).toBe(1);
   });
 
-  it('ArrowDown skips over a disabled item', async () => {
-    // Paste (disabled) sits between Copy and Delete.
+  it('ArrowDown lands ON a disabled item rather than stepping over it', async () => {
+    // Paste (disabled) sits between Copy and Delete. Windows menus stop there too, and
+    // it is the only way a disabled item announces itself, or shows the tooltip holding
+    // the reason it is disabled — skipping it hid the action's existence from everyone
+    // not using a mouse.
     const el = await makeMenu(ITEMS);
     key('ArrowDown'); // Cut
     key('ArrowDown'); // Copy
-    key('ArrowDown'); // skips Paste -> Delete
+    key('ArrowDown'); // Paste, disabled
+    await el.updateComplete;
+    expect(focusedLabel(el)).toBe('Paste');
+    key('ArrowDown');
     await el.updateComplete;
     expect(focusedLabel(el)).toBe('Delete');
   });
 
+  it('Enter on a disabled item fires nothing and leaves the menu open', async () => {
+    // The other half of arrowing onto one: reachable, still not actionable.
+    const el = await makeMenu(ITEMS);
+    const ids = recordActions(el);
+    key('ArrowDown'); // Cut
+    key('ArrowDown'); // Copy
+    key('ArrowDown'); // Paste, disabled
+    key('Enter');
+    expect(ids).toEqual([]);
+    expect(el.hasAttribute('open')).toBe(true);
+  });
+
+  it('marks a focused disabled item so the highlight does not vanish over it', async () => {
+    // A skipped item needed no state of its own. One the keyboard can rest on does, or
+    // passing over it reads as the menu having stopped responding.
+    const el = await makeMenu(ITEMS);
+    key('ArrowDown');
+    key('ArrowDown');
+    key('ArrowDown'); // Paste, disabled
+    await el.updateComplete;
+    const focused = el.shadowRoot!.querySelectorAll('.item.focused');
+    expect(focused.length).toBe(1);
+    expect(focused[0].classList.contains('disabled')).toBe(true);
+
+    // And it must be marked with the SAME ring the :focus-visible rule draws. That rule is
+    // one attribute plus one pseudo-class; this selector is three classes, so it wins
+    // wherever both apply — pick a different ring here and the one item that most needs a
+    // visible focus indication is the only item that never shows one.
+    expect(ruleFor('.item.disabled.focused')).toMatch(/box-shadow:\s*inset var\(--dex-focus-ring/);
+  });
+
   it('ArrowDown wraps from the last item back to the first', async () => {
+    // One press per action item — four of them, the disabled Paste included — and the
+    // fifth comes back round. The separator is not one of them.
     const el = await makeMenu(ITEMS);
     for (let i = 0; i < 4; i++) key('ArrowDown');
+    await el.updateComplete;
+    expect(focusedLabel(el), 'four presses reach the last item').toBe('Delete');
+    key('ArrowDown');
     await el.updateComplete;
     expect(focusedLabel(el)).toBe('Cut');
   });
 
-  it('ArrowUp from the unentered state selects the last enabled item', async () => {
+  it('ArrowUp from the unentered state selects the last item', async () => {
     const el = await makeMenu(ITEMS);
     key('ArrowUp');
     await el.updateComplete;
     expect(focusedLabel(el)).toBe('Delete');
   });
 
-  it('ArrowUp skips a disabled item on the way back up', async () => {
+  it('ArrowUp walks back through every item, disabled ones included', async () => {
     const el = await makeMenu(ITEMS);
     key('ArrowUp'); // Delete
-    key('ArrowUp'); // skips Paste -> Copy
+    key('ArrowUp'); // Paste, disabled
+    await el.updateComplete;
+    expect(focusedLabel(el)).toBe('Paste');
+    key('ArrowUp');
     await el.updateComplete;
     expect(focusedLabel(el)).toBe('Copy');
   });
 
-  it('ArrowUp past a disabled first item wraps to the last item', async () => {
-    // Add Child is disabled on a leaf row, so the first entry is often the
-    // disabled one; arrowing up off the top must not stall there.
+  it('ArrowUp from a disabled FIRST item wraps to the last', async () => {
+    // Add Child is disabled on a leaf row, so the first entry is often the disabled one.
+    // Arrowing up off the top must reach the bottom, not stall.
     const el = await makeMenu([
       { id: 'addChild', label: 'Add Child', disabled: true },
       { id: 'copy', label: 'Copy' },
       { id: 'delete', label: 'Delete' },
     ]);
-    key('ArrowDown'); // skips the disabled first item -> Copy
+    key('ArrowDown'); // Add Child, disabled — entered, not skipped
     await el.updateComplete;
-    expect(focusedLabel(el)).toBe('Copy');
-    key('ArrowUp'); // Add Child is disabled -> wraps past the top to Delete
+    expect(focusedLabel(el)).toBe('Add Child');
+    key('ArrowUp');
     await el.updateComplete;
     expect(focusedLabel(el)).toBe('Delete');
   });
@@ -285,9 +341,10 @@ describe('keyboard navigation', () => {
     expect(ids).toEqual(['delete']);
   });
 
-  it('ArrowDown/Enter on an all-disabled menu focuses nothing and fires nothing', async () => {
-    // Read-only rows can yield a menu where every action is unavailable. Parking
-    // the highlight on an unusable item makes Enter look broken.
+  it('an all-disabled menu is still walkable, and still fires nothing', async () => {
+    // A menu where every action is unavailable used to refuse focus entirely, which
+    // left a keyboard user no way to learn what the greyed-out items even were. It is
+    // navigable now; what it must not do is act.
     const el = await makeMenu([
       { id: 'cut', label: 'Cut', disabled: true },
       { id: 'delete', label: 'Delete', disabled: true },
@@ -295,9 +352,14 @@ describe('keyboard navigation', () => {
     const ids = recordActions(el);
     key('ArrowDown');
     await el.updateComplete;
-    expect(el.shadowRoot!.querySelectorAll('.item.focused').length).toBe(0);
+    expect(focusedLabel(el)).toBe('Cut');
+    key('Enter');
+    key('ArrowDown');
+    await el.updateComplete;
+    expect(focusedLabel(el)).toBe('Delete');
     key('Enter');
     expect(ids).toEqual([]);
+    expect(el.hasAttribute('open')).toBe(true);
   });
 
   it('arrowing an empty menu does not throw', async () => {
@@ -412,40 +474,95 @@ describe('item content', () => {
     expect(label.textContent).toBe('<img src=x onerror=alert(1)>');
   });
 
-  it('shows a disabled item’s reason where its shortcut would go', async () => {
-    // Keyboard navigation skips disabled items, so a `title` tooltip on one can
-    // never be reached — the reason has to be on screen. The shortcut slot is free
-    // because a disabled item's shortcut would not fire anyway.
+  it('puts a disabled item’s reason in its tooltip, and leaves the row alone', async () => {
+    // The reason used to occupy the shortcut slot, which made the menu's WIDTH depend on
+    // which items happened to be disabled: these sentences run to ~45 characters, so one
+    // selection opened a 200px menu and the next a 500px one. As a tooltip it costs the
+    // row nothing, and `title` on an element named by its content is read out as that
+    // element's accessible description — so it reaches a screen reader too, which the
+    // visible column never did, because a disabled item could not be focused at all.
     const el = await makeMenu([
       { id: 'paste', label: 'Paste', shortcut: 'Cmd+V', disabled: true, reason: 'Bus cannot be in Design Data' },
     ]);
-    const slot = el.shadowRoot!.querySelector('.item-shortcut')!;
-    expect(slot.textContent).toBe('Bus cannot be in Design Data');
-  });
-
-  it('keeps the shortcut on an enabled item even when a reason is present', async () => {
-    // A stale reason left on an enabled item must not displace the hint the user
-    // needs; `disabled` is what selects between them.
-    const el = await makeMenu([
-      { id: 'paste', label: 'Paste', shortcut: 'Cmd+V', reason: 'ignored' },
-    ]);
+    const item = itemEls(el)[0];
+    expect(item.getAttribute('title')).toBe('Bus cannot be in Design Data');
+    // The accelerator keeps its slot; nothing in the row grew.
     expect(el.shadowRoot!.querySelector('.item-shortcut')!.textContent).toBe('Cmd+V');
   });
 
-  it('shows a reason on a disabled item that has no shortcut', async () => {
+  it('the reason displaces a title, because why beats what on an unusable item', async () => {
+    // Both can be set at once: Cut names a long entry (title) and is refused for a
+    // reason. One tooltip slot, and the reason is the sentence the user is asking for.
     const el = await makeMenu([
-      { id: 'addChild', label: 'Add Child', disabled: true, reason: 'this item takes no children' },
+      { id: 'cut', label: 'Cut "SomeVeryLongEntryNam…"', title: 'SomeVeryLongEntryNameIndeed', disabled: true, reason: "\"Element\" can't be cut" },
     ]);
-    expect(el.shadowRoot!.querySelector('.item-shortcut')!.textContent).toBe('this item takes no children');
+    expect(itemEls(el)[0].getAttribute('title')).toBe("\"Element\" can't be cut");
   });
 
-  it('renders a hostile reason as text, not markup', async () => {
+  it('shows the full label as the tooltip when the item is usable', async () => {
+    const el = await makeMenu([
+      { id: 'copy', label: 'Copy "SomeVeryLongEntryNam…"', title: 'SomeVeryLongEntryNameIndeed' },
+    ]);
+    expect(itemEls(el)[0].getAttribute('title')).toBe('SomeVeryLongEntryNameIndeed');
+  });
+
+  it('ignores a reason left on an ENABLED item', async () => {
+    // `disabled` is what selects between the two, so a stale reason cannot shadow the
+    // label's own tooltip — nor appear on an item that works.
+    const el = await makeMenu([
+      { id: 'paste', label: 'Paste', shortcut: 'Cmd+V', reason: 'ignored', title: 'Paste' },
+    ]);
+    expect(itemEls(el)[0].getAttribute('title')).toBe('Paste');
+  });
+
+  it('renders a hostile reason as an attribute value, not markup', async () => {
     // A reason embeds an entry name and a section label, both from the opened file.
     const el = await makeMenu([
       { id: 'x', label: 'Paste', disabled: true, reason: '<img src=x onerror=alert(1)>' },
     ]);
-    const slot = el.shadowRoot!.querySelector('.item-shortcut')!;
-    expect(slot.querySelectorAll('img').length).toBe(0);
-    expect(slot.textContent).toBe('<img src=x onerror=alert(1)>');
+    const item = itemEls(el)[0];
+    expect(item.getAttribute('title')).toBe('<img src=x onerror=alert(1)>');
+    expect(el.shadowRoot!.querySelectorAll('img').length).toBe(0);
+  });
+
+  it('sets no title at all when there is nothing to say', async () => {
+    // An empty `title=""` is a tooltip that flashes blank on hover.
+    const el = await makeMenu([{ id: 'undo', label: 'Undo', shortcut: 'Cmd+Z' }]);
+    expect(itemEls(el)[0].hasAttribute('title')).toBe(false);
+  });
+});
+
+// The reported defect was the menu's SHAPE: it resized with the selection, because the
+// widest string in it was a ~45-character sentence that only some items carried. Moving
+// that sentence to a tooltip is half the fix; the other half is these three declarations,
+// which together bound the width whatever the labels say. They are asserted as CSS text,
+// not as measured boxes — happy-dom has no layout engine, so a rendered width here would
+// be 0 either way, and a test that measures nothing is worse than one that admits it.
+describe('a width that does not follow the selection', () => {
+  it('bounds the menu at both ends rather than fitting it to its content', () => {
+    // An upper bound alone would let a section menu shrink to a tooltip; a lower bound
+    // alone is what shipped, and is what stretched.
+    const menuRule = ruleFor('.menu');
+    expect(menuRule).toMatch(/min-width:\s*220px/);
+    expect(menuRule).toMatch(/max-width:\s*320px/);
+  });
+
+  it('clips the label, and only the label', () => {
+    // `min-width: 0` is load-bearing: a flex item defaults to `min-width: auto` and
+    // refuses to shrink below its content, so the ellipsis never engages and the max-width
+    // above is overrun instead of respected. All three declarations or none.
+    const label = ruleFor('.item-label');
+    expect(label).toMatch(/min-width:\s*0/);
+    expect(label).toMatch(/text-overflow:\s*ellipsis/);
+    expect(label).toMatch(/white-space:\s*nowrap/);
+  });
+
+  it('never gives way on the accelerator', () => {
+    // Four characters, unreadable clipped — the label absorbs the shortfall instead. The
+    // old `max-width` here existed to cap the REASON text this slot used to hold; with
+    // the reason gone it would only have invited the shortcut to wrap.
+    const shortcut = ruleFor('.item-shortcut');
+    expect(shortcut).toMatch(/flex-shrink:\s*0/);
+    expect(shortcut).not.toMatch(/max-width/);
   });
 });
