@@ -152,7 +152,7 @@ describe('.sldd table→text write-back (round-trip)', () => {
   it('rename yields a new node id that matches a row in the rebuilt tree', () => {
     // The rename re-selection relies on: after setProperty('Name'), node.id
     // reflects the new name, and the rebuilt tree contains a row with that exact
-    // ID. If these ever diverge, the host would post a selectRow id that no row
+    // ID. If these ever diverge, the host would post a selectRows id that no row
     // has and the selection would be lost — the very bug this guards.
     const uri = 'test://wb-reselect.sldd';
     invalidate(uri);
@@ -169,7 +169,7 @@ describe('.sldd table→text write-back (round-trip)', () => {
     expect(newId).not.toBe(oldId);
 
     // The rebuilt tree (what post() sends after the rename) has a row with the
-    // new id — so the host's selectRow(newId) will match and selection survives.
+    // new id — so the host's selectRows([newId]) will match and selection survives.
     const rows = buildRows(model);
     expect(rows.some((r: any) => r.ID === newId)).toBe(true);
     expect(rows.some((r: any) => r.ID === oldId)).toBe(false);

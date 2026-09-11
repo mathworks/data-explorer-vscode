@@ -41,138 +41,31 @@ import { unzipSync } from 'fflate';
 import { SC_PART_XML } from 'data-explorer-core';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-
-function ctx(): vscode.ExtensionContext {
-  const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
-  assert.ok(ext, 'the extension must be present');
-  return { extensionUri: ext!.extensionUri } as unknown as vscode.ExtensionContext;
-}
-
-function ws(): vscode.Uri {
-  const folder = vscode.workspace.workspaceFolders?.[0];
-  assert.ok(folder, 'a workspace folder must be open');
-  return folder!.uri;
-}
-
-function wsUri(name: string): vscode.Uri {
-  return vscode.Uri.joinPath(ws(), name);
-}
-
-function token(): vscode.CancellationToken {
-  return new vscode.CancellationTokenSource().token;
-}
-
-const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/**
- * Wait for the thing itself, with a generous cap, instead of sleeping for however long it
- * is expected to take.
- *
- * The JSON path is asynchronous — the host applies a WorkspaceEdit and VS Code decides when
- * that lands — and this file's gestures walk and reserialize far more of a dictionary than
- * the single-cell edits the suite's usual fixed sleeps were calibrated against. A sleep is
- * the wrong shape for that twice over: too short and it fails as a confusing assertion
- * about rows rather than as a timeout, too long and every test pays for the worst case.
- */
-async function waitFor(what: string, done: () => boolean, ms = 20000): Promise<void> {
-  const deadline = Date.now() + ms;
-  while (!done()) {
-    assert.ok(Date.now() < deadline, `timed out after ${ms}ms waiting for ${what}`);
-    await settle(20);
-  }
-}
+import {
+  chunkOf,
+  childrenOf,
+  ctx,
+  entryNames,
+  fakePanel,
+  isEntryRow,
+  isHeader,
+  nameOf,
+  rowNamed,
+  settle,
+  token,
+  waitFor,
+  ws,
+  wsUri,
+} from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-// The panel a provider talks to, with the messages it sent captured and a way to send it
-// the ones the webview would. Copied from undoOfTableEdit.test.ts, which is the only
-// established way in this suite to reach a provider's message handler at all — there is no
-// route to the REGISTERED provider instance (activate() returns no API), so every test
-// builds its own.
-//
-// `close()` is this copy's addition, and it is not cosmetic. Both providers register their
-// teardown INSIDE `webviewPanel.onDidDispose` — and among the subscriptions it disposes are
-// global ones (`workspace.onDidChangeTextDocument`, `onDidSaveTextDocument`, the nav-select
-// relay). A stub that drops the callback leaks all of them for the lifetime of the test
-// process, and this file opens eight views. Each leak is a no-op afterwards (every handler
-// re-checks the document URI, which by then is deleted), so it is a leak rather than a bug —
-// but eight of them in one file is where "harmless" stops being a good enough answer.
-function fakePanel(): {
-  panel: vscode.WebviewPanel;
-  posts: any[];
-  send: (msg: any) => void;
-  close: () => void;
-} {
-  const posts: any[] = [];
-  let onMessage: ((msg: any) => void) | null = null;
-  let onDispose: (() => void) | null = null;
-  const panel = {
-    iconPath: undefined,
-    webview: {
-      options: {},
-      html: '',
-      cspSource: 'vscode-webview:',
-      asWebviewUri: (u: vscode.Uri) => u,
-      postMessage: async (msg: any) => {
-        posts.push(msg);
-        return true;
-      },
-      onDidReceiveMessage: (cb: (msg: any) => void) => {
-        onMessage = cb;
-        return { dispose() {} };
-      },
-    },
-    onDidDispose: (cb: () => void) => {
-      onDispose = cb;
-      return { dispose() {} };
-    },
-    onDidChangeViewState: () => ({ dispose() {} }),
-    dispose() {},
-  } as unknown as vscode.WebviewPanel;
-  return {
-    panel,
-    posts,
-    send: (msg: any) => {
-      assert.ok(onMessage, 'the provider subscribed to webview messages');
-      onMessage!(msg);
-    },
-    close: () => onDispose?.(),
-  };
-}
-
-// --- reading a .sldd the way its own format spells it -----------------------------------
-
-const CHUNK = '__MW_TEXT_PART__/data/chunk0';
-
-/** The parsed `data/chunk0` content of a JSON .sldd: `entries`, `Dictionary References`. */
-function chunkOf(text: string): any {
-  const doc = JSON.parse(text);
-  const content = doc?.__MW_TEXT_PARTS__?.[CHUNK]?.__MW_TEXT_content;
-  assert.ok(content, 'the document still spells a data/chunk0 part');
-  return content;
-}
-
-const entryNames = (text: string): string[] =>
-  ((chunkOf(text).entries ?? []) as any[]).map((e) => e.name);
-
-// --- the rows a table holds ------------------------------------------------------------
-
-const isHeader = (row: any): boolean => String(row.ID).startsWith('section:');
-const isEntryRow = (row: any): boolean => String(row.parent ?? '').startsWith('section:');
-const nameOf = (row: any): string => row?.Name?.label ?? String(row?.ID ?? '');
 // An ARRAY's child rows, which core labels `name(3)` / `name{1,2}` (its subscriptLabel).
 // They are the one kind of child this file's container assertions cannot use: the label is
 // a position rather than a name, so the file never spells it, and shrinking the array to
 // one element leaves a scalar with no child rows at all rather than a container holding
 // one. Both are correct behaviour and neither is this test's subject.
 const isElementRow = (row: any): boolean => /[({][\d,\s]+[)}]$/.test(nameOf(row));
-const childrenOf = (rows: any[], parentId: string): any[] =>
-  rows.filter((r) => r.parent === parentId);
-const rowNamed = (rows: any[], name: string): any => {
-  const row = rows.find((r) => isEntryRow(r) && nameOf(r) === name);
-  assert.ok(row, `the table has an entry row for "${name}"`);
-  return row;
-};
 
 /**
  * Open a working copy of a JSON fixture through the real provider, let the caller choose a
@@ -215,7 +108,7 @@ async function deleteFromJson(
         (doc.version > versionBefore &&
           view.posts.some((m) => m.type === 'updateEntryRows' || m.type === 'setRows')),
     );
-    // The repaint is what the wait above catches; `selectRow` follows it. Small and fixed
+    // The repaint is what the wait above catches; `selectRows` follows it. Small and fixed
     // because it is a tail, not the work.
     await settle(150);
 
@@ -251,12 +144,14 @@ suite('Select-all then Delete, on a JSON .sldd', () => {
     assert.strictEqual(chunk.AllowAccessBWS, false, 'and the sibling properties are untouched');
 
     // Nothing is left selected that no longer exists. The table asks for a landing row.
-    const landed = run.posts.filter((m) => m.type === 'selectRow').pop();
+    const landed = run.posts.filter((m) => m.type === 'selectRows').pop();
     assert.ok(landed, 'the host named a row for the selection to land on');
-    assert.ok(
-      String(landed.rowId).startsWith('section:'),
-      `with every entry gone the only place left is a header (got ${landed.rowId})`,
+    assert.deepStrictEqual(
+      (landed.rowIds as string[]).filter((id) => !id.startsWith('section:')),
+      [],
+      `with every entry gone the only place left is a header (got ${JSON.stringify(landed.rowIds)})`,
     );
+    assert.ok(landed.rowIds.length, 'and it named one');
   }).timeout(60000);
 
   test('collapsed and expanded select-all produce the SAME file', async () => {
@@ -574,12 +469,14 @@ suite('The same two gestures, on a compressed-binary .sldd', () => {
       'the pass-through part survived the widest delete there is',
     );
 
-    const landed = run.posts.filter((m) => m.type === 'selectRow').pop();
+    const landed = run.posts.filter((m) => m.type === 'selectRows').pop();
     assert.ok(landed, 'the host named a row for the selection to land on');
-    assert.ok(
-      String(landed.rowId).startsWith('section:'),
-      `with every entry gone the only place left is a header (got ${landed.rowId})`,
+    assert.deepStrictEqual(
+      (landed.rowIds as string[]).filter((id) => !id.startsWith('section:')),
+      [],
+      `with every entry gone the only place left is a header (got ${JSON.stringify(landed.rowIds)})`,
     );
+    assert.ok(landed.rowIds.length, 'and it named one');
   }).timeout(60000);
 
   test('collapsed and expanded select-all produce the SAME payload', async () => {

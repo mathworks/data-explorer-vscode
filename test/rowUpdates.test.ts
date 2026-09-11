@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { nextExpandedIds, nextStickyIds, spliceEntryRows, insertEntryRows } from '../src/webview/rowUpdates.js';
+import { nextExpandedIds, nextStickyIds, pendingSelectionToApply, spliceEntryRows, insertEntryRows } from '../src/webview/rowUpdates.js';
 import { getModel } from '../src/host/SlddModel.js';
 import { buildRows, buildEntryRows } from '../src/host/rowBuilder.js';
 
@@ -252,7 +252,7 @@ describe('nextStickyIds — a filtered list holds still across a repaint', () =>
   ];
 
   it('keeps the ids that were visible, so an edited row cannot vanish', () => {
-    expect(nextStickyIds('gain', ['section:P', 'section:P/Gain'], rows, null)).toEqual(
+    expect(nextStickyIds('gain', ['section:P', 'section:P/Gain'], rows, [])).toEqual(
       new Set(['section:P', 'section:P/Gain']),
     );
   });
@@ -261,11 +261,11 @@ describe('nextStickyIds — a filtered list holds still across a repaint', () =>
     // Without a filter the set would hold every visible id in the document —
     // ~130,000 on a real customer dictionary — and buy nothing: an unfiltered
     // view hides no rows to begin with.
-    expect(nextStickyIds('', ['section:P', 'section:P/Gain'], rows, null)).toEqual(new Set());
+    expect(nextStickyIds('', ['section:P', 'section:P/Gain'], rows, [])).toEqual(new Set());
   });
 
   it('drops ids that no longer exist, so a deleted row does not linger', () => {
-    expect(nextStickyIds('gain', ['section:P/Gain', 'section:P/Deleted'], rows, null)).toEqual(
+    expect(nextStickyIds('gain', ['section:P/Gain', 'section:P/Deleted'], rows, [])).toEqual(
       new Set(['section:P/Gain']),
     );
   });
@@ -278,13 +278,68 @@ describe('nextStickyIds — a filtered list holds still across a repaint', () =>
       { ID: 'section:P', parent: null },
       { ID: 'section:P/Renamed', parent: 'section:P' },
     ];
-    expect(nextStickyIds('gain', ['section:P', 'section:P/Gain'], renamed, 'section:P/Renamed')).toEqual(
+    expect(nextStickyIds('gain', ['section:P', 'section:P/Gain'], renamed, ['section:P/Renamed'])).toEqual(
       new Set(['section:P', 'section:P/Renamed']),
     );
   });
 
   it('ignores a selection that is not in the new rows', () => {
-    expect(nextStickyIds('gain', [], rows, 'section:P/Absent')).toEqual(new Set());
+    expect(nextStickyIds('gain', [], rows, ['section:P/Absent'])).toEqual(new Set());
+  });
+
+  it('keeps EVERY row of a multi-entry paste in a filtered list, not just the last', () => {
+    // The paste appends N entries and the host names all N. Only the ones held here
+    // survive the filter, so keeping one would leave the user selecting rows the search
+    // has hidden — which is the same defect this whole set exists to prevent.
+    const pasted: Row[] = [
+      { ID: 'section:P', parent: null },
+      { ID: 'section:P/Bus1', parent: 'section:P' },
+      { ID: 'section:P/Bus2', parent: 'section:P' },
+    ];
+    expect(nextStickyIds('gain', [], pasted, ['section:P/Bus1', 'section:P/Bus2'])).toEqual(
+      new Set(['section:P/Bus1', 'section:P/Bus2']),
+    );
+  });
+});
+
+// The retry the host's `selectRows` message goes through: it names rows the model already
+// holds, but the ROWS may still be in flight, so it is re-tried after every repaint.
+describe('pendingSelectionToApply — all of the asked-for selection, or none yet', () => {
+  const rows: Row[] = [
+    { ID: 'section:P', parent: null },
+    { ID: 'section:P/Bus1', parent: 'section:P' },
+    { ID: 'section:P/Bus2', parent: 'section:P' },
+  ];
+
+  it('applies every id once they are all present', () => {
+    expect(pendingSelectionToApply(rows, ['section:P/Bus1', 'section:P/Bus2'])).toEqual([
+      'section:P/Bus1',
+      'section:P/Bus2',
+    ]);
+  });
+
+  it('holds while ANY id is still missing, rather than selecting the half that arrived', () => {
+    // A partial answer is both wrong and final: applying it consumes the pending ids, so
+    // the entries still in flight would never join the selection.
+    expect(pendingSelectionToApply(rows, ['section:P/Bus1', 'section:P/Bus3'])).toBeNull();
+  });
+
+  it('holds when the whole selection is absent — the pre-repaint state of every paste', () => {
+    expect(pendingSelectionToApply(rows, ['section:P/Bus3'])).toBeNull();
+  });
+
+  it('has nothing to do when nothing is pending', () => {
+    expect(pendingSelectionToApply(rows, [])).toBeNull();
+  });
+
+  it('preserves the host’s order, which is the order the entries were added', () => {
+    // selectedRowIds' LAST id is what the table scrolls to (dex-tree-table's
+    // selectedRowId), so reordering here would move the viewport to a different member
+    // of the group than the one the host's fold ended on.
+    expect(pendingSelectionToApply(rows, ['section:P/Bus2', 'section:P/Bus1'])).toEqual([
+      'section:P/Bus2',
+      'section:P/Bus1',
+    ]);
   });
 });
 

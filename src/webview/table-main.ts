@@ -7,7 +7,7 @@ import './components/dex-error-dialog.js';
 import './components/dex-variable-editor.js';
 import { installMatrixOpen } from './matrixOpen.js';
 import { renderBanners } from './banners.js';
-import { nextExpandedIds, nextStickyIds, spliceEntryRows, insertEntryRows } from './rowUpdates.js';
+import { nextExpandedIds, nextStickyIds, pendingSelectionToApply, spliceEntryRows, insertEntryRows } from './rowUpdates.js';
 import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from './menuItems.js';
 import { dropDecision, type DragMode, type DropTarget, type DragSource } from './dropDecision.js';
 import { sectionRowIdOf } from './operands.js';
@@ -151,19 +151,21 @@ function predictDrop(
   return dropDecision(source, target, mode);
 }
 
-// A row id the host asked us to select once it exists in the table. Set on a
-// rename (the row's id changes, so the old selection is stale); applied as soon
-// as a matching row is present, otherwise held until the rebuilt rows arrive.
-let pendingSelectId: string | null = null;
+// The rows the host asked us to select once they exist in the table. Set on a rename (the
+// row's id changes, so the old selection is stale), and on every edit that ADDS rows — a
+// paste or a drop of several entries names all of them, so the selection lands on the
+// whole group the user just created rather than on its last member. Applied as soon as
+// they are all present, otherwise held until the rebuilt rows arrive.
+let pendingSelectIds: string[] = [];
 
 function applyPendingSelection(): void {
-  if (!pendingSelectId) return;
-  const rows = (table.rows ?? []) as { ID: string }[];
-  if (!rows.some((r) => r.ID === pendingSelectId)) return;
-  table.selectedRowIds = [pendingSelectId];
-  // Keep the host (Property Inspector) in sync with the re-selected row.
-  vscode.postMessage({ type: 'select', rowIds: [pendingSelectId] });
-  pendingSelectId = null;
+  const rows = (table.rows ?? []) as { ID: string; parent: string | null }[];
+  const toSelect = pendingSelectionToApply(rows, pendingSelectIds);
+  if (!toSelect) return;
+  table.selectedRowIds = toSelect;
+  // Keep the host (Property Inspector) in sync with the re-selected rows.
+  vscode.postMessage({ type: 'select', rowIds: toSelect });
+  pendingSelectIds = [];
 }
 
 // A name a navigation asked us to select once its row exists. Set on a cross-tab
@@ -247,17 +249,17 @@ function installRows(rows: any[]): void {
   // sections-only on first load. Never collapse the tree under the user.
   table._expandedIds = nextExpandedIds(prevExpanded, rows);
   // Preserve the filtered list: rows edited out of the active search stay until the
-  // user searches again. pendingSelectId — the row the host wants selected after this
-  // edit, so a renamed row under its new id, or a pasted one — is still unread here;
-  // applyPendingSelection() below is what consumes it.
-  table._stickyRowIds = nextStickyIds(table._filterText ?? '', prevVisible, rows, pendingSelectId);
+  // user searches again. pendingSelectIds — the rows the host wants selected after this
+  // edit, so a renamed row under its new id, or the entries a paste added — are still
+  // unread here; applyPendingSelection() below is what consumes them.
+  table._stickyRowIds = nextStickyIds(table._filterText ?? '', prevVisible, rows, pendingSelectIds);
   table._visibleRowsCache = null;
   const present = new Set(rows.map((r: { ID: string }) => r.ID));
   const stillSelected = prevSelected.filter((id) => present.has(id));
   if (stillSelected.length > 0) table.selectedRowIds = stillSelected;
   if (typeof table.requestUpdate === 'function') table.requestUpdate();
-  // A rename/structural edit posts selectRow then triggers this rebuild;
-  // re-apply now that the row with the new id exists.
+  // A rename/structural edit posts selectRows then triggers this rebuild;
+  // re-apply now that the rows it named exist.
   applyPendingSelection();
   // A cross-tab navigation may be waiting for its target row to appear.
   applyPendingNameSelection();
@@ -325,10 +327,10 @@ window.addEventListener('message', (event: MessageEvent) => {
     // variable). Apply now if present, else hold until the next setRows.
     pendingSelectName = typeof msg.name === 'string' ? msg.name : null;
     applyPendingNameSelection();
-  } else if (msg.type === 'selectRow') {
-    // Re-select a row by id (e.g. after a rename changed its id). Apply now if
-    // the row is already present, else stash until the next setRows rebuild.
-    pendingSelectId = typeof msg.rowId === 'string' ? msg.rowId : null;
+  } else if (msg.type === 'selectRows') {
+    // Select rows by id (a rename changed one, a paste added several). Apply now if they
+    // are all present, else stash until a rebuild brings the rest.
+    pendingSelectIds = Array.isArray(msg.rowIds) ? msg.rowIds.filter((id) => typeof id === 'string') : [];
     applyPendingSelection();
   } else if (msg.type === 'clipboardState') {
     clipboardState = {

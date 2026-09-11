@@ -640,7 +640,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         const redoOps = attempt(() => [replaceOp(entry, entryRowId)]);
         document.pushEdit(label, before, newText, undoOps && redoOps ? { undo: undoOps, redo: redoOps } : undefined);
         document.repaintOps([{ kind: 'replace', entryRowId, entry }]);
-        if (selectId) webview.postMessage({ type: 'selectRow', rowId: selectId });
+        if (selectId) webview.postMessage({ type: 'selectRows', rowIds: [selectId] });
       } catch (err) {
         // These transforms mutate the model BEFORE they splice the text
         // (removeChildFromModel / addChildToModel), so a transform that throws half-way
@@ -678,7 +678,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         const applied = applyEntryOps(liveModel(), [removeOp(entryRowId)]);
         document.pushEdit('Delete', before, newText, patch);
         document.repaintOps(applied);
-        if (selectId) webview.postMessage({ type: 'selectRow', rowId: selectId });
+        if (selectId) webview.postMessage({ type: 'selectRows', rowIds: [selectId] });
       } catch (err) {
         // Nothing was pushed, so chunkXml is untouched; the model may not be. Rebuild
         // from the text, which is the state the user still has.
@@ -753,7 +753,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         document.pushEdit('Delete', before, working, patch);
         document.repaintOps(applied);
         const landing = entrySelectId ?? childSelectId;
-        if (landing) webview.postMessage({ type: 'selectRow', rowId: landing });
+        if (landing) webview.postMessage({ type: 'selectRows', rowIds: [landing] });
       } catch (err) {
         // Nothing was pushed, so chunkXml is untouched; the model may not be — the child
         // removals happen before the splice. Rebuild from the text, then say so (the
@@ -859,7 +859,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           : null;
         document.pushEdit('Edit ' + msg.columnId, before, after, patch, scPart ?? undefined);
         document.repaintOps([{ kind: 'replace', entryRowId, entry }]);
-        if (msg.columnId === 'Name') webview.postMessage({ type: 'selectRow', rowId: node.id });
+        if (msg.columnId === 'Name') webview.postMessage({ type: 'selectRows', rowIds: [node.id] });
       } catch (err) {
         // Same reason as the !span branch, in both halves: setProperty may have landed
         // before the throw, and the repaint clears the banner the message writes.
@@ -965,7 +965,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         document.pushEdit('Paste', before, newText, narrow ? patchOfPairs(pairs) : undefined);
         if (narrow) document.repaintOps(applied);
         else document.repaintAll();
-        if (selectIds.length) webview.postMessage({ type: 'selectRow', rowId: selectIds[selectIds.length - 1] });
+        if (selectIds.length) webview.postMessage({ type: 'selectRows', rowIds: selectIds });
         try {
           // A cross-document cut removes the source from ITS document via that
           // document's own format-appropriate deleter (JSON or binary), a second
@@ -1092,7 +1092,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         document.pushEdit(isMove ? 'Move' : 'Copy', before, newText, narrow ? patchOfPairs(pairs) : undefined);
         if (narrow) document.repaintOps(applied);
         else document.repaintAll();
-        if (selectIds.length) webview.postMessage({ type: 'selectRow', rowId: selectIds[selectIds.length - 1] });
+        if (selectIds.length) webview.postMessage({ type: 'selectRows', rowIds: selectIds });
 
         // Cross-document move: remove the originals from the SOURCE document via
         // its own deleter (a second native undo step on that document).
