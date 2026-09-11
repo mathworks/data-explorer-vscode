@@ -19,6 +19,13 @@ export interface ContextMenuItem {
    * obvious from the row — a paste the target's rules refuse, for instance.
    */
   reason?: string;
+  /**
+   * The full text when the label is abbreviated — an entry name truncated to keep the
+   * menu narrow. A hover tooltip is enough here (unlike `reason`, which has to be
+   * visible because keyboard focus skips disabled items): an item whose label names an
+   * operand is an ENABLED item, so it is reachable both ways.
+   */
+  title?: string;
 }
 
 @customElement('dex-context-menu')
@@ -322,6 +329,7 @@ export class DexContextMenu extends LitElement {
             <div
               class="item ${item.disabled ? 'disabled' : ''} ${isFocused ? 'focused' : ''}"
               role="menuitem"
+              title="${item.title ?? nothing}"
               tabindex="${item.disabled ? '-1' : '0'}"
               aria-disabled="${item.disabled ? 'true' : 'false'}"
               @click=${() => this._onItemClick(item)}
