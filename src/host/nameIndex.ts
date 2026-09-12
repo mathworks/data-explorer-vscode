@@ -15,7 +15,7 @@
 import * as vscode from 'vscode';
 import { mapLimited, readForScan } from './scanRead.js';
 import { isMatFile, isModelFile, isSlddFile, parseModel, parseMat } from 'data-explorer-core';
-import { readSlddContent } from './slddContent.js';
+import { scanSldd } from './slddContent.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import { basename } from '../common/pathUtil.js';
 import { GRAPH_GLOB } from '../common/fileTypes.js';
@@ -142,7 +142,11 @@ async function recordsForFile(uri: vscode.Uri): Promise<NameRecord[]> {
       return namesFromMat(parsed, uriString);
     }
     if (isSlddFile(path)) {
-      return namesFromSldd(readSlddContent(ab), uriString);
+      // Scanned, not parsed: this index wants one string per entry and used to build a
+      // whole DOM to get them. Same refusal policy either way — see slddContent.ts — so
+      // an unreadable dictionary still throws and still contributes nothing, via the
+      // catch below.
+      return namesFromSldd(scanSldd(ab).names, uriString);
     }
   } catch {
     /* unreadable/corrupt file contributes nothing */

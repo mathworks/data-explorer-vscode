@@ -7,36 +7,31 @@ import {
   type NameRecord,
 } from '../src/host/nameExtract.js';
 
-// Build the in-memory .sldd content shape (__MW_TEXT_PARTS__ ... entries[]).
-function slddContent(entries: { name?: string }[]): Record<string, unknown> {
-  return {
-    __MW_TEXT_PARTS__: {
-      '__MW_TEXT_PART__/data/chunk0': {
-        __MW_TEXT_content: { entries },
-      },
-    },
-  };
-}
+// The `__MW_TEXT_PARTS__` content shape this file used to build by hand is GONE from
+// these tests, and deliberately so: `namesFromSldd` now takes the names core's `scanSldd`
+// read, so the three-key path is core's to know and core's to test. A hand-written copy of
+// it here was a fourth spelling that could drift from the two writers — and drift silently,
+// since a wrong key yields no entries rather than an error.
 
 describe('namesFromSldd', () => {
   it('extracts entry names with kind sldd and the uri basename as sourceLabel', () => {
-    const content = slddContent([{ name: 'Kp' }, { name: 'Ts' }]);
-    const records = namesFromSldd(content, 'file:///w/dict.sldd');
+    const records = namesFromSldd(['Kp', 'Ts'], 'file:///w/dict.sldd');
     expect(records).toEqual<NameRecord[]>([
       { name: 'Kp', sourceUri: 'file:///w/dict.sldd', sourceLabel: 'dict.sldd', kind: 'sldd' },
       { name: 'Ts', sourceUri: 'file:///w/dict.sldd', sourceLabel: 'dict.sldd', kind: 'sldd' },
     ]);
   });
 
-  it('drops empty/missing names', () => {
-    const content = slddContent([{ name: 'Keep' }, { name: '' }, {}, { name: undefined }]);
-    const records = namesFromSldd(content, 'file:///w/dict.sldd');
-    expect(records.map((r) => r.name)).toEqual(['Keep']);
+  it('drops the empty name core reports for an unnamed entry', () => {
+    // Core KEEPS that '' on purpose — it holds the entry's position for a consumer that
+    // indexes positionally. This index is not one, so an unnamed entry contributes no
+    // record, which is what it did when this walked the entry objects itself.
+    const records = namesFromSldd(['Keep', '', 'Also'], 'file:///w/dict.sldd');
+    expect(records.map((r) => r.name)).toEqual(['Keep', 'Also']);
   });
 
-  it('returns [] for empty / malformed content', () => {
-    expect(namesFromSldd({}, 'file:///w/dict.sldd')).toEqual([]);
-    expect(namesFromSldd(slddContent([]), 'file:///w/dict.sldd')).toEqual([]);
+  it('returns [] for a dictionary with no entries', () => {
+    expect(namesFromSldd([], 'file:///w/dict.sldd')).toEqual([]);
   });
 });
 
@@ -176,8 +171,8 @@ describe('namesFromSlx', () => {
 
 describe('dup-preserving across sources', () => {
   it('the same entry name in two different sources yields two distinct records', () => {
-    const a = namesFromSldd(slddContent([{ name: 'Shared' }]), 'file:///w/a.sldd');
-    const b = namesFromSldd(slddContent([{ name: 'Shared' }]), 'file:///w/b.sldd');
+    const a = namesFromSldd(['Shared'], 'file:///w/a.sldd');
+    const b = namesFromSldd(['Shared'], 'file:///w/b.sldd');
     const all = [...a, ...b];
     expect(all).toHaveLength(2);
     expect(all.map((r) => r.sourceUri)).toEqual(['file:///w/a.sldd', 'file:///w/b.sldd']);
