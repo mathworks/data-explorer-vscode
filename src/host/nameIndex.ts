@@ -14,7 +14,7 @@
 // name-extraction core lives in nameExtract.ts (unit-tested).
 import * as vscode from 'vscode';
 import { mapLimited, readForScan } from './scanRead.js';
-import { isMatFile, isModelFile, isSlddFile, parseModel, parseMat } from 'data-explorer-core';
+import { isMatFile, isModelFile, isSlddFile, parseModel, scanMat } from 'data-explorer-core';
 import { scanSldd } from './slddContent.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import { basename } from '../common/pathUtil.js';
@@ -138,8 +138,12 @@ async function recordsForFile(uri: vscode.Uri): Promise<NameRecord[]> {
       return namesFromSlx(parsed, uriString);
     }
     if (isMatFile(path)) {
-      const parsed = parseMat(ab);
-      return namesFromMat(parsed, uriString);
+      // Scanned, not parsed, for the same reason as the dictionary below — and no wrapper
+      // is needed here, unlike `scanSldd`: core's MAT scanner refuses every doubt and hands
+      // the file to `parseMat`, so a file the full parser rejects still throws (into the
+      // catch below) and a file it repairs still yields the repaired names. The only thing
+      // lost is `parseMat`'s warnings, which this index never read.
+      return namesFromMat(scanMat(ab).names, uriString);
     }
     if (isSlddFile(path)) {
       // Scanned, not parsed: this index wants one string per entry and used to build a

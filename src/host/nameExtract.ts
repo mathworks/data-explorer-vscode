@@ -75,9 +75,19 @@ export function namesFromSldd(names: readonly string[], sourceUri: string): Name
   return nameRecords(names, (name) => name, sourceUri, 'sldd');
 }
 
-// Variable names from a parsed .mat.
-export function namesFromMat(parsed: { variables: { name?: string }[] }, sourceUri: string): NameRecord[] {
-  return nameRecords(parsed?.variables ?? [], (v) => v?.name, sourceUri, 'mat');
+// Variable names from a .mat.
+//
+// A LIST OF NAMES, as `namesFromSldd` above takes, and for the same reason: core's
+// `scanMat` reads a .mat's variable names without decoding a single value, which is 189x
+// over the customer corpus because this index reads one string per variable and threw
+// every matrix — every element of every matrix — away.
+//
+// Empty names are dropped here and core's scanner deliberately KEEPS them, exactly as on
+// the .sldd side. It matters more here: EVERY .mat holding an MCOS object carries a
+// trailing anonymous element, so this is not an edge case but the common shape, and a
+// positional caller that lost it would misname every variable after it.
+export function namesFromMat(names: readonly string[], sourceUri: string): NameRecord[] {
+  return nameRecords(names, (name) => name, sourceUri, 'mat');
 }
 
 // Model-workspace variable names (kind 'workspace') plus referenced blocks

@@ -37,28 +37,23 @@ describe('namesFromSldd', () => {
 
 describe('namesFromMat', () => {
   it('extracts variable names with kind mat', () => {
-    const records = namesFromMat({ variables: [{ name: 'Mv' }, { name: 'Gain' }] }, 'file:///w/data.mat');
+    const records = namesFromMat(['Mv', 'Gain'], 'file:///w/data.mat');
     expect(records).toEqual<NameRecord[]>([
       { name: 'Mv', sourceUri: 'file:///w/data.mat', sourceLabel: 'data.mat', kind: 'mat' },
       { name: 'Gain', sourceUri: 'file:///w/data.mat', sourceLabel: 'data.mat', kind: 'mat' },
     ]);
   });
 
-  it('drops empty/missing names and tolerates empty input', () => {
-    expect(namesFromMat({ variables: [{ name: '' }, {}, { name: 'X' }] }, 'file:///w/d.mat').map((r) => r.name)).toEqual([
-      'X',
+  it('drops the empty name core reports for the anonymous element every MCOS .mat carries', () => {
+    // Not a hypothetical shape: core reports one trailing '' for any .mat holding a
+    // Simulink object, so this is the common case and not a broken file. Core keeps it to
+    // hold the variable's POSITION; this index is not positional, and a record with no
+    // searchable name could only ever be a hit nothing can reveal.
+    expect(namesFromMat(['Kp', 'matParam', ''], 'file:///w/d.mat').map((r) => r.name)).toEqual([
+      'Kp',
+      'matParam',
     ]);
-    expect(namesFromMat({ variables: [] }, 'file:///w/d.mat')).toEqual([]);
-  });
-
-  it('contributes nothing for a parse that yielded no variables array at all', () => {
-    // nameIndex feeds this whatever parseMat returned for every .mat in the
-    // workspace, and parseMat comes from the separately versioned
-    // data-explorer-core. One .mat missing the field must cost that file its names,
-    // not abort the scan and leave the WHOLE Used By column empty.
-    for (const parsed of [{}, null, undefined] as any[]) {
-      expect(namesFromMat(parsed, 'file:///w/d.mat')).toEqual([]);
-    }
+    expect(namesFromMat([], 'file:///w/d.mat')).toEqual([]);
   });
 });
 
