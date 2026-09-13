@@ -18,13 +18,17 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
-import { DataModel, parseBinarySlddParts } from 'data-explorer-core';
+import {
+  DataModel,
+  parseBinarySlddParts,
+  entrySelectorOf,
+  toEntrySelector,
+  findEntryObjectSpan,
+} from 'data-explorer-core';
 import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
 import { buildRows } from '../src/host/rowBuilder.js';
-import { entrySelectorOf, toEntrySelector } from '../src/host/entrySelector.js';
 import { findEntrySpan, findEntryElementSpan } from '../src/host/entrySplice.js';
 import { deleteEntry, deleteEntriesByName, pasteEntry } from '../src/host/structuralEdit.js';
-import { findEntryObjectSpan } from '../src/host/xmlEntrySplice.js';
 import { deleteEntryXml, pasteEntryXml, deleteEntriesByNameXml } from '../src/host/xmlStructuralEdit.js';
 
 // ---------------------------------------------------------------- selectors ---

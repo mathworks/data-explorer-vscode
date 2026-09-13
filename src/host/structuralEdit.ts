@@ -19,8 +19,14 @@ import {
   findEntriesArrayInsertion,
   detectIndent,
 } from './entrySplice.js';
-import { entrySelectorOf, type EntrySelector } from './entrySelector.js';
-import { applyTextPatch, generateUuid, getSectionMetadata, type TextPatch } from 'data-explorer-core';
+import {
+  applyTextPatch,
+  entrySelectorOf,
+  generateUuid,
+  getSectionMetadata,
+  type EntrySelector,
+  type TextPatch,
+} from 'data-explorer-core';
 import { buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
 import type { DragRegisterItem } from './dragState.js';
 import type { ClipboardItem } from './clipboard.js';
@@ -216,7 +222,7 @@ export function deleteEntry(text: string, entry: any): StructuralResult {
   const selectId = reselectAfterRemoval(siblings, entry, buildSectionRowId(section?.name ?? ''));
   // By selector, not name: the node the user right-clicked is a specific entry,
   // and another section's namespace may hold a different entry with the same
-  // name. See entrySelector.ts.
+  // name. See core's entrySelector.ts.
   const span = findEntryElementSpan(text, entrySelectorOf(entry));
   if (!span) throw new Error(`Could not locate entry "${entry.name}" to delete.`);
   return patchResult(text, { offset: span.offset, length: span.length, text: '' }, selectId);
@@ -528,7 +534,7 @@ export function pasteEntry(
  * Works purely on text so it applies to any document (the move source may differ
  * from the paste target). Targets are selectors — `entrySelectorOf(payload)` when
  * the caller has the serialized entry, or a bare name when it only has that (see
- * entrySelector.ts). Targets not present are silently skipped, so an already-
+ * core's entrySelector.ts). Targets not present are silently skipped, so an already-
  * absent entry never throws (and an all-absent list returns the text unchanged,
  * byte-identical).
  *

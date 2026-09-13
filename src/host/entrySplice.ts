@@ -11,7 +11,7 @@
 // instead of holding two that can drift. See entrySpliceScan.test.ts, which pins that index
 // against jsonc-parser's tree element for element.
 import { indexEntries, type EntryElementSpan } from './jsonEntryScan.js';
-import { toEntrySelector, type EntrySelector } from './entrySelector.js';
+import { toEntrySelector, type EntrySelector } from 'data-explorer-core';
 
 // The metadata uuid an element's text declares, or null. Parsing the element is affordable
 // here because this is only reached to break a tie between same-named candidates, of which a
@@ -29,7 +29,7 @@ function elementUuid(text: string, el: EntryElementSpan): string | null {
 
 // Index within the entries array of the element the selector names, or -1. An element with no
 // string name of its own can never match: the scan reports that as a null name, and no
-// selector's name is ever null (entrySelector.ts always yields a string), so a numeric or
+// selector's name is ever null (core's entrySelector.ts always yields a string), so a numeric or
 // missing name is unfindable without a guard for it here.
 //
 // Names are matched first, and the uuid is consulted ONLY to break a tie: entry
@@ -53,7 +53,7 @@ function indexOfEntryElement(text: string, elements: EntryElementSpan[], selecto
 
 /**
  * Locate the `{...}` span of the entry object the selector identifies (see
- * entrySelector.ts — a bare string means "whichever entry has this name").
+ * core's entrySelector.ts — a bare string means "whichever entry has this name").
  *
  * Returns the element's offset/length, or null if the entries array cannot be
  * scanned or no element matches. Never throws.

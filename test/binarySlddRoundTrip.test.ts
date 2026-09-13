@@ -3,8 +3,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
-import { DataModel, parseBinarySlddParts, serializeEntryToXml, type ParseWarning } from 'data-explorer-core';
-import { findEntryObjectSpan } from '../src/host/xmlEntrySplice.js';
+import {
+  DataModel,
+  parseBinarySlddParts,
+  serializeEntryToXml,
+  findEntryObjectSpan,
+  type ParseWarning,
+} from 'data-explorer-core';
 
 function loadZip(fixture: string) {
   const p = fileURLToPath(new URL('./parity/artifacts/binary/' + fixture, import.meta.url));

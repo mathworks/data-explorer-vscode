@@ -500,7 +500,7 @@ describe('JSON .sldd narrow text sync — undo and redo of the host’s own edit
 //
 // The uuid is the rename-stable half of an entry's identity and is how every test above
 // resolves one, but a `.sldd` in the plain-text view is a text file a user can hand-author:
-// entrySelector.ts already treats "no metadata at all" as an ordinary entry shape rather
+// core's entrySelector.ts already treats "no metadata at all" as an ordinary entry shape rather
 // than a broken one, and MATLAB is not the only thing that writes these files. So the name
 // has to be the fallback — and it has to stop being one the moment two entries answer to
 // it, because resolving an ambiguous name means repainting whichever of them the walk

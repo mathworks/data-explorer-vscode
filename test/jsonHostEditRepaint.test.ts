@@ -53,12 +53,11 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DataModel, applyScEdits } from 'data-explorer-core';
+import { DataModel, applyScEdits, entrySelectorOf } from 'data-explorer-core';
 import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
 import { buildEntryRows } from '../src/host/rowBuilder.js';
 import { findEntrySpan, detectIndent } from '../src/host/entrySplice.js';
 import { indexEntries } from '../src/host/jsonEntryScan.js';
-import { entrySelectorOf } from '../src/host/entrySelector.js';
 import { reserializeEntry } from '../src/host/structuralEdit.js';
 import { mutateEntry, applyEntryOps } from '../src/host/entryOps.js';
 import { planEntrySync, isEchoOfEdit, planOwnEdit } from '../src/host/jsonEntrySync.js';

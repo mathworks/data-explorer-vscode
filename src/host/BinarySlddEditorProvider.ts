@@ -25,7 +25,14 @@ import { sectionRules } from './sectionRules.js';
 // sites below are three roles of one rule: two lookups, the exclusion in
 // `passThroughParts`, and the re-insert in `writeTo`. Drift between them does not throw —
 // see `passThroughParts` — so they take the name core's own reader looks up.
-import { serializeEntryToXml, DataModel, DATA_PART_XML, type ParseWarning } from 'data-explorer-core';
+import {
+  serializeEntryToXml,
+  DataModel,
+  DATA_PART_XML,
+  findEntryObjectSpan,
+  entrySelectorOf,
+  type ParseWarning,
+} from 'data-explorer-core';
 // Never parseBinarySlddParts directly: readSlddParts is the same read plus the rule
 // that a dictionary this host could not read is not passed on as an empty one, which
 // the reader itself no longer enforces (it recovers and warns instead).
@@ -49,7 +56,6 @@ import {
   deleteEntriesByNameXml,
   type StructuralResult,
 } from './xmlStructuralEdit.js';
-import { findEntryObjectSpan } from './xmlEntrySplice.js';
 import { catalogRenameOf, scXmlRenamePatch, type ScPartPatch } from './scRename.js';
 import {
   applyEntryOps,
@@ -79,7 +85,6 @@ import {
   broadcastDragState,
   deleteFromSource,
 } from './editorHub.js';
-import { entrySelectorOf } from './entrySelector.js';
 import { basename } from '../common/pathUtil.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import type { TableToHostMessage } from '../common/protocol.js';
@@ -1035,7 +1040,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         const sameDoc = drag.sourceDocUri === uriString;
         // Selectors, not bare names: a dragged entry's name is unique only within
         // its namespace, so deleting by name alone could splice out a same-named
-        // entry in another section. See entrySelector.ts.
+        // entry in another section. See core's entrySelector.ts.
         const sourceTargets = drag.items
           .map((it) => entrySelectorOf(it.payload))
           .filter((s) => s.name.length > 0);

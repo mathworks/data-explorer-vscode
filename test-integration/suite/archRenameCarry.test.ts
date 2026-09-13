@@ -23,12 +23,18 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { unzipSync } from 'fflate';
-import { DataModel, SC_PART_XML, SlddNode, parseBinarySlddParts, serializeEntryToXml } from 'data-explorer-core';
+import {
+  DataModel,
+  SC_PART_XML,
+  SlddNode,
+  parseBinarySlddParts,
+  serializeEntryToXml,
+  entrySelectorOf,
+  findEntryObjectSpan,
+} from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 import { catalogRenameOf, scXmlRenamePatch } from '../../src/host/scRename';
 import { mutateEntry } from '../../src/host/entryOps';
-import { entrySelectorOf } from '../../src/host/entrySelector';
-import { findEntryObjectSpan } from '../../src/host/xmlEntrySplice';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

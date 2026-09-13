@@ -32,7 +32,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DataModel } from 'data-explorer-core';
+import { DataModel, entrySelectorOf } from 'data-explorer-core';
 import {
   applyEntryOps,
   findEntryByName,
@@ -66,7 +66,6 @@ import { captureBaseline, computeModified, isEntryModified, clearBaseline } from
 import { buildRows, buildEntryRows } from '../src/host/rowBuilder.js';
 import { spliceEntryRows, insertEntryRows } from '../src/webview/rowUpdates.js';
 import { buildSectionRowId } from '../src/common/sectionRowId.js';
-import { entrySelectorOf } from '../src/host/entrySelector.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

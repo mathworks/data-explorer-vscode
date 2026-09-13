@@ -66,13 +66,12 @@ import {
   type TextPatch,
 } from './structuralEdit.js';
 import { planDeletion } from './deletionPlan.js';
-import { minimalReplacement } from 'data-explorer-core';
+import { entrySelectorOf, minimalReplacement, type EntrySelector } from 'data-explorer-core';
 import { copyEntriesToClipboard } from './clipboardAction.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { parsesAsJson } from './slddFormat.js';
-import { entrySelectorOf, type EntrySelector } from './entrySelector.js';
 import { catalogRenameOf, scJsonRenameEdits } from './scRename.js';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 import { basename } from '../common/pathUtil.js';
@@ -863,7 +862,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // Snapshot the entry's selector BEFORE the mutation: a rename changes
         // `name`, and the span lookup has to find the entry as the text still
         // spells it. The uuid half is rename-stable, and is what keeps the lookup
-        // off a same-named entry in another namespace (see entrySelector.ts).
+        // off a same-named entry in another namespace (see core's entrySelector.ts).
         const entrySelectorForLookup = entrySelectorOf(entry);
         const isRename = msg.columnId === 'Name';
         // And its row id, for the same reason one step further on: the rows on screen
@@ -1581,7 +1580,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         const sameDoc = drag.sourceDocUri === uriString;
         // Selectors, not names: a multi-select move must remove the exact entries
         // that were dragged, and one of them may share a name with an entry in a
-        // different namespace of the source document (see entrySelector.ts).
+        // different namespace of the source document (see core's entrySelector.ts).
         const sourceTargets = drag.items
           .map((it) => entrySelectorOf(it.payload))
           .filter((s) => s.name.length > 0);

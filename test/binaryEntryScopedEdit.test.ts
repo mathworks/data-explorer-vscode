@@ -34,9 +34,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
-import { DataModel, parseBinarySlddParts, serializeEntryToXml } from 'data-explorer-core';
-import { findEntryObjectSpan } from '../src/host/xmlEntrySplice.js';
-import { entrySelectorOf } from '../src/host/entrySelector.js';
+import {
+  DataModel,
+  parseBinarySlddParts,
+  serializeEntryToXml,
+  findEntryObjectSpan,
+  entrySelectorOf,
+} from 'data-explorer-core';
 import {
   addChildXml,
   deleteChildXml,

@@ -27,8 +27,7 @@ import { buildRows } from '../src/host/rowBuilder.js';
 import { reserializeEntry, addChild, deleteChild, findOwningEntry } from '../src/host/structuralEdit.js';
 import { detectIndent, findEntrySpan } from '../src/host/entrySplice.js';
 import { reserializeEntryXml, addChildXml, deleteChildXml } from '../src/host/xmlStructuralEdit.js';
-import { findEntryObjectSpan } from '../src/host/xmlEntrySplice.js';
-import { serializeEntryToXml } from 'data-explorer-core';
+import { serializeEntryToXml, findEntryObjectSpan } from 'data-explorer-core';
 
 const OUT_DIR = fileURLToPath(new URL('./fixtures/rt_out/', import.meta.url));
 
