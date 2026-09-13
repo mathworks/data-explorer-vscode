@@ -11,6 +11,7 @@
 // added to it.
 //
 // See docs/superpowers/specs/2026-09-02-variable-editor-design.md.
+import { effectiveDims as coreEffectiveDims } from 'data-explorer-core';
 
 export interface MatrixPayload {
   /** Panel title name — 'Kp', or 'ParamMat.Value' when the matrix is a property. */
@@ -44,16 +45,19 @@ export const GRIDDABLE_CLASSES = new Set([
 ]);
 
 // MATLAB's size(): trailing singleton dimensions past the second do not exist, so
-// a 2x3x1 IS a 2x3. Mirrors core's display/DisplayConvention.ts:effectiveDims,
-// which is not on the core barrel and must not be added to it. Without this, a
-// [2,3,1] node's 3-entry dims disagree with its 2-subscript labels and the
-// payload fails closed on a perfectly good matrix.
+// a 2x3x1 IS a 2x3. Core owns that rule and now exports it, so what is left here is
+// only the COERCION: node access in this file is duck-typed, so `dims` arrives as
+// `unknown`, while core's `effectiveDims` takes `number[]`. Narrowing at the one
+// call boundary that has the problem is right — a library's types should not be
+// loosened to `unknown` for a single consumer.
+//
+// The rule itself still has to be applied here, and this is why: a [2,3,1] node's
+// 3-entry dims disagree with the 2-subscript labels core wrote for its elements, so
+// without it `canonicalIndex` sees a rank mismatch and the payload fails closed on a
+// perfectly good matrix. Applying core's own function is what keeps the shape we lay
+// out in and the labels we place by from being two different answers to size().
 export function effectiveDims(dims: unknown): number[] {
-  if (!Array.isArray(dims) || dims.length === 0) return [1, 1];
-  if (dims.length === 1) return [1, Number(dims[0])];
-  const d = dims.map(Number);
-  while (d.length > 2 && d[d.length - 1] === 1) d.pop();
-  return d;
+  return coreEffectiveDims(Array.isArray(dims) ? dims.map(Number) : null);
 }
 
 function product(dims: number[]): number {
