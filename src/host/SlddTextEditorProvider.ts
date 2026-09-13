@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
-import { renderWebviewHtml, BANNERS_HTML } from './webviewHtml.js';
+import { renderTableWebview } from './webviewHtml.js';
 import { getModel, invalidate, findNode, peekModel } from './SlddModel.js';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
 import {
@@ -1746,8 +1746,6 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       }
     });
 
-    // Live cross-tab selection: if a navigation targets THIS already-open file,
-    // select the row immediately (the just-opened case is drained in post()).
     const navSub = wireNavigateSelect(webview, uriString);
 
     // Repaint on ANY change to this document: table edits, text-view edits, undo,
@@ -1825,12 +1823,6 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
   }
 
   private getHtml(webview: vscode.Webview, distRoot: vscode.Uri): string {
-    return renderWebviewHtml(webview, distRoot, {
-      scriptFile: 'table.js',
-      title: 'Data Explorer',
-      body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
-${BANNERS_HTML}
-    <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>`,
-    });
+    return renderTableWebview(webview, distRoot);
   }
 }

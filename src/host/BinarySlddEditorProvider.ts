@@ -18,7 +18,7 @@
 // cached model of the same file.
 import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
-import { renderWebviewHtml, BANNERS_HTML } from './webviewHtml.js';
+import { renderTableWebview } from './webviewHtml.js';
 import { buildRows, buildEntryRows, clipMarkKey, splitClipMarkKey, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { sectionRules } from './sectionRules.js';
 // DATA_PART_XML is core's name for the one zip member holding the entries, and the four
@@ -1132,17 +1132,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       } else if (msg?.type === 'undo' || msg?.type === 'redo') void vscode.commands.executeCommand(msg.type);
     });
 
-    // Live cross-tab selection: if a navigation targets THIS already-open file,
-    // select the row immediately (the just-opened case is drained in post()).
     const navSub = wireNavigateSelect(webview, uriString);
 
-    webview.html = renderWebviewHtml(webview, distRoot, {
-      scriptFile: 'table.js',
-      title: 'Data Explorer',
-      body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
-${BANNERS_HTML}
-    <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>`,
-    });
+    webview.html = renderTableWebview(webview, distRoot);
 
     webviewPanel.onDidDispose(() => {
       unregisterWebview(webview);

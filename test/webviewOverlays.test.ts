@@ -2,10 +2,14 @@
 //
 // Who creates the webview's overlay elements.
 //
-// The table webview's HTML is assembled as a string by THREE host providers, and
-// a fourth shell (src/webview/table.html) exists for vite dev. table-main.ts is
-// shared by all of them, so every element it looks up in markup is one rule
-// spread over four paths. Two real bugs came from that split:
+// The table webview's HTML is assembled as a string by ONE shared host function —
+// webviewHtml.ts's renderTableWebview, which all three table providers delegate to —
+// and a second shell (src/webview/table.html) exists for vite dev. table-main.ts is
+// shared by both, so every element it looks up in markup is one rule spread over TWO
+// paths.
+//
+// It was four paths until the three providers each carried their own byte-identical
+// copy of that markup, and the wider split is where both of these real bugs came from:
 //
 //   * BinaryEditorProvider never had <dex-error-dialog>, so `errorDialog?.show()`
 //     silently did nothing and invalid-value errors were invisible in that view.
@@ -27,16 +31,25 @@ const read = (p: string) => readFileSync(join(root, p), 'utf8');
 // layout, so none belongs in the shell's markup.
 const OVERLAYS = ['dex-context-menu', 'dex-error-dialog', 'dex-variable-editor'];
 
-// Every shell that table-main.ts runs inside.
-const TABLE_SHELLS = [
+// Every shell that table-main.ts runs inside. Two, not five: the three providers
+// share renderTableWebview, so their shell IS webviewHtml.ts and they cannot
+// disagree with each other. PROVIDERS below asserts they still hold no markup of
+// their own — that is what keeps this list honest at two entries.
+const TABLE_SHELLS = ['src/host/webviewHtml.ts', 'src/webview/table.html'];
+
+// The providers that delegate to the shared shell rather than being one.
+const PROVIDERS = [
   'src/host/SlddTextEditorProvider.ts',
   'src/host/BinarySlddEditorProvider.ts',
   'src/host/BinaryEditorProvider.ts',
-  'src/webview/table.html',
 ];
 
 describe('table webview overlays are created in code, not declared in markup', () => {
-  it.each(TABLE_SHELLS)('%s declares no overlay element', (shell) => {
+  // Providers as well as shells: a provider no longer holds shell markup, but this is
+  // the assertion that says an overlay must not be declared ANYWHERE in a host source,
+  // so narrowing it to the two shells would have stopped checking three files it used
+  // to check.
+  it.each([...TABLE_SHELLS, ...PROVIDERS])('%s declares no overlay element', (shell) => {
     const src = read(shell);
     for (const tag of OVERLAYS) {
       expect(src).not.toContain(`<${tag}>`);
@@ -71,10 +84,11 @@ describe('table webview overlays are created in code, not declared in markup', (
 // in markup — one rule over four paths — which is precisely where the two bugs above
 // came from. #dex-notice already lived in one provider alone.
 //
-// Three of the four shells interpolate BANNERS_HTML, so they agree by construction;
-// src/webview/table.html is a static file that cannot, so it holds a hand copy. The
-// ids the webview looks up are read out of banners.ts rather than listed here, so
-// adding a banner element cannot pass this test without being added to both.
+// renderTableWebview interpolates BANNERS_HTML, so every provider view agrees by
+// construction; src/webview/table.html is a static file that cannot interpolate, so it
+// holds a hand copy. The ids the webview looks up are read out of banners.ts rather
+// than listed here, so adding a banner element cannot pass this test without being
+// added to both.
 describe('the banner strip is declared by every shell, because it is layout', () => {
   const BANNERS_HTML = /BANNERS_HTML = `([\s\S]*?)`;/.exec(read('src/host/webviewHtml.ts'))![1];
 
@@ -96,16 +110,19 @@ describe('the banner strip is declared by every shell, because it is layout', ()
     expect(read('src/webview/table.html')).toContain(`id="${id}"`);
   });
 
-  it.each(['src/host/SlddTextEditorProvider.ts', 'src/host/BinarySlddEditorProvider.ts', 'src/host/BinaryEditorProvider.ts'])(
-    '%s interpolates the shared constant instead of its own copy',
-    (provider) => {
-      const src = read(provider);
-      expect(src).toContain('${BANNERS_HTML}');
-      // An inline copy is what this test exists to prevent: it would pass the id
-      // checks above and still drift the moment the shared one changed.
-      expect(src).not.toContain('id="dex-notice"');
-    },
-  );
+  it.each(PROVIDERS)('%s takes the whole shell from renderTableWebview', (provider) => {
+    const src = read(provider);
+    expect(src).toContain('renderTableWebview(');
+    // An inline copy is what this test exists to prevent: it would pass the id
+    // checks above and still drift the moment the shared one changed. Asserting the
+    // absence of ANY shell markup, not just the banner strip, is stricter than the
+    // interpolation check this replaced — a provider that grew a second copy of the
+    // table element or the error banner would have satisfied that one.
+    expect(src).not.toContain('id="dex-notice"');
+    expect(src).not.toContain('id="dex-error"');
+    expect(src).not.toContain('<dex-tree-table');
+    expect(src).not.toContain('${BANNERS_HTML}');
+  });
 
   it('table-main.ts paints the strip through that one function', () => {
     // Not two calls (one per banner): the table is offset by the strip's TOTAL
@@ -123,7 +140,9 @@ describe('the banner strip is declared by every shell, because it is layout', ()
 // table had already painted, so the bar flickered on every slow open. A component
 // that draws its own wait has no shells to agree and no panel-wide layer.
 describe('the loading state belongs to the table component, not to any shell', () => {
-  const SHELLS = [...TABLE_SHELLS, 'src/host/webviewHtml.ts'];
+  // The providers too, not just the shells: a loading element is the one thing that
+  // was wrong in BOTH directions, so this stays the widest list in the file.
+  const SHELLS = [...TABLE_SHELLS, ...PROVIDERS];
 
   it.each(SHELLS)('%s declares no loading element', (shell) => {
     expect(read(shell)).not.toContain('dex-loading');

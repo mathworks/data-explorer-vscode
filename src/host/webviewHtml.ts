@@ -64,3 +64,25 @@ export function renderWebviewHtml(
     options,
   );
 }
+
+// WHAT THE TABLE VIEW'S DOCUMENT IS: the error banner, the shared banner strip, and
+// the tree table filling what is left.
+//
+// One decision, and it used to be stated three times — the text provider, the
+// read-only binary provider and the binary .sldd provider each passed a
+// byte-identical options object to renderWebviewHtml. Changing the error banner's
+// markup therefore meant three edits, or three table views that disagree about what
+// an error looks like, and a fourth provider would have copied it a fourth time.
+//
+// Deliberately NOT folded into renderWebviewHtml itself: that function is the vscode
+// Uri resolution, and the Property Inspector shares it with a different body. The
+// PI's shell is not a copy of this one.
+export function renderTableWebview(webview: vscode.Webview, distRoot: vscode.Uri): string {
+  return renderWebviewHtml(webview, distRoot, {
+    scriptFile: 'table.js',
+    title: 'Data Explorer',
+    body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
+${BANNERS_HTML}
+    <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>`,
+  });
+}
