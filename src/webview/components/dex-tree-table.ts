@@ -4,6 +4,7 @@ import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { highContrastStyles } from './styles/high-contrast.styles.js';
 import { dragModeFromModifiers, type DragMode } from './dragMode.js';
+import { filterRows, parseFilterExpression, type FilterTerm } from '../rowFilter.js';
 import './dex-icon.js';
 import './dex-matrix-open.js';
 import type { MatrixPayload } from './dex-matrix-grid.js';
@@ -166,33 +167,6 @@ const DEFAULT_COLUMN_ORDER = [
   'lastModifiedBy',
 ];
 const DEFAULT_HIDDEN_COLUMNS = ['Kind', 'Class', 'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit', 'storageClass', 'headerFile', 'alignment', 'lastModified', 'lastModifiedBy'];
-
-// One term the user typed, with the column it was restricted to (null = any
-// visible column). Both the row predicates and the <mark> highlighting are built
-// from this one list, so the table can never filter by one thing and highlight
-// another.
-type FilterTerm = { column: string | null; text: string };
-
-// Search prefixes that mean "substring-match this ONE column", and the column
-// each names. `type:` deliberately reads DataType — the prefix is what the user
-// types, the column is what the table calls it, and they are not the same word.
-//
-// `value:` is absent on purpose: it is the only prefix with its own grammar
-// (exact `value:"..."` and numeric `value:>10` comparisons), so it stays a
-// separate branch rather than being forced into this table.
-//
-// A Map, not an object literal: a plain object inherits from Object.prototype, so
-// a lookup of `constructor:` or `toString:` returns an inherited function instead
-// of undefined and the search would treat those words as real column prefixes.
-// Unknown prefixes must fall through to a whole-token text search — `constructor:`
-// is ordinary text a user may well be looking for in a .sldd.
-const SUBSTRING_FILTER_COLUMNS = new Map<string, string>([
-  ['name', 'Name'],
-  ['type', 'DataType'],
-  ['class', 'Class'],
-  ['kind', 'Kind'],
-  ['status', 'Status'],
-]);
 
 // The display text of a cell value, which the host emits either as a plain
 // string or as an object carrying `text`.
@@ -1958,93 +1932,12 @@ export class DexTreeTable extends LitElement {
     predicates: Array<(row: TreeTableRow) => boolean>;
     terms: FilterTerm[];
   } {
-    const predicates: Array<(row: TreeTableRow) => boolean> = [];
-    const terms: FilterTerm[] = [];
-    const tokens = text.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
-
     // An unqualified term matches against every visible column, so the search
     // stays in sync with whatever columns the user actually sees (Class, Kind,
-    // etc.) instead of a hardcoded subset.
-    const searchColumns = this._visibleColumns;
-    // The tokenizer keeps a "quoted phrase" together as ONE token specifically so
-    // its spaces don't split it into separate terms; the quotes themselves are
-    // syntax, not text to match, so they must come off before comparing. Leaving
-    // them on makes every quoted search silently match nothing.
-    const unquote = (s: string): string =>
-      s.length > 1 && s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s;
-    // An EMPTY term must never be recorded. `name:` on its own is a half-typed
-    // query that matches every row, but as a highlight term it would match at
-    // every offset of every cell — and the scan advances by the term's length, so
-    // a zero-length one never advances and hangs the webview mid-keystroke.
-    const addTerm = (column: string | null, term: string): void => {
-      if (term) terms.push({ column, text: term });
-    };
-    const makeGenericPredicate = (term: string): ((row: TreeTableRow) => boolean) => {
-      const lower = unquote(term).toLowerCase();
-      addTerm(null, lower);
-      return (row) => searchColumns.some((col) => this._getCellText(row, col).toLowerCase().includes(lower));
-    };
-
-    for (const token of tokens) {
-      const colonIdx = token.indexOf(':');
-      if (colonIdx > 0) {
-        const prefix = token.slice(0, colonIdx).toLowerCase();
-        const rawValue = token.slice(colonIdx + 1);
-
-        const column = SUBSTRING_FILTER_COLUMNS.get(prefix);
-        if (column) {
-          const term = unquote(rawValue).toLowerCase();
-          addTerm(column, term);
-          predicates.push((row) => this._getCellText(row, column).toLowerCase().includes(term));
-        } else if (prefix === 'value') {
-          if (rawValue.startsWith('"') && rawValue.endsWith('"')) {
-            const exact = rawValue.slice(1, -1);
-            addTerm('Value', exact.toLowerCase());
-            predicates.push((row) => {
-              return this._getCellText(row, 'Value') === exact;
-            });
-          } else if (/^(>=|<=|>|<|=)/.test(rawValue)) {
-            const opMatch = rawValue.match(/^(>=|<=|>|<|=)/);
-            const op = opMatch![0];
-            const numStr = rawValue.slice(op.length);
-            const num = parseFloat(numStr);
-            if (!isNaN(num)) {
-              predicates.push((row) => {
-                const val = this._getCellText(row, 'Value');
-                const rowNum = parseFloat(val);
-                if (isNaN(rowNum)) return false;
-                switch (op) {
-                  case '>':
-                    return rowNum > num;
-                  case '<':
-                    return rowNum < num;
-                  case '>=':
-                    return rowNum >= num;
-                  case '<=':
-                    return rowNum <= num;
-                  case '=':
-                    return rowNum === num;
-                  default:
-                    return false;
-                }
-              });
-            }
-          } else {
-            const term = unquote(rawValue).toLowerCase();
-            addTerm('Value', term);
-            predicates.push((row) => {
-              return this._getCellText(row, 'Value').toLowerCase().includes(term);
-            });
-          }
-        } else {
-          predicates.push(makeGenericPredicate(token));
-        }
-      } else {
-        predicates.push(makeGenericPredicate(token));
-      }
-    }
-
-    return { predicates, terms };
+    // etc.) instead of a hardcoded subset. `_getCellText` is passed rather than
+    // reached for inside rowFilter.ts because reading a cell's text depends on
+    // cell shape, which is this component's concern, not the grammar's.
+    return parseFilterExpression(text, this._visibleColumns, (row, col) => this._getCellText(row, col));
   }
 
   // The terms behind the current search, cached because _highlight runs once per
@@ -2057,69 +1950,10 @@ export class DexTreeTable extends LitElement {
   }
 
   private _filterRows(rows: TreeTableRow[], text: string): TreeTableRow[] {
-    const { predicates } = this._parseFilterExpression(text);
-    if (predicates.length === 0) return rows;
-
-    const rowById = new Map<string, TreeTableRow>();
-    for (const r of rows) rowById.set(r.ID, r);
-
-    const hitSet = new Set<string>();
-    for (const row of rows) {
-      if (predicates.every((pred) => pred(row))) {
-        hitSet.add(row.ID);
-      }
-    }
-
-    // Rows the user has edited out of the match since they last searched (see
-    // nextStickyIds). Kept in the list — with their ancestors, since the flatten
-    // DROPS a row whose parent is missing rather than merely unindenting it — but
-    // deliberately NOT counted as matches: a match pulls in its whole subtree
-    // below, and every visible row's section header is sticky, so treating these as
-    // matches would re-admit entire sections on the first edit and blow the filter
-    // wide open. The cost of that choice is narrow: renaming a matched PARENT keeps
-    // the parent but not the children it was showing, since a rename re-keys them
-    // and only the parent's new id reaches us.
-    const keepSet = this._stickyRowIds.size === 0 ? hitSet : new Set([...hitSet, ...this._stickyRowIds]);
-
-    // Every ancestor walk below is cycle-guarded: a malformed document can give
-    // two rows each other as parent, and an unguarded walk would spin forever,
-    // freezing the webview mid-search with no error shown.
-    const includeSet = new Set<string>();
-    for (const row of rows) {
-      if (keepSet.has(row.ID)) {
-        includeSet.add(row.ID);
-        let parentId = row.parent;
-        const seen = new Set<string>([row.ID]);
-        while (parentId && rowById.has(parentId) && !seen.has(parentId)) {
-          seen.add(parentId);
-          includeSet.add(parentId);
-          parentId = rowById.get(parentId)!.parent;
-        }
-      }
-    }
-
-    for (const row of rows) {
-      if (includeSet.has(row.ID)) continue;
-      let parentId = row.parent;
-      const seen = new Set<string>([row.ID]);
-      while (parentId && !seen.has(parentId)) {
-        seen.add(parentId);
-        if (hitSet.has(parentId)) {
-          includeSet.add(row.ID);
-          let mid = row.parent;
-          const midSeen = new Set<string>([row.ID]);
-          while (mid && mid !== parentId && !midSeen.has(mid)) {
-            midSeen.add(mid);
-            includeSet.add(mid);
-            mid = rowById.get(mid)?.parent || null;
-          }
-          break;
-        }
-        parentId = rowById.get(parentId)?.parent || null;
-      }
-    }
-
-    return rows.filter((r) => includeSet.has(r.ID));
+    // `_stickyRowIds` is passed rather than reached for inside rowFilter.ts
+    // because it is this component's edit-tracking state, not part of the
+    // grammar (see nextStickyIds in rowUpdates.ts).
+    return filterRows(rows, text, this._visibleColumns, (row, col) => this._getCellText(row, col), this._stickyRowIds);
   }
 
   private _flattenToVisible(rows: TreeTableRow[]): TreeTableRow[] {
