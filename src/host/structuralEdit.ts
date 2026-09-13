@@ -20,23 +20,20 @@ import {
   detectIndent,
 } from './entrySplice.js';
 import { entrySelectorOf, type EntrySelector } from './entrySelector.js';
-import { generateUuid, getSectionMetadata } from 'data-explorer-core';
+import { applyTextPatch, generateUuid, getSectionMetadata, type TextPatch } from 'data-explorer-core';
 import { buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
 import type { DragRegisterItem } from './dragState.js';
 import type { ClipboardItem } from './clipboard.js';
 import { dropFactsOf } from './dropFacts.js';
 
-/** One byte-scoped replacement of a document's text: `length` bytes at `offset` become `text`. */
-export interface TextPatch {
-  offset: number;
-  length: number;
-  text: string;
-}
-
-/** The text a patch produces. The one applier, so nothing can apply one differently. */
-export function applyTextPatch(text: string, patch: TextPatch): string {
-  return text.slice(0, patch.offset) + patch.text + text.slice(patch.offset + patch.length);
-}
+// One byte-scoped replacement of a document's text, and the one applier — both now core's
+// (`src/edit/textPatch.ts`), because WHICH REGION a text edit covers is a property of the two
+// strings and not of anything that renders them. Re-exported from here rather than imported at
+// each use site: this is where the transforms below report a patch from, so it is where every
+// other file in the host already names the type, and a re-export keeps all of them reading the
+// same specifier they always did.
+export type { TextPatch };
+export { applyTextPatch };
 
 export interface StructuralResult {
   newText: string;

@@ -60,7 +60,7 @@ import {
   type TextPatch,
 } from '../src/host/structuralEdit.js';
 import { planDeletion } from '../src/host/deletionPlan.js';
-import { minimalReplacement } from '../src/host/minimalEdit.js';
+import { minimalReplacement } from 'data-explorer-core';
 import { getModel, invalidate, peekModel } from '../src/host/SlddModel.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from '../src/host/slddBaseline.js';
 import { buildRows, buildEntryRows } from '../src/host/rowBuilder.js';
