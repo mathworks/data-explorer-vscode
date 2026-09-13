@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DataModel } from 'data-explorer-core';
+import { DataModel, effectiveDims as coreEffectiveDims } from 'data-explorer-core';
 import { getModel, getModelFromBytes, invalidate } from '../src/host/SlddModel.js';
 import {
   matrixPayload, matrixForRow, isGriddable, effectiveDims, subsOf, canonicalIndex,
@@ -81,6 +81,25 @@ describe('effectiveDims mirrors MATLAB size()', () => {
     expect(effectiveDims(undefined)).toEqual([1, 1]);
     expect(effectiveDims([])).toEqual([1, 1]);
     expect(effectiveDims([4])).toEqual([1, 4]);
+  });
+
+  it('IS core’s function now, not a second copy of the rule', () => {
+    // The local implementation is gone; core exports `effectiveDims` and this file
+    // calls it. Comparing the two over the cases that used to be duplicated is what
+    // fails if a rule of our own ever grows back here, because drift between them
+    // shows up as a good matrix silently getting no grid rather than as an error.
+    for (const dims of [[2, 3, 1], [2, 3, 1, 1], [2, 1, 3], [1, 1], [], [4], [2, 2, 2, 3]]) {
+      expect(effectiveDims(dims)).toEqual(coreEffectiveDims(dims));
+    }
+  });
+
+  it('coerces what a duck-typed node hands it, which core’s number[] cannot', () => {
+    // All this wrapper still adds. `dims` is read off an untyped node, so anything
+    // that is not an array of numbers has to normalize like an absent one — core's
+    // signature is number[] and stays that way rather than widening for us.
+    expect(effectiveDims(['2', '3', '1'])).toEqual([2, 3]);
+    expect(effectiveDims('2x3')).toEqual([1, 1]);
+    expect(effectiveDims(null)).toEqual([1, 1]);
   });
 });
 

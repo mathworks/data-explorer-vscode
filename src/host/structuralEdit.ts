@@ -19,24 +19,28 @@ import {
   findEntriesArrayInsertion,
   detectIndent,
 } from './entrySplice.js';
-import { entrySelectorOf, type EntrySelector } from './entrySelector.js';
-import { generateUuid, getSectionMetadata } from 'data-explorer-core';
+import {
+  applyTextPatch,
+  entrySelectorOf,
+  generateUuid,
+  getSectionMetadata,
+  owningEntryOf,
+  type EntrySelector,
+  type TextPatch,
+} from 'data-explorer-core';
 import { buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
 import type { DragRegisterItem } from './dragState.js';
 import type { ClipboardItem } from './clipboard.js';
 import { dropFactsOf } from './dropFacts.js';
 
-/** One byte-scoped replacement of a document's text: `length` bytes at `offset` become `text`. */
-export interface TextPatch {
-  offset: number;
-  length: number;
-  text: string;
-}
-
-/** The text a patch produces. The one applier, so nothing can apply one differently. */
-export function applyTextPatch(text: string, patch: TextPatch): string {
-  return text.slice(0, patch.offset) + patch.text + text.slice(patch.offset + patch.length);
-}
+// One byte-scoped replacement of a document's text, and the one applier — both now core's
+// (`src/edit/textPatch.ts`), because WHICH REGION a text edit covers is a property of the two
+// strings and not of anything that renders them. Re-exported from here rather than imported at
+// each use site: this is where the transforms below report a patch from, so it is where every
+// other file in the host already names the type, and a re-export keeps all of them reading the
+// same specifier they always did.
+export type { TextPatch };
+export { applyTextPatch };
 
 export interface StructuralResult {
   newText: string;
@@ -69,10 +73,17 @@ function patchResult(text: string, patch: TextPatch, selectId: string | null): S
 // Walk up from any node to its owning top-level entry (the node where
 // `isEntry` is true), or null if there is none. Section rows and detached
 // nodes have no owning entry.
+//
+// The walk itself is core's now (`owningEntryOf`, beside the `isEntry` it reads): both
+// members belong to core's node classes, so "which entry does this row belong to" is a
+// question about the MODEL, and this file's named copy of it was the second of two
+// spellings — core walked the same chain inline inside DataNode._markModified.
+//
+// Kept as a name here, and kept `any` in and `any` out, because ~15 call sites in this
+// host read the result as a live node and pass it straight to another `any` seam. Typing
+// this at core's node class would push a cast onto every one of them to say nothing new.
 export function findOwningEntry(node: any): any {
-  let entry: any = node;
-  while (entry && !entry.isEntry) entry = entry.parent;
-  return entry ?? null;
+  return owningEntryOf(node);
 }
 
 // Resolve the section a paste should target, given the right-clicked row's
@@ -219,7 +230,7 @@ export function deleteEntry(text: string, entry: any): StructuralResult {
   const selectId = reselectAfterRemoval(siblings, entry, buildSectionRowId(section?.name ?? ''));
   // By selector, not name: the node the user right-clicked is a specific entry,
   // and another section's namespace may hold a different entry with the same
-  // name. See entrySelector.ts.
+  // name. See core's entrySelector.ts.
   const span = findEntryElementSpan(text, entrySelectorOf(entry));
   if (!span) throw new Error(`Could not locate entry "${entry.name}" to delete.`);
   return patchResult(text, { offset: span.offset, length: span.length, text: '' }, selectId);
@@ -301,7 +312,7 @@ export function deleteChild(text: string, node: any): StructuralResult {
  * ALL the children must share one entry, and that is checked rather than assumed: one
  * splice can only rewrite one entry, so a mixed list would drop the other entry's
  * removals from the text while keeping them in the model — a table that disagrees with
- * its own file. The caller that groups them (deletionPlan.planDeletion) guarantees it;
+ * its own file. The caller that groups them (core's planDeletion) guarantees it;
  * this is what makes the guarantee testable.
  *
  * Both checks run over the WHOLE group before anything is removed, so a group this
@@ -531,7 +542,7 @@ export function pasteEntry(
  * Works purely on text so it applies to any document (the move source may differ
  * from the paste target). Targets are selectors — `entrySelectorOf(payload)` when
  * the caller has the serialized entry, or a bare name when it only has that (see
- * entrySelector.ts). Targets not present are silently skipped, so an already-
+ * core's entrySelector.ts). Targets not present are silently skipped, so an already-
  * absent entry never throws (and an all-absent list returns the text unchanged,
  * byte-identical).
  *

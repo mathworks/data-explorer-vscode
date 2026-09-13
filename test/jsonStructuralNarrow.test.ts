@@ -32,7 +32,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DataModel } from 'data-explorer-core';
+import { DataModel, entrySelectorOf } from 'data-explorer-core';
 import {
   applyEntryOps,
   findEntryByName,
@@ -59,14 +59,12 @@ import {
   pasteEntry,
   type TextPatch,
 } from '../src/host/structuralEdit.js';
-import { planDeletion } from '../src/host/deletionPlan.js';
-import { minimalReplacement } from '../src/host/minimalEdit.js';
+import { minimalReplacement, planDeletion } from 'data-explorer-core';
 import { getModel, invalidate, peekModel } from '../src/host/SlddModel.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from '../src/host/slddBaseline.js';
 import { buildRows, buildEntryRows } from '../src/host/rowBuilder.js';
 import { spliceEntryRows, insertEntryRows } from '../src/webview/rowUpdates.js';
 import { buildSectionRowId } from '../src/common/sectionRowId.js';
-import { entrySelectorOf } from '../src/host/entrySelector.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

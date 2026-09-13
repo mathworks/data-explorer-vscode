@@ -13,13 +13,15 @@
 // this repo has already shipped bugs from: a rule fixed on one side leaves the other
 // .sldd format classifying entries differently.
 
-import { serializeEntryToXml } from 'data-explorer-core';
-import { buildSectionRowId } from '../common/sectionRowId.js';
 import {
+  serializeEntryToXml,
   findEntryObjectSpan,
   findEntryElementSpan,
   findEntryInsertionPoint,
-} from './xmlEntrySplice.js';
+  entrySelectorOf,
+  type EntrySelector,
+} from 'data-explorer-core';
+import { buildSectionRowId } from '../common/sectionRowId.js';
 import {
   reselectAfterRemoval,
   removeChildFromModel,
@@ -29,7 +31,6 @@ import {
   foldPasteEntries,
   type StructuralResult,
 } from './structuralEdit.js';
-import { entrySelectorOf, type EntrySelector } from './entrySelector.js';
 
 export type { StructuralResult };
 
@@ -62,7 +63,7 @@ export function deleteEntryXml(text: string, entry: any): StructuralResult {
   const section = entry.parent;
   const siblings = (section?.children ?? []) as any[];
   const selectId = reselectAfterRemoval(siblings, entry, buildSectionRowId(section?.name ?? ''));
-  // By selector, not name — see entrySelector.ts and the JSON path's deleteEntry.
+  // By selector, not name — see core's entrySelector.ts and the JSON path's deleteEntry.
   const span = findEntryElementSpan(text, entrySelectorOf(entry));
   if (!span) throw new Error(`Could not locate entry "${entry.name}" to delete.`);
   const newText = text.slice(0, span.offset) + text.slice(span.offset + span.length);
@@ -112,7 +113,7 @@ export function pasteEntriesXml(
 
 /**
  * Remove many entries, each identified by a selector or a bare name (see
- * entrySelector.ts). Each span is re-found against the text the previous removal
+ * core's entrySelector.ts). Each span is re-found against the text the previous removal
  * produced, mirroring the JSON path: a target listed twice (the same entry
  * reaching the move list from two selected rows) would otherwise be spliced twice
  * from stale offsets, deleting an innocent neighbouring entry's fragment and

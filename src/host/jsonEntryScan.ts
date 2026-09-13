@@ -38,7 +38,7 @@ export interface EntryElementSpan {
   index: number;
   /**
    * The element's OWN top-level `"name"` value, or null when it declares none or one
-   * that is not a string (which no selector can match — see entrySelector.ts).
+   * that is not a string (which no selector can match — see core's entrySelector.ts).
    */
   name: string | null;
 }

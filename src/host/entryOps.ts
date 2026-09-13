@@ -31,8 +31,7 @@
 // than guessing when the model is not the shape it expects; the caller answers a throw
 // with the wide repaint, which rebuilds from the text that is already correct.
 
-import { DataModel } from 'data-explorer-core';
-import { toEntrySelector, type EntrySelector } from './entrySelector.js';
+import { DataModel, toEntrySelector, type EntrySelector } from 'data-explorer-core';
 
 /** One entry serialized the way `SectionNode.parseEntry` takes it back. */
 export type EntryRecord = Record<string, unknown>;

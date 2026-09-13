@@ -18,14 +18,22 @@
 // cached model of the same file.
 import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
-import { renderWebviewHtml, BANNERS_HTML } from './webviewHtml.js';
+import { renderTableWebview } from './webviewHtml.js';
 import { buildRows, buildEntryRows, clipMarkKey, splitClipMarkKey, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
 import { sectionRules } from './sectionRules.js';
 // DATA_PART_XML is core's name for the one zip member holding the entries, and the four
 // sites below are three roles of one rule: two lookups, the exclusion in
 // `passThroughParts`, and the re-insert in `writeTo`. Drift between them does not throw —
 // see `passThroughParts` — so they take the name core's own reader looks up.
-import { serializeEntryToXml, DataModel, DATA_PART_XML, type ParseWarning } from 'data-explorer-core';
+import {
+  serializeEntryToXml,
+  DataModel,
+  DATA_PART_XML,
+  findEntryObjectSpan,
+  entrySelectorOf,
+  planDeletion,
+  type ParseWarning,
+} from 'data-explorer-core';
 // Never parseBinarySlddParts directly: readSlddParts is the same read plus the rule
 // that a dictionary this host could not read is not passed on as an empty one, which
 // the reader itself no longer enforces (it recovers and warns instead).
@@ -37,7 +45,6 @@ import {
   buildDragSnapshot,
   reselectAfterRemoval,
 } from './structuralEdit.js';
-import { planDeletion } from './deletionPlan.js';
 import { copyEntriesToClipboard } from './clipboardAction.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
 import {
@@ -49,7 +56,6 @@ import {
   deleteEntriesByNameXml,
   type StructuralResult,
 } from './xmlStructuralEdit.js';
-import { findEntryObjectSpan } from './xmlEntrySplice.js';
 import { catalogRenameOf, scXmlRenamePatch, type ScPartPatch } from './scRename.js';
 import {
   applyEntryOps,
@@ -79,7 +85,6 @@ import {
   broadcastDragState,
   deleteFromSource,
 } from './editorHub.js';
-import { entrySelectorOf } from './entrySelector.js';
 import { basename } from '../common/pathUtil.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import type { TableToHostMessage } from '../common/protocol.js';
@@ -1035,7 +1040,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         const sameDoc = drag.sourceDocUri === uriString;
         // Selectors, not bare names: a dragged entry's name is unique only within
         // its namespace, so deleting by name alone could splice out a same-named
-        // entry in another section. See entrySelector.ts.
+        // entry in another section. See core's entrySelector.ts.
         const sourceTargets = drag.items
           .map((it) => entrySelectorOf(it.payload))
           .filter((s) => s.name.length > 0);
@@ -1127,17 +1132,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       } else if (msg?.type === 'undo' || msg?.type === 'redo') void vscode.commands.executeCommand(msg.type);
     });
 
-    // Live cross-tab selection: if a navigation targets THIS already-open file,
-    // select the row immediately (the just-opened case is drained in post()).
     const navSub = wireNavigateSelect(webview, uriString);
 
-    webview.html = renderWebviewHtml(webview, distRoot, {
-      scriptFile: 'table.js',
-      title: 'Data Explorer',
-      body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
-${BANNERS_HTML}
-    <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>`,
-    });
+    webview.html = renderTableWebview(webview, distRoot);
 
     webviewPanel.onDidDispose(() => {
       unregisterWebview(webview);

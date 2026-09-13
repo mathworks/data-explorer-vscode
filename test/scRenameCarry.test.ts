@@ -37,13 +37,18 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync, zipSync } from 'fflate';
-import { DataModel, SlddNode, SC_PART_XML, serializeEntryToXml } from 'data-explorer-core';
+import {
+  DataModel,
+  SlddNode,
+  SC_PART_XML,
+  serializeEntryToXml,
+  entrySelectorOf,
+  findEntryObjectSpan,
+} from 'data-explorer-core';
 import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
 import { findEntrySpan, detectIndent } from '../src/host/entrySplice.js';
-import { entrySelectorOf } from '../src/host/entrySelector.js';
 import { reserializeEntry, findOwningEntry } from '../src/host/structuralEdit.js';
 import { mutateEntry } from '../src/host/entryOps.js';
-import { findEntryObjectSpan } from '../src/host/xmlEntrySplice.js';
 import { readSlddParts } from '../src/host/slddContent.js';
 import { catalogRenameOf, scJsonRenameEdits, scXmlRenamePatch } from '../src/host/scRename.js';
 

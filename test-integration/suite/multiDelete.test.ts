@@ -24,7 +24,7 @@
 // Ctrl+A is not simulated as a keystroke — it is what `_selectAll` produces, which is the
 // VISIBLE rows (dex-tree-table.ts). Collapsed that is headers plus top-level entries;
 // expanded it is every row in the table. Both are sent here, because the two must agree:
-// subsumption (deletionPlan.hasSelectedAncestor) is what makes the child ids redundant, and
+// subsumption (hasSelectedAncestor, in core's planDeletion) is what makes the child ids redundant, and
 // the expanded gesture is the one that breaks when it stops holding.
 //
 // HOW it breaks was measured rather than assumed, by deleting that check and running this

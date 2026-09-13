@@ -19,7 +19,7 @@
 import * as vscode from 'vscode';
 import { clipboardState } from './clipboard.js';
 import { dragDescriptor } from './dragState.js';
-import type { EntrySelector } from './entrySelector.js';
+import type { EntrySelector } from 'data-explorer-core';
 
 /** What a cross-document move asks the source document to remove. */
 export type DeleteTarget = string | EntrySelector;
