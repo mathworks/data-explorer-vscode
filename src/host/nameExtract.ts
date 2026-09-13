@@ -9,7 +9,7 @@
 // it answers only "what entry names exist, and where", never how they resolve or
 // relate. Duplicate names across files are preserved (each becomes its own record)
 // so a global "search entries by name" can list every occurrence.
-import { blockKey, blockLabel, joinBlockPath, slddChunkContent } from 'data-explorer-core';
+import { blockKey, blockLabel, joinBlockPath } from 'data-explorer-core';
 import { uriBasename } from '../common/pathUtil.js';
 
 export type EntryKind = 'sldd' | 'mat' | 'workspace' | 'block';
@@ -54,22 +54,40 @@ function nameRecords<T>(
 
 // Entry names from an .sldd (JSON or binary/zip; both share the same in-memory shape).
 //
-// Reached through core's `slddChunkContent`, which is the accessor core publishes for
-// exactly this walk. This function used to spell the three-key path itself — a fourth
-// reader of a path core's two writers build — and the drift it invited is silent in the
-// worst way: one wrong key yields no entries, so a dictionary full of definitions
-// contributes nothing to the name index and search simply does not find it. There is no
-// error to see and no row missing from a table. structuralIndex.ts had already switched;
-// this was the straggler.
-export function namesFromSldd(content: Record<string, unknown>, sourceUri: string): NameRecord[] {
-  const inner = slddChunkContent(content);
-  const entries = (inner?.entries as { name?: string }[] | undefined) ?? [];
-  return nameRecords(entries, (entry) => entry?.name, sourceUri, 'sldd');
+// A LIST OF NAMES, not the parsed content, and the change of shape is the point: core's
+// `scanSldd` reads a dictionary's names WITHOUT building its entry tree, which is 27x on
+// the larger customer dictionary because this index reads exactly one string per entry and
+// threw the rest of the DOM away. The walk that reaches those strings now lives in core,
+// beside the two writers that build the shape.
+//
+// This is the third and last version of that walk. It began by spelling the three-key
+// `__MW_TEXT_PARTS__` path here, became a call to core's `slddChunkContent` accessor, and
+// is now nothing at all — the right end state, because both earlier versions could fail
+// the same silent way: one wrong key yields no entries, so a dictionary full of
+// definitions contributes nothing to the index and search simply does not find it, with no
+// error to see and no row missing from a table.
+//
+// Empty names are dropped here, and core's scanner deliberately KEEPS them — it reports ''
+// for an entry with no readable name so a consumer indexing POSITIONALLY is not shifted by
+// one. This index is not positional (every record carries its own name), so dropping is
+// right here, and is what happened before.
+export function namesFromSldd(names: readonly string[], sourceUri: string): NameRecord[] {
+  return nameRecords(names, (name) => name, sourceUri, 'sldd');
 }
 
-// Variable names from a parsed .mat.
-export function namesFromMat(parsed: { variables: { name?: string }[] }, sourceUri: string): NameRecord[] {
-  return nameRecords(parsed?.variables ?? [], (v) => v?.name, sourceUri, 'mat');
+// Variable names from a .mat.
+//
+// A LIST OF NAMES, as `namesFromSldd` above takes, and for the same reason: core's
+// `scanMat` reads a .mat's variable names without decoding a single value, which is 189x
+// over the customer corpus because this index reads one string per variable and threw
+// every matrix — every element of every matrix — away.
+//
+// Empty names are dropped here and core's scanner deliberately KEEPS them, exactly as on
+// the .sldd side. It matters more here: EVERY .mat holding an MCOS object carries a
+// trailing anonymous element, so this is not an edge case but the common shape, and a
+// positional caller that lost it would misname every variable after it.
+export function namesFromMat(names: readonly string[], sourceUri: string): NameRecord[] {
+  return nameRecords(names, (name) => name, sourceUri, 'mat');
 }
 
 // Model-workspace variable names (kind 'workspace') plus referenced blocks

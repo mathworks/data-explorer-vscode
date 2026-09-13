@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 
-import { ModelBlockNode, schemaColumnLabels } from 'data-explorer-core';
+import { ModelBlockNode, RowCellPool, schemaColumnLabels } from 'data-explorer-core';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 import { stampMatrix } from './matrixPayload.js';
 
@@ -81,6 +81,16 @@ export function splitClipMarkKey(key: string): { section: string; name: string }
 
 export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: ClipMark): any[] {
   const rows: any[] = [];
+  // One cell pool for this pass. A table's cells are overwhelmingly repetition — measured
+  // over a 128,111-row customer dictionary, 1.36M cells hold ~200k distinct values — so
+  // giving each distinct value ONE object takes the row set from 88 MB to 55 MB, and the
+  // copy the webview receives from 60 MB to 47 MB, because structured clone preserves
+  // aliasing (it does not re-expand the shared cells into copies).
+  //
+  // The pool lives for this call and is then dropped. It is deliberately not a cache
+  // across builds: a cache would keep every cell of every dictionary ever opened alive
+  // for the life of the extension host, which is the opposite of the point.
+  const pool = new RowCellPool();
   const sections = (sldd.children || []) as any[];
   for (const section of sections) {
     // Always emit the section's parent row, even when it has no entries.
@@ -95,7 +105,7 @@ export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: Cli
     // array (empty when the section holds nothing), so the fallback never fires.
     // Kept because a missing array here would blank the WHOLE table, not one row.
     for (const entry of (section.children || []) as any[]) {
-      rows.push(...buildEntryRows(entry, section.name, modifiedNames, clipMark));
+      rows.push(...buildEntryRows(entry, section.name, modifiedNames, clipMark, pool));
     }
   }
   return rows;
@@ -124,7 +134,21 @@ function capabilityFlags(n: any): {
 // nested children), reparented under its section. Used both by buildRows for
 // the full tree and by the incremental edit write-back, which repaints only
 // the edited entry's rows instead of rebuilding the whole table.
-export function buildEntryRows(entry: any, sectionName: string, modifiedNames?: Set<string>, clipMark?: ClipMark): any[] {
+//
+// `pool` is optional because the two callers want different things from it. buildRows
+// materializes the WHOLE table and brings one, so its rows share cells; the edit
+// write-back repaints ONE entry into a table that already exists and brings none —
+// a pool over a handful of rows shares almost nothing, and one that outlived the call
+// to be reused by the next repaint would pin the whole first build's cells forever.
+// Mixing pooled and unpooled rows in one table is safe: a cell is read-only data to
+// everything downstream, so sharing is invisible to it.
+export function buildEntryRows(
+  entry: any,
+  sectionName: string,
+  modifiedNames?: Set<string>,
+  clipMark?: ClipMark,
+  pool?: RowCellPool,
+): any[] {
   const out: any[] = [];
   const flat = entry.flatten ? entry.flatten() : [entry];
   for (const n of flat) {
@@ -189,7 +213,13 @@ export function buildEntryRows(entry: any, sectionName: string, modifiedNames?: 
     // Context-menu capability flags (consumed by the webview menu builder), then
     // the grid-view payload if this node's value is a griddable matrix. Both are
     // stamps over the node's own row; neither rewrites the row's columns.
-    out.push(stampMatrix({ ...row, ...capabilityFlags(n) }, n));
+    const stamped = stampMatrix({ ...row, ...capabilityFlags(n) }, n);
+    // Share the FINISHED row, rather than passing the pool to `n.toRow()` above. This row
+    // is the node's cells plus this host's own — Usage/Data Type remapped for a block row,
+    // the dictionary metadata columns, the clipboard mark — so sharing here covers all of
+    // them in ONE walk where doing both would cost two. `_matrix` is left alone: the pool
+    // declines any cell it cannot key exactly, and a matrix payload holds a number[].
+    out.push(pool ? pool.share(stamped) : stamped);
   }
   return out;
 }

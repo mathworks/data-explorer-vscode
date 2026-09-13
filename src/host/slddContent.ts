@@ -27,7 +27,9 @@
 import {
   parseBinarySlddParts,
   readSlddContent as readContent,
+  scanSldd as scanContent,
   type ParseWarning,
+  type SlddScanResult,
 } from 'data-explorer-core';
 import { refuseIfUnreadable } from './parseWarnings.js';
 
@@ -53,6 +55,33 @@ export function readSlddContent(
   const content = readContent(bytes, collected);
   refuseIfUnreadable(collected);
   return content;
+}
+
+/**
+ * A dictionary's entry NAMES and referenced sub-dictionaries, without building its entry
+ * tree — core's `scanSldd`, under this host's same refusal policy.
+ *
+ * For the two workspace-wide scans (the name index and the relationship graph), which
+ * between them read one string per entry out of a full DOM parse. Core measures the
+ * compressed spelling at 3230 ms deep against ~115 ms scanned, and holds 1.7 MB where the
+ * parse holds 62.8 MB heap plus 142.6 MB off-heap. The textual spelling is unchanged by
+ * design: a scanner for it was written and measured SLOWER than `JSON.parse`.
+ *
+ * THE POLICY IS THE REASON THIS WRAPPER EXISTS, and it is not decoration. Core's scanner
+ * falls back to the full read for any dictionary it was not verified against, and that
+ * read RECOVERS from an unreadable `data/chunk0.xml` by answering an empty dictionary with
+ * a warning. Calling core directly would therefore turn a truncated file into a dictionary
+ * with no entries — silently contributing nothing to the name index and no edges to the
+ * graph, with nothing to see. `refuseIfUnreadable` is what makes it a failure instead, and
+ * it works here for a checked reason: across every adversarial shape core tests, the scan
+ * never SUCCEEDS where the full parse refuses, so the warnings this collects are the same
+ * ones `readSlddContent` above would have collected.
+ */
+export function scanSldd(bytes: ArrayBuffer, warnings?: ParseWarning[]): SlddScanResult {
+  const collected = warnings ?? [];
+  const out = scanContent(bytes, collected);
+  refuseIfUnreadable(collected);
+  return out;
 }
 
 /**

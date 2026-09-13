@@ -277,10 +277,18 @@ describe('no consumer keeps its own copy of the list', () => {
     }
   });
 
-  it('routes both model containers through core’s format-sniffing parseModel', () => {
-    // parseSlx on a `.mdl` throws "invalid zip data". Every model read must go
-    // through parseModel, which decides from the BYTES — that is also what makes a
-    // mislabelled file open instead of failing.
+  it('routes both model containers through a core reader that sniffs the format', () => {
+    // parseSlx on a `.mdl` throws "invalid zip data". Every model read must go through a
+    // reader that decides from the BYTES — that is also what makes a mislabelled file
+    // open instead of failing.
+    //
+    // TWO core readers qualify, and what they have in common is the point: `parseModel`
+    // and `scanModelStructure` dispatch on the same ZIP magic in the same core module,
+    // the second being the first narrowed to three relationship fields over a filtered
+    // set of OPC parts. So slxStructure.ts reads models with the scanner and
+    // nameIndex.ts with the full parse — it needs block parameters, which the scanner
+    // deliberately does not carry — and neither is choosing a format on this host's
+    // behalf. What is barred is reaching PAST the sniff to a single-format reader.
     //
     // The usage graph's model read is no longer in this repo at all — it is core's
     // `buildUsageIndex`, which dispatches through the same `parseModel`. Pinning that
@@ -290,8 +298,12 @@ describe('no consumer keeps its own copy of the list', () => {
     // `.mdl` throws rather than returning nothing.
     for (const file of ['src/host/nameIndex.ts', 'src/host/slxStructure.ts']) {
       const src = code(file);
-      expect(src, `${file} must use parseModel`).toContain('parseModel');
+      expect(
+        src.includes('parseModel') || src.includes('scanModelStructure'),
+        `${file} must read models through parseModel or scanModelStructure`,
+      ).toBe(true);
       expect(src, `${file} must not call parseSlx directly`).not.toContain('parseSlx');
+      expect(src, `${file} must not call parseMdl directly`).not.toContain('parseMdl');
     }
   });
 });

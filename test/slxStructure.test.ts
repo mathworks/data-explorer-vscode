@@ -134,4 +134,62 @@ describe('extractSlxStructure', () => {
     );
     expect(s.dataDictionary).toBeNull();
   });
+
+  it('keeps the relationships of a model whose BLOCK part cannot be inflated', () => {
+    // What changed when this module moved from `parseModel` to core's
+    // `scanModelStructure`: the block parts are never read, so bytes that cannot be
+    // inflated cannot fail to inflate. The full parse throws on this archive and the
+    // catch in extractSlxStructure returned the all-empty structure for it — a model with
+    // damaged block XML showed no linked dictionary and no references, which is
+    // indistinguishable in the tree from a model that genuinely has none.
+    //
+    // The unreadability is by construction rather than by luck: the low three bits of a
+    // raw deflate stream are BFINAL and a two-bit BTYPE, and `11` is the reserved value,
+    // so 0xFF is refused by every inflate implementation.
+    const archive = slx({
+      'simulink/blockDiagram.json': JSON.stringify({
+        BlockDiagram: { DataDictionary: 'params.sldd', ModelUUID: 'u' },
+      }),
+      'simulink/graphicalInterface.json': JSON.stringify({
+        ModelReferences: [{ BlockPath: 'ctrl/plant', ModelName: 'plant' }],
+      }),
+      'simulink/ExternalDataSourceSettings.xml': DATA_SOURCES_XML,
+      // Compressible on purpose, so the writer deflates rather than stores it: a stored
+      // member is never inflated by anyone and would make this case vacuous.
+      'simulink/systems/system_1.xml': '<System><Block/></System>'.repeat(400),
+    });
+
+    const s = extractSlxStructure(poison(archive, 'simulink/systems/system_1.xml'), 'damaged.slx');
+    expect(s.dataDictionary).toBe('params.sldd');
+    expect(s.modelReferences).toEqual(['plant.slx']);
+    expect(s.externalDataSources).toEqual(['signals.mat']);
+  });
 });
+
+/**
+ * Overwrite one member's compressed bytes with 0xFF in place, leaving every header intact
+ * so the archive is still perfectly walkable.
+ */
+function poison(archive: ArrayBuffer, target: string): ArrayBuffer {
+  const out = new Uint8Array(archive.slice(0));
+  const view = new DataView(out.buffer);
+  const utf8 = new TextDecoder();
+  let p = 0;
+  while (p + 30 <= out.byteLength && view.getUint32(p, true) === 0x04034b50) {
+    const method = view.getUint16(p + 8, true);
+    const compressedSize = view.getUint32(p + 18, true);
+    const nameLength = view.getUint16(p + 26, true);
+    const extraLength = view.getUint16(p + 28, true);
+    const name = utf8.decode(out.subarray(p + 30, p + 30 + nameLength));
+    const dataAt = p + 30 + nameLength + extraLength;
+    if (name === target) {
+      // Loud rather than vacuous: if the writer stored this member there is nothing to
+      // fail to inflate and the case above proves nothing.
+      expect(method, `${target} must be deflated for this case to mean anything`).toBe(8);
+      out.fill(0xff, dataAt, dataAt + compressedSize);
+      return out.buffer as ArrayBuffer;
+    }
+    p = dataAt + compressedSize;
+  }
+  throw new Error(`no local header for ${target} -- the archive layout is not what this helper assumes`);
+}
