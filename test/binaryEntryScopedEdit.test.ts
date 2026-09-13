@@ -40,6 +40,7 @@ import {
   serializeEntryToXml,
   findEntryObjectSpan,
   entrySelectorOf,
+  planDeletion,
 } from 'data-explorer-core';
 import {
   addChildXml,
@@ -49,7 +50,6 @@ import {
   deleteEntryXml,
   pasteEntryXml,
 } from '../src/host/xmlStructuralEdit.js';
-import { planDeletion } from '../src/host/deletionPlan.js';
 import {
   applyEntryOps,
   entryRecord,

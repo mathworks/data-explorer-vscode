@@ -3,7 +3,7 @@
 // The seams between the paths a multi-row action travels, over a REAL model.
 //
 // One selection is resolved twice: by the webview, to label and enable a menu
-// (webview/operands.ts), and by the host, to perform the edit (host/deletionPlan.ts +
+// (webview/operands.ts), and by the host, to perform the edit (core's planDeletion +
 // structuralEdit's owningEntriesOf). Two answers to "which rows does this act on" is the
 // recurring defect in this repo, and it is invisible when it drifts: the menu says
 // "Delete 3 Items" and two disappear. So the resolutions are asserted against each other
@@ -20,7 +20,7 @@ import { buildRows } from '../src/host/rowBuilder.js';
 import { sectionRules } from '../src/host/sectionRules.js';
 import { dropFactsOf } from '../src/host/dropFacts.js';
 import { buildClipboardSnapshot, buildDragSnapshot, pasteEntry } from '../src/host/structuralEdit.js';
-import { planDeletion } from '../src/host/deletionPlan.js';
+import { planDeletion } from 'data-explorer-core';
 import { resolveOperands } from '../src/webview/operands.js';
 import { buildContextMenuItems, type MenuRow } from '../src/webview/menuItems.js';
 import { dropDecision, rejectReason } from '../src/webview/dropDecision.js';

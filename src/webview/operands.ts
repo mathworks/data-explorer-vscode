@@ -14,7 +14,7 @@
 //
 // Pure and row-shaped on purpose: the webview holds no model, so an owning entry is
 // found by walking `parent` until the parent is a section header. The model-side
-// mirror of the same rule is host/deletionPlan.ts, and the two are pinned against
+// mirror of the same rule is core's planDeletion, and the two are pinned against
 // each other in multiSelectInvariants.test.ts — that pairing is the point, because this
 // is the `one rule, two paths` bug class.
 import { isSectionRowId } from '../common/sectionRowId.js';

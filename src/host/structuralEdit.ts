@@ -24,6 +24,7 @@ import {
   entrySelectorOf,
   generateUuid,
   getSectionMetadata,
+  owningEntryOf,
   type EntrySelector,
   type TextPatch,
 } from 'data-explorer-core';
@@ -72,10 +73,17 @@ function patchResult(text: string, patch: TextPatch, selectId: string | null): S
 // Walk up from any node to its owning top-level entry (the node where
 // `isEntry` is true), or null if there is none. Section rows and detached
 // nodes have no owning entry.
+//
+// The walk itself is core's now (`owningEntryOf`, beside the `isEntry` it reads): both
+// members belong to core's node classes, so "which entry does this row belong to" is a
+// question about the MODEL, and this file's named copy of it was the second of two
+// spellings — core walked the same chain inline inside DataNode._markModified.
+//
+// Kept as a name here, and kept `any` in and `any` out, because ~15 call sites in this
+// host read the result as a live node and pass it straight to another `any` seam. Typing
+// this at core's node class would push a cast onto every one of them to say nothing new.
 export function findOwningEntry(node: any): any {
-  let entry: any = node;
-  while (entry && !entry.isEntry) entry = entry.parent;
-  return entry ?? null;
+  return owningEntryOf(node);
 }
 
 // Resolve the section a paste should target, given the right-clicked row's
@@ -304,7 +312,7 @@ export function deleteChild(text: string, node: any): StructuralResult {
  * ALL the children must share one entry, and that is checked rather than assumed: one
  * splice can only rewrite one entry, so a mixed list would drop the other entry's
  * removals from the text while keeping them in the model — a table that disagrees with
- * its own file. The caller that groups them (deletionPlan.planDeletion) guarantees it;
+ * its own file. The caller that groups them (core's planDeletion) guarantees it;
  * this is what makes the guarantee testable.
  *
  * Both checks run over the WHOLE group before anything is removed, so a group this

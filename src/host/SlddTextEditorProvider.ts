@@ -65,8 +65,7 @@ import {
   type StructuralResult,
   type TextPatch,
 } from './structuralEdit.js';
-import { planDeletion } from './deletionPlan.js';
-import { entrySelectorOf, minimalReplacement, type EntrySelector } from 'data-explorer-core';
+import { entrySelectorOf, minimalReplacement, planDeletion, type EntrySelector } from 'data-explorer-core';
 import { copyEntriesToClipboard } from './clipboardAction.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';

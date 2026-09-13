@@ -31,6 +31,7 @@ import {
   DATA_PART_XML,
   findEntryObjectSpan,
   entrySelectorOf,
+  planDeletion,
   type ParseWarning,
 } from 'data-explorer-core';
 // Never parseBinarySlddParts directly: readSlddParts is the same read plus the rule
@@ -44,7 +45,6 @@ import {
   buildDragSnapshot,
   reselectAfterRemoval,
 } from './structuralEdit.js';
-import { planDeletion } from './deletionPlan.js';
 import { copyEntriesToClipboard } from './clipboardAction.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
 import {
