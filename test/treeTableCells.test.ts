@@ -1175,3 +1175,71 @@ describe('a matrix Value cell carries the Variable Editor glyph', () => {
     table.remove();
   });
 });
+
+describe('a Data Type that names a type definition', () => {
+  // Core sends `{prefix, text, linkTarget}` for a value like `Bus: artFsAimCmd`: the
+  // dictionary holds an entry called `artFsAimCmd`, not one called `Bus: artFsAimCmd`, so
+  // the qualifier is plain text and only the name is the anchor. Underlining the whole
+  // string would claim the dictionary holds something it does not, and clicking it would
+  // then have to guess which part was meant.
+  const QUALIFIED = { prefix: 'Bus: ', text: 'artFsAimCmd', linkTarget: 'artFsAimCmd@d.sldd' };
+
+  it('shows the qualifier as text and anchors only the name', async () => {
+    const table = await mount([makeRow('s', 'sig', { DataType: QUALIFIED as any })]);
+    expect(text(table, 's', 'DataType')).toBe('Bus: artFsAimCmd');
+    const link = cell(table, 's', 'DataType').querySelector('a.value-link') as HTMLElement;
+    expect(link.textContent!.trim()).toBe('artFsAimCmd');
+    table.remove();
+  });
+
+  it('reports the whole target when the name is clicked', async () => {
+    const table = await mount([makeRow('s', 'sig', { DataType: QUALIFIED as any })]);
+    const clicked: string[] = [];
+    table.addEventListener('dex-link-clicked', (e) => clicked.push((e as CustomEvent).detail.target));
+    (cell(table, 's', 'DataType').querySelector('a.value-link') as HTMLElement).dispatchEvent(
+      new MouseEvent('click', { bubbles: true, cancelable: true }),
+    );
+    expect(clicked).toEqual(['artFsAimCmd@d.sldd']);
+    table.remove();
+  });
+
+  it('searches the qualifier along with the name', async () => {
+    // The prefix is on screen, so it is part of what the user can search and sort by.
+    // `type:` is the filter prefix for this column (rowFilter.ts), and `type:bus` matches
+    // ONLY through the qualifier — which is what makes this a real assertion about
+    // _getCellText rather than a restatement of the render.
+    const table = await mount([
+      makeRow('s', 'sig', { DataType: QUALIFIED as any }),
+      makeRow('p', 'param', { DataType: { text: 'adtUint8', linkTarget: 'adtUint8@d.sldd' } as any }),
+    ]);
+    const input = table.shadowRoot!.querySelector('.filter-input') as HTMLInputElement;
+    input.value = 'type:bus';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await table.updateComplete;
+
+    expect(cell(table, 's', 'DataType'), 'the bus-typed row survives type:bus').not.toBeNull();
+    expect(table.shadowRoot!.querySelector('tr[data-row-id="p"]'), 'the uint8-typed row does not').toBeNull();
+    table.remove();
+  });
+
+  it('leaves an unqualified link exactly as it was', async () => {
+    // The far majority of linked cells have no prefix at all; this is the shape that
+    // already worked, and it must not grow a stray space.
+    const table = await mount([
+      makeRow('p', 'param', { DataType: { text: 'adtUint8', linkTarget: 'adtUint8@d.sldd' } as any }),
+    ]);
+    expect(text(table, 'p', 'DataType')).toBe('adtUint8');
+    expect(cell(table, 'p', 'DataType').querySelectorAll('a.value-link').length).toBe(1);
+    table.remove();
+  });
+
+  it('shows both halves of a qualified cell even with no link', async () => {
+    // Core never emits a prefix without a linkTarget, and this is what keeps that from
+    // mattering: the un-anchored branch renders the same text the anchored one does, so a
+    // resolver that stopped answering degrades to plain text rather than to a half-value.
+    const table = await mount([makeRow('s', 'sig', { DataType: { prefix: 'Bus: ', text: 'artFsAimCmd' } as any })]);
+    expect(text(table, 's', 'DataType')).toBe('Bus: artFsAimCmd');
+    expect(cell(table, 's', 'DataType').querySelector('a.value-link')).toBeNull();
+    table.remove();
+  });
+});

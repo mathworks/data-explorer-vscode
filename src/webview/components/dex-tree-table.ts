@@ -28,7 +28,11 @@ export interface TreeTableRow {
   // Present only when this row's value is a griddable matrix (host: matrixPayload.ts).
   // Its presence IS the decision — the cell renders the glyph and asks nothing else.
   _matrix?: MatrixPayload;
-  DataType: { text: string; clipboardMode?: string; linkTarget?: string } | string;
+  // `prefix` is core's: the qualifier of a value like `Bus: artFsAimCmd`, split off so the
+  // anchor can cover exactly the name the dictionary holds. Declared here because
+  // _CoreRowContract below compares this line against core's RowData, and a field core
+  // sends that this shape does not name is a build error rather than a lost qualifier.
+  DataType: { prefix?: string; text: string; clipboardMode?: string; linkTarget?: string } | string;
   Class?: { text: string; clipboardMode?: string } | string;
   Kind?: { text: string; clipboardMode?: string } | string;
   Description: { text: string; clipboardMode?: string } | string;
@@ -1756,6 +1760,11 @@ export class DexTreeTable extends LitElement {
             .join(', ');
         if (isCellObject(row.DataType) && 'links' in (row.DataType as any))
           return (row.DataType as any).links.map((l: any) => l.text).join(', ');
+        // The qualifier is on screen, so it belongs in the one string this column is
+        // searched and sorted by. Reading only `text` would make `type:bus` miss every
+        // bus-typed signal while the user is looking straight at the word Bus.
+        if (isCellObject(row.DataType) && typeof (row.DataType as any).prefix === 'string')
+          return (row.DataType as any).prefix + cellText(row.DataType);
         return cellText(row.DataType);
       case 'Class':
         return cellText(row.Class);
@@ -2808,12 +2817,22 @@ export class DexTreeTable extends LitElement {
       }
       const dtText = val.text || '';
       const dtLink = val.linkTarget;
+      // `Bus: ` before `artFsAimCmd`, as plain text: core split the value on its first
+      // colon because the entry the dictionary holds is the name alone, and an underline
+      // over the whole string would claim otherwise. Highlighted through the same
+      // _highlight the anchor uses, so a search term is marked in whichever half it lands
+      // in; a term straddling the colon still MATCHES (see _getCellText) but is marked in
+      // neither, the same limitation every multi-fragment cell in this table has.
+      const dtPrefix = typeof val.prefix === 'string' ? val.prefix : '';
       if (dtLink) {
-        return html`<a class="value-link" href="#" @click=${(e: Event) => this._onLinkClick(dtLink, e)}
-          >${this._highlight(dtText, columnId)}</a
-        >`;
+        return html`${dtPrefix ? this._highlight(dtPrefix, columnId) : ''}<a
+            class="value-link"
+            href="#"
+            @click=${(e: Event) => this._onLinkClick(dtLink, e)}
+            >${this._highlight(dtText, columnId)}</a
+          >`;
       }
-      return html`<span>${this._highlight(dtText, columnId)}</span>`;
+      return html`<span>${dtPrefix ? this._highlight(dtPrefix, columnId) : ''}${this._highlight(dtText, columnId)}</span>`;
     }
 
     if (columnId === 'Class') {
