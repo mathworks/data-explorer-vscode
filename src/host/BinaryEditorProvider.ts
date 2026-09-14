@@ -173,6 +173,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           const rows = buildRows(node);
           webview.postMessage({
             type: 'setRows',
+            docUri: uriString,
             rows,
             columns: PROJECT_COLUMNS,
             columnLabels: PROJECT_COLUMN_LABELS,
@@ -204,6 +205,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
         }
         webview.postMessage({
           type: 'setRows',
+          docUri: uriString,
           rows,
           columns: COLUMNS,
           columnLabels: COLUMN_LABELS,

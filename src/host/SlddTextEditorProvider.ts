@@ -238,6 +238,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           .then(() => {
             webview.postMessage({
               type: 'setRows',
+              docUri: uriString,
               rows,
               columns: COLUMNS,
               columnLabels: COLUMN_LABELS,

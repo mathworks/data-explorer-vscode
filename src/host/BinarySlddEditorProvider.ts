@@ -425,6 +425,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         const rows = buildRows(node, modified, clipMark);
         webview.postMessage({
           type: 'setRows',
+          docUri: uriString,
           rows,
           columns: COLUMNS,
           columnLabels: COLUMN_LABELS,

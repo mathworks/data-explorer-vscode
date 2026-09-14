@@ -177,3 +177,29 @@ describe('each editor answers everything its contract makes meaningful', () => {
     });
   }
 });
+
+describe('every setRows says which document it is describing', () => {
+  // The webview answers a link into its own document itself (webview/linkRoute.ts), which
+  // it can only do if it knows which document that is. `webview.postMessage` takes `any`,
+  // so omitting the field at one of these call sites is not a type error, and the symptom
+  // is silent: that one view's local links take the host round-trip instead. Four posts
+  // across three providers is exactly the shape this file exists for.
+  const posts = PROVIDERS.map((p) => ({
+    file: p.file,
+    bodies: [...read(`src/host/${p.file}`).matchAll(/postMessage\(\{\s*type: 'setRows'([\s\S]*?)\}\)/g)].map(
+      (m) => m[1],
+    ),
+  }));
+
+  it('finds all four posts, so none of them is missed below', () => {
+    // A regex that matched nothing would make the loop vacuous.
+    expect(posts.reduce((n, p) => n + p.bodies.length, 0)).toBe(4);
+  });
+
+  for (const { file, bodies } of posts) {
+    it(`${file} sets docUri on each of its ${bodies.length} setRows posts`, () => {
+      expect(bodies.length).toBeGreaterThan(0);
+      for (const body of bodies) expect(body).toContain('docUri');
+    });
+  }
+});

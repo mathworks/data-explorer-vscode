@@ -11,6 +11,7 @@ import { nextExpandedIds, nextStickyIds, pendingSelectionToApply, spliceEntryRow
 import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from './menuItems.js';
 import { dropDecision, type DragMode, type DropTarget, type DragSource } from './dropDecision.js';
 import { sectionRowIdOf } from './operands.js';
+import { linkRoute } from './linkRoute.js';
 import type { ContextMenuItem } from './components/dex-context-menu.js';
 import type { SectionRule } from '../host/sectionRules.js';
 import type { DragDescriptor } from '../host/dragState.js';
@@ -318,6 +319,11 @@ window.addEventListener('message', (event: MessageEvent) => {
     const rows = msg.rows ?? [];
     editable = !!msg.editable;
     hasTextView = !!msg.hasTextView;
+    // Every table gets setRows, including the read-only ones that never receive
+    // sectionRules — so this is the assignment that lets a .slx or .mat view answer a link
+    // into itself. Guarded so a provider that has not been updated leaves the old value
+    // rather than blanking it.
+    docUri = typeof msg.docUri === 'string' ? msg.docUri : docUri;
     table.columns = msg.columns ?? null;
     table.columnLabels = msg.columnLabels ?? null;
     table.columnGroups = (msg.columnGroups as Record<string, string> | undefined) ?? null;
@@ -503,13 +509,33 @@ table.addEventListener('dex-row-selected', (e: Event) => {
   vscode.postMessage({ type: 'select', rowIds: detail.rowIds ?? [] });
 });
 
-// A Usage-column link was clicked. The target tab isn't this webview, so relay
-// the raw target to the host, which opens the referenced file and selects the
-// row there (see navigate.ts). Cross-tab navigation is host-mediated because
-// each table is its own webview (unlike the vendored dex-app's in-page nav).
+// A link was clicked. Most targets name a row in ANOTHER tab, so they go to the host,
+// which opens the referenced file and selects the row there (see navigate.ts) —
+// cross-tab navigation is host-mediated because each table is its own webview (unlike
+// the vendored dex-app's in-page nav).
+//
+// A Data Type link is the exception: core built its target from the source the entry
+// lives in, so the row is already in this table. The host path would still work — it
+// opens the tab the user is looking at and posts a selectByName back — so this is a
+// round-trip and a tab focus saved, not a bug fixed. linkRoute owns the decision, and
+// nothing here re-derives it.
 table.addEventListener('dex-link-clicked', (e: Event) => {
   const target = (e as CustomEvent).detail?.target;
-  if (typeof target === 'string') vscode.postMessage({ type: 'navigate', target });
+  if (typeof target !== 'string') return;
+  const route = linkRoute(target, docUri);
+  if (route.kind !== 'local') {
+    vscode.postMessage({ type: 'navigate', target });
+    return;
+  }
+  // The same name-matching path a cross-tab selectByName lands on, so a local jump and a
+  // remote one select the same row, expand the same ancestors and tell the host about the
+  // selection the same way.
+  pendingSelectName = route.name;
+  applyPendingNameSelection();
+  // ...but not the same PENDING behaviour: a cross-tab target legitimately arrives before
+  // its rows and waits. A local target's row is already here, so a miss means the target
+  // was wrong, and leaving it in the slot would hijack the next repaint.
+  pendingSelectName = null;
 });
 
 // Relay committed cell edits to the host for write-back into the JSON text.

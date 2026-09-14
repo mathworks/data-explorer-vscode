@@ -27,6 +27,21 @@ import type { WarningBanner } from '../host/parseWarnings.js';
 /** Full table repaint: rows + column metadata + edit/read-only mode. */
 export interface SetRowsMessage {
   type: 'setRows';
+  /**
+   * The uri of the document these rows came from, so the webview can answer a link into
+   * itself without a host round-trip (see webview/linkRoute.ts).
+   *
+   * On `setRows` rather than `sectionRules` because only the two EDITABLE providers post
+   * that one — it carries drop rules, which a read-only .slx/.mat view has none of. Hang
+   * the uri off it and a read-only table never learns its own identity, so its links take
+   * the host path while a dictionary's take the local one: the same rule behaving two ways
+   * depending on which provider had drop rules to send.
+   *
+   * Declared required to say every provider owes it, though `webview.postMessage` is
+   * untyped, so what actually holds the four call sites is a test in
+   * test/messageDispatch.test.ts.
+   */
+  docUri: string;
   rows: any[];
   columns: unknown;
   columnLabels: unknown;
