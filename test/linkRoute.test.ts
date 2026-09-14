@@ -1,4 +1,5 @@
 // Copyright 2026 The MathWorks, Inc.
+// @vitest-environment happy-dom
 //
 // Which link clicks this webview can answer itself.
 //
@@ -12,9 +13,12 @@
 // `blocks:`/`workspace:` grammars, which name things this table cannot select by that
 // spelling. Getting the routing wrong in the generous direction is worse than not routing
 // at all — a click that quietly selects nothing.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+// `join(import.meta.dirname, …)` and not `fileURLToPath(import.meta.url)`: this file runs
+// under happy-dom, where import.meta.url is an http URL and fileURLToPath rejects it.
+// blockSidIdentity.test.ts reads the same module the same way for the same reason.
+import { join } from 'node:path';
 import { linkRoute } from '../src/webview/linkRoute.js';
 import { blankCommentsAndKeepLines } from './tools/moduleGraph.js';
 
@@ -74,10 +78,11 @@ describe('a link into this same document is answered here', () => {
 });
 
 describe('table-main routes every link through that one function', () => {
-  // table-main.ts runs top-level side effects against a live table element, so it is not
-  // importable here — the same reason multiSelectInvariants.test.ts reads it as source.
+  // Read as source, the way multiSelectInvariants.test.ts reads it: these three are about
+  // the SHAPE of the code rather than its behaviour, which the describe below drives for
+  // real against an imported table-main.
   const src = blankCommentsAndKeepLines(
-    readFileSync(fileURLToPath(new URL('../src/webview/table-main.ts', import.meta.url)), 'utf8'),
+    readFileSync(join(import.meta.dirname, '..', 'src/webview/table-main.ts'), 'utf8'),
   );
 
   it('decides in exactly one place', () => {
@@ -97,8 +102,110 @@ describe('table-main routes every link through that one function', () => {
     // it pending would hijack the next repaint.
     //
     // Two clearings: the one inside applyPendingNameSelection, which runs only on a HIT,
-    // and the unconditional one after the local call. Counting them is what makes this
-    // assertion about the second — matching either would have passed before it existed.
+    // and the one on the miss branch after the local call. Counting them is what makes
+    // this assertion about the second — matching either would have passed before it
+    // existed.
     expect(src.match(/pendingSelectName = null;/g) ?? []).toHaveLength(2);
+  });
+});
+
+// ── the routing, driven for real ──────────────────────────────────────────────────
+// Everything above reads table-main as text. This imports it and clicks links in it, so
+// the assertions are about the listener that actually ships rather than about a copy of it
+// rewritten here. That distinction is the whole reason to bother: a reconstructed listener
+// is one rule on two paths, and it goes on passing after the shipped one changes.
+//
+// It is importable after all, with two stubs: `acquireVsCodeApi` as a global (the module
+// calls it at top level) and a `<dex-tree-table>` in the body for it to bind to, both in
+// place before the dynamic import runs. Importing it once, in beforeAll, is not a choice —
+// a module body runs once per test FILE, and this one wires window and body listeners.
+describe('a local click that finds no row still reaches the host', () => {
+  const posted: { type: string; [k: string]: unknown }[] = [];
+  let table: any;
+
+  beforeAll(async () => {
+    (globalThis as any).acquireVsCodeApi = () => ({
+      postMessage: (m: unknown) => posted.push(m as { type: string }),
+    });
+    document.body.innerHTML = '<dex-tree-table></dex-tree-table>';
+    await import('../src/webview/table-main.js');
+    table = document.querySelector('dex-tree-table');
+  });
+
+  // A repaint carrying one row, from THIS document — the setRows `docUri` is what lets the
+  // routing fire at all, so this doubles as the end-to-end check that the field arrives.
+  async function paint(names: string[]): Promise<void> {
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          type: 'setRows',
+          docUri: HERE,
+          rows: names.map((name, i) => ({ ID: `r${i}`, parent: null, Name: { label: name } })),
+          columns: ['Name'],
+          columnLabels: { Name: 'Name' },
+          editable: false,
+        },
+      }),
+    );
+    await table.updateComplete;
+  }
+
+  function click(target: string): void {
+    table.dispatchEvent(new CustomEvent('dex-link-clicked', { detail: { target } }));
+  }
+
+  const types = () => posted.map((m) => m.type);
+
+  beforeEach(async () => {
+    await paint(['artFsAimCmd']);
+    posted.length = 0;
+  });
+
+  it('selects locally and posts no navigate when the row is here', () => {
+    // The point of the whole optimisation, and the assertion that keeps the fast path
+    // fast: one `select`, and nothing that would make the host open and re-focus the tab
+    // the user is already looking at.
+    click(`artFsAimCmd@${HERE}`);
+    expect(types()).toEqual(['select']);
+    expect(posted[0].rowIds).toEqual(['r0']);
+  });
+
+  it('falls back to the host when the name matches no row', () => {
+    // linkRoute's allowlist is a claim about every target that will ever carry this
+    // document's uri. It holds for today's producers, but core's resolveLink reads the
+    // name half as an EXPRESSION, not a whole name, so a same-document `[tau 1]@here`
+    // has no colon, routes local, and finds nothing. Handing the miss to the host — which
+    // can resolve it — is what makes the allowlist merely an optimisation rather than
+    // something that has to stay exhaustive forever.
+    click(`[tau 1]@${HERE}`);
+    expect(types()).toEqual(['navigate']);
+    // The RAW target, not the name half: the host needs the whole `name@source` grammar
+    // to know which document to resolve in.
+    expect(posted[0].target).toBe(`[tau 1]@${HERE}`);
+  });
+
+  it('does not select twice when it falls back', () => {
+    // The fallback must not ALSO take the local path: a `select` here plus a host
+    // navigation would re-focus the tab and undo the optimisation on exactly the clicks
+    // that are already the slow ones.
+    click(`nosuch@${HERE}`);
+    expect(types()).not.toContain('select');
+  });
+
+  it('does not let a missed local target hijack the next repaint', async () => {
+    // pendingSelectName is deliberately sticky for a cross-tab target, which legitimately
+    // arrives before its rows. A local miss is not that — the rows were already here — so
+    // the slot has to be cleared, or the next repaint that happens to contain the name
+    // selects it out of nowhere, long after the click.
+    click(`latecomer@${HERE}`);
+    posted.length = 0;
+    await paint(['artFsAimCmd', 'latecomer']);
+    expect(types()).not.toContain('select');
+  });
+
+  it('still hands a cross-document target straight to the host', () => {
+    // The path that existed before any of this, unchanged.
+    click('Kp@file:///w/Other.sldd');
+    expect(types()).toEqual(['navigate']);
   });
 });

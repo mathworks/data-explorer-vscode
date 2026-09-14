@@ -532,10 +532,17 @@ table.addEventListener('dex-link-clicked', (e: Event) => {
   // selection the same way.
   pendingSelectName = route.name;
   applyPendingNameSelection();
-  // ...but not the same PENDING behaviour: a cross-tab target legitimately arrives before
-  // its rows and waits. A local target's row is already here, so a miss means the target
-  // was wrong, and leaving it in the slot would hijack the next repaint.
-  pendingSelectName = null;
+  if (pendingSelectName !== null) {
+    // A local MISS. applyPendingNameSelection clears the slot on a hit and leaves it set
+    // otherwise, so this is the table saying the row is not here after all — a target whose
+    // name half is an expression rather than a whole name, say (core resolves those; this
+    // table cannot). Hand it to the host, which can, rather than swallowing the click. The
+    // slot is cleared either way: a local target that missed must not hijack the next
+    // repaint the way a legitimately-early cross-tab target is allowed to.
+    pendingSelectName = null;
+    vscode.postMessage({ type: 'navigate', target });
+    return;
+  }
 });
 
 // Relay committed cell edits to the host for write-back into the JSON text.
