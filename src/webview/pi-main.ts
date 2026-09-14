@@ -40,5 +40,17 @@ window.addEventListener('message', (event: MessageEvent) => {
   }
 });
 
+// A cross-reference in the inspector was clicked. This webview has no rows to select in —
+// the target is a row in a TABLE, which is a different webview — so the host resolves it,
+// exactly as it does for a cross-tab Usage link (host/navigate.ts).
+//
+// Until now nothing listened for this event, so the inspector's link path was inert. It was
+// invisible because it was also unreachable: its only trigger was a `type: 'link'` row,
+// which needs a `link` field nothing in core sets.
+pi?.addEventListener('dex-pi-navigate', (e: Event) => {
+  const target = (e as CustomEvent).detail?.sourceId;
+  if (typeof target === 'string' && target !== '') vscode.postMessage({ type: 'navigate', target });
+});
+
 setEmpty(true);
 vscode.postMessage({ type: 'ready' });

@@ -351,3 +351,51 @@ describe('the Value property row carries the matrix payload', () => {
     expect(rows.filter((r) => r.matrix)).toEqual([]);
   });
 });
+
+describe('the Data Type row carries core valueLink through to the PI', () => {
+  // Core sets `valueLink` on the DataType property when the type names another entry in the
+  // same dictionary (BaseNode.toPIObject). It is deliberately NOT the `link` field this
+  // builder already reads: that one flips the row to type 'link', which anchors the property
+  // NAME and mutes the value — right for a row whose label is the reference, wrong here,
+  // where the VALUE is.
+  const propRow = (props: Record<string, unknown>, objects: Record<string, unknown>) =>
+    buildPropertyGroups({
+      toPIObject: () => ({
+        objects: [objects],
+        propertySheet: {
+          groups: [{ name: 'g', displayName: 'Group', items: [{ type: 'property', name: 'DataType' }] }],
+          properties: [{ name: 'DataType', displayName: 'Data Type', ...props }],
+        },
+      }),
+    })[0].properties[0];
+
+  it('passes the target through as valueLink', () => {
+    const row = propRow({ valueLink: 'adtUint8@d.sldd' }, { DataType: 'adtUint8' });
+    expect(row.valueLink).toBe('adtUint8@d.sldd');
+    expect(row.value).toBe('adtUint8');
+  });
+
+  it('leaves the row a plain text row', () => {
+    // The distinction that matters: `type` stays 'text', so the component renders the NAME
+    // as a label and the VALUE as the anchor. A row that came back as 'link' would put the
+    // underline on the words "Data Type".
+    const row = propRow({ valueLink: 'adtUint8@d.sldd' }, { DataType: 'adtUint8' });
+    expect(row.type).toBe('text');
+    expect(row.linkTarget).toBeUndefined();
+  });
+
+  it('omits it when core sent none', () => {
+    const row = propRow({}, { DataType: 'double' });
+    expect(row.valueLink).toBeUndefined();
+    expect(row.type).toBe('text');
+  });
+
+  it('still honours the name-anchoring link field', () => {
+    // Nothing in core sets `link` today, but the branch is live in this builder and must
+    // keep its meaning: this is the row shape whose LABEL is the reference.
+    const row = propRow({ link: 'controller.slx' }, { DataType: 'x' });
+    expect(row.type).toBe('link');
+    expect(row.linkTarget).toBe('controller.slx');
+    expect(row.valueLink).toBeUndefined();
+  });
+});

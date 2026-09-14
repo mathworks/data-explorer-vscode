@@ -10,6 +10,9 @@ export class PropertiesViewProvider implements vscode.WebviewViewProvider {
   private ready = false;
   private pending: any[] | null = null; // pending groups
 
+  /** A cross-reference was clicked in the inspector; resolve it as a table link. */
+  public onNavigate: ((target: string) => void) | null = null;
+
   constructor(private readonly extensionUri: vscode.Uri) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -23,6 +26,10 @@ export class PropertiesViewProvider implements vscode.WebviewViewProvider {
           view.webview.postMessage({ type: 'showProps', groups: this.pending });
           this.pending = null;
         }
+      } else if (msg?.type === 'navigate') {
+        // Answered by the same closure the three table providers use, so a Data Type link
+        // behaves identically whichever pane it was clicked in.
+        this.onNavigate?.(msg.target);
       }
     });
     view.onDidDispose(() => {

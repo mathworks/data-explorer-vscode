@@ -310,4 +310,6 @@ export type TableToHostMessage =
   | DropMessage;
 
 /** Every message the host receives from the property-inspector webview. */
-export type PropsToHostMessage = ReadyMessage;
+// `NavigateMessage` is reused rather than reinvented: a clicked cross-reference means the
+// same thing from either webview, and the host answers both with the same closure.
+export type PropsToHostMessage = ReadyMessage | NavigateMessage;

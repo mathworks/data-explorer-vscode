@@ -401,3 +401,54 @@ describe('the Value row shows the Variable Editor glyph', () => {
     expect(rows(el)[0].querySelector('dex-matrix-open')).toBeNull();
   });
 });
+
+describe('a Data Type value that names another entry is a link', () => {
+  // Otherwise the same fact is a link in the table and dead text one pane away. The anchor
+  // goes on the VALUE here — the name column says "Data Type", which is not what the click
+  // navigates to.
+  const LINKED: PropertyGroup[] = [
+    {
+      title: 'Simulink.Parameter',
+      properties: [
+        { name: 'Value', value: '42', type: 'text' },
+        { name: 'DataType', value: 'adtUint8', type: 'text', valueLink: 'adtUint8@d.sldd' },
+      ],
+    },
+  ];
+
+  it('anchors the value and leaves the name a label', async () => {
+    const el = await makeInspector(LINKED);
+    const rows = Array.from(el.shadowRoot!.querySelectorAll('.prop-row'));
+    const dt = rows[1];
+    expect(dt.querySelector('.prop-name')!.textContent!.trim()).toBe('DataType');
+    expect(dt.querySelector('.prop-name a')).toBeNull();
+    expect(dt.querySelector('.prop-value a')!.textContent!.trim()).toBe('adtUint8');
+  });
+
+  it('reports the target and does not follow the href', async () => {
+    const el = await makeInspector(LINKED);
+    const seen: string[] = [];
+    el.addEventListener('dex-pi-navigate', (e) => seen.push((e as CustomEvent).detail.sourceId));
+    const link = el.shadowRoot!.querySelectorAll('.prop-row')[1].querySelector('.prop-value a') as HTMLElement;
+    const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+    link.dispatchEvent(ev);
+    expect(seen).toEqual(['adtUint8@d.sldd']);
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  it('renders a value with no valueLink as text, as before', async () => {
+    const el = await makeInspector(GROUPS);
+    expect(el.shadowRoot!.querySelectorAll('.prop-row')[1].querySelector('.prop-value a')).toBeNull();
+  });
+
+  it('renders an editable row as an input even if a link came with it', async () => {
+    // The editable branch wins: an anchor around an input is not a thing, and Data Type is
+    // read-only everywhere today, so a row that is both is a contradiction to resolve in
+    // favour of editing rather than to render half of.
+    const el = await makeInspector([
+      { title: 'g', properties: [{ name: 'DataType', value: 'adtUint8', editable: true, valueLink: 'adtUint8@d.sldd' }] },
+    ]);
+    expect(el.shadowRoot!.querySelector('.prop-input')).not.toBeNull();
+    expect(el.shadowRoot!.querySelector('.prop-value a')).toBeNull();
+  });
+});

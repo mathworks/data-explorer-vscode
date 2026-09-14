@@ -101,6 +101,9 @@ export function activate(context: vscode.ExtensionContext): void {
     void handleNavigate(target, (uri) => openInBestEditor(uri));
   };
 
+  // The inspector navigates through the same closure as the tables.
+  piProvider.onNavigate = navigate;
+
   const binaryProvider = new BinaryEditorProvider(context);
   binaryProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
   binaryProvider.onNavigate = navigate;

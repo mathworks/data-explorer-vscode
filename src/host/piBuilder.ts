@@ -7,6 +7,11 @@ export interface PIPropertyRow {
   editable: boolean;
   type: 'text' | 'link';
   linkTarget?: string;
+  // A link on the VALUE, set by core on the Data Type property when the type names another
+  // entry in the same dictionary. Distinct from `linkTarget` above, which pairs with
+  // `type: 'link'` and anchors the property NAME: this row's label is the word "Data Type",
+  // which is not what the click navigates to.
+  valueLink?: string;
   // Present only on a Value row whose value is a griddable matrix. Same payload
   // and same builder the table rows use, so the PI cannot disagree with the table
   // about what is griddable.
@@ -35,12 +40,17 @@ export function buildPropertyGroups(node: any): PIPropertyGroup[] {
       );
       if (!propDef) continue;
       const link = (propDef as any).link; // usually undefined for textual sldd
+      // Core's forward type link (BaseNode.toPIObject). Passed straight through and NOT
+      // folded into `link`: that one would make this a `type: 'link'` row, whose template
+      // anchors the property name and mutes the value.
+      const valueLink = (propDef as any).valueLink;
       const row: PIPropertyRow = {
         name: propDef.displayName || propDef.name,
         value: String(obj[propDef.name] ?? ''),
         editable: false, // read-only V1
         type: link ? 'link' : 'text',
         linkTarget: link || undefined,
+        ...(typeof valueLink === 'string' && valueLink !== '' ? { valueLink } : {}),
       };
       // The Variable Editor affordance, on the Value property only: it is the one
       // property whose value can be a matrix. `node` is passed, NOT its Value

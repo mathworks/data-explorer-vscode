@@ -17,6 +17,10 @@ export interface PropertyRow {
   editable?: boolean;
   type?: 'text' | 'link';
   linkTarget?: string;
+  // A link on the VALUE (piBuilder, from core's toPIObject): the Data Type of an entry
+  // whose type is another entry in the same dictionary. Separate from `type: 'link'`, whose
+  // template anchors the NAME.
+  valueLink?: string;
   // Set by piBuilder for a matrix-valued Value row. Opens the same popover the
   // table's Value cell opens, via the same dex-matrix-open glyph.
   matrix?: MatrixPayload;
@@ -158,6 +162,19 @@ export class DexPropertyInspector extends LitElement {
         .value=${live(prop.value)}
         @change=${(e: Event) => this._onPropertyChange(prop.name, (e.target as HTMLInputElement).value, prop.value)}
       />`;
+    }
+    // The type this value names, as a link to its definition — the same jump the table's
+    // Data Type cell offers, reported through the same event as the name-anchored link
+    // above so there is one navigation channel out of this component.
+    //
+    // Below the editable check on purpose: an anchor wrapped around an <input> is not a
+    // thing, and Data Type is read-only everywhere today, so a row that claims both is a
+    // contradiction to resolve rather than to render half of.
+    if (prop.valueLink) {
+      const target = prop.valueLink;
+      return html`<a class="prop-link" href="#" @click=${(e: Event) => this._onLinkClick(e, target)}
+        >${prop.value}</a
+      >`;
     }
     // The glyph FOLLOWS the value text — the same affordance, event and icon the
     // table's Value cell renders, so there is exactly one way to open a grid. An
