@@ -15,7 +15,7 @@ import { linkRoute } from './linkRoute.js';
 import type { ContextMenuItem } from './components/dex-context-menu.js';
 import type { SectionRule } from '../host/sectionRules.js';
 import type { DragDescriptor } from '../host/dragState.js';
-import { sectionNameFromRowId } from '../common/sectionRowId.js';
+import { isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
 import type { HostToTableMessage } from '../common/protocol.js';
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
@@ -178,7 +178,17 @@ let pendingSelectName: string | null = null;
 
 function applyPendingNameSelection(): void {
   if (!pendingSelectName) return;
-  const rows = (table.rows ?? []) as { ID: string; Name?: { label?: string }; _blockKey?: string }[];
+  const rows = (table.rows ?? []) as {
+    ID: string;
+    parent?: string | null;
+    Name?: { label?: string };
+    _blockKey?: string;
+  }[];
+  // A row that is a top-level ENTRY: its parent is a section header. Same reading of the
+  // row shape as operands.ts, through the same `section:` spelling.
+  const isEntry = (r: { parent?: string | null }): boolean =>
+    typeof r.parent === 'string' && isSectionRowId(r.parent);
+  const named = (r: { Name?: { label?: string } }): boolean => r.Name?.label === pendingSelectName;
   // Two grammars share this one channel. A variable target (and a block in a file
   // written before SIDs existed) is a NAME and matches the Name label; a block
   // target is core's block KEY — the SID — which is not printed anywhere, so it is
@@ -186,8 +196,20 @@ function applyPendingNameSelection(): void {
   // `blocks:65@f14.slx` click would open the model and select nothing, since the
   // row it means reads `<SID: 65>`. Name first, so every pre-SID target keeps its
   // existing answer when a same-spelled key also exists.
+  //
+  // ENTRY rows first within the Name pass, because a name can be spelled at more than
+  // one depth and every by-name target on this channel means the top-level one: a Data
+  // Type link resolves through core's typeLinkIndex, which is `isEntry`-gated, and the
+  // Usage grammars name a dictionary/MAT variable or a model-workspace param. A nested
+  // row that happens to share the name is not what any of them means — and in an
+  // architectural dictionary that is not hypothetical, because a bus element named after
+  // the value type it references sits ABOVE that value type's own entry. First-in-
+  // document-order then answered with the row the click came FROM, so the link selected
+  // what was already selected and read as dead. The ungated pass stays as the fallback a
+  // pre-SID block target needs: its row is deep in the block tree, never an entry.
   const match =
-    rows.find((r) => r.Name?.label === pendingSelectName) ??
+    rows.find((r) => named(r) && isEntry(r)) ??
+    rows.find(named) ??
     rows.find((r) => r._blockKey === pendingSelectName);
   if (!match) return;
   table.selectedRowIds = [match.ID];
