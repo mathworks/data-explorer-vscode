@@ -48,8 +48,19 @@ describe('a link into this same document is answered here', () => {
     expect(linkRoute(`Kp@${AT_URI}`, AT_URI)).toEqual({ kind: 'local', name: 'Kp' });
   });
 
+  it('routes an editable binary dictionary locally too', () => {
+    // Its srcId is not its uri: BinarySlddEditorProvider prefixes, so core builds
+    // `Kp@binedit:file:///…` while setRows carries the plain uri. Compared raw those never
+    // match, and every link in a binary .sldd took the host path — correct, but the fast
+    // path silently never firing for one of the three providers is one rule on two paths.
+    expect(linkRoute(`Kp@binedit:${HERE}`, HERE)).toEqual({ kind: 'local', name: 'Kp' });
+  });
+
   it('sends a link into another document to the host', () => {
     expect(linkRoute(`Kp@file:///w/Other.sldd`, HERE)).toEqual({ kind: 'host' });
+    // Prefixed and still elsewhere: unwrapping the srcId must not widen what counts as
+    // "this document".
+    expect(linkRoute(`Kp@binedit:file:///w/Other.sldd`, HERE)).toEqual({ kind: 'host' });
   });
 
   it('sends the block and workspace grammars to the host', () => {
@@ -207,5 +218,14 @@ describe('a local click that finds no row still reaches the host', () => {
     // The path that existed before any of this, unchanged.
     click('Kp@file:///w/Other.sldd');
     expect(types()).toEqual(['navigate']);
+  });
+
+  it('selects locally for a target carrying the binary-edit srcId', () => {
+    // The shipped listener, for the provider whose srcId is not its uri. Driven here and not
+    // only through linkRoute() because what matters is that the string setRows delivers and
+    // the string core builds are reconciled somewhere on this path.
+    click(`artFsAimCmd@binedit:${HERE}`);
+    expect(types()).toEqual(['select']);
+    expect(posted[0].rowIds).toEqual(['r0']);
   });
 });

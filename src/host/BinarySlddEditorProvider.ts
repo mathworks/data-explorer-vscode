@@ -87,11 +87,8 @@ import {
 } from './editorHub.js';
 import { basename } from '../common/pathUtil.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
+import { binaryEditSrcId } from '../common/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
-
-// srcId prefix so the editable model never collides with the read-only
-// BinaryEditorProvider's cached model of the same URI (DataModel is a singleton).
-const SRC_PREFIX = 'binedit:';
 
 /**
  * One open view of a document: the two ways the document can ask it to repaint.
@@ -195,8 +192,12 @@ class BinarySlddDocument implements vscode.CustomDocument {
     this.zipMeta = zipMeta;
   }
 
+  // Prefixed, so this editable model never collides with the read-only
+  // BinaryEditorProvider's cached model of the same uri (DataModel is a singleton). The
+  // prefix and its removal live together in common/srcId.ts — a link target core builds out
+  // of this srcId has to be read back as a document, which is what needs the pair to agree.
   get srcId(): string {
-    return SRC_PREFIX + this.uri.toString();
+    return binaryEditSrcId(this.uri.toString());
   }
 
   /**
@@ -208,7 +209,7 @@ class BinarySlddDocument implements vscode.CustomDocument {
    *
    * From `uri.path`, which is DECODED, rather than from the srcId, which is not. That
    * lookup tries the srcId's own basename first, and for this provider the srcId is
-   * `SRC_PREFIX + uri.toString()` — percent-encoded, so a dictionary named `my
+   * `binaryEditSrcId(uri.toString())` — percent-encoded, so a dictionary named `my
    * params.sldd` is `my%20params.sldd` there and matches nothing a model recorded. The
    * decoded basename is the only spelling that answers for a file with a space in its
    * name, which on the paths MATLAB projects live on is the common case, not the corner.

@@ -14,6 +14,8 @@
 // working navigation into a click that selects nothing. A dictionary entry name cannot
 // contain a colon, which is what makes "has a colon in the name half" a sound test for
 // them — and the same fact core's first-colon split relies on.
+import { srcIdToUriString } from '../common/srcId.js';
+
 export type LinkRoute = { kind: 'local'; name: string } | { kind: 'host' };
 
 export function linkRoute(target: string, docUri: string): LinkRoute {
@@ -25,7 +27,11 @@ export function linkRoute(target: string, docUri: string): LinkRoute {
   const at = target.indexOf('@');
   if (at <= 0) return { kind: 'host' };
   const name = target.slice(0, at);
-  if (target.slice(at + 1) !== docUri) return { kind: 'host' };
+  // The source half is a core srcId, not a uri: for an editable binary dictionary it is
+  // `binedit:file:///…`, and comparing that raw against docUri sends every link in the file
+  // to the host. Correct either way — the host resolves it — but this table would silently
+  // never take its own fast path, which is the kind of difference that stays hidden.
+  if (srcIdToUriString(target.slice(at + 1)) !== docUri) return { kind: 'host' };
   if (name.includes(':')) return { kind: 'host' };
   return { kind: 'local', name };
 }

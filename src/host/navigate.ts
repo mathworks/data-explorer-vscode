@@ -15,6 +15,7 @@
 // resolved against the workspace.
 import * as vscode from 'vscode';
 import { parseNavTarget, parseFileTarget } from './navTarget.js';
+import { srcIdToUriString } from '../common/srcId.js';
 
 export { parseNavTarget, parseFileTarget };
 
@@ -74,7 +75,14 @@ export function wireNavigateSelect(
 
 // A full uriString parses directly; a bare basename is looked up in the
 // workspace (first match wins).
-async function resolveSource(source: string): Promise<vscode.Uri | undefined> {
+//
+// `source` is a core srcId, so it can also arrive in a provider's own spelling of one:
+// BinarySlddEditorProvider registers `binedit:file:///…`. That still contains '://' and
+// Uri.parse still accepts it — as scheme `binedit` with the whole `file:///…` as its path,
+// naming no file at all, which the caller then opens as an empty tab. srcIdToUriString is
+// what makes every provider's srcId read back as the document it names.
+async function resolveSource(srcId: string): Promise<vscode.Uri | undefined> {
+  const source = srcIdToUriString(srcId);
   if (source.includes('://')) {
     try {
       return vscode.Uri.parse(source);
