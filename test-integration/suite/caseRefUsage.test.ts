@@ -26,7 +26,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import {
-  ensureUsageGraph,
   invalidateUsageGraph,
   paramLinksForBlock,
   blocksUsingVariable,
@@ -61,7 +60,9 @@ async function pollRebuilt<T>(fn: () => Promise<T>, timeoutMs = 10000): Promise<
   const start = Date.now();
   const attempt = async (): Promise<T> => {
     invalidateUsageGraph();
-    await ensureUsageGraph();
+    // No prebuild: every query in `fn` builds the graph for the file it asks about. So
+    // invalidating is the whole of what this does, and it is what re-runs the build against
+    // the live open-tab set — the code path under test.
     return fn();
   };
   let last: T = await attempt();
@@ -204,7 +205,6 @@ suite('case-insensitive reference matching (usage graph)', () => {
     // The control: the edges above exist because of the open-tab union, not because
     // something else in the workspace happens to define these names.
     invalidateUsageGraph();
-    await ensureUsageGraph();
     for (const [block, sid] of Object.entries(SID)) {
       assert.strictEqual(
         (await paramLinksForBlock(modelUri(), sid)).length,

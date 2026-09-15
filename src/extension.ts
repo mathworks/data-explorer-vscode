@@ -10,6 +10,7 @@ import { invalidate, findNode } from './host/SlddModel.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, isZipBytes } from './host/slddFormat.js';
 import { handleNavigate, requestSelect } from './host/navigate.js';
 import { invalidateUsageGraph } from './host/usageGraph.js';
+import { clearUsageSources } from './host/usageSources.js';
 import { searchDataSources } from './host/searchSources.js';
 import {
   listEntries,
@@ -237,6 +238,11 @@ export function activate(context: vscode.ExtensionContext): void {
     // of files at once, and there is no single uri to reindex or drop.
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       invalidateNameIndex();
+      // The usage graph's per-file summary cache is keyed by content version, so it needs
+      // no eviction while a file can still be reached to be re-checked. A folder REMOVED
+      // is the case where it cannot: its files leave `findFiles`, and their summaries
+      // would sit in memory for the rest of the session.
+      clearUsageSources();
       refreshAll();
     }),
     // Saving clears the dirty state → update the modified badge.

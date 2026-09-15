@@ -572,8 +572,114 @@ writeFileSync(
   }),
 );
 
+// --- chain_*: a model whose dictionary chain runs THROUGH A COMPRESSED dictionary ---
+//
+// The set that pins the cheap tier's one real hazard. Scoping a Usage answer to "the models
+// whose chain reaches this file" has to READ each dictionary's references to know what a
+// chain reaches, and a compressed dictionary keeps its references inside a zip:
+//
+//   chain_model.slx  →  chain_top.sldd (ZIP)  →  chain_leaf.sldd  defines ChainVar
+//
+// Nothing in `chain_model.slx` names `chain_leaf.sldd`, and nothing in `chain_top.sldd`
+// names it in plain text. So a tier that scraped references out of the bytes as text would
+// report that `chain_top.sldd` inherits nothing, conclude no model reaches `chain_leaf.sldd`,
+// and answer that `ChainVar` is unused — a WRONG answer, arrived at quickly, for the file the
+// user is looking at. Reading a dictionary through core's own summariser (which is the same
+// `scanSldd` either way, so it costs nothing extra) is what makes the link visible.
+//
+// `chain_top.sldd` deliberately defines no entry of its own: the only thing it contributes is
+// the edge, so a test cannot pass by accidentally resolving the name somewhere closer.
+writeFileSync(
+  here('chain_top.sldd'),
+  zipSync({
+    'data/chunk0.xml': strToU8(
+      `<?xml version="1.0" encoding="utf-8"?>` +
+        `<DataSource FormatVersion="4" MinRelease="R2026b" Arch="glnxa64">` +
+        `<Object Class="DD.DICTIONARYREFERENCE"><P Name="Subdictionary">chain_leaf.sldd</P></Object>` +
+        `</DataSource>`,
+    ),
+    'metadata/mwcoreProperties.xml': strToU8(`<x><matlabRelease>R2026b</matlabRelease></x>`),
+  }),
+);
+
+writeFileSync(here('chain_leaf.sldd'), jsonSldd(['ChainVar']));
+
+writeFileSync(
+  here('chain_model.slx'),
+  zipSync({
+    'simulink/blockDiagram.json': strToU8(
+      JSON.stringify({
+        BlockDiagram: {
+          DataDictionary: 'chain_top.sldd',
+          ModelUUID: 'uuid-chain-model',
+          System: { Ref: 'system_root' },
+        },
+      }),
+    ),
+    'simulink/systems/system_root.xml': strToU8(
+      `<?xml version="1.0" encoding="utf-8"?>` +
+        `<System>` +
+        `<Block BlockType="Gain" Name="ChainGain" SID="1"><P Name="Gain">ChainVar</P></Block>` +
+        `</System>`,
+    ),
+    'metadata/coreProperties.xml': strToU8(
+      `<?xml version="1.0"?><coreProperties><version>R2026b</version></coreProperties>`,
+    ),
+  }),
+);
+
+// --- shadow_pair_*: TWO dictionaries defining the same name, on one model's chain ---
+//
+// The other hazard in scoping a Usage answer, and the one a corpus otherwise has no case for.
+// MATLAB resolves a name once, in order, first hit wins:
+//
+//   shadow_pair.slx  →  shadow_first.sldd  (defines PairVar)  ← the usage lands HERE
+//                    →  shadow_second.sldd (defines PairVar)  ← and NOT here
+//
+// So opening `shadow_second.sldd` has to carry `shadow_first.sldd` into the set even though
+// nothing about `shadow_second.sldd` names it. Left out, core cannot see what shadowed the
+// name and moves the usage DOWN the order onto `shadow_second.sldd` — a usage the whole folder
+// says it does not have. Which is a wrong answer in the harder direction: a cell that gained a
+// user, not one that lost one.
+//
+// `shadow_first.sldd` is the linked dictionary and `shadow_second.sldd` an external data
+// source, because that is how a model comes to have two dictionaries on one chain at all
+// (`ModelSummary.slddRefs` = the linked one, then the externals).
+writeFileSync(here('shadow_first.sldd'), jsonSldd(['PairVar']));
+writeFileSync(here('shadow_second.sldd'), jsonSldd(['PairVar']));
+
+writeFileSync(
+  here('shadow_pair.slx'),
+  zipSync({
+    'simulink/blockDiagram.json': strToU8(
+      JSON.stringify({
+        BlockDiagram: {
+          DataDictionary: 'shadow_first.sldd',
+          ModelUUID: 'uuid-shadow-pair',
+          System: { Ref: 'system_root' },
+        },
+      }),
+    ),
+    'simulink/ExternalDataSourceSettings.xml': strToU8(
+      `<?xml version="1.0"?><ExternalDataSourceSettings><ExplicitExternalBrokerSources>` +
+        `<fullPathToSource>shadow_second.sldd</fullPathToSource>` +
+        `</ExplicitExternalBrokerSources></ExternalDataSourceSettings>`,
+    ),
+    'simulink/systems/system_root.xml': strToU8(
+      `<?xml version="1.0" encoding="utf-8"?>` +
+        `<System>` +
+        `<Block BlockType="Gain" Name="PairGain" SID="1"><P Name="Gain">PairVar</P></Block>` +
+        `</System>`,
+    ),
+    'metadata/coreProperties.xml': strToU8(
+      `<?xml version="1.0"?><coreProperties><version>R2026b</version></coreProperties>`,
+    ),
+  }),
+);
+
 console.log(
   'wrote model_with_refs.slx, model_with_refs.mdl, legacy_ctrl.mdl, compressed.sldd, ' +
     'object_array_binary.sldd, nd_numeric.mat, params.sldd, shared_gain.slx, shadow_ws.slx, ' +
-    'sid_blocks.slx, arch_binary.sldd',
+    'sid_blocks.slx, arch_binary.sldd, chain_top.sldd, chain_leaf.sldd, chain_model.slx, ' +
+    'shadow_first.sldd, shadow_second.sldd, shadow_pair.slx',
 );

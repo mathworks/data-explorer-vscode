@@ -29,14 +29,18 @@ function wsUri(name: string): vscode.Uri {
   return vscode.Uri.joinPath(ws.uri, name);
 }
 
+// There is one graph per file being viewed, so the prebuild and the query below must name
+// the SAME file — a graph built for another uri is not an answer for this one.
+const subject = (): string => wsUri('data.sldd').toString();
+
 /** True while the graph is cached: the one query that answers WITHOUT a rebuild. */
-const cached = (): boolean => annotateDataRowsNow(wsUri('data.sldd').toString(), []);
+const cached = (): boolean => annotateDataRowsNow(subject(), []);
 
 suite('The usage graph keeps itself until its inputs change', () => {
   test('a dirty buffer does not stale it; opening a tab does', async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
     invalidateUsageGraph();
-    await ensureUsageGraph();
+    await ensureUsageGraph(subject());
     assert.ok(cached(), 'a built graph answers without a rebuild');
 
     // A buffer change, with no tab opened or closed: openTextDocument does not open a tab.
@@ -52,7 +56,7 @@ suite('The usage graph keeps itself until its inputs change', () => {
       // Opening a tab IS: its file joins the scan.
       await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(wsUri('params.sldd')));
       assert.ok(!cached(), 'the tab list it was built from changed, so it went stale');
-      await ensureUsageGraph();
+      await ensureUsageGraph(subject());
       assert.ok(cached(), 'and the next query rebuilt it against the new tab list');
     } finally {
       await vscode.window.showTextDocument(doc);

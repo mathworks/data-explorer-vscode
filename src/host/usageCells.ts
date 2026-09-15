@@ -24,7 +24,15 @@
 //
 // usageGraph.ts adds the vscode file I/O in front of this and nothing else, so a
 // test here drives the same path the extension runs.
-import { blockLabel, buildUsageIndex, type NodeUsage, type ParamOrigin, type UsageIndex } from 'data-explorer-core';
+import {
+  blockLabel,
+  buildUsageIndex,
+  buildUsageIndexFromSummaries,
+  type FileSummaries,
+  type NodeUsage,
+  type ParamOrigin,
+  type UsageIndex,
+} from 'data-explorer-core';
 import { uriBasename } from '../common/pathUtil.js';
 
 // A file the graph is built from, already read. `path` decides how it is parsed
@@ -112,9 +120,25 @@ export interface UsageGraph {
  * test should have to know about.
  */
 export function buildUsageGraph(files: RawSource[]): UsageGraph {
-  const index: UsageIndex = buildUsageIndex(
-    files.map((f) => ({ srcId: f.uriString, filename: f.path, bytes: f.bytes })),
+  return graphOver(
+    buildUsageIndex(files.map((f) => ({ srcId: f.uriString, filename: f.path, bytes: f.bytes }))),
   );
+}
+
+/**
+ * The same graph, over summaries a caller kept rather than bytes it just read.
+ *
+ * This is the path a tab takes (see usageSources.ts): summarising a file is what a usage
+ * index costs, so the host keeps each file's summary and rebuilds only the edge maps when
+ * its query scope changes. Core owns both halves — `summarizeFiles` and
+ * `buildUsageIndexFromSummaries` — so this is the same index by the same rules, entered a
+ * step later. The equality of the two entrances is pinned in usageEndToEnd.test.ts.
+ */
+export function buildUsageGraphFromSummaries(summaries: FileSummaries): UsageGraph {
+  return graphOver(buildUsageIndexFromSummaries(summaries));
+}
+
+function graphOver(index: UsageIndex): UsageGraph {
   // Core names a usage's model by srcId; the CELL names it by model name. The lookup
   // is built once here rather than derived per link from the uri, because the name is
   // core's own reduction of the file name and re-deriving it is how the two come to

@@ -21,7 +21,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import {
-  ensureUsageGraph,
   invalidateUsageGraph,
   paramLinksForBlock,
   blocksUsingVariable,
@@ -63,7 +62,9 @@ async function pollRebuilt<T>(fn: () => Promise<T>, timeoutMs = 10000): Promise<
   const start = Date.now();
   const attempt = async (): Promise<T> => {
     invalidateUsageGraph();
-    await ensureUsageGraph();
+    // No prebuild: every query in `fn` builds the graph for the file it asks about. So
+    // invalidating is the whole of what this does, and it is what re-runs the build against
+    // the live open-tab set — the code path under test.
     return fn();
   };
   let last: T = await attempt();
@@ -234,7 +235,6 @@ suite('.mdl models (both flavours)', () => {
     // The control: the edges above exist because these files were opened, not
     // because something in the workspace happens to define `Kp`.
     invalidateUsageGraph();
-    await ensureUsageGraph();
     // `key` is each block's own: a name in the classic file, which records no SID, and
     // the SID in the modern one.
     for (const [model, block, key] of [

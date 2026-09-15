@@ -30,6 +30,8 @@ export default defineConfig({
         'src/host/scanRead.ts',
         'src/host/searchSources.ts',
         'src/host/usageGraph.ts',
+        // The reading half of the usage plan; the plan itself is usagePlan.ts.
+        'src/host/usageSources.ts',
         'src/host/navigate.ts',
         'src/host/iconMap.ts',
         'src/host/projectStore.ts',

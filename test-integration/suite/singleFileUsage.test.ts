@@ -15,7 +15,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import {
-  ensureUsageGraph,
   invalidateUsageGraph,
   paramLinksForBlock,
   blocksUsingVariable,
@@ -49,7 +48,9 @@ async function pollRebuilt<T>(fn: () => Promise<T>, timeoutMs = 5000): Promise<T
   const start = Date.now();
   const attempt = async (): Promise<T> => {
     invalidateUsageGraph();
-    await ensureUsageGraph();
+    // No prebuild: every query in `fn` builds the graph for the file it asks about. So
+    // invalidating is the whole of what this does, and it is what re-runs the build against
+    // the live open-tab set — the code path under test.
     return fn();
   };
   let last: T = await attempt();
@@ -86,7 +87,6 @@ suite('single-file Usage (open-tab union)', () => {
     // that is neither in the workspace nor open in a tab. This is the control for
     // the next test — it isolates the open-tab union as the cause of the edges.
     invalidateUsageGraph();
-    await ensureUsageGraph();
     const links = await paramLinksForBlock(uri.toString(), GAIN1);
     assert.strictEqual(links.length, 0, 'no param links before the file is opened');
     const blocks = await blocksUsingVariable(uri.toString(), 'Bp');

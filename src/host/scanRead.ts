@@ -53,3 +53,27 @@ export async function readForScan(uri: vscode.Uri): Promise<Uint8Array | null> {
     return null;
   }
 }
+
+/**
+ * What VERSION of a file a scan would read, or `null` for one it would not read at all —
+ * the same two refusals `readForScan` makes, decided from the `stat` alone.
+ *
+ * For a scan that caches what it parsed. `mtime:size` rather than a content hash because
+ * hashing means reading, and reading is the thing the cache exists to avoid: a scan that
+ * had to read a file to find out whether it had changed would already have paid most of
+ * what it was trying to save.
+ *
+ * A cache keyed on this is self-healing, which is worth more here than precision: a file
+ * whose mtime moved is re-read even if a watcher event was missed entirely, and the
+ * pathological case — a write that preserves both mtime and size — is one a `stat`-based
+ * watcher would not have reported either.
+ */
+export async function scanVersion(uri: vscode.Uri): Promise<string | null> {
+  try {
+    const stat = await vscode.workspace.fs.stat(uri);
+    if (stat.size > MAX_SCAN_BYTES) return null;
+    return `${stat.mtime}:${stat.size}`;
+  } catch {
+    return null;
+  }
+}

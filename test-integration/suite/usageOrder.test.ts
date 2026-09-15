@@ -39,7 +39,6 @@ import {
   annotateDataRows,
   annotateModelRows,
   blocksUsingVariable,
-  ensureUsageGraph,
   invalidateUsageGraph,
 } from '../../src/host/usageGraph';
 import { getModel, getModelFromBytes, invalidate } from '../../src/host/SlddModel';
@@ -74,7 +73,9 @@ async function pollRebuilt<T>(fn: () => Promise<T>, timeoutMs = 10000): Promise<
   const start = Date.now();
   const attempt = async (): Promise<T> => {
     invalidateUsageGraph();
-    await ensureUsageGraph();
+    // No prebuild: every query in `fn` builds the graph for the file it asks about. So
+    // invalidating is the whole of what this does, and it is what re-runs the build against
+    // the live open-tab set — the code path under test.
     return fn();
   };
   let last: T = await attempt();
@@ -259,7 +260,6 @@ suite('Usage does not depend on tab history', () => {
     // showing whatever the session does know.
     await registerCtrlAInSession();
     invalidateUsageGraph();
-    await ensureUsageGraph();
     assert.strictEqual((await blocksUsingVariable(dictUri(), 'SharedGain')).length, 0);
     const rows = await dictionaryRows();
     const before = rowNamed(rows, 'SharedGain').UsedBy;
