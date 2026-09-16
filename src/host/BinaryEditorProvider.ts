@@ -19,6 +19,7 @@ import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
+import { seededRead } from './seededRead.js';
 import { isMatFile, isModelFile, isProjectFile, isSlddFile } from 'data-explorer-core';
 import type { TableToHostMessage } from '../common/protocol.js';
 
@@ -78,6 +79,11 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     // limit (see below). Binary/zip .sldd — expected read-only — leave this unset
     // so no banner appears. Passed to the webview in the setRows payload.
     let notice: string | undefined;
+
+    // The bytes the classification below reads, kept ONLY for a file that stays in this
+    // view and spent on its first post — see the byte source further down. Left undefined
+    // for every other format, none of which reads anything here.
+    let seed: ArrayBuffer | undefined;
 
     // This byte-backed editor is the DEFAULT for *.sldd because it can open any
     // bytes (binary/zip .sldd fail to load as a TextDocument, so the text-backed
@@ -146,6 +152,11 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
             `To edit the JSON directly, use "Reopen Editor With… → Text Editor"; ` +
             `this view refreshes when you save.`;
         }
+        // Every redirect above has returned, so reaching here means this file is STAYING —
+        // and the bytes just read to prove that are the same bytes the first post needs.
+        // Converted at the seam rather than inside the reader so it happens once:
+        // `toArrayBuffer` copies, and this is the size class where a copy is felt.
+        seed = toArrayBuffer(bytes);
       } catch {
         // Unreadable → fall through and let the read-only render report the error.
       }
@@ -155,11 +166,19 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       webviewPanel.iconPath = new vscode.ThemeIcon('table');
     }
 
-    // Source bytes for the file, always read from disk (read-only view).
-    const readBytes = async (): Promise<ArrayBuffer> => {
-      return toArrayBuffer(await vscode.workspace.fs.readFile(document.uri));
-    };
-
+    // Source bytes for the file, read from disk (read-only view) — except for the first ask
+    // of a `.sldd` that stayed here, which is handed the read the classification above
+    // already made instead of making the same read again. That handoff is worth having
+    // exactly where it is least affordable: a file only stays in this view because it is too
+    // large for the editable routes.
+    //
+    // The one thing given up: seeded bytes are microseconds older than a fresh read would
+    // be. A write that lands in that window is the write the disk watcher below already
+    // exists for — it drops the shared cache (`forgetChangedSource`) and reposts, and the
+    // seed is gone by then, so the newer bytes are what the user ends up looking at.
+    const byteSource = seededRead(seed, async () =>
+      toArrayBuffer(await vscode.workspace.fs.readFile(document.uri)),
+    );
 
     // Read/parse the file host-side and push rows to the webview. On failure,
     // drop the cached model and post a banner.
@@ -206,7 +225,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
         // the read the branch does not take never happens.
         const node = await getModelForBinaryTab(uriString, name, {
           parsed: () => parsedModelForTab(document.uri),
-          bytes: readBytes,
+          bytes: byteSource.read,
         });
         const rows = isMatFile(name) ? buildMatRows(node) : buildRows(node);
         // Fill the Usage column from the shared workspace usage graph (lazy +
@@ -240,6 +259,13 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           type: 'error',
           message: `Failed to parse ${name}: ${(err as Error).message}`,
         });
+      } finally {
+        // The handoff is over after ONE attempt, taken or not. Both halves matter: an
+        // attempt that threw — or a `.prj`, which returns above without asking for bytes —
+        // must not leave a seed behind for a repost to serve, since a repost is triggered by
+        // the file having changed; and a dictionary big enough to land in this view is too
+        // big to keep a second copy of alive for the life of the tab.
+        byteSource.drop();
       }
     };
 
