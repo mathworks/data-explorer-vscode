@@ -1,41 +1,52 @@
 // Copyright 2026 The MathWorks, Inc.
 // Tier-1 orchestration: turn workspace files into GraphSource records for the relationship
-// graph. Dispatches by extension. vscode-free (callers read files and pass bytes/text in).
+// graph. vscode-free (callers supply the reader and the already-extracted artifacts).
 //
-// TWO WAYS IN, ONE SHAPER. `graphSourcesOf` is what the tree uses: a pass over the SHARED
-// cheap tier, so a folder the usage plan or the name index has already looked at costs a
-// `stat` per file and no reads at all (sourceCache.ts). `buildGraphSource` is the same
-// shaping for a caller holding the bytes itself, and the cache pass goes THROUGH it —
-// which is the point. The relationship fields are one mapping, the failure policy is one
-// `catch`, and neither is written twice; what differs between the two entry points is only
-// where the extraction came from, and even that is the same function either way
-// (`extractSlxStructure`, `refsFromSlddBytes`). "One rule, two paths" is the bug class this
-// repo keeps hitting, and a tree drawn from cached artifacts that disagreed with a tree
-// drawn from bytes is exactly its shape: a missing edge, in one of the two, silently.
+// ONE SHAPER, AND IT TAKES THE ARTIFACT. `graphSourcesOf` is what the tree uses: a pass over
+// the SHARED cheap tier, so a folder the usage plan or the name index has already looked at
+// costs a `stat` per file and no reads at all (sourceCache.ts). `buildGraphSource` is the
+// shaping itself, and what it accepts is what the cheap tier already extracted — a model's
+// `SlxStructure`, a dictionary's reference list, a project's store — never bytes.
+//
+// It used to accept bytes as well, and re-derive from them (`extractSlxStructure`,
+// `refsFromSlddBytes`, `extractReferences`) exactly what the cheap tier had already computed.
+// No production caller ever passed them: `graphSourcesOf` is the only one and it fills the
+// artifact fields. So that branch was a second copy of one extraction, reachable only from the
+// tests that pinned it — "one rule, two paths", the bug class this repo keeps hitting, in the
+// form it takes here: a tree drawn from cached artifacts that disagreed with a tree drawn from
+// bytes is a missing edge in one of the two, silently. A caller holding bytes runs the
+// extraction at its own call site and hands the result in, which is what `graphSourcesOf`
+// does through the cache. The relationship fields are then one mapping and the failure policy
+// one `catch`, with nothing left to drift against.
 import type { GraphSource, SourceType } from './graphModel.js';
 import { mapLimited } from './mapLimited.js';
-import { extractReferences, refsFromSlddBytes } from './slddRefs.js';
-import { extractSlxStructure, type SlxStructure } from './slxStructure.js';
-import { cheapAll, type SourceCache, type SourceFile, type SourceReader } from './sourceCache.js';
-import { isMatFile, isModelFile, isProjectFile, parseProject, projectNameOf } from 'data-explorer-core';
+import { type SlxStructure } from './slxStructure.js';
+import { cheapAll, sourceKind, type SourceCache, type SourceFile, type SourceReader } from './sourceCache.js';
+import { isProjectFile, parseProject, projectNameOf } from 'data-explorer-core';
 import { basename } from '../common/pathUtil.js';
 
 /** A project's structure, keyed by store-relative POSIX path — see projectStore.ts. */
 export type ProjectStore = Record<string, string>;
 
+/**
+ * One file to shape, and what has already been extracted for it.
+ *
+ * NO BYTES, deliberately. Every relationship field here is an ARTIFACT the caller already
+ * holds — which is the whole reason the tree reads the cache, since it must not hold a 20 MB
+ * dictionary again to learn what it references. A caller that has only bytes runs the same
+ * extraction the cheap tier runs (`extractSlxStructure`, `refsFromSlddBytes`) and passes the
+ * result; see the header for what re-deriving it in here cost.
+ *
+ * Every field is optional and absence is never an error: a file the cache has no artifact for
+ * — oversized, unreadable, gone between the glob and the read — is still a node, because it is
+ * still in the folder. It just draws no edges.
+ */
 export interface RawFile {
   uriString: string;
   path: string;
-  bytes?: ArrayBuffer; // for binary formats
-  text?: string;       // for JSON .sldd (already read as text)
   // For a .prj: the project's resources/project/**/*.xml text, keyed by relpath
   // (relative to the project root). The host reads these; the parser stays pure.
   projectFiles?: ProjectStore;
-  // What the shared cheap tier already extracted for this file, when the caller has it.
-  // PREFERRED over the bytes below, and normally supplied INSTEAD of them: the whole reason
-  // the tree reads the cache is that it does not have to hold a 20 MB dictionary again to
-  // learn what it references. Same values either way — `graphSourcesOf` fills these from the
-  // artifacts the cheap tier built with the very functions this file's byte branches call.
   structure?: SlxStructure;        // a model's relationships
   slddRefs?: readonly string[];    // a dictionary's references, RAW (see slddRefs.ts)
 }
@@ -54,14 +65,58 @@ export interface GraphReader extends SourceReader {
   projectStore(file: SourceFile): Promise<ProjectStore | null>;
 }
 
+/**
+ * What kind of node `path` draws as — a MAPPING of the one classifier's answer, not a second
+ * reading of the path.
+ *
+ * `sourceKind` is that classifier (sourceCache.ts), and this used to be a rival to it: it
+ * tested `isModelFile`/`isMatFile`/`isProjectFile` itself, never asked `isSlddFile` at all, and
+ * answered `'sldd'` for anything left over — which is precisely the fallback `sourceKind`'s own
+ * doc calls "the trap this replaces". Two classifiers for one question is this repo's recurring
+ * bug class in its purest form (see the header): each looks right alone, and the disagreement
+ * reaches the user as a file with the wrong icon, the wrong row builder and the wrong
+ * relationship extraction — which is how a `.mdl` came to be drawn as a dictionary with no
+ * children.
+ *
+ * The two vocabularies are not the same and neither is redundant. `SourceKind` names the FORMAT,
+ * for a reader deciding what to parse; `SourceType` names what the graph DRAWS, and its members
+ * are `NodeKind`s the tree renders (graphModel.ts). So `'prj'` becomes `'project'` here, and
+ * that spelling is the reason this mapping exists at all rather than the two types being one.
+ *
+ * EXHAUSTIVE by construction — every `SourceKind` by name, no `default`, no `else` — so a format
+ * added to core and to `sourceKind` fails to COMPILE here instead of quietly taking a fallback.
+ * `null` is a written case for that same reason.
+ *
+ * WHY `null` MAPS TO `'sldd'`, both halves:
+ *
+ *   Safe, because production cannot reach it. `graphSourcesOf` is the only caller, its files come
+ *   out of the supported glob (`SUPPORTED_GLOB`, whose extensions `sourceKind` all name — pinned
+ *   from `SUPPORTED_EXTS` in sourceCache.test.ts and again in structuralIndex.test.ts), and every
+ *   relationship field it fills comes off an already-classified cheap artifact. An unknown
+ *   extension arriving here would carry no artifact anyway, so what it gets is the empty node.
+ *
+ *   Kept, and not `null`, because the graph needs a `SourceType` for EVERY file the tree lists.
+ *   A file in the folder and absent from the view is the worst failure available here (see
+ *   `graphSourcesOf`), so there has to be an answer; making it nullable would push "no kind"
+ *   into `GraphSource`, `NodeKind`, the icon table and every row builder to describe a case no
+ *   glob produces. `'sldd'` is the harmless one of the four: with no `slddRefs` supplied it
+ *   draws no edges, where `'model'` would advertise relationships nothing extracted.
+ */
 function typeOf(path: string): SourceType {
-  // Both model containers are the same SourceType: a `.mdl` is a Simulink model,
-  // so it gets the model icon, the model row builder, and the model relationship
-  // extraction — not the `.sldd` fallback this used to drop it into.
-  if (isModelFile(path)) return 'model';
-  if (isMatFile(path)) return 'mat';
-  if (isProjectFile(path)) return 'project';
-  return 'sldd';
+  switch (sourceKind(path)) {
+    // Both model containers are one SourceType: a `.mdl` is a Simulink model, so it gets the
+    // model icon, the model row builder and the model relationship extraction.
+    case 'model':
+      return 'model';
+    case 'mat':
+      return 'mat';
+    case 'sldd':
+      return 'sldd';
+    case 'prj':
+      return 'project';
+    case null:
+      return 'sldd';
+  }
 }
 
 function empty(uriString: string, path: string, type: SourceType): GraphSource {
@@ -74,14 +129,14 @@ export function buildGraphSource(file: RawFile): GraphSource {
 
   try {
     if (type === 'model') {
-      // The cheap tier's artifact if the caller brought one, else the same extraction over the
-      // bytes. A model with neither is still a node: it is in the folder, so it belongs in the
-      // tree — it just draws no edges.
-      const s = file.structure ?? (file.bytes ? extractSlxStructure(file.bytes, file.path) : null);
+      // No structure is not an error: a model the cache holds no artifact for is still a node —
+      // it is in the folder, so it belongs in the tree — it just draws no edges.
+      const s = file.structure;
       if (!s) return base;
-      // Copied, like the dictionary branch below, because `s` may be a CACHED artifact now: a
-      // consumer that sorted a source's list in place would be rewriting what every later build
-      // and every other consumer reads. The lists are a handful of names.
+      // Copied, like the dictionary branch below, because `s` is a CACHED artifact: a consumer
+      // that sorted a source's list in place would be rewriting what every later build and every
+      // other consumer reads, permanently — no `mtime:size` can notice a mutated artifact. The
+      // lists are a handful of names.
       return {
         ...base,
         modelRefs: [...s.modelReferences],
@@ -101,19 +156,23 @@ export function buildGraphSource(file: RawFile): GraphSource {
       const projectRefs = parsed.references.map((r) => r.name ?? r.id).filter((n): n is string => !!n);
       return { ...base, projectFiles, projectRefs };
     }
-    if (type === 'sldd') {
-      // The cheap tier's list first, for the same reason the model branch takes its
-      // structure. Then text, then bytes — `refsFromSlddBytes` decides the FORMAT with
-      // core's own sniff and reads the references without building the entry tree; the tree
-      // deliberately does not parse a whole dictionary to draw a handful of edges. All three
-      // are the same list: the cheap tier fills it by calling that same function.
-      if (file.slddRefs) return { ...base, slddRefs: [...file.slddRefs] };
-      if (file.text != null) return { ...base, slddRefs: extractReferences(file.text) };
-      if (file.bytes) return { ...base, slddRefs: refsFromSlddBytes(file.bytes) };
+    if (type === 'sldd' && file.slddRefs) {
+      // Copied for the reason the model branch gives: this list may be the cache's own array.
+      // The list itself is whatever the caller extracted — `refsFromSlddBytes` in both the cheap
+      // tier and any bytes-in-hand caller, which decides the FORMAT with core's own sniff and
+      // reads the references without building the entry tree. The tree deliberately does not
+      // parse a whole dictionary to draw a handful of edges.
+      return { ...base, slddRefs: [...file.slddRefs] };
     }
-    // mat and everything else: node with no outbound relationships.
+    // mat, a dictionary with no artifact, and everything else: node with no outbound
+    // relationships.
     return base;
   } catch {
+    // One file that will not shape must not fail the whole build: the pass this is the body of
+    // runs over a folder, and the graph above it has one failure mode and it is "no graph". The
+    // extraction throws are gone from in here — the caller runs those, and both callers catch
+    // (see `slddRefsOf` in sourceCache.ts) — so what is left to throw is `parseProject` over a
+    // malformed store, which is a real file on disk and reachable.
     return base;
   }
 }

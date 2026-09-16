@@ -189,11 +189,15 @@ describe('the tree and the graph complete a bare reference the same way', () => 
 });
 
 describe('buildGraphSource classifies a .mdl as a model', () => {
-  const raw = (name: string) => ({
-    uriString: `file:///${name}`,
-    path: `/${name}`,
-    bytes: bytes(name),
-  });
+  // A `.mdl` as its consumer hands it over: the path, and the structure extracted for it. The
+  // extraction is at the call site because that is where production runs it — the shared cheap
+  // tier builds the artifact and `graphSourcesOf` passes it along, so `buildGraphSource` never
+  // sees bytes. The path goes to both calls and must be the SAME one: a bare reference is
+  // completed with the parent's own container extension, which is the whole subject of this file.
+  const raw = (name: string) => {
+    const path = `/${name}`;
+    return { uriString: `file://${path}`, path, structure: extractSlxStructure(bytes(name), path) };
+  };
 
   it('gives a modern .mdl the model type and its full relationship set', () => {
     // Before this, typeOf fell through to the 'sldd' default: the file appeared in
@@ -217,12 +221,21 @@ describe('buildGraphSource classifies a .mdl as a model', () => {
     // The extension matchers are case-insensitive because these files live on
     // case-insensitive filesystems; a .MDL classified as 'sldd' would be the same
     // wrong-icon/no-children failure as above.
-    const s = buildGraphSource({ uriString: 'file:///L.MDL', path: '/L.MDL', bytes: bytes(CLASSIC) });
+    //
+    // A pure classification claim, so it needs no structure at all: what the type is decided
+    // from is the PATH, never the content. `buildGraphSource` calls one classifier for that
+    // (`sourceKind`, mapped) — see structuralIndex.test.ts for the pin over every format.
+    const s = buildGraphSource({ uriString: 'file:///L.MDL', path: '/L.MDL' });
     expect(s.type).toBe('model');
   });
 
   it('yields an empty model node for a corrupt .mdl rather than aborting the scan', () => {
-    const s = buildGraphSource({ uriString: 'file:///c.mdl', path: '/c.mdl', bytes: new ArrayBuffer(4) });
+    // The tolerance is the EXTRACTION's, which is why it is asserted there first: a corrupt
+    // model answers with the all-empty structure instead of throwing, so a folder holding one
+    // still builds. Then the shaper turns that into a model node with no edges.
+    const structure = extractSlxStructure(new ArrayBuffer(4), '/c.mdl');
+    expect(structure).toEqual({ dataDictionary: null, modelReferences: [], externalDataSources: [] });
+    const s = buildGraphSource({ uriString: 'file:///c.mdl', path: '/c.mdl', structure });
     expect(s.type).toBe('model');
     expect(s.modelRefs).toEqual([]);
     expect(s.dataDictionary).toBeNull();

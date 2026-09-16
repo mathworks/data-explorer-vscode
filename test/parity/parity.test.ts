@@ -11,8 +11,10 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DataModel } from 'data-explorer-core';
+import { DataModel, isModelFile, isSlddFile } from 'data-explorer-core';
 import { buildGraphSource } from '../../src/host/structuralIndex.js';
+import { refsFromSlddBytes } from '../../src/host/slddRefs.js';
+import { extractSlxStructure } from '../../src/host/slxStructure.js';
 import { RelGraph, type GraphSource } from '../../src/host/graphModel.js';
 import { parseMat } from 'data-explorer-core';
 import { parseSlx } from 'data-explorer-core';
@@ -40,20 +42,25 @@ beforeAll(() => {
 const VARIANTS = ['text', 'binary'] as const;
 const FILES = ['common.sldd', 'util.sldd', 'params.sldd', 'plant.slx', 'sub.slx', 'top.slx', 'signals.mat'];
 
-// Build a GraphSource for a file, choosing text vs bytes the way the extension
-// host does (JSON .sldd read as text; everything else as bytes).
+// Build a GraphSource for a file the way the extension host does: extract the
+// tier-1 artifact from the bytes, then shape a node out of it. `buildGraphSource`
+// takes artifacts and never bytes (structuralIndex.ts), so the extraction is here
+// — which is where the host does it too, inside the shared cheap tier.
+//
+// `refsFromSlddBytes` covers BOTH on-disk dictionary formats behind core's own
+// format sniff, so this no longer tests the first two bytes for 'PK' itself; the
+// text/binary split is what the `variant` axis of this suite drives.
 function graphSourceFor(variant: string, name: string): GraphSource {
   const path = ART(variant, name);
   const uriString = `test://${variant}/${name}`;
-  if (name.endsWith('.sldd')) {
-    // Tier-1 host reads .sldd as text when it is JSON; bytes when zip. We detect
-    // by first byte: 'PK' => zip (compressed-binary), else JSON text.
-    const raw = readFileSync(path);
-    const isZip = raw[0] === 0x50 && raw[1] === 0x4b;
-    if (isZip) return buildGraphSource({ uriString, path: name, bytes: bytesOf(path) });
-    return buildGraphSource({ uriString, path: name, text: raw.toString('utf8') });
+  if (isSlddFile(name)) {
+    return buildGraphSource({ uriString, path: name, slddRefs: refsFromSlddBytes(bytesOf(path)) });
   }
-  return buildGraphSource({ uriString, path: name, bytes: bytesOf(path) });
+  if (isModelFile(name)) {
+    return buildGraphSource({ uriString, path: name, structure: extractSlxStructure(bytesOf(path), name) });
+  }
+  // A MAT-file inherits nothing, so there is no artifact to extract for it at all.
+  return buildGraphSource({ uriString, path: name });
 }
 
 (HAVE_FIXTURES ? describe : describe.skip)('PARITY', () => {

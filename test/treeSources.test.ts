@@ -26,10 +26,12 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
-import { isProjectFile, isSlddFile } from 'data-explorer-core';
+import { isModelFile, isProjectFile, isSlddFile } from 'data-explorer-core';
 import { toArrayBuffer } from '../src/common/bytes.js';
 import { isZipBytes } from '../src/host/slddFormat.js';
 import { mapLimited } from '../src/host/mapLimited.js';
+import { extractReferences, refsFromSlddBytes } from '../src/host/slddRefs.js';
+import { extractSlxStructure } from '../src/host/slxStructure.js';
 import { RelGraph, type GraphNode, type GraphSource } from '../src/host/graphModel.js';
 import {
   buildGraphSource,
@@ -173,8 +175,21 @@ const reader = (): GraphReader => ({
  * `vscode` — the same reason parseOnce.test.ts writes out a tab's sequence. It is the reference
  * the shared-cache path is swept against, so what matters is that it is faithful: `readForScan`
  * refuses the same file the reader's `version` refuses (`stamp` answers both), a JSON `.sldd`
- * arrives as TEXT and a compressed one as bytes, a `.prj` gets its store and never a read, and
- * one unreadable file is caught per file rather than failing the build.
+ * is read as TEXT and a compressed one out of its bytes, a `.prj` gets its store and never a
+ * read, and one unreadable file is caught per file rather than failing the build.
+ *
+ * The extraction is HERE, at the call site, because `buildGraphSource` takes artifacts and not
+ * bytes — it never re-derives what a caller could already have. So this side reads the folder
+ * and extracts per file while the cache side reads nothing it already holds, and the sweep below
+ * is still two independent routes to one set of sources. What the two share is the extraction
+ * FUNCTION, deliberately and from the start (see structuralIndex.ts's header): a second spelling
+ * of "read the reference list" is the drift this arrangement exists to make impossible, so the
+ * sweep is about the reads, the dispatch and the shaping — not about two parsers agreeing.
+ *
+ * The `.sldd` split below is the one place the two routes still differ in more than timing: this
+ * one decides text-vs-zip itself, the way the tree used to, where the cheap tier hands the whole
+ * question to `refsFromSlddBytes`' own sniff. Both formats are in the corpus, so the sweep covers
+ * both arms of that difference.
  */
 async function sourcesFromBytes(r: GraphReader): Promise<GraphSource[]> {
   return mapLimited(FILES, async (f) => {
@@ -189,10 +204,11 @@ async function sourcesFromBytes(r: GraphReader): Promise<GraphSource[]> {
       if (bytes) {
         const u8 = new Uint8Array(bytes);
         if (isSlddFile(f.path)) {
-          if (isZipBytes(u8)) raw.bytes = bytes;
-          else raw.text = new TextDecoder().decode(u8);
-        } else {
-          raw.bytes = bytes;
+          raw.slddRefs = isZipBytes(u8)
+            ? refsFromSlddBytes(bytes)
+            : extractReferences(new TextDecoder().decode(u8));
+        } else if (isModelFile(f.path)) {
+          raw.structure = extractSlxStructure(bytes, f.path);
         }
       }
     } catch {
@@ -347,6 +363,11 @@ describe('what a tree build reads', () => {
     // build and every OTHER consumer of that file reads. And the corruption is permanent: no
     // `mtime:size` can notice a mutated artifact, so it survives every rebuild until the file
     // itself changes. Hence `buildGraphSource` copies all three lists, and hence this test.
+    //
+    // The copy is now the only thing standing between a consumer and the cache, not a courtesy
+    // on one of two input paths: the shaper takes the ARTIFACT and nothing else, so every list it
+    // hands out came out of the map. There is no bytes-in-hand build left whose lists are
+    // freshly-derived and safe to mutate.
     const cache = newSourceCache();
     const r = reader();
     await graphSourcesOf(cache, r, FILES);

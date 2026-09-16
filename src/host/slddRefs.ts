@@ -37,13 +37,16 @@ export function extractReferences(text: string): string[] {
 
 /**
  * A dictionary's references from its BYTES, in whichever of the two on-disk formats they
- * hold — the one extraction, for the two tiers that want it.
+ * hold — the one extraction, for anyone holding the bytes.
  *
- * It is here rather than inside either caller because both want it: the shared cheap tier
- * records these on a dictionary's artifact (sourceCache.ts) and the tree's own bytes-in-hand
- * path derives them the same way (structuralIndex.ts). Two spellings of "read the reference
- * list" is the shape the drift in this file's header took, and the formats are exactly where
- * it hid.
+ * Its production caller is now the shared cheap tier, which records these on a dictionary's
+ * artifact and hands the artifact to everything downstream (sourceCache.ts). It stays a
+ * separate function rather than folding into that one caller because it is the answer any
+ * bytes-in-hand caller needs, and the alternative is that caller writing its own: the tree's
+ * shaper did exactly that, re-deriving from bytes what the cache had already computed, until
+ * it was reduced to taking the artifact (structuralIndex.ts). Two spellings of "read the
+ * reference list" is the shape the drift in this file's header took, and the formats are
+ * exactly where it hid.
  *
  * RAW, and that is the point of keeping it separate from the summary the same bytes also
  * produce. Core's `DataSummary.slddRefs` is `refs.map(refBasename)` — lowercased and stripped
@@ -58,8 +61,8 @@ export function extractReferences(text: string): string[] {
  * did not agree on a textual dictionary that leads with a BOM.
  *
  * Throws what `scanSldd` throws — a dictionary the read could not recover is a failure, not an
- * empty dictionary (slddContent.ts). Both callers catch, and both answer "no references" for
- * it, which is what a workspace-wide pass has always done with a file it cannot read.
+ * empty dictionary (slddContent.ts). The cheap tier catches and answers "no references" for it,
+ * which is what a workspace-wide pass has always done with a file it cannot read.
  */
 export function refsFromSlddBytes(bytes: ArrayBuffer): string[] {
   const u8 = new Uint8Array(bytes);
