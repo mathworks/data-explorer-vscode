@@ -175,7 +175,7 @@ suite('workspace name index', () => {
   });
 
   test('a compressed-binary .sldd can never present as a dirty text document', async () => {
-    // The premise the readCurrentBytes comment rests on. If a zip COULD be mirrored
+    // The premise the dirtyBytesOf comment rests on. If a zip COULD be mirrored
     // as a TextDocument, getText() would hand back its bytes decoded as UTF-8 and
     // re-encoding that is lossy — the zip would stop parsing and the file would
     // silently drop out of search. VS Code refuses the open outright, which is a

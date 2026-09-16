@@ -29,8 +29,10 @@ export default defineConfig({
         'src/host/nameIndex.ts',
         'src/host/scanRead.ts',
         'src/host/searchSources.ts',
+        // The reading half of the shared source cache; the cache itself is sourceCache.ts.
+        'src/host/sourceReads.ts',
         'src/host/usageGraph.ts',
-        // The reading half of the usage plan; the plan itself is usagePlan.ts.
+        // The Usage question over that cache; which files it needs is usagePlan.ts.
         'src/host/usageSources.ts',
         'src/host/navigate.ts',
         'src/host/iconMap.ts',

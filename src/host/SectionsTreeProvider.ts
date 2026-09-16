@@ -1,14 +1,11 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
 import { svgIconFor } from './iconMap.js';
-import { RelGraph, type GraphNode, type GraphSource } from './graphModel.js';
-import { buildGraphSource, type RawFile } from './structuralIndex.js';
+import { RelGraph, type GraphNode } from './graphModel.js';
+import { graphSourcesOf, type GraphReader } from './structuralIndex.js';
 import { readProjectStore } from './projectStore.js';
 import { encode, type HealthState } from './health.js';
-import { isZipBytes } from './slddFormat.js';
-import { isProjectFile, isSlddFile } from 'data-explorer-core';
-import { toArrayBuffer } from '../common/bytes.js';
-import { mapLimited, readForScan } from './scanRead.js';
+import { readerFor, sourceCache, sourceFilesOf } from './sourceReads.js';
 import { SUPPORTED_GLOB } from '../common/fileTypes.js';
 
 // The Data Explorer tree is a cross-format relationship graph (model->model,
@@ -128,42 +125,43 @@ export class SectionsTreeProvider implements vscode.TreeDataProvider<SlddTreeNod
     return this.graph;
   }
 
+  /**
+   * Read the folder — through the SHARED source cache, so this pass and the usage plan's and
+   * the name index's are one pass over the same artifacts.
+   *
+   * This used to read every file in the folder itself, every build: `readForScan` per file,
+   * then a per-format extraction, then discard the bytes. The usage plan then did the same
+   * again for the same folder, and `rebuild()` fires on every save — so saving one 27 KB
+   * dictionary re-read every model and every dictionary beside it, twice. Nothing about the
+   * tree's answer changes here (structuralIndex.ts shapes it either way); what changes is that
+   * the reads are version-keyed and shared, so a build after a save reads the saved file and
+   * `stat`s the rest.
+   */
   private async buildGraph(): Promise<RelGraph> {
     const uris = await vscode.workspace.findFiles(SUPPORTED_GLOB);
-    this.uris = new Map();
-    // A few files at a time, and nothing oversized — see scanRead. The tree only
-    // wants each file's reference list, so a file it cannot read is still a node
-    // here (it is in the folder, so it belongs in the tree); it just has no edges.
-    const sources = await mapLimited(uris, async (uri): Promise<GraphSource> => {
-      const uriString = uri.toString();
-      this.uris.set(uriString, uri);
-      const raw: RawFile = { uriString, path: uri.path };
-      try {
-        // A .prj is an empty marker: read its sibling resources/project/**
-        // store into a project-root-relative relpath map instead of bytes.
-        if (isProjectFile(uri.path)) {
-          raw.projectFiles = await readProjectStore(uri);
-          return buildGraphSource(raw);
-        }
-        const bytes = await readForScan(uri);
-        if (bytes) {
-          // JSON .sldd is passed as text so extractReferences works; others as
-          // bytes. The ArrayBuffer copy is made only on the branch that needs one:
-          // the text branch decodes the bytes it already has, and paying for a
-          // full-size copy first made every textual dictionary cost twice its size.
-          if (isSlddFile(uri.path)) {
-            if (isZipBytes(bytes)) raw.bytes = toArrayBuffer(bytes);
-            else raw.text = new TextDecoder().decode(bytes);
-          } else {
-            raw.bytes = toArrayBuffer(bytes);
-          }
-        }
-      } catch {
-        /* unreadable: node with no relationships */
-      }
-      return buildGraphSource(raw);
-    });
-    return new RelGraph(sources);
+    // uriString -> Uri, for the rows: a node carries the string and `getTreeItem` needs the
+    // Uri to open, decorate and badge with. Rebuilt with the graph, so a file that has left
+    // the folder leaves this map too.
+    this.uris = new Map(uris.map((uri) => [uri.toString(), uri]));
+    return new RelGraph(await graphSourcesOf(sourceCache, this.reader(uris), sourceFilesOf(uris)));
+  }
+
+  /**
+   * The cache's own scan reader — same cap, same `mtime:size` version, so every file it reads
+   * is one every other consumer gets for free — plus the project store, which the cache
+   * deliberately does not hold (see structuralIndex.GraphReader).
+   */
+  private reader(uris: readonly vscode.Uri[]): GraphReader {
+    const byUri = new Map(uris.map((u) => [u.toString(), u]));
+    return {
+      ...readerFor(uris),
+      projectStore: async (file) => {
+        const uri = byUri.get(file.uriString);
+        // A .prj is an empty marker: its structure is the sibling resources/project/** tree,
+        // read into a project-root-relative relpath map instead of bytes.
+        return uri ? readProjectStore(uri) : null;
+      },
+    };
   }
 
   // The single most-severe health state for a real-file row, or null if healthy.

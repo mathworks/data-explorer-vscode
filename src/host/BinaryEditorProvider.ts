@@ -1,7 +1,8 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
 import { renderTableWebview } from './webviewHtml.js';
-import { getModelFromBytes, getProjectModel, invalidate } from './SlddModel.js';
+import { getModelForBinaryTab, getProjectModel, invalidate } from './SlddModel.js';
+import { forgetChangedSource, parsedModelForTab } from './sourceReads.js';
 import {
   buildRows,
   COLUMNS,
@@ -187,12 +188,26 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           return;
         }
 
-        // Re-parse from disk. The file doesn't change here, but invalidate is
+        // Re-register from disk. The file doesn't change here, but invalidate is
         // harmless and keeps the cache honest against external edits.
+        //
+        // Deliberately NOT reaching into the shared source cache: what this drops is the
+        // node this module holds for the URI, so the tree is rebuilt from the file as it is
+        // now. The shared cache's entries are keyed by the file's content VERSION, so a
+        // repost is exactly the case where dropping them would be wrong — an unchanged file
+        // would be re-read and re-parsed every time the table repainted, which is the whole
+        // cost this shares. The write that a version key CANNOT see is handled where it is
+        // known about, on the watcher below.
         invalidate(uriString);
 
-        const ab = await readBytes();
-        const node = getModelFromBytes(uriString, name, ab);
+        // Which route this format's tree comes from is decided in SlddModel — a model through
+        // the shared parse, everything else through its bytes — so that the decision is unit
+        // testable and this module keeps only the vscode plumbing. Both sources are thunks:
+        // the read the branch does not take never happens.
+        const node = await getModelForBinaryTab(uriString, name, {
+          parsed: () => parsedModelForTab(document.uri),
+          bytes: readBytes,
+        });
         const rows = isMatFile(name) ? buildMatRows(node) : buildRows(node);
         // Fill the Usage column from the shared workspace usage graph (lazy +
         // cached). A model (.slx/.mdl) resolves its blocks' params to source files
@@ -257,6 +272,17 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       new vscode.RelativePattern(vscode.Uri.joinPath(document.uri, '..'), name),
     );
     const onDiskChange = () => {
+      // The shared cache is dropped for this file HERE and nowhere else on this path. Its
+      // entries are keyed by `mtime:size`, and this is the one event that knows better than
+      // that key: a write can preserve both — `tar -xp` or `unzip -o` restoring a
+      // same-revision file keeps its recorded mtime and its size, and a mount with 1-2 s
+      // mtime granularity cannot separate two equal-size writes in one tick — and then the
+      // repost below would re-derive the table from the parse of the OLD bytes, leaving the
+      // user with a file that changed, an editor that visibly refreshed, and every row stale
+      // for the life of the window. A watcher event is evidence of a change no `stat` carries,
+      // so it is the one place allowed to spend a re-read (see sourceCache.forgetSource, and
+      // note that putting this inside `invalidate` would apply it to every repost too).
+      forgetChangedSource(document.uri);
       invalidate(uriString);
       void post();
     };

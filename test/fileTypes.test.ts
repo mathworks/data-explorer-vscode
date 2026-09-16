@@ -210,6 +210,10 @@ describe('no consumer keeps its own copy of the list', () => {
     // dispatches on the filename with its own (case-insensitive) kind tests — so a
     // rule about this extension's globs and predicates has nothing to say about it.
     'src/host/nameIndex.ts',
+    // nameScan.ts is the kind DISPATCH the name index used to hold itself: which reader a
+    // candidate's names come from. It moved out when the model read went through the shared
+    // cache, and the scan has to follow it, not the file it left.
+    'src/host/nameScan.ts',
     'src/host/structuralIndex.ts',
     'src/host/slxStructure.ts',
     'src/host/SlddModel.ts',
@@ -286,9 +290,13 @@ describe('no consumer keeps its own copy of the list', () => {
     // and `scanModelStructure` dispatch on the same ZIP magic in the same core module,
     // the second being the first narrowed to three relationship fields over a filtered
     // set of OPC parts. So slxStructure.ts reads models with the scanner and
-    // nameIndex.ts with the full parse — it needs block parameters, which the scanner
+    // nameScan.ts with the full parse — it needs block parameters, which the scanner
     // deliberately does not carry — and neither is choosing a format on this host's
     // behalf. What is barred is reaching PAST the sniff to a single-format reader.
+    //
+    // nameScan.ts, not nameIndex.ts: the name index's model read is the SHARED parse now
+    // (sourceCache.parsedModelOf), and the only model read left in this repo outside that
+    // one accessor is the buffer of an unsaved document, which nameScan owns.
     //
     // The usage graph's model read is no longer in this repo at all — it is core's
     // `buildUsageIndex`, which dispatches through the same `parseModel`. Pinning that
@@ -296,7 +304,7 @@ describe('no consumer keeps its own copy of the list', () => {
     // is pinned by BEHAVIOUR instead: test/usageEndToEnd.test.ts runs a classic
     // legacy_ctrl.mdl through the graph and expects its blocks, and parseSlx on a
     // `.mdl` throws rather than returning nothing.
-    for (const file of ['src/host/nameIndex.ts', 'src/host/slxStructure.ts']) {
+    for (const file of ['src/host/nameScan.ts', 'src/host/slxStructure.ts']) {
       const src = code(file);
       expect(
         src.includes('parseModel') || src.includes('scanModelStructure'),

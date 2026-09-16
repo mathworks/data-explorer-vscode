@@ -64,9 +64,16 @@ export async function readForScan(uri: vscode.Uri): Promise<Uint8Array | null> {
  * what it was trying to save.
  *
  * A cache keyed on this is self-healing, which is worth more here than precision: a file
- * whose mtime moved is re-read even if a watcher event was missed entirely, and the
- * pathological case — a write that preserves both mtime and size — is one a `stat`-based
- * watcher would not have reported either.
+ * whose mtime moved is re-read even if a watcher event was missed entirely.
+ *
+ * It is not COMPLETE, though, and the gap needed correcting: a write that preserves both mtime
+ * and size is invisible to this token, and a file-system watcher does report it. VS Code's
+ * watcher is fed by the OS's own change events rather than by polling a `stat`, so its event
+ * carries information no token computed from a `stat` can. That is why the shared cache has
+ * exactly one invalidation hook (`sourceCache.forgetSource`, called from the tab's watcher) and
+ * why it is a hook rather than a finer key — a finer key means hashing, which means reading.
+ * forgetOnDiskChange.test.ts restores an mtime with `utimesSync` and asserts that this token
+ * does not move across the write.
  */
 export async function scanVersion(uri: vscode.Uri): Promise<string | null> {
   try {

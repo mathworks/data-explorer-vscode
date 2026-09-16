@@ -16,10 +16,11 @@
 // Now there is one reading, published for exactly this caller (core v1.6.0).
 //
 // `normalizeRefNames` takes `unknown` because the two .sldd formats reach it by
-// different routes: the COMPRESSED path (structuralIndex.buildGraphSource) pulls the
-// array out of parsed binary content and the textual path out of JSON, so each hands
-// over whatever it found.
-import { normalizeRefNames, refBasename } from 'data-explorer-core';
+// different routes: the COMPRESSED path (core's `scanSldd`) pulls the array out of
+// parsed binary content and the textual path out of JSON, so each hands over whatever
+// it found.
+import { isJsonTextBytes, normalizeRefNames, refBasename } from 'data-explorer-core';
+import { scanSldd } from './slddContent.js';
 
 export { normalizeRefNames, refBasename };
 
@@ -32,5 +33,41 @@ export function extractReferences(text: string): string[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * A dictionary's references from its BYTES, in whichever of the two on-disk formats they
+ * hold — the one extraction, for the two tiers that want it.
+ *
+ * It is here rather than inside either caller because both want it: the shared cheap tier
+ * records these on a dictionary's artifact (sourceCache.ts) and the tree's own bytes-in-hand
+ * path derives them the same way (structuralIndex.ts). Two spellings of "read the reference
+ * list" is the shape the drift in this file's header took, and the formats are exactly where
+ * it hid.
+ *
+ * RAW, and that is the point of keeping it separate from the summary the same bytes also
+ * produce. Core's `DataSummary.slddRefs` is `refs.map(refBasename)` — lowercased and stripped
+ * of directories — which resolves identically (RelGraph resolves through `refBasename` too,
+ * and it is idempotent) but is not what a reference SAYS. The tree renders an unresolved
+ * reference as a row labelled with the string itself, so a dictionary naming
+ * `shared/Common.sldd` must not be reported as missing `common.sldd`: that is a file the user
+ * cannot search for and a directory the message has silently dropped.
+ *
+ * WHICH format the bytes are is core's question, asked with core's own sniff. This host used
+ * to test for the zip magic itself, which is the same rule written a second time, and the two
+ * did not agree on a textual dictionary that leads with a BOM.
+ *
+ * Throws what `scanSldd` throws — a dictionary the read could not recover is a failure, not an
+ * empty dictionary (slddContent.ts). Both callers catch, and both answer "no references" for
+ * it, which is what a workspace-wide pass has always done with a file it cannot read.
+ */
+export function refsFromSlddBytes(bytes: ArrayBuffer): string[] {
+  const u8 = new Uint8Array(bytes);
+  // A textual dictionary takes the regex above and not `scanSldd`, which would `JSON.parse`
+  // the whole file to read one array: 52.6 ms against 3.7 ms on a 20 MB one. Compressed, the
+  // scan IS the cheap read — it streams the reference objects out of `data/chunk0.xml`
+  // without building the entry tree.
+  if (isJsonTextBytes(u8)) return extractReferences(new TextDecoder().decode(u8));
+  return scanSldd(bytes).refs;
 }
 

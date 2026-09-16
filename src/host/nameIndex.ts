@@ -10,16 +10,18 @@
 // single-key replace rather than a full rebuild. Built LAZILY on first query
 // and cached via a module Promise; invalidated wholesale via invalidate().
 //
-// This module does the vscode file I/O + parser dispatch; the pure
-// name-extraction core lives in nameExtract.ts (unit-tested).
+// This module does the vscode file I/O; where each name comes FROM — the shared
+// source cache for a model's parse, this file's own scanners for a .sldd or a
+// .mat, and an unsaved buffer over both — is nameScan.ts, and the pure
+// name-extraction core is nameExtract.ts. Both are vscode-free and unit-tested.
 import * as vscode from 'vscode';
-import { mapLimited, readForScan } from './scanRead.js';
-import { isMatFile, isModelFile, isSlddFile, parseModel, scanMat } from 'data-explorer-core';
-import { scanSldd } from './slddContent.js';
+import { mapLimited } from './scanRead.js';
 import { toArrayBuffer } from '../common/bytes.js';
-import { basename } from '../common/pathUtil.js';
 import { GRAPH_GLOB } from '../common/fileTypes.js';
-import { namesFromSldd, namesFromMat, namesFromSlx, type NameRecord } from './nameExtract.js';
+import type { NameRecord } from './nameExtract.js';
+import { namesOfFile, type NameReader } from './nameScan.js';
+import { readerFor, sourceCache, sourceFilesOf } from './sourceReads.js';
+import type { SourceFile } from './sourceCache.js';
 
 export type { EntryKind, NameRecord } from './nameExtract.js';
 
@@ -58,8 +60,8 @@ export async function listEntries(): Promise<NameRecord[]> {
 // current after an edit without a full rebuild.
 export async function reindexFile(uri: vscode.Uri): Promise<void> {
   if (!index) return;
-  const records = await recordsForFile(uri);
-  index.set(uri.toString(), records);
+  const [file] = sourceFilesOf([uri]);
+  index.set(uri.toString(), await namesOfFile(sourceCache, nameReader([uri]), file));
 }
 
 // Drop one file's bucket (e.g. the file was deleted). Safe before build.
@@ -67,8 +69,8 @@ export function removeFile(uriString: string): void {
   index?.delete(uriString);
 }
 
-// The file's CURRENT bytes, preferring an open document's unsaved buffer over
-// what is on disk.
+// The file's UNSAVED bytes, when an open document has some, and `null` when the
+// scan should read disk instead.
 //
 // This matters because reindexFile is driven by onDidChangeTextDocument, which
 // fires per keystroke on an UNSAVED buffer. Reading disk there re-derives the
@@ -83,16 +85,23 @@ export function removeFile(uriString: string): void {
 // JSON format and encoding the string back to bytes is lossless. A clean (or
 // unopened) document has no in-memory state worth preferring, so it reads disk —
 // which also keeps the full build() unaffected.
-async function readCurrentBytes(uri: vscode.Uri): Promise<ArrayBuffer | null> {
-  const uriString = uri.toString();
-  const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uriString);
-  if (open?.isDirty) {
-    // Already in memory and already bounded — VS Code will not mirror a document
-    // this scan's cap would exclude (its own sync limit is far below it).
-    return toArrayBuffer(new TextEncoder().encode(open.getText()));
-  }
-  const bytes = await readForScan(uri);
-  return bytes ? toArrayBuffer(bytes) : null;
+//
+// Answering `null` rather than the disk bytes is what lets nameScan tell the two
+// cases apart, and it has to: buffer bytes must never be stored in the shared
+// cache, whose keys are the DISK file's `mtime:size` (see nameScan.ts).
+function dirtyBytesOf(file: SourceFile): ArrayBuffer | null {
+  const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === file.uriString);
+  if (!open?.isDirty) return null;
+  // Already in memory and already bounded — VS Code will not mirror a document
+  // this scan's cap would exclude (its own sync limit is far below it).
+  return toArrayBuffer(new TextEncoder().encode(open.getText()));
+}
+
+// How this index reads: the shared cache's own scan reader — same cap, same
+// `mtime:size` version, so a model it parses is one every other consumer gets for
+// free — with the dirty-buffer override layered on top of it.
+function nameReader(uris: readonly vscode.Uri[]): NameReader {
+  return { ...readerFor(uris), dirtyBytes: dirtyBytesOf };
 }
 
 async function build(): Promise<void> {
@@ -104,11 +113,13 @@ async function build(): Promise<void> {
     /* no workspace folder open — nothing to scan; the index is legitimately empty */
   }
   // A few files at a time, and nothing oversized — see scanRead. This scan is the
-  // heaviest of the three (it runs each file's real parser to collect names), so it
-  // is also the one that must not hold the whole folder at once.
-  await mapLimited(uris, async (uri) => {
-    const records = await recordsForFile(uri);
-    if (records.length > 0) map.set(uri.toString(), records);
+  // heaviest of the three (it needs each model's full parse to collect its block
+  // names), so it is also the one that must not hold the whole folder at once. One
+  // reader for the whole pass, so every file is versioned and read the same way.
+  const reader = nameReader(uris);
+  await mapLimited(sourceFilesOf(uris), async (file) => {
+    const records = await namesOfFile(sourceCache, reader, file);
+    if (records.length > 0) map.set(file.uriString, records);
   });
   // Assigned on exactly ONE path, deliberately. `index` non-null is what marks
   // the build as done: reindexFile no-ops while it is null, and listEntries reads
@@ -116,44 +127,4 @@ async function build(): Promise<void> {
   // would leave the module permanently half-built — ensureIndex() satisfied, so
   // no rebuild is ever attempted, while every query returns nothing.
   index = map;
-}
-
-// Read + parse a single file's NAMES ONLY. Any read/parse failure (corrupt or
-// unreadable file) contributes nothing.
-async function recordsForFile(uri: vscode.Uri): Promise<NameRecord[]> {
-  let ab: ArrayBuffer | null;
-  try {
-    ab = await readCurrentBytes(uri);
-  } catch {
-    return [];
-  }
-  // Unreadable or too large to scan: no names, which is what an undecodable file
-  // could contribute anyway. It still opens in its own tab.
-  if (!ab) return [];
-  const path = uri.path;
-  const uriString = uri.toString();
-  try {
-    if (isModelFile(path)) {
-      const parsed = parseModel(ab, basename(path));
-      return namesFromSlx(parsed, uriString);
-    }
-    if (isMatFile(path)) {
-      // Scanned, not parsed, for the same reason as the dictionary below — and no wrapper
-      // is needed here, unlike `scanSldd`: core's MAT scanner refuses every doubt and hands
-      // the file to `parseMat`, so a file the full parser rejects still throws (into the
-      // catch below) and a file it repairs still yields the repaired names. The only thing
-      // lost is `parseMat`'s warnings, which this index never read.
-      return namesFromMat(scanMat(ab).names, uriString);
-    }
-    if (isSlddFile(path)) {
-      // Scanned, not parsed: this index wants one string per entry and used to build a
-      // whole DOM to get them. Same refusal policy either way — see slddContent.ts — so
-      // an unreadable dictionary still throws and still contributes nothing, via the
-      // catch below.
-      return namesFromSldd(scanSldd(ab).names, uriString);
-    }
-  } catch {
-    /* unreadable/corrupt file contributes nothing */
-  }
-  return [];
 }

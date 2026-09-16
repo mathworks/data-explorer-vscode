@@ -1,53 +1,29 @@
 // Copyright 2026 The MathWorks, Inc.
-// The vscode half of the usage plan: how a candidate file is versioned and read, and where
-// the summaries live between builds.
+// The Usage entry point: the candidate files a tab's graph is built over, run through the
+// shared source cache.
 //
-// The reasoning — the two tiers, the scope, why a data file is summarised whether or not it
-// is in scope — is all in usagePlan.ts, which is vscode-free so that it can be tested over
-// real fixture bytes. This module supplies `readForScan`/`scanVersion` and one cache, and
-// nothing else: the split is the same one nameIndex→nameExtract and searchSources→searchFilter
-// already make here, and it exists so the equality the design rests on is pinned in the fast
-// suite rather than only in the integration suite.
+// This was the whole vscode half of the usage plan — the reader and the one cache — and both
+// are now sourceReads.ts, because they were never specific to Usage: the tree, the name index
+// and the opened tab read the same files the same way. What is left here is only the question
+// Usage asks, which is `scopedSummaries`.
+//
+// The reasoning behind the answer is split the same way it always was: the tiers and the
+// version key in sourceCache.ts, and which files a Usage answer needs in usagePlan.ts. Both
+// are vscode-free so they can be tested over real fixture bytes.
 import * as vscode from 'vscode';
-import { toArrayBuffer } from '../common/bytes.js';
-import { readForScan, scanVersion } from './scanRead.js';
-import { clearUsageCache, newUsageCache, planSummaries, type PlanFile, type PlanReader } from './usagePlan.js';
+import { readerFor, sourceCache, sourceFilesOf, clearSources } from './sourceReads.js';
+import { planSummaries } from './usagePlan.js';
 import type { FileSummaries } from 'data-explorer-core';
 
-// One cache for the window. Keyed by content version inside, so it is shared by every file's
-// graph: the models `a.sldd` had to parse are the models `b.sldd` gets for free.
-const cache = newUsageCache();
-
 /**
- * Drop every summary held for every file.
+ * Drop every artifact held for every file.
  *
- * Not needed for correctness — version keying already refuses a stale entry — but for the
- * case where an entry can no longer be reached to be checked: a workspace folder removed
- * takes its files out of `findFiles`, and their summaries would otherwise sit here for the
- * rest of the session.
+ * Kept as a Usage-named call because extension.ts reaches for it where it drops the usage
+ * graphs; it clears the shared cache, which is what that moment means now that one cache
+ * serves every consumer. See `clearSources`.
  */
 export function clearUsageSources(): void {
-  clearUsageCache(cache);
-}
-
-// `readForScan` and `scanVersion` make the same two refusals (oversized, unreadable), one
-// from the bytes and one from the `stat` alone — which is the contract `PlanReader` asks for:
-// a version that cost a read would defeat the cache it keys. See scanRead.ts.
-function readerFor(uris: readonly vscode.Uri[]): PlanReader {
-  const byUri = new Map(uris.map((u) => [u.toString(), u]));
-  const uriOf = (file: PlanFile): vscode.Uri | undefined => byUri.get(file.uriString);
-  return {
-    version: async (file) => {
-      const uri = uriOf(file);
-      return uri ? scanVersion(uri) : null;
-    },
-    bytes: async (file) => {
-      const uri = uriOf(file);
-      if (!uri) return null;
-      const bytes = await readForScan(uri);
-      return bytes ? toArrayBuffer(bytes) : null;
-    },
-  };
+  clearSources();
 }
 
 /**
@@ -55,6 +31,5 @@ function readerFor(uris: readonly vscode.Uri[]): PlanReader {
  * `uris` — which is the workspace files plus the open tabs, in that order.
  */
 export async function scopedSummaries(openedUriString: string, uris: readonly vscode.Uri[]): Promise<FileSummaries> {
-  const files: PlanFile[] = uris.map((u) => ({ uriString: u.toString(), path: u.path }));
-  return planSummaries(cache, readerFor(uris), files, openedUriString);
+  return planSummaries(sourceCache, readerFor(uris), sourceFilesOf(uris), openedUriString);
 }

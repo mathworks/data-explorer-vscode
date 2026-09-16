@@ -68,6 +68,63 @@ export function getModelFromBytes(uriString: string, name: string, bytes: ArrayB
   return node;
 }
 
+/**
+ * A model whose bytes someone already parsed — the same session entry `getModelFromBytes`
+ * makes for one, one `parseModel` earlier.
+ *
+ * This is the tab's half of the shared parse (sourceCache.ts): the Usage tier may already hold
+ * the parse of this very model, because opening its linked dictionary had to summarise it, and
+ * re-deriving it here is the duplicate work that made a model open cost two full parses of the
+ * same bytes.
+ *
+ * Everything else about the registration is deliberately identical, `registered()` included:
+ * core's `addModelSourceParsed` is `addModelSource` with the parse lifted out, it forwards
+ * `parsed.warnings` the same way, and `ModelNode.fromParsed` labels the tree from the srcId
+ * rather than from anything in `parsed`. So a model that read short is refused here exactly as
+ * it is there — which is the invariant parsedRegistration.test.ts pins between the two.
+ */
+export function getModelFromParsed(uriString: string, name: string, parsed: unknown): any {
+  const cached = cache.get(uriString);
+  if (cached) return cached;
+  const node = registered(uriString, DataModel.addModelSourceParsed(uriString, parsed, { path: name }));
+  cache.set(uriString, node);
+  return node;
+}
+
+/** Where a read-only binary tab gets what it registers. Both are vscode reads; neither is made
+ *  unless the branch below picks it. */
+export interface TabSources {
+  /** The SHARED parse of a model, for a model only — sourceReads.parsedModelForTab. */
+  parsed: () => Promise<unknown>;
+  /** The file's bytes from disk, for every other byte-backed format. */
+  bytes: () => Promise<ArrayBuffer>;
+}
+
+/**
+ * The tree a read-only binary tab shows, by the route its FORMAT takes: a model through the
+ * shared parse, everything else through its bytes.
+ *
+ * A named function rather than a ternary inside `BinaryEditorProvider.post`, and the reason is
+ * that this branch is the whole of what phase 2 changed on the tab path — a model's rows now come
+ * off the same `ParsedSlx` the Usage tier summarises, so opening a model parses it once instead of
+ * once per consumer, and opening it after its linked dictionary (which had to parse it to
+ * summarise it) parses it not at all. Left in the provider, that decision sat in a module which
+ * imports `vscode` and which therefore no unit test can load: reverting it to the old
+ * `getModelFromBytes` call left the entire suite green, because the equality sweep in
+ * parsedRegistration.test.ts proves the two routes produce identical rows and nothing else could
+ * tell which one a tab took. Here it is testable by behaviour — see tabRoute.test.ts, which asserts
+ * that a model tab reads no bytes of its own and that every other format reads nothing else.
+ *
+ * Both sources are THUNKS, which is the other half of the same point: the read a branch does not
+ * take must not happen. A model already parsed for a dictionary costs a `stat`, and passing the
+ * bytes in would have paid for them before deciding they were not needed.
+ */
+export async function getModelForBinaryTab(uriString: string, name: string, sources: TabSources): Promise<any> {
+  return isModelFile(name)
+    ? getModelFromParsed(uriString, name, await sources.parsed())
+    : getModelFromBytes(uriString, name, await sources.bytes());
+}
+
 // MATLAB/Simulink Project (.prj): parsed from its resources/project/**/*.xml
 // text map, keyed by POSIX relpath relative to the project root.
 export function getProjectModel(uriString: string, name: string, files: Record<string, string>): any {
