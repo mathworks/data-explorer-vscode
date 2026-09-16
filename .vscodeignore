@@ -24,6 +24,7 @@ CLAUDE.md
 src/**
 test/**
 test-integration/**
+bench/**
 dist-test/**
 coverage/**
 .vscode-test/**

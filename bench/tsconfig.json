@@ -1,0 +1,14 @@
+{
+  // The bench sources are NOT in the root tsconfig: its `rootDir` is `./src`, so a
+  // file outside it is an error there, and widening `rootDir` would move every
+  // emitted path in `dist/`. This config typechecks bench/ on its own —
+  // `npx tsc --noEmit -p bench` — and is not wired into `npm run typecheck`, which
+  // stays exactly the check it was.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "..",
+    "types": ["node"]
+  },
+  "include": ["**/*.ts", "../src/**/*.ts"]
+}

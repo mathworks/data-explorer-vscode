@@ -44,6 +44,11 @@ test-integration/fixtures/workspace/*
 !test-integration/fixtures/workspace/model.slx
 !test-integration/fixtures/workspace/params.sldd
 
+# The benchmark corpus (bench/genCorpus.mjs). Generated, not committed: one of its
+# models is 120 000 blocks of XML, which is the whole point of it and has no business
+# in git. The generator is deterministic, so the numbers stay reproducible without it.
+bench/corpus/
+
 # Screenshots and page snapshots a browser-automation session leaves behind while
 # inspecting the webview by hand. Scratch output, never source.
 .playwright-mcp/
