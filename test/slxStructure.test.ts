@@ -1,9 +1,10 @@
 // Copyright 2026 The MathWorks, Inc.
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { zipSync, strToU8 } from 'fflate';
-import { extractSlxStructure } from '../src/host/slxStructure.js';
+import { isModelFile, parseModel } from 'data-explorer-core';
+import { extractSlxStructure, structureFromParsed } from '../src/host/slxStructure.js';
 
 function buf(name: string): ArrayBuffer {
   const b = readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
@@ -163,6 +164,110 @@ describe('extractSlxStructure', () => {
     expect(s.dataDictionary).toBe('params.sldd');
     expect(s.modelReferences).toEqual(['plant.slx']);
     expect(s.externalDataSources).toEqual(['signals.mat']);
+  });
+});
+
+// The two ways this host can reach a model's relationships, and the one answer they owe each
+// other.
+//
+// `extractSlxStructure` scans the BYTES; `structureFromParsed` reads the same three fields off a
+// `ParsedSlx` the host is already holding, which is what lets the cheap tier answer for a model a
+// tab has just parsed without reading the file again (sourceCache.cheapOf). Core makes the two
+// equivalent at its own boundary — `scanModelStructure` projects those three fields off a
+// `parseModel` result for a non-zip model, and checks the projection against a 127-model corpus —
+// so what is left to this host is the SHAPING, and that is what this compares.
+//
+// Why it has to be compared rather than argued: the answer decides a model's edges in the sections
+// tree and its chain in the usage scope, and the route taken depends on nothing the user can see —
+// whether some tab happened to have parsed the file first. Two routes that disagreed would make a
+// model's relationships depend on the order the window was restored in.
+//
+// Exhaustive over the fixture corpus rather than illustrative, and read from the directory rather
+// than listed, so a model fixture added for some other suite is swept here too.
+describe('a structure derived from a parse equals a scan of the same bytes', () => {
+  const dir = fileURLToPath(new URL('./fixtures', import.meta.url));
+  // Core's own predicate, and recursive: `mcos/` and the other subdirectories hold models too, and
+  // a model is a model here whatever else its fixture was authored for.
+  const MODELS = (readdirSync(dir, { recursive: true }) as string[]).filter((name) => isModelFile(name)).sort();
+
+  it('has a corpus worth sweeping', () => {
+    // A guard on the test itself: without it every comparison below passes vacuously over an
+    // empty list, and the three cases that actually pull the routes apart could all be missing.
+    expect(MODELS.length).toBeGreaterThan(8);
+    // A `.mdl`, because the reference-name completion is the parent's OWN extension and this is
+    // the only format where that is not `.slx`.
+    expect(MODELS.filter((n) => n.endsWith('.mdl')).length).toBeGreaterThan(1);
+    // And a model of each shape the three fields can take.
+    const all = MODELS.map((name) => extractSlxStructure(buf(name), name));
+    expect(all.filter((s) => s.modelReferences.length > 0).length).toBeGreaterThan(1);
+    expect(all.filter((s) => s.dataDictionary !== null).length).toBeGreaterThan(1);
+    expect(all.filter((s) => s.externalDataSources.length > 0).length).toBeGreaterThan(1);
+  });
+
+  it('gives every model fixture the same three fields, field for field', () => {
+    for (const name of MODELS) {
+      const bytes = buf(name);
+      expect(structureFromParsed(parseModel(bytes, name), name), name).toEqual(
+        extractSlxStructure(bytes, name),
+      );
+    }
+  });
+
+  // The sweep above cannot see a change to the shaping itself — both routes go through the one
+  // shaping function, so a completion dropped there moves both answers together and they stay
+  // equal. So the completion is pinned ABSOLUTELY on the derived route as well, on the three
+  // fixtures that spell a reference the three different ways.
+  it('completes a bare reference name with the .mdl of the model that RECORDS it', () => {
+    // `legacy_ctrl.mdl` records `plant`, and its siblings are `.mdl` files: labelling that
+    // reference `plant.slx` resolves to nothing at all.
+    const s = structureFromParsed(parseModel(buf('legacy_ctrl.mdl'), 'legacy_ctrl.mdl'), 'legacy_ctrl.mdl');
+    expect(s.modelReferences).toEqual(['plant.mdl']);
+  });
+
+  it('completes a bare reference name with .slx for an .slx parent', () => {
+    const s = structureFromParsed(
+      parseModel(
+        slx({
+          'simulink/graphicalInterface.json': JSON.stringify({
+            ModelReferences: [{ BlockPath: 'ctrl/plant', ModelName: 'plant' }],
+          }),
+        }),
+        'bare.slx',
+      ),
+      'bare.slx',
+    );
+    expect(s.modelReferences).toEqual(['plant.slx']);
+  });
+
+  it('leaves a reference that already names a model file alone, whatever the parent is', () => {
+    // `model_with_refs.mdl` records `plant.slx` — so the parent is a `.mdl` and the completion
+    // must not fire. Appending the parent's extension anyway would name `plant.slx.mdl`.
+    const s = structureFromParsed(
+      parseModel(buf('model_with_refs.mdl'), 'model_with_refs.mdl'),
+      'model_with_refs.mdl',
+    );
+    expect(s.modelReferences).toEqual(['plant.slx']);
+  });
+
+  it('is NOT interchangeable for a package the scan can read and the parse cannot', () => {
+    // Why the cheap tier keeps the read as a fallback instead of routing everything through a
+    // parse: these two routes are equal on every model that PARSES, and the scan reads strictly
+    // fewer parts — so a package whose block XML cannot be inflated has a scan and no parse at
+    // all. There is nothing to derive from for that file, and the relationships it does have are
+    // still the tree's to draw.
+    const archive = slx({
+      'simulink/blockDiagram.json': JSON.stringify({
+        BlockDiagram: { DataDictionary: 'params.sldd', ModelUUID: 'u' },
+      }),
+      'simulink/graphicalInterface.json': JSON.stringify({
+        ModelReferences: [{ BlockPath: 'ctrl/plant', ModelName: 'plant' }],
+      }),
+      'simulink/systems/system_1.xml': '<System><Block/></System>'.repeat(400),
+    });
+    const damaged = poison(archive, 'simulink/systems/system_1.xml');
+
+    expect(() => parseModel(damaged, 'damaged.slx')).toThrow();
+    expect(extractSlxStructure(damaged, 'damaged.slx').modelReferences).toEqual(['plant.slx']);
   });
 });
 

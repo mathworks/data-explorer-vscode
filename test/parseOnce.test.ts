@@ -127,8 +127,9 @@ describe('opening a model parses it once, not once per consumer', () => {
     expect(parsedBetween(new Map(), ledger(cache))).toEqual([MODEL.uriString]);
 
     // The same open's Usage column, which is the second consumer and used to be the second
-    // parse. It is a whole folder pass, so it reads the model once more for the CHEAP tier —
-    // that read is a scan, not a parse, and the parse it would have made is a hit.
+    // parse. It is a whole folder pass, so it wants this model's relationships for the CHEAP
+    // tier as well — and those three fields are read off the parse the tab just made, so the
+    // pass neither parses the model again nor reads it.
     const mid = ledger(cache);
     const summaries = await planSummaries(cache, reader, FILES, MODEL.uriString);
     expect(parsedBetween(mid, ledger(cache))).toEqual([]);
@@ -143,9 +144,11 @@ describe('opening a model parses it once, not once per consumer', () => {
     expect(parsed.masks).toBeTruthy();
     expect(summaries.models[0].masks).toBe(parsed.masks);
 
-    // Two reads of the model in the whole open — the tab's own, and the folder's cheap pass —
-    // where it used to be three, one per parse plus the scan.
-    expect(modelReads().filter((p) => p === MODEL.path).length).toBe(2);
+    // ONE read of the model in the whole open — the tab's own. It was three when the two
+    // consumers each parsed for themselves and the cheap tier scanned the bytes a third time, and
+    // two once the parse was shared; the last one goes because the cheap tier's three fields are
+    // already inside that parse (sourceCache.cheapOf, slxStructure.structureFromParsed).
+    expect(modelReads().filter((p) => p === MODEL.path).length).toBe(1);
   });
 
   it('parses a model NOT in the opened model’s scope zero times', async () => {

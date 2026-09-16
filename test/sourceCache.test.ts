@@ -19,11 +19,13 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SUPPORTED_EXTS } from '../src/common/fileTypes.js';
 import { blankCommentsAndKeepLines } from './tools/moduleGraph.js';
+import { extractSlxStructure } from '../src/host/slxStructure.js';
 import {
   cheapAll,
   clearSourceCache,
   fillModelSummaries,
   newSourceCache,
+  parsedModelOf,
   sourceKind,
   type SourceCache,
   type SourceFile,
@@ -230,6 +232,79 @@ describe('what a cheap pass reads', () => {
     reads = [];
     await cheapAll(cache, reader, FILES);
     expect(once(reads)).toEqual(once(FILES.map((f) => f.path)));
+  });
+});
+
+describe('a model this cache has already parsed costs the cheap tier NOTHING', () => {
+  // The read the cheap tier does not have to make, counted. A model's cheap artifact is three
+  // fields, and 0.1 ms of scanning on an 885 KiB model — the READ is its entire cost — while the
+  // parse this cache may already be holding carries those same three fields. So the pass that
+  // answers a freshly opened tab's Usage column stopped re-reading the file that tab has just
+  // parsed. Two claims, and each needs its own test: no read when the versions match, and a read
+  // when they do not.
+  const MODEL = file('model_with_refs.slx');
+  const parse = (cache: SourceCache, f: SourceFile): Promise<unknown> =>
+    parsedModelOf(cache, f, stamp.get(f.path) ?? null, () => reader.bytes(f));
+
+  it('derives the structure from the held parse instead of reading the file', async () => {
+    const cache = newSourceCache();
+    await parse(cache, MODEL);
+    expect(reads).toEqual([MODEL.path]);
+    reads = [];
+
+    const cheap = await cheapAll(cache, reader, FILES);
+
+    // Not read, at all. This is the tab-open order — parse first, then the folder pass behind it.
+    expect(reads).not.toContain(MODEL.path);
+    // And not because the pass read nothing: every other file in the folder was read exactly once,
+    // so the absence above is about the held parse and not about a pass that did no work.
+    expect(once(reads)).toEqual(once(FILES.map((f) => f.path).filter((p) => p !== MODEL.path)));
+    // The answer is the one the read would have produced, field for field — which is the property
+    // slxStructure.test.ts sweeps over every model fixture. Here it is asserted through the CACHE,
+    // so a pass wired to the wrong shaper would be caught as well as a shaper that drifted.
+    const entry = cheap.get(MODEL.uriString);
+    if (entry?.cheap.kind !== 'model') throw new Error(`expected a model, got ${entry?.cheap.kind}`);
+    expect(entry.cheap.structure).toEqual(extractSlxStructure(bytesOf('model_with_refs.slx'), MODEL.path));
+    // Stored under the version the pass asked about, like any other entry: the NEXT pass is an
+    // ordinary cache hit rather than a second derivation.
+    expect(cache.cheap.get(MODEL.uriString)?.version).toBe(`v1:${MODEL.path}`);
+  });
+
+  it('reads the file when the parse it holds is at a DIFFERENT version', async () => {
+    // Version equality is exact, the same string comparison every other tier makes. A parse of
+    // the bytes the file USED to hold is not a cheaper answer to this question, it is an answer to
+    // a different one — and it would be stored under the current version, where no later `stat`
+    // could ever correct it.
+    const cache = newSourceCache();
+    stamp.set(MODEL.path, `v0:${MODEL.path}`);
+    await parse(cache, MODEL);
+    stamp.set(MODEL.path, `v1:${MODEL.path}`);
+    reads = [];
+
+    await cheapAll(cache, reader, [MODEL]);
+
+    expect(reads).toEqual([MODEL.path]);
+    // The stale parse is untouched — it is not this tier's to evict or refresh, and the cheap
+    // entry that was just stored is keyed by the version that was actually read.
+    expect(cache.parsed.get(MODEL.uriString)?.version).toBe(`v0:${MODEL.path}`);
+    expect(cache.cheap.get(MODEL.uriString)?.version).toBe(`v1:${MODEL.path}`);
+  });
+
+  it('does not move the parse it read in the eviction order', async () => {
+    const cache = newSourceCache();
+    const other = file('shared_gain.slx');
+    await parse(cache, MODEL);
+    await parse(cache, other);
+    expect([...cache.parsed.keys()]).toEqual([MODEL.uriString, other.uriString]);
+
+    await cheapAll(cache, reader, [MODEL]);
+
+    // `cache.parsed` iterates least-recently-used FIRST, and a cheap pass touches every model in
+    // the folder — so refreshing recency here would rewrite the whole order into FOLDER order and
+    // leave the tier evicting by folder position, which is the eviction-by-age failure
+    // `parsedModelOf`'s re-insert exists to avoid. Reading three relationship fields off a parse
+    // is not a use of the model.
+    expect([...cache.parsed.keys()]).toEqual([MODEL.uriString, other.uriString]);
   });
 });
 

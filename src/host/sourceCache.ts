@@ -21,8 +21,10 @@
 // What a file's CHEAP artifact is depends on its kind, and the asymmetry is core's own:
 //
 //   model  its relationships, through `scanModelStructure` (1598 ms -> 54 ms over a
-//          127-model corpus; see slxStructure.ts). A model is the only kind whose summary
-//          costs a full `parseModel`, so it is the only kind worth deciding about.
+//          127-model corpus; see slxStructure.ts) — or off the model's own PARSE when this cache
+//          already holds one at that version, which costs no read at all. A model is the only
+//          kind whose summary costs a full `parseModel`, so it is the only kind worth deciding
+//          about, and the only kind with a parse to derive a cheap answer from.
 //   .sldd  its whole `FileSummaries` — references AND names. Reading a dictionary's
 //          references IS summarising it: `scanSldd` answers both from one call
 //          (3288 ms -> 116 ms), so there is no cheaper tier to put it in. Plus its RAW
@@ -94,7 +96,7 @@ import {
 import type { FileSummaries, ParsedSlx } from 'data-explorer-core';
 import { mapLimited } from './mapLimited.js';
 import { refsFromSlddBytes } from './slddRefs.js';
-import { extractSlxStructure, type SlxStructure } from './slxStructure.js';
+import { extractSlxStructure, structureFromParsed, type SlxStructure } from './slxStructure.js';
 
 /** A candidate file, before anything has been read: what it is called and where. */
 export interface SourceFile {
@@ -634,6 +636,25 @@ function summarizeOne(file: SourceFile, bytes: ArrayBuffer): FileSummaries {
  * relationships rather than throwing, which is the right answer here too — the file is still
  * a source that can be opened and can say "no usages", it just reaches nothing.
  *
+ * Unless this cache is already holding that model's PARSE at the same version, in which case
+ * there is nothing to read: `structureFromParsed` reads the three relationship fields straight
+ * off it. The read was the entire cost of a model's cheap artifact — 0.1 ms of scanning on an
+ * 885 KiB model — so the case this removes is the whole of a tab open's second read of the file
+ * the user just opened: the tab parses, then the folder pass that answers its Usage column scans
+ * the same bytes again. The version check is the same exact string comparison every other tier
+ * makes; a parse at a DIFFERENT version is not a cheaper answer, it is another file's answer.
+ *
+ * The fallback is not only for a model nothing has parsed. It is also what keeps the two routes
+ * from being one: a package whose non-structural parts are corrupt is SCANNABLE and not
+ * PARSEABLE (see the comment inside `extractSlxStructure`), so for that file there is no parse to
+ * derive from, and the scan answers as it always did.
+ *
+ * Recency is deliberately NOT refreshed for the parse this reads. `parsedModelOf` re-inserts on a
+ * hit because a consumer asking for a parse is a use of it; a cheap pass touches EVERY model in
+ * the folder, so re-inserting here would reorder the whole map into FOLDER order on every pass
+ * and leave `parsed` with no recency signal at all — evicting by folder position, which is the
+ * eviction-by-age failure `parsedModelOf`'s re-insert exists to avoid.
+ *
  * A data file gets its summary, and a consumer resolving a NAME through its chain reads the
  * references back off `DataSummary.slddRefs`. That is what core's own resolver follows, so the
  * chain a scope walks and the chain that resolves a name are one list read once, rather than
@@ -649,9 +670,21 @@ function summarizeOne(file: SourceFile, bytes: ArrayBuffer): FileSummaries {
  * the last line summarises whatever is left as a data file. A marker file read as a dictionary
  * is a read for nothing and an empty summary that then answers Usage questions.
  */
-async function cheapOf(file: SourceFile, reader: SourceReader): Promise<Cheap | null> {
+async function cheapOf(
+  cache: SourceCache,
+  file: SourceFile,
+  version: string,
+  reader: SourceReader,
+): Promise<Cheap | null> {
   const kind = sourceKind(file.path);
   if (kind === null || kind === 'prj') return null;
+  if (kind === 'model') {
+    const held = cache.parsed.get(file.uriString);
+    // Synchronous, and that matters: it introduces no await of its own, so this branch stores
+    // through `cheapAll`'s existing generation check without widening the window that check
+    // covers. See there.
+    if (held && held.version === version) return { kind, structure: structureFromParsed(held.parsed, file.path) };
+  }
   const bytes = await reader.bytes(file);
   if (!bytes) return null;
   if (kind === 'model') return { kind, structure: extractSlxStructure(bytes, file.path) };
@@ -679,7 +712,9 @@ function slddRefsOf(bytes: ArrayBuffer): readonly string[] {
  * The cheap artifact for every file in `files`, re-using what has not changed.
  *
  * One `version` per candidate, and `bytes` only on a miss — so a pass over a folder already
- * seen is a folder of `stat`s.
+ * seen is a folder of `stat`s. Not even on every miss: a MODEL whose parse this cache already
+ * holds at that version has its structure read off the parse, so the pass that answers a freshly
+ * opened tab's Usage column does not read the file that tab has just parsed (see `cheapOf`).
  *
  * Files come back in `files` ORDER, which is load-bearing twice over and not merely tidy:
  * folder order decides which of two same-named dictionaries wins a basename collision, and
@@ -707,9 +742,11 @@ export async function cheapAll(
     // is — which is what lets a consumer hold an artifact and know it is holding the cache.
     const entry = await coalesced(cache.reading, file.uriString, version, async () => {
       // Taken before the read, so a `forgetSource` that lands while it is in flight is visible
-      // below: these bytes may be the ones a watcher has just called stale.
+      // below: these bytes may be the ones a watcher has just called stale. It covers the
+      // no-read route the same way — a forget deletes `cache.parsed` too, so a derivation either
+      // finds no parse to work from and reads, or finds one and has its store skipped here.
       const at = cache.generation;
-      const cheap = await cheapOf(file, reader);
+      const cheap = await cheapOf(cache, file, version, reader);
       if (!cheap) return null;
       const fresh: CheapEntry = { version, cheap };
       if (nothingForgottenSince(cache, at)) cache.cheap.set(file.uriString, fresh);
@@ -888,16 +925,19 @@ export async function fillModelSummaries(
   wanted: ReadonlySet<string>,
   cheap: CheapMap,
 ): Promise<void> {
-  const pending = files.filter((file) => {
+  // The version is CARRIED rather than looked up again below: one `cheap.get` per file, and the
+  // version each file is summarised at is the one its own filter decision was made on by
+  // construction — where a second lookup was a second chance to read a different entry.
+  const pending: { file: SourceFile; version: string }[] = [];
+  for (const file of files) {
     const entry = cheap.get(file.uriString);
-    if (!entry || entry.cheap.kind !== 'model') return false;
-    if (!wanted.has(file.uriString)) return false;
+    if (!entry || entry.cheap.kind !== 'model') continue;
+    if (!wanted.has(file.uriString)) continue;
     const hit = cache.models.get(file.uriString);
-    return !(hit && hit.version === entry.version);
-  });
-  await mapLimited(pending, async (file) => {
-    const version = cheap.get(file.uriString)?.version;
-    if (version === undefined) return null;
+    if (hit && hit.version === entry.version) continue;
+    pending.push({ file, version: entry.version });
+  }
+  await mapLimited(pending, async ({ file, version }) => {
     // The same capture the other two tiers make, and this tier needs it as much as they do: a
     // summary is a reading of a parse, so a parse of bytes a watcher has since called stale
     // summarises to a stale Usage column — under a version key that same write did not move.

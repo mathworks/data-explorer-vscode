@@ -356,15 +356,18 @@ describe('the tab pin is what keeps the folder pass from thrashing', () => {
     const rows = buildRows(await openTab(cache, SMALL));
 
     expect(rows.length).toBeGreaterThan(0);
-    // Two reads of the model in the whole sequence and neither is a re-parse for the tab: the
-    // tab's own, and the folder's CHEAP scan.
-    expect(readsOf(SMALL)).toBe(2);
+    // ONE read of the model in the whole sequence, and it is the tab's own. The folder pass reads
+    // nothing of it: the cheap tier takes its three relationship fields off the parse the tab is
+    // holding, and the summary tier's parse is a hit that the pin is what protects.
+    expect(readsOf(SMALL)).toBe(1);
     expect(cache.parsed.has(SMALL.uriString)).toBe(true);
   });
 
   it('re-parses it when the pin is absent — the control for the test above', async () => {
     // Same budget, same sequence, `pin` dropped. This is the regression the pin exists to stop,
-    // and stating it here is what keeps the test above from passing for some other reason.
+    // and stating it here is what keeps the test above from passing for some other reason: the
+    // folder pass evicts the unpinned entry, so the second open reads and parses the file again —
+    // two reads against the pinned sequence's one.
     const cache = newSourceCache((await estimates([SMALL]))[0]);
     reads = [];
 
@@ -372,7 +375,7 @@ describe('the tab pin is what keeps the folder pass from thrashing', () => {
     await planSummaries(cache, reader, FILES, null);
     await openTab(cache, SMALL, false);
 
-    expect(readsOf(SMALL)).toBe(3);
+    expect(readsOf(SMALL)).toBe(2);
     expect(cache.pinnedParses).toEqual([]);
   });
 
