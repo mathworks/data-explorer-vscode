@@ -13,7 +13,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel, isModelFile, isSlddFile } from 'data-explorer-core';
 import { buildGraphSource } from '../../src/host/structuralIndex.js';
-import { refsFromSlddBytes } from '../../src/host/slddRefs.js';
+import { scanSldd } from '../../src/host/slddContent.js';
 import { extractSlxStructure } from '../../src/host/slxStructure.js';
 import { RelGraph, type GraphSource } from '../../src/host/graphModel.js';
 import { parseMat } from 'data-explorer-core';
@@ -47,14 +47,17 @@ const FILES = ['common.sldd', 'util.sldd', 'params.sldd', 'plant.slx', 'sub.slx'
 // takes artifacts and never bytes (structuralIndex.ts), so the extraction is here
 // — which is where the host does it too, inside the shared cheap tier.
 //
-// `refsFromSlddBytes` covers BOTH on-disk dictionary formats behind core's own
-// format sniff, so this no longer tests the first two bytes for 'PK' itself; the
-// text/binary split is what the `variant` axis of this suite drives.
+// `scanSldd` covers BOTH on-disk dictionary formats behind core's own format
+// sniff, so this no longer tests the first two bytes for 'PK' itself; the
+// text/binary split is what the `variant` axis of this suite drives. It is also
+// the exact call the shipped cheap tier makes for a dictionary (`dataCheapOf` in
+// sourceCache.ts), so what this suite holds against MATLAB's ground truth is the
+// code that runs in the extension and not a second reader written for the test.
 function graphSourceFor(variant: string, name: string): GraphSource {
   const path = ART(variant, name);
   const uriString = `test://${variant}/${name}`;
   if (isSlddFile(name)) {
-    return buildGraphSource({ uriString, path: name, slddRefs: refsFromSlddBytes(bytesOf(path)) });
+    return buildGraphSource({ uriString, path: name, slddRefs: scanSldd(bytesOf(path)).refs });
   }
   if (isModelFile(name)) {
     return buildGraphSource({ uriString, path: name, structure: extractSlxStructure(bytesOf(path), name) });

@@ -57,9 +57,23 @@ suite('The Data Explorer tree rebuilds only when the folder changed', () => {
     try {
       // Change the FOLDER, not a buffer: data.sldd now links binary.sldd, so a graph built
       // from disk after this cannot list binary.sldd as a root of its own.
+      //
+      // The link fills in the dictionary's OWN reference list — the empty `Dictionary References`
+      // array MATLAB wrote inside the content part (`__MW_TEXT_PARTS__` ->
+      // `__MW_TEXT_PART__/data/chunk0` -> `__MW_TEXT_content`), which is the only place core's
+      // readers look for one. It used to be inserted after the file's first `{`, i.e. as a second
+      // copy of the key at the top level: the tree read references with a regex then
+      // (`/"Dictionary References"\s*:\s*(\[[^\]]*\])/`), which matched the first occurrence at any
+      // depth, so a dictionary no MATLAB would write still produced an edge. That regex is gone —
+      // one `scanSldd` now answers the references, the names and the usage summary from one read of
+      // either format (sourceCache.ts) — and `JSON.parse` keeps the LAST of two identical keys, so
+      // the top-level copy read as no references at all. What this test is about is unaffected: it
+      // asserts that `rebuild()` re-reads the folder and `refresh()` does not, and it can only
+      // assert that over a dictionary the extension actually reads.
       const linked = new TextDecoder()
         .decode(original)
-        .replace('{', '{\n  "Dictionary References": ["binary.sldd"],');
+        .replace('"Dictionary References": []', '"Dictionary References": ["binary.sldd"]');
+      assert.ok(linked.includes('["binary.sldd"]'), 'the link went into the reference list');
       await vscode.workspace.fs.writeFile(uri, new TextEncoder().encode(linked));
 
       tree.refresh();

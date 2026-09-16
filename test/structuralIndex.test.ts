@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { zipSync, strToU8 } from 'fflate';
 import { SUPPORTED_EXTS } from '../src/common/fileTypes.js';
 import type { GraphSource, SourceType } from '../src/host/graphModel.js';
-import { refsFromSlddBytes } from '../src/host/slddRefs.js';
+import { scanSldd } from '../src/host/slddContent.js';
 import { extractSlxStructure } from '../src/host/slxStructure.js';
 import { newSourceCache, sourceKind, type SourceFile } from '../src/host/sourceCache.js';
 import {
@@ -52,9 +52,16 @@ function modelFile(name: string): RawFile {
   return { uriString: `file:///${name}`, path, structure: extractSlxStructure(fixture(name), path) };
 }
 
-/** A dictionary as its consumer hands it over: the path, and the references read off its bytes. */
+/**
+ * A dictionary as its consumer hands it over: the path, and the references read off its bytes.
+ *
+ * `scanSldd` is the one extraction, for either on-disk format, and it is what the cheap tier
+ * calls (`dataCheapOf` in sourceCache.ts). It THROWS on a dictionary it cannot read, where the
+ * regex this used to run over textual bytes answered an empty list — so the tolerance case is
+ * asserted through `pass()` below, which is the route that catches in production.
+ */
 function slddFile(name: string, bytes: ArrayBuffer): RawFile {
-  return { uriString: `file:///${name}`, path: `/${name}`, slddRefs: refsFromSlddBytes(bytes) };
+  return { uriString: `file:///${name}`, path: `/${name}`, slddRefs: scanSldd(bytes).refs };
 }
 
 // A real compressed .sldd: the zip layout parseBinarySldd reads, carrying only
@@ -68,8 +75,29 @@ function binarySlddBytes(refs: string[]): ArrayBuffer {
   return toArrayBuffer(zipSync({ 'data/chunk0.xml': strToU8(xml) }));
 }
 
+/**
+ * A textual dictionary, in the shape MATLAB actually writes one.
+ *
+ * The three-key wrapper is not decoration: a textual `.sldd` carries its content under
+ * `__MW_TEXT_PARTS__ -> __MW_TEXT_PART__/data/chunk0 -> __MW_TEXT_content`, which is where core's
+ * reader looks for `entries` and `Dictionary References` (`slddChunkContent`), and every real
+ * fixture in this folder has it. This helper used to write the field at the TOP level, which the
+ * retired regex found because it searched the raw text for the key wherever it sat — so the
+ * helper was building a file no dictionary is, and the assertion below passed on it. Reading a
+ * dictionary the way production reads one means the fixture has to be one.
+ */
 const jsonSlddBytes = (refs: unknown[]): ArrayBuffer =>
-  toArrayBuffer(new TextEncoder().encode(JSON.stringify({ 'Dictionary References': refs })));
+  toArrayBuffer(
+    new TextEncoder().encode(
+      JSON.stringify({
+        __MW_TEXT_PARTS__: {
+          '__MW_TEXT_PART__/data/chunk0': {
+            __MW_TEXT_content: { entries: [], 'Dictionary References': refs },
+          },
+        },
+      }),
+    ),
+  );
 
 /**
  * One pass of the production entry point over an in-memory folder.
@@ -149,14 +177,14 @@ describe('buildGraphSource', () => {
 
   it('extracts dictionary references from a COMPRESSED .sldd, not just a JSON one', () => {
     // The zip path reads the references out of a different shape than the text
-    // path (the parsed binary content's __MW_TEXT_PARTS__ chunk, not a regex over
-    // JSON). A binary dictionary whose refs came back empty would draw its
+    // path (the parsed binary content's __MW_TEXT_PARTS__ chunk, not a JSON
+    // object). A binary dictionary whose refs came back empty would draw its
     // referenced dictionaries nowhere in the Sections tree even though the file
     // names them — the same file saved as JSON text would show them.
     const bytes = binarySlddBytes(['base.sldd', 'shared/common.sldd']);
     // The extraction, then the node built from it — the two halves the production caller does in
     // that order. Asserting the first is what stops this becoming a test of an empty list.
-    expect(refsFromSlddBytes(bytes)).toEqual(['base.sldd', 'shared/common.sldd']);
+    expect(scanSldd(bytes).refs).toEqual(['base.sldd', 'shared/common.sldd']);
     const s = buildGraphSource(slddFile('bin.sldd', bytes));
     expect(s.type).toBe('sldd');
     expect(s.slddRefs).toEqual(['base.sldd', 'shared/common.sldd']);
@@ -190,23 +218,13 @@ describe('buildGraphSource', () => {
   });
 
   it('reads a JSON .sldd out of BYTES, not only a zip one', () => {
-    // The format sniff, which is the whole of what `refsFromSlddBytes` decides: JSON text and a
-    // zip archive both arrive here as an ArrayBuffer, and a caller that assumed zip would report
-    // no references at all for every textual dictionary in the folder.
+    // The format sniff, which is core's and is the first thing `scanSldd` decides: JSON text and
+    // a zip archive both arrive here as an ArrayBuffer, and a caller that assumed zip would
+    // report no references at all for every textual dictionary in the folder.
     const bytes = jsonSlddBytes(['fromBytes.sldd']);
     const s = buildGraphSource(slddFile('b.sldd', bytes));
     expect(s.type).toBe('sldd');
     expect(s.slddRefs).toEqual(['fromBytes.sldd']);
-  });
-
-  it('yields an empty sldd node for malformed JSON bytes, with no throw', () => {
-    // `extractReferences` answers `[]` for text it cannot parse rather than throwing, so a
-    // truncated dictionary is a node with no edges — which is what the tree has always shown for
-    // a file it could not read.
-    const bytes = toArrayBuffer(new TextEncoder().encode('{ oops'));
-    const s = buildGraphSource(slddFile('bad.sldd', bytes));
-    expect(s.type).toBe('sldd');
-    expect(s.slddRefs).toEqual([]);
   });
 
   it('returns an empty model node for a model the cache has no structure for', () => {
@@ -481,6 +499,24 @@ describe('a folder pass survives the files it cannot read', () => {
     expect(sourceFor(sources, BROKEN).slddRefs).toEqual([]);
     expect(sourceFor(sources, GONE).slddRefs).toEqual([]);
     // Non-vacuity: the pass did not merely fail quietly for all three.
+    expect(sourceFor(sources, HEALTHY).slddRefs).toEqual(['base.sldd']);
+  });
+
+  it('gives a dictionary of malformed JSON an empty node, with no throw', async () => {
+    // The textual half of the same tolerance, and it MOVED here rather than being dropped. It
+    // used to be asserted through `buildGraphSource`, where the regex that read a textual
+    // dictionary answered `[]` for text it could not parse. The one extraction throws instead
+    // (`JSON.parse` does), so the tolerance is the cheap tier's `catch` now — and this is the
+    // route production takes to it.
+    const BAD = '/w/bad.sldd';
+    const sources = await pass(
+      new Map([
+        [BAD, toArrayBuffer(new TextEncoder().encode('{ oops'))],
+        [HEALTHY, jsonSlddBytes(['base.sldd'])],
+      ]),
+    );
+    expect(sourceFor(sources, BAD).type).toBe('sldd');
+    expect(sourceFor(sources, BAD).slddRefs).toEqual([]);
     expect(sourceFor(sources, HEALTHY).slddRefs).toEqual(['base.sldd']);
   });
 

@@ -8,8 +8,8 @@
 // shaping itself, and what it accepts is what the cheap tier already extracted — a model's
 // `SlxStructure`, a dictionary's reference list, a project's store — never bytes.
 //
-// It used to accept bytes as well, and re-derive from them (`extractSlxStructure`,
-// `refsFromSlddBytes`, `extractReferences`) exactly what the cheap tier had already computed.
+// It used to accept bytes as well, and re-derive from them (`extractSlxStructure`, plus a
+// regex over a textual dictionary) exactly what the cheap tier had already computed.
 // No production caller ever passed them: `graphSourcesOf` is the only one and it fills the
 // artifact fields. So that branch was a second copy of one extraction, reachable only from the
 // tests that pinned it — "one rule, two paths", the bug class this repo keeps hitting, in the
@@ -34,8 +34,8 @@ export type ProjectStore = Record<string, string>;
  * NO BYTES, deliberately. Every relationship field here is an ARTIFACT the caller already
  * holds — which is the whole reason the tree reads the cache, since it must not hold a 20 MB
  * dictionary again to learn what it references. A caller that has only bytes runs the same
- * extraction the cheap tier runs (`extractSlxStructure`, `refsFromSlddBytes`) and passes the
- * result; see the header for what re-deriving it in here cost.
+ * extraction the cheap tier runs (`extractSlxStructure`, `scanSldd`) and passes the result; see
+ * the header for what re-deriving it in here cost.
  *
  * Every field is optional and absence is never an error: a file the cache has no artifact for
  * — oversized, unreadable, gone between the glob and the read — is still a node, because it is
@@ -158,10 +158,10 @@ export function buildGraphSource(file: RawFile): GraphSource {
     }
     if (type === 'sldd' && file.slddRefs) {
       // Copied for the reason the model branch gives: this list may be the cache's own array.
-      // The list itself is whatever the caller extracted — `refsFromSlddBytes` in both the cheap
-      // tier and any bytes-in-hand caller, which decides the FORMAT with core's own sniff and
-      // reads the references without building the entry tree. The tree deliberately does not
-      // parse a whole dictionary to draw a handful of edges.
+      // The list itself is whatever the caller extracted — one `scanSldd` in the cheap tier and
+      // in any bytes-in-hand caller, which decides the FORMAT with core's own sniff and reads the
+      // references without building the entry tree. The tree deliberately does not parse a whole
+      // dictionary to draw a handful of edges.
       return { ...base, slddRefs: [...file.slddRefs] };
     }
     // mat, a dictionary with no artifact, and everything else: node with no outbound
@@ -171,7 +171,7 @@ export function buildGraphSource(file: RawFile): GraphSource {
     // One file that will not shape must not fail the whole build: the pass this is the body of
     // runs over a folder, and the graph above it has one failure mode and it is "no graph". The
     // extraction throws are gone from in here — the caller runs those, and both callers catch
-    // (see `slddRefsOf` in sourceCache.ts) — so what is left to throw is `parseProject` over a
+    // (see `dataCheapOf` in sourceCache.ts) — so what is left to throw is `parseProject` over a
     // malformed store, which is a real file on disk and reachable.
     return base;
   }

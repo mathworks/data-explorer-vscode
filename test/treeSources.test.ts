@@ -28,9 +28,8 @@ import { join } from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
 import { isModelFile, isProjectFile, isSlddFile } from 'data-explorer-core';
 import { toArrayBuffer } from '../src/common/bytes.js';
-import { isZipBytes } from '../src/host/slddFormat.js';
 import { mapLimited } from '../src/host/mapLimited.js';
-import { extractReferences, refsFromSlddBytes } from '../src/host/slddRefs.js';
+import { scanSldd } from '../src/host/slddContent.js';
 import { extractSlxStructure } from '../src/host/slxStructure.js';
 import { RelGraph, type GraphNode, type GraphSource } from '../src/host/graphModel.js';
 import {
@@ -186,10 +185,12 @@ const reader = (): GraphReader => ({
  * of "read the reference list" is the drift this arrangement exists to make impossible, so the
  * sweep is about the reads, the dispatch and the shaping — not about two parsers agreeing.
  *
- * The `.sldd` split below is the one place the two routes still differ in more than timing: this
- * one decides text-vs-zip itself, the way the tree used to, where the cheap tier hands the whole
- * question to `refsFromSlddBytes`' own sniff. Both formats are in the corpus, so the sweep covers
- * both arms of that difference.
+ * The `.sldd` extraction below is now the SAME call the cheap tier makes, and the split that used
+ * to be here is gone with the function that held it: this side decided text-vs-zip itself, the way
+ * the tree used to, and ran a regex over the textual arm. That regex could disagree with the
+ * cache's answer rather than merely take longer to reach it (slddRefs.ts records how), so the
+ * remaining difference between the two routes is the reads, the dispatch and the shaping — which
+ * is what this sweep is about. Both formats are in the corpus either way.
  */
 async function sourcesFromBytes(r: GraphReader): Promise<GraphSource[]> {
   return mapLimited(FILES, async (f) => {
@@ -202,11 +203,8 @@ async function sourcesFromBytes(r: GraphReader): Promise<GraphSource[]> {
       const refused = (await r.version(f)) === null;
       const bytes = refused ? null : await r.bytes(f);
       if (bytes) {
-        const u8 = new Uint8Array(bytes);
         if (isSlddFile(f.path)) {
-          raw.slddRefs = isZipBytes(u8)
-            ? refsFromSlddBytes(bytes)
-            : extractReferences(new TextDecoder().decode(u8));
+          raw.slddRefs = scanSldd(bytes).refs;
         } else if (isModelFile(f.path)) {
           raw.structure = extractSlxStructure(bytes, f.path);
         }

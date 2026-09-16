@@ -7,7 +7,10 @@
 // Search still needs those parses (a block name exists nowhere cheaper than
 // `parsed.blockParamUsages`, and a cheap block-name scanner is an explicit non-goal), so what
 // this pins is not that the parses went away but that they are now the SAME parses: one per
-// model per content version, whichever consumer asked first.
+// model per content version, whichever consumer asked first. A `.sldd` or `.mat` is the same
+// story one tier down: search used to scan each of them for itself, and now reads the
+// occurrence-ordered names off the cheap artifact the tree and the usage plan already wanted —
+// one scan per data file per content version, whichever consumer asked first.
 //
 // Counted the way parseOnce.test.ts counts, and for the same reason: `parsedModelOf` is the only
 // place this host parses a model, and every parse stores a NEW `{version, parsed}` entry in
@@ -58,7 +61,10 @@ const MODEL = file('chain_model.slx');
 // nothing, which is a fact about the fixture rather than about the sharing.
 const MODELS = [MODEL, file('shared_gain.slx'), file('sid_blocks.slx'), file('legacy_ctrl.mdl')];
 const DICT = file('params.sldd');
-const FILES = [...MODELS, DICT, file('chain_top.sldd'), file('nd_numeric.mat')];
+// The data files, which search now reads through the shared cheap tier rather than scanning
+// itself: two dictionaries (one textual, one compressed) and a MAT-file.
+const DATA = [DICT, file('chain_top.sldd'), file('nd_numeric.mat')];
+const FILES = [...MODELS, ...DATA];
 
 let reads: string[] = [];
 let stamp: Map<string, string>;
@@ -132,10 +138,13 @@ describe('the first search shares whatever is already parsed', () => {
     const cache = newSourceCache();
     const found = await search(cache);
     // All four, so the one-fewer below is a model that was skipped rather than a model that
-    // was never wanted. The cheap tier stays empty: this pass does not fill it, and a model's
-    // `extractSlxStructure` is a scan search has no use for.
+    // was never wanted.
     expect(parsedBetween(new Map(), ledger(cache))).toEqual(uris(MODELS));
-    expect(cache.cheap.size).toBe(0);
+    // The cheap tier holds the DATA files and no model. Both halves are the sharing: a
+    // dictionary's or a MAT-file's names come off the same scan the tree and the usage plan
+    // read, so the artifact is here for them; a model's cheap artifact is
+    // `extractSlxStructure`, a scan search has no use for, so this pass does not run it.
+    expect([...cache.cheap.keys()].sort()).toEqual(uris(DATA));
     expect(namesIn(found, MODEL)).toContain('ChainGain');
   });
 
@@ -206,12 +215,13 @@ describe('the first search shares whatever is already parsed', () => {
   });
 });
 
-describe('a dictionary keeps its own scan, because the shared summary is deduped', () => {
-  // Why search does not read names off the cheap tier's `FileSummaries`, stated as the case
+describe('a dictionary shares the cheap tier’s scan, and its names are not the summary’s', () => {
+  // Why search reads `Cheap.names` and NOT the cheap tier's `FileSummaries`, stated as the case
   // that would break: `DataSummary.names` is a `Set`, and one .sldd legitimately holds two
   // entries with the same name — Design and Other Data are separate namespaces, so pasting
   // `Array` from one into the other keeps the name (duplicateNameIdentity.test.ts). This index
-  // promises one record per OCCURRENCE, so a deduped set would silently drop a search hit.
+  // promises one record per OCCURRENCE, so a deduped set would silently drop a search hit. The
+  // artifact carries both: the Set for resolution and the occurrence-ordered array for this.
   const DUPS = file('dup_names.sldd');
 
   const withDuplicateEntry = (): ArrayBuffer => {
@@ -232,16 +242,54 @@ describe('a dictionary keeps its own scan, because the shared summary is deduped
 
     expect(namesIn(found, DUPS).filter((n) => n === 'Kp').length).toBe(2);
     expect(namesIn(found, DUPS)).toEqual(['Kp', 'Kp', 'Uo', 'Ki']);
+    // Off the SHARED artifact, and the two lists it carries are the two answers: the summary
+    // this same scan produced collapsed the duplicate, which is what search must not read.
+    const cheap = cache.cheap.get(DUPS.uriString)?.cheap;
+    if (cheap?.kind !== 'sldd') throw new Error(`expected a dictionary, got ${cheap?.kind}`);
+    expect(cheap.names).toEqual(['Kp', 'Kp', 'Uo', 'Ki']);
+    expect([...[...cheap.summary.slddByName.values()][0].names]).toEqual(['Kp', 'Uo', 'Ki']);
   });
 
-  it('stores no dictionary artifact, so the two tiers cannot disagree about one', async () => {
-    // Search shares the MODEL tier and only that. A dictionary is scanned here under this
-    // host's refusal policy (slddContent.ts), where the cheap tier's `summarizeFiles` answers
-    // an unrecoverable file with an empty summary instead.
+  it('stores ONE dictionary artifact and reads the file once, whichever tier asked first', async () => {
+    // Search shares the model tier AND the cheap tier now. A dictionary read for its names is
+    // the same read the tree and the usage plan want, so the artifact it leaves behind is
+    // theirs, and a second search over the same folder reads nothing at all.
     const cache = newSourceCache();
     await search(cache);
-    expect(cache.cheap.has(DICT.uriString)).toBe(false);
+    expect([...cache.cheap.keys()].sort()).toEqual(uris(DATA));
     expect([...cache.parsed.keys()].sort()).toEqual(uris(MODELS));
+    const first = cache.cheap.get(DICT.uriString);
+    reads = [];
+
+    const again = await search(cache);
+
+    // The same artifact object, not an equal one: the second pass re-versioned and hit.
+    expect(cache.cheap.get(DICT.uriString)).toBe(first);
+    expect(reads.filter((p) => p === DICT.path)).toEqual([]);
+    expect(namesIn(again, DICT)).toEqual(['Kp', 'Uo', 'Ki']);
+  });
+
+  it('contributes nothing for a dictionary the read cannot recover, without failing the pass', async () => {
+    // The refusal policies CONVERGED with the sharing, and this is where they now meet. This
+    // index used to scan the file itself and catch its own throw; the throw is now inside the
+    // cheap tier, which answers an empty artifact for such a file (`dataCheapOf`). Same `[]`
+    // here, and the file is still an artifact-bearing node for the tree and a scope for the
+    // usage plan — the alternative, dropping it, makes `usageScope` summarise the whole folder.
+    const BAD = file('broken.sldd');
+    const cache = newSourceCache();
+    stamp.set(BAD.path, `v1:${BAD.path}`);
+    disk.set(BAD.path, encode('{ "__MW_TEXT_PARTS__": trunc'));
+
+    const found = await search(cache, [BAD, DICT]);
+
+    expect(found.has(BAD.uriString)).toBe(false);
+    const cheap = cache.cheap.get(BAD.uriString)?.cheap;
+    if (cheap?.kind !== 'sldd') throw new Error(`expected a dictionary, got ${cheap?.kind}`);
+    expect(cheap.names).toEqual([]);
+    expect(cheap.refs).toEqual([]);
+    expect(cheap.summary.slddByName.size).toBe(0);
+    // Non-vacuity: the pass kept going and the healthy dictionary beside it still answered.
+    expect(namesIn(found, DICT)).toEqual(['Kp', 'Uo', 'Ki']);
   });
 });
 
@@ -300,12 +348,35 @@ describe('an unsaved buffer never enters the shared cache', () => {
   });
 
   it('keeps nothing for a dirty dictionary either', async () => {
+    // Now that a dictionary HAS a cheap artifact, this is the rule's sharpest edge: the scan of
+    // an unsaved buffer must not become the artifact the tree, the usage plan and the next
+    // search all read for the file on disk. It bypasses the tier entirely rather than writing
+    // under the disk version.
     const cache = newSourceCache();
     buffers.set(DICT.uriString, encode(readFileSync(join(dir, 'params.sldd'), 'utf8').replace('"Kp"', '"KpRenamed"')));
     await search(cache, [DICT]);
     expect(cache.cheap.has(DICT.uriString)).toBe(false);
     expect(cache.models.has(DICT.uriString)).toBe(false);
     expect(cache.parsed.size).toBe(0);
+    expect(reads).toEqual([]);
+  });
+
+  it('takes no cached SCAN for a dirty dictionary, so the renamed entry is what search finds', async () => {
+    // The other direction, and the one the shared cheap tier newly makes possible: the file has
+    // an artifact at the current disk version, so a scan that only refused to WRITE would read
+    // the saved names straight back out of it and offer `Kp` — exactly the stale name the
+    // override exists to remove.
+    const cache = newSourceCache();
+    await search(cache, [DICT]);
+    const onDisk = cache.cheap.get(DICT.uriString);
+    expect(onDisk).toBeTruthy();
+    buffers.set(DICT.uriString, encode(readFileSync(join(dir, 'params.sldd'), 'utf8').replace('"Kp"', '"KpRenamed"')));
+
+    const found = await search(cache, [DICT]);
+
+    expect(namesIn(found, DICT)).toEqual(['KpRenamed', 'Uo', 'Ki']);
+    // And the disk artifact it did not take is still there, unchanged, for every other consumer.
+    expect(cache.cheap.get(DICT.uriString)).toBe(onDisk);
   });
 
   it('takes no cached parse for a dirty model, so the stale name cannot come back', async () => {

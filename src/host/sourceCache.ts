@@ -25,12 +25,15 @@
 //          already holds one at that version, which costs no read at all. A model is the only
 //          kind whose summary costs a full `parseModel`, so it is the only kind worth deciding
 //          about, and the only kind with a parse to derive a cheap answer from.
-//   .sldd  its whole `FileSummaries` — references AND names. Reading a dictionary's
-//          references IS summarising it: `scanSldd` answers both from one call
-//          (3288 ms -> 116 ms), so there is no cheaper tier to put it in. Plus its RAW
-//          reference list, which the summary cannot give back (see `Cheap` below).
-//   .mat   the same, through `scanMat` (1271 ms -> 4.4 ms); its references are empty by
-//          definition, since a MAT-file inherits nothing.
+//   .sldd  everything ONE `scanSldd` of it says: its `FileSummaries`, its RAW reference list
+//          and its occurrence-ordered entry names. Reading a dictionary's references IS
+//          summarising it and IS listing its names (3288 ms -> 116 ms), so there is no cheaper
+//          tier to put any of the three in, and no reason to read the file three times to
+//          reach them. The summary is core's own reduction of that one scan
+//          (`summarizeSlddScan`), which is the same call core's `summarizeFiles` makes; the
+//          other two are what the reduction throws away (see `Cheap` below).
+//   .mat   the same, through one `scanMat` (1271 ms -> 4.4 ms) reduced by `summarizeMatScan`;
+//          its references are empty by definition, since a MAT-file inherits nothing.
 //   .prj   NOTHING. A project is classified (`sourceKind` answers `'prj'`, so it is never
 //          mistaken for a dictionary) and then never cached: its structure is not in the
 //          marker file's bytes at all but in a sibling `resources/project/` tree, so there
@@ -90,12 +93,14 @@ import {
   isSlddFile,
   mergeFileSummaries,
   parseModel,
-  summarizeFiles,
+  scanMat,
+  summarizeMatScan,
   summarizeParsedModel,
+  summarizeSlddScan,
 } from 'data-explorer-core';
 import type { FileSummaries, ParsedSlx } from 'data-explorer-core';
 import { mapLimited } from './mapLimited.js';
-import { refsFromSlddBytes } from './slddRefs.js';
+import { scanSldd } from './slddContent.js';
 import { extractSlxStructure, structureFromParsed, type SlxStructure } from './slxStructure.js';
 
 /** A candidate file, before anything has been read: what it is called and where. */
@@ -130,29 +135,43 @@ export type SourceKind = 'model' | 'sldd' | 'mat' | 'prj';
  * a field that happens to be missing. There is no `prj` arm: a project is classified and then
  * never cached (see the header).
  *
- * A dictionary carries `refs` as well as `summary`, and they are not the same list. The
- * summary's is core's `refs.map(refBasename)` — lowercased, directories stripped — which is
- * what a NAME resolves through; `refs` is what the file actually says, which is what a tree row
- * naming an unresolved reference has to show. Deriving one from the other is only possible in
- * that direction, so the artifact keeps the wider one. Both come off the same bytes in the same
- * pass — see slddRefs.refsFromSlddBytes for what the second reading costs.
+ * A data file carries `refs` and `names` as well as `summary`, and the three are ONE SCAN read
+ * three ways — not three readings of the file. `summarizeSlddScan`/`summarizeMatScan` are core's
+ * reduction of the very scan whose `refs` and `names` sit beside it here, so the artifact is the
+ * union of what its consumers need and every consumer is looking at the same answer. What the
+ * reduction drops is exactly what the other two fields keep:
  *
- * They can also disagree about the SET, not only the spelling, and only one of the two formats
- * is at risk. A COMPRESSED dictionary's two lists really are one list with one reduction applied:
- * `scanSldd` reads the references and core's summary reduces the same array. A TEXTUAL one's are
- * two different extractions of the same file — `refs` from `extractReferences`' regex
- * (`/"Dictionary References"\s*:\s*(\[[^\]]*\])/`), the summary's from core's full `JSON.parse` —
- * and the regex's negated class stops at the FIRST `]`, so a reference array holding a nested
- * array truncates the capture, `JSON.parse` throws, and `refs` is `[]` while the summary still
- * names the reference. The tree then draws no edge for a dictionary whose usage scope follows
- * one. No dictionary MATLAB writes is known to nest an array in that field, and the tree read
- * through the same regex before this list was shared, so it is a pre-existing fragility of the
- * extraction and not of the sharing — logged as future work, not fixed here.
+ *   `refs` — the summary's is core's `refs.map(refBasename)`, lowercased and stripped of
+ *   directories, which is what a NAME resolves through; this is what the file actually SAYS,
+ *   which is what a tree row naming an unresolved reference has to show. A dictionary naming
+ *   `shared/Common.sldd` must not be reported as missing `common.sldd`: that is a file the user
+ *   cannot search for and a directory the message has silently dropped. The reduction only runs
+ *   in that direction, so the artifact keeps the wider list. Empty for a `.mat`, which inherits
+ *   nothing.
+ *
+ *   `names` — the summary's is a `Set` of the non-empty ones, which is what a name RESOLVES
+ *   through; this is one string per OCCURRENCE, in file order, `''` placeholders included,
+ *   which is what the search index has to have. One dictionary legitimately holds two entries
+ *   with the same name (Design Data and Other Data are separate namespaces —
+ *   duplicateNameIdentity.test.ts), so a set would silently drop search hits, and a lost hit is
+ *   invisible. The Set is built FROM this array, so the two cannot disagree, and the strings are
+ *   shared rather than copied: this array is core's, and the Set holds the same string objects.
+ *
+ * A read this cannot recover from yields an EMPTY artifact of the right kind and not `null` —
+ * empty summary, no refs, no names. That is the answer every consumer already got for such a
+ * file when each of them scanned it separately and caught, and the file must stay a node in the
+ * tree and a scope in the usage plan: it is still in the folder and still opens (see
+ * `dataCheapOf`).
  */
 export type Cheap =
   | { readonly kind: 'model'; readonly structure: SlxStructure }
-  | { readonly kind: 'sldd'; readonly summary: FileSummaries; readonly refs: readonly string[] }
-  | { readonly kind: 'mat'; readonly summary: FileSummaries };
+  | {
+      readonly kind: 'sldd';
+      readonly summary: FileSummaries;
+      readonly refs: readonly string[];
+      readonly names: readonly string[];
+    }
+  | { readonly kind: 'mat'; readonly summary: FileSummaries; readonly names: readonly string[] };
 
 /** One cheap artifact and the version it was derived from. */
 export interface CheapEntry {
@@ -621,12 +640,60 @@ export function sourceKind(path: string): SourceKind | null {
   return null;
 }
 
-// srcId is the uriString, so every link target carries a full uri and a click resolves to an
-// exact file even when two same-named files exist. The filename is the PATH, which is what
-// core dispatches the kind on — and the path rather than the uri because a uri can carry a
-// `?query` no extension test should have to know about.
-function summarizeOne(file: SourceFile, bytes: ArrayBuffer): FileSummaries {
-  return summarizeFiles([{ srcId: file.uriString, filename: file.path, bytes }]);
+/**
+ * One data file's artifact, off ONE scan of its bytes.
+ *
+ * The three things a `.sldd` or `.mat` contributes — its usage summary, its raw references and
+ * its entry names — all come out of the same scan, and this is where that scan happens. Each
+ * used to be taken by its own reader from its own read of the same bytes: `summarizeFiles`
+ * scanned for the summary, `refsFromSlddBytes` scanned again for the references, and the name
+ * index scanned a third time for the names. Measured, the second scan alone was 46% of this
+ * tier's per-dictionary CPU (14.6 ms of 31.5 ms on a 20 000-entry dictionary). Three copies of
+ * "read this dictionary" is also this repo's recurring bug class in its plainest form — one rule
+ * on three paths, each right alone, and a disagreement between them reaching the user as an edge
+ * the tree does not draw or a name search does not find, silently.
+ *
+ * srcId is the uriString, so every link target carries a full uri and a click resolves to an
+ * exact file even when two same-named files exist. The filename is the PATH, which is what core
+ * keys the summary by and dispatches the kind on — and the path rather than the uri because a
+ * uri can carry a `?query` no extension test should have to know about. Both are what
+ * `summarizeFiles` was handed for this file, unchanged: a different `srcId` would silently
+ * re-key every Usage answer that resolves through this summary.
+ *
+ * The summary comes from core's own reduction of the scan (`summarizeSlddScan`/
+ * `summarizeMatScan`), which is the same call `summarizeFiles` makes for these two kinds. So
+ * this is one summariser reading one scan, not a host-side rewrite of core's summary that could
+ * drift from it — the equality is by construction and pinned per fixture besides
+ * (usageScanEquality.test.ts).
+ *
+ * THE CATCH IS THE REFUSAL POLICY, and it belongs here rather than at each consumer. The scan is
+ * this host's wrapped one, which refuses a dictionary the read could not recover where core
+ * would answer an empty one (slddContent.ts) — so one call now throws where three separate
+ * callers each used to catch. The answer is the empty artifact, which is byte-for-byte what
+ * those three catches produced between them: `summarizeFiles`' own per-file catch answered an
+ * empty summary, `slddRefsOf` answered no references, and `namesOfFile` answered no names. A
+ * corrupt file must not be dropped from this tier — a file with no artifact is not in the tree
+ * and not in the usage plan's `ChainSource`s, and a uri that is not among the scoped sources
+ * makes `usageScope` fall back to summarising the WHOLE folder (usageScope.ts). It is still a
+ * file in the folder and a tab that opens; it just has nothing to say.
+ */
+function dataCheapOf(kind: 'sldd' | 'mat', file: SourceFile, bytes: ArrayBuffer): Cheap {
+  try {
+    if (kind === 'sldd') {
+      const scan = scanSldd(bytes);
+      return {
+        kind,
+        summary: summarizeSlddScan(scan, file.uriString, file.path),
+        refs: scan.refs,
+        names: scan.names,
+      };
+    }
+    const scan = scanMat(bytes);
+    return { kind, summary: summarizeMatScan(scan, file.uriString, file.path), names: scan.names };
+  } catch {
+    const summary = mergeFileSummaries([]);
+    return kind === 'sldd' ? { kind, summary, refs: [], names: [] } : { kind, summary, names: [] };
+  }
 }
 
 /**
@@ -655,13 +722,13 @@ function summarizeOne(file: SourceFile, bytes: ArrayBuffer): FileSummaries {
  * and leave `parsed` with no recency signal at all — evicting by folder position, which is the
  * eviction-by-age failure `parsedModelOf`'s re-insert exists to avoid.
  *
- * A data file gets its summary, and a consumer resolving a NAME through its chain reads the
- * references back off `DataSummary.slddRefs`. That is what core's own resolver follows, so the
- * chain a scope walks and the chain that resolves a name are one list read once, rather than
- * two readings of the same bytes that could disagree about a reference recorded in object form
- * instead of as a bare string. It is also what keeps a COMPRESSED dictionary honest: its
- * references are inside a zip, so a text-scraping tier would report none and a chain running
- * through one would be invisible.
+ * A data file goes through `dataCheapOf`, which is one scan of its bytes read three ways — see
+ * there. A consumer resolving a NAME through its chain reads the references back off
+ * `DataSummary.slddRefs`, which is what core's own resolver follows, so the chain a scope walks
+ * and the chain that resolves a name are one list read once, rather than two readings of the same
+ * bytes that could disagree about a reference recorded in object form instead of as a bare
+ * string. It is also what keeps a COMPRESSED dictionary honest: its references are inside a zip,
+ * so a text-scraping tier would report none and a chain running through one would be invisible.
  *
  * A project is dropped here, and dropped BEFORE the read: the answer is the same `null` an
  * unknown extension gets, but the reason is different and both matter. `sourceKind` has
@@ -688,24 +755,48 @@ async function cheapOf(
   const bytes = await reader.bytes(file);
   if (!bytes) return null;
   if (kind === 'model') return { kind, structure: extractSlxStructure(bytes, file.path) };
-  if (kind === 'sldd') return { kind, summary: summarizeOne(file, bytes), refs: slddRefsOf(bytes) };
-  return { kind, summary: summarizeOne(file, bytes) };
+  return dataCheapOf(kind, file, bytes);
 }
 
 /**
- * A dictionary's raw references, or none for one that could not be read.
+ * ONE file's cheap artifact, from the cache when it already holds one at that version.
  *
- * The catch is the policy `summarizeFiles` applies to the summary from the same bytes, stated
- * once more here because it is a separate call: a folder holding one truncated dictionary must
- * not fail the pass for every other file in it. "No references" is also exactly what the tree's
- * own catch answered for such a file before this list was shared, so nothing changes for it.
+ * The whole tier for one file, and `cheapAll` below is this function over a folder — not a
+ * second spelling of it. Both callers therefore get the same version check, the same
+ * `coalesced` join and the same `forgetSource` guard, which is the point of it being one
+ * function: a per-file caller that wrote its own would be this repo's recurring bug class in
+ * the tier that exists to remove it, and the ways to get it subtly wrong are all invisible
+ * afterwards (see `coalesced` and `nothingForgottenSince`).
+ *
+ * `null` for a file this pass cannot produce an artifact for: one the reader will not version
+ * (too large, unreachable), one whose bytes it will not hand over, a `.prj`, or an extension
+ * nothing here reads. A corrupt file is NOT one of those — it gets an empty artifact, see
+ * `dataCheapOf`.
+ *
+ * The entry a joining or hitting caller gets is the SAME object, not an equal one, which is what
+ * lets a consumer hold an artifact and know it is holding the cache.
  */
-function slddRefsOf(bytes: ArrayBuffer): readonly string[] {
-  try {
-    return refsFromSlddBytes(bytes);
-  } catch {
-    return [];
-  }
+export async function cheapOne(
+  cache: SourceCache,
+  reader: SourceReader,
+  file: SourceFile,
+): Promise<CheapEntry | null> {
+  const version = await reader.version(file);
+  if (version === null) return null;
+  const hit = cache.cheap.get(file.uriString);
+  if (hit && hit.version === version) return hit;
+  return coalesced(cache.reading, file.uriString, version, async () => {
+    // Taken before the read, so a `forgetSource` that lands while it is in flight is visible
+    // below: these bytes may be the ones a watcher has just called stale. It covers the
+    // no-read route the same way — a forget deletes `cache.parsed` too, so a derivation either
+    // finds no parse to work from and reads, or finds one and has its store skipped here.
+    const at = cache.generation;
+    const cheap = await cheapOf(cache, file, version, reader);
+    if (!cheap) return null;
+    const fresh: CheapEntry = { version, cheap };
+    if (nothingForgottenSince(cache, at)) cache.cheap.set(file.uriString, fresh);
+    return fresh;
+  });
 }
 
 /**
@@ -734,26 +825,8 @@ export async function cheapAll(
   files: readonly SourceFile[],
 ): Promise<CheapMap> {
   const found = await mapLimited(files, async (file) => {
-    const version = await reader.version(file);
-    if (version === null) return null;
-    const hit = cache.cheap.get(file.uriString);
-    if (hit && hit.version === version) return { file, entry: hit };
-    // The entry a joining pass gets is the SAME object, not an equal one, exactly as a cache hit
-    // is — which is what lets a consumer hold an artifact and know it is holding the cache.
-    const entry = await coalesced(cache.reading, file.uriString, version, async () => {
-      // Taken before the read, so a `forgetSource` that lands while it is in flight is visible
-      // below: these bytes may be the ones a watcher has just called stale. It covers the
-      // no-read route the same way — a forget deletes `cache.parsed` too, so a derivation either
-      // finds no parse to work from and reads, or finds one and has its store skipped here.
-      const at = cache.generation;
-      const cheap = await cheapOf(cache, file, version, reader);
-      if (!cheap) return null;
-      const fresh: CheapEntry = { version, cheap };
-      if (nothingForgottenSince(cache, at)) cache.cheap.set(file.uriString, fresh);
-      return fresh;
-    });
-    if (!entry) return null;
-    return { file, entry };
+    const entry = await cheapOne(cache, reader, file);
+    return entry ? { file, entry } : null;
   });
   const out: CheapMap = new Map();
   for (const f of found) {
@@ -835,7 +908,7 @@ export async function parsedModelOf(
     const at = cache.generation;
     const buffer = await bytes();
     if (!buffer) return null;
-    // The path, not the srcId, for the reason summarizeOne gives. It lands in `parsed.name`, which
+    // The path, not the srcId, for the reason `dataCheapOf` gives. It lands in `parsed.name`, which
     // nothing reads — neither `ModelNode.fromParsed` nor `modelSummary`: both take the name they
     // label with as their own argument — and, for a `.mdl` alone, in core's own warning TEXT
     // (MdlParser quotes it in `source-unreadable` and in its "Not a Simulink model" throw). So the
