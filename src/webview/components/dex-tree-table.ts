@@ -1693,6 +1693,46 @@ export class DexTreeTable extends LitElement {
     return this._filterTokens.find((t) => t.column === col);
   }
 
+  // Splice the condition for `col` into the applied text: in place if the column
+  // already has one, appended otherwise. Appending unconditionally would build
+  // `Name:a Name:b` — two conditions ANDed, so nothing matches, which reads as a
+  // bug rather than as a replaced filter.
+  private _applyColumnFilter(col: string, op: FilterOp, value: string): void {
+    const label = this.columnLabels?.[col] || col;
+    const text = formatToken(label, op, value);
+    const existing = this._tokenForColumn(col);
+    const next = existing
+      ? `${this._filterText.slice(0, existing.start)}${text}${this._filterText.slice(existing.end)}`
+      : this._filterText
+        ? `${this._filterText} ${text}`
+        : text;
+    this._setFilterText(next);
+  }
+
+  private _clearColumnFilter(col: string): void {
+    const existing = this._tokenForColumn(col);
+    if (existing) this._setFilterText(removeToken(this._filterText, existing));
+    this._filterPopupCol = null;
+  }
+
+  // The ONE place the applied text changes. Everything that filters — Enter, popup
+  // Apply, Escape — goes through here, so "a new search resets the sticky rows" is
+  // stated once instead of at four call sites.
+  private _setFilterText(text: string): void {
+    this._filterText = text;
+    this._newSearch();
+  }
+
+  private _onColumnFilterApplied(e: CustomEvent): void {
+    const { column, op, value } = e.detail as { column: string; op: FilterOp; value: string };
+    this._applyColumnFilter(column, op, value);
+    this._filterPopupCol = null;
+  }
+
+  private _onColumnFilterCleared(e: CustomEvent): void {
+    this._clearColumnFilter((e.detail as { column: string }).column);
+  }
+
   private _toggleColumnVisibility(col: string): void {
     if (col === 'Name') return;
     const updated = new Set(this._hiddenColumns);
@@ -2732,15 +2772,16 @@ export class DexTreeTable extends LitElement {
   }
 
   private _onFilterInput(e: Event): void {
-    this._filterText = (e.target as HTMLInputElement).value.trim();
-    this._newSearch();
+    this._setFilterText((e.target as HTMLInputElement).value.trim());
   }
 
   private _onFilterKeyDown(e: KeyboardEvent): void {
     if (e.key === 'Escape') {
-      this._filterText = '';
+      // The box is cleared directly as well as through the binding: Escape on an
+      // already-empty filter leaves _filterText unchanged, and then the binding has
+      // nothing to commit and whitespace the user typed would stay on screen.
       this._filterInput.value = '';
-      this._newSearch();
+      this._setFilterText('');
     }
   }
 
@@ -3197,6 +3238,7 @@ export class DexTreeTable extends LitElement {
           type="search"
           class="filter-input"
           placeholder="Search"
+          .value=${this._filterText}
           @input=${this._onFilterInput}
           @keydown=${this._onFilterKeyDown}
         />
@@ -3426,6 +3468,8 @@ export class DexTreeTable extends LitElement {
         .op=${existing?.op ?? 'contains'}
         .value=${existing?.value ?? ''}
         .hasExisting=${existing !== undefined}
+        @dex-column-filter-applied=${this._onColumnFilterApplied}
+        @dex-column-filter-cleared=${this._onColumnFilterCleared}
         @dex-column-filter-closed=${() => {
           this._filterPopupCol = null;
         }}
