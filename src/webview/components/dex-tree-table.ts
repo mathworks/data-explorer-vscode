@@ -4,7 +4,9 @@ import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { highContrastStyles } from './styles/high-contrast.styles.js';
 import { dragModeFromModifiers, type DragMode } from './dragMode.js';
-import { filterRows, parseFilterExpression, type FilterTerm } from '../rowFilter.js';
+import {
+  filterRows, parseFilterExpression, removeToken, type FilterTerm, type FilterToken,
+} from '../rowFilter.js';
 import './dex-icon.js';
 import './dex-matrix-open.js';
 import type { MatrixPayload } from './dex-matrix-grid.js';
@@ -1141,7 +1143,7 @@ export class DexTreeTable extends LitElement {
   @state() private _expandedIds: Set<string> = new Set();
   @state() private _filterText = '';
   // Not @state: derived from _filterText, and keyed by it so it cannot go stale.
-  private _filterTermsCache: { text: string; terms: FilterTerm[] } | null = null;
+  private _filterParseCache: { text: string; terms: FilterTerm[]; tokens: FilterToken[] } | null = null;
   // Rows kept in the filtered list although they no longer match, because the user
   // edited them there. Written by installRows (table-main.ts) on every repaint from
   // nextStickyIds; dropped here the moment the user searches again.
@@ -1938,31 +1940,50 @@ export class DexTreeTable extends LitElement {
   // MEANS belongs here, emitted to both consumers together, rather than being
   // guessed a second time at render.
   private _parseFilterExpression(text: string): {
+    tokens: FilterToken[];
     predicates: Array<(row: TreeTableRow) => boolean>;
     terms: FilterTerm[];
   } {
     // An unqualified term matches against every visible column, so the search
-    // stays in sync with whatever columns the user actually sees (Class, Kind,
-    // etc.) instead of a hardcoded subset. `_getCellText` is passed rather than
-    // reached for inside rowFilter.ts because reading a cell's text depends on
-    // cell shape, which is this component's concern, not the grammar's.
-    return parseFilterExpression(text, this._visibleColumns, (row, col) => this._getCellText(row, col));
+    // stays in sync with whatever columns the user actually sees. The VOCABULARY,
+    // by contrast, is every column the table has — a `Unit=` typed by hand has to
+    // work with Unit hidden, and only a bare term is limited to what is on screen.
+    // `_getCellText` is passed rather than reached for inside rowFilter.ts because
+    // reading a cell's text depends on cell shape, which is this component's
+    // concern, not the grammar's.
+    return parseFilterExpression(text, this._visibleColumns, (row, col) => this._getCellText(row, col), {
+      labels: this.columnLabels,
+      keys: this.columns,
+    });
   }
 
-  // The terms behind the current search, cached because _highlight runs once per
-  // rendered cell and the tokens only change when the box does.
-  private get _filterTerms(): FilterTerm[] {
-    if (this._filterTermsCache?.text !== this._filterText) {
-      this._filterTermsCache = { text: this._filterText, terms: this._parseFilterExpression(this._filterText).terms };
+  // The parse behind the current search, cached because _highlight runs once per
+  // rendered cell and the chips render once per repaint, while the tokens only
+  // change when the box does.
+  private get _filterParse(): { terms: FilterTerm[]; tokens: FilterToken[] } {
+    if (this._filterParseCache?.text !== this._filterText) {
+      const { terms, tokens } = this._parseFilterExpression(this._filterText);
+      this._filterParseCache = { text: this._filterText, terms, tokens };
     }
-    return this._filterTermsCache.terms;
+    return this._filterParseCache;
+  }
+
+  private get _filterTerms(): FilterTerm[] {
+    return this._filterParse.terms;
+  }
+
+  private get _filterTokens(): FilterToken[] {
+    return this._filterParse.tokens;
   }
 
   private _filterRows(rows: TreeTableRow[], text: string): TreeTableRow[] {
     // `_stickyRowIds` is passed rather than reached for inside rowFilter.ts
     // because it is this component's edit-tracking state, not part of the
     // grammar (see nextStickyIds in rowUpdates.ts).
-    return filterRows(rows, text, this._visibleColumns, (row, col) => this._getCellText(row, col), this._stickyRowIds);
+    return filterRows(
+      rows, text, this._visibleColumns, (row, col) => this._getCellText(row, col), this._stickyRowIds,
+      { labels: this.columnLabels, keys: this.columns },
+    );
   }
 
   private _flattenToVisible(rows: TreeTableRow[]): TreeTableRow[] {

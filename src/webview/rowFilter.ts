@@ -286,8 +286,9 @@ export function filterRows<T extends FilterableRow>(
   searchColumns: string[],
   getCellText: (row: T, col: string) => string,
   stickyRowIds: Set<string>,
+  vocabulary?: ColumnVocabulary,
 ): T[] {
-  const { predicates } = parseFilterExpression(text, searchColumns, getCellText);
+  const { predicates } = parseFilterExpression(text, searchColumns, getCellText, vocabulary);
   if (predicates.length === 0) return rows;
 
   const rowById = new Map<string, T>();

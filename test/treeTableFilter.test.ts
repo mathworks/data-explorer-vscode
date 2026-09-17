@@ -234,14 +234,19 @@ describe('value: searches', () => {
     table.remove();
   });
 
-  it('value:"..." is exact, so it does not match a longer value', async () => {
-    // Distinguishing 5 from 15 and 100 is the whole point of the quoted form.
+  it('a quoted value groups, it does not mean exact — = is what does', async () => {
+    // The one grammar exception that used to live here: `value:"5"` was exact AND
+    // case-sensitive while its five sibling prefixes were neither, so which of two
+    // adjacent boxes the user typed in decided what quotes meant. Now quoting only
+    // holds a phrase together, and `=` is the operator that means exactly — read
+    // numerically, so the 5 spelled `5.0` is the same 5.
     const table = await mount([
       makeRow('a', null, 'a', { Value: '5' }),
       makeRow('b', null, 'b', { Value: '15' }),
       makeRow('c', null, 'c', { Value: '5.0' }),
     ]);
-    expect(await search(table, 'value:"5"')).toEqual(['a']);
+    expect(await search(table, 'value:"5"')).toEqual(['a', 'b', 'c']);
+    expect(await search(table, 'Value=5')).toEqual(['a', 'c']);
     table.remove();
   });
 
@@ -693,6 +698,33 @@ describe('a filtered list holds still while its rows are edited', () => {
     await table.updateComplete;
     expect((table as any)._getVisibleRows().length).toBe(4);
     expect(await search(table, 'gain')).toEqual([]);
+    table.remove();
+  });
+});
+
+describe('columns are addressable by the label on their header', () => {
+  it('a multi-word label filters when quoted', async () => {
+    const table = await mount(CATALOG);
+    table.columnLabels = { Name: 'Name', Value: 'Value', DataType: 'Data Type', Status: 'Status' };
+    await table.updateComplete;
+    expect(await search(table, '"Data Type"=single')).toEqual(['p2']);
+    table.remove();
+  });
+
+  it('a label beats the legacy alias, so a project table resolves its own Type', async () => {
+    const table = new DexTreeTable();
+    table.columns = ['Name', 'Type', 'Location'];
+    table.columnLabels = { Name: 'Name', Type: 'Type', Location: 'Location' };
+    document.body.appendChild(table);
+    (table as any)._hiddenColumns = new Set<string>();
+    table.rows = [
+      makeRow('a', null, 'ctrl', { Type: 'Model' } as any),
+      makeRow('b', null, 'util', { Type: 'Folder' } as any),
+    ];
+    (table as any)._visibleRowsCache = null;
+    table.requestUpdate();
+    await table.updateComplete;
+    expect(await search(table, 'Type=Model')).toEqual(['a']);
     table.remove();
   });
 });
