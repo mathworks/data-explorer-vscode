@@ -134,25 +134,121 @@ function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// One sticky alternation of every header label that CONTAINS A SPACE, so the
-// tokenizer can keep such a label in one token. Whitespace splits tokens, and a
-// user types the prefix off the header they are reading — which says `Data Type`,
-// not `"Data Type"`. Without this, `Data Type:double` parsed as the bare word
-// `Data` AND `Type:double`: two conditions ANDed, one of them a word the user
-// never meant to search for, so the query returned less than it should have while
-// showing a chip that looked right.
+// Whitespace splits tokens, which made a condition unwritable the way a person
+// writes one: `Data Type: double` split into three pieces, of which `Data` and
+// `double` became stray words ANDed onto the query. So whitespace inside a
+// condition — around the operator, and between the words of a multi-word header
+// label — is insignificant. The one thing holding that open: it applies ONLY once
+// the prefix has resolved to a real column of THIS table. `a > b` names no column,
+// so it stays three ordinary words to search for.
 //
-// Longest first, or `Last Modified By:ww` would match `Last Modified` and leave
-// `By:ww` behind. The lookahead is what keeps this from stealing ordinary text:
-// the label only counts as a prefix when an operator follows it immediately, so
-// `Data Type` on its own stays two words to search for.
-function buildMultiWordLabelRe(labelMap: Map<string, string>): RegExp | null {
-  const labels = [...labelMap.keys()].filter((l) => /\s/.test(l)).sort((a, b) => b.length - a.length);
-  if (labels.length === 0) return null;
-  // `\s+` between the words: the label came off a header, so a double space there
-  // is a typo rather than a different question.
-  const alts = labels.map((l) => l.trim().split(/\s+/).map(escapeRe).join('\\s+'));
-  return new RegExp(`(?:${alts.join('|')})(?=[:=<>!~])`, 'iy');
+// One sticky alternation of every prefix this table understands: each header label
+// (its spaces relaxed to `\s+`, since the label came off a header and a double
+// space there is a typo rather than a different question) and each legacy alias.
+// Longest first, or `Last Modified By` matches as `Last Modified` and strands `By`.
+function buildPrefixRe(labelMap: Map<string, string>): RegExp {
+  const names = [...labelMap.keys(), ...SUBSTRING_FILTER_COLUMNS.keys(), 'value'];
+  const alts = [...new Set(names)]
+    .sort((a, b) => b.length - a.length)
+    .map((l) => l.trim().split(/\s+/).map(escapeRe).join('\\s+'));
+  return new RegExp(`(?:${alts.join('|')})`, 'iy');
+}
+
+function skipWs(text: string, pos: number): number {
+  let i = pos;
+  while (i < text.length && /\s/.test(text[i])) i++;
+  return i;
+}
+
+// Where a value ends: the next whitespace outside quotes, so `Data Type: "fixed
+// point"` keeps its value whole.
+function valueEnd(text: string, pos: number): number {
+  let i = pos;
+  while (i < text.length) {
+    const ch = text[i];
+    if (/\s/.test(ch)) break;
+    if (ch === '"') {
+      // Only a BALANCED pair groups. An unclosed quote ends the value here, which
+      // is what the chunk tokenizer does with one too — the two have to agree, or
+      // `value:"5` means one thing when this path reads it and another when the
+      // chunk path does.
+      const close = text.indexOf('"', i + 1);
+      if (close === -1) break;
+      i = close + 1;
+      continue;
+    }
+    i++;
+  }
+  return i;
+}
+
+// Reads an operator at `pos`, or null when there is none. A lone `!` or `~` is not
+// one — `Name!abc` is text — and that is what stops this from claiming every
+// punctuation mark as syntax.
+function readOperator(text: string, pos: number): { op: FilterOp; end: number } | null {
+  const two = text.slice(pos, pos + 2);
+  if (two === '!=' || two === '~=') return { op: '!=', end: pos + 2 };
+  if (two === '>=' || two === '<=') return { op: two as FilterOp, end: pos + 2 };
+  const ch = text[pos];
+  if (ch === '=') return { op: '=', end: pos + 1 };
+  if (ch === '>' || ch === '<') return { op: ch as FilterOp, end: pos + 1 };
+  if (ch !== ':') return null;
+  // `:` is contains — unless an operator follows it, which is the legacy
+  // `value:>10` spelling, now accepted on every column and across a space. To
+  // search for the literal text `>10`, quote it: `Description:">10"`.
+  const after = skipWs(text, pos + 1);
+  const legacy = /^(>=|<=|!=|~=|=|>|<)/.exec(text.slice(after));
+  if (legacy) {
+    const g = legacy[1];
+    return { op: g === '~=' ? '!=' : (g as FilterOp), end: after + g.length };
+  }
+  return { op: 'contains', end: pos + 1 };
+}
+
+interface ConditionHit {
+  column: string;
+  op: FilterOp;
+  value: string;
+  /** End of the whole condition in the source text — the chip's span ends here. */
+  end: number;
+}
+
+// Reads `<column> <op> <value>` at `pos`, with optional whitespace at each seam.
+// Null unless the prefix resolves to a column of this table AND an operator
+// follows, which is what keeps ordinary text out.
+function readCondition(
+  text: string,
+  pos: number,
+  prefixRe: RegExp,
+  labelMap: Map<string, string>,
+  vocab: ColumnVocabulary | undefined,
+  crossWhitespaceForValue: boolean,
+): ConditionHit | null {
+  prefixRe.lastIndex = pos;
+  const prefix = prefixRe.exec(text);
+  if (!prefix) return null;
+  const column = resolveColumn(prefix[0].toLowerCase().replace(/\s+/g, ' '), labelMap, vocab);
+  if (!column) return null;
+
+  const opHit = readOperator(text, skipWs(text, pos + prefix[0].length));
+  if (!opHit) return null;
+
+  let start = opHit.end;
+  let end = valueEnd(text, start);
+  if (end === start) {
+    // Nothing flush against the operator. The value is the next word — unless that
+    // word is itself a condition, in which case this one has an empty value and
+    // means it: `Unit= Value>5` asks for entries with no Unit whose Value is over 5,
+    // and must not read as `Unit=Value>5`.
+    const next = skipWs(text, start);
+    const nextIsCondition =
+      next < text.length && readCondition(text, next, prefixRe, labelMap, vocab, false) !== null;
+    if (crossWhitespaceForValue && next > start && !nextIsCondition) {
+      start = next;
+      end = valueEnd(text, next);
+    }
+  }
+  return { column, op: opHit.op, value: unquote(text.slice(start, end)), end };
 }
 
 interface OpHit {
@@ -244,9 +340,41 @@ export function parseFilterExpression<T extends FilterableRow>(
     if (term) terms.push({ column, text: term });
   };
 
-  const multiWordLabelRe = buildMultiWordLabelRe(labelMap);
-  // Chunks up front rather than a streaming matchAll: a multi-word label spans a
-  // whitespace boundary, so this loop sometimes has to swallow the NEXT chunk too.
+  // One column-scoped condition, however it was spelled. Both paths below end here,
+  // so what `Data Type: double` and `"Data Type":double` mean cannot drift apart.
+  const emitColumn = (raw: string, start: number, end: number, column: string, op: FilterOp, value: string): void => {
+    const label = vocabulary?.labels?.[column] ?? column;
+    const token: FilterToken = { raw, start, end, column, columnLabel: label, op, value };
+    tokens.push(token);
+
+    if (op === 'contains') {
+      const lower = value.toLowerCase();
+      addTerm(column, lower);
+      predicates.push((row) => getCellText(row, column).toLowerCase().includes(lower));
+    } else if (op === '=' || op === '!=') {
+      // `=` highlights (its value IS in the cell); `!=` cannot — nothing matched.
+      if (op === '=') addTerm(column, value.toLowerCase());
+      const want = op === '=';
+      predicates.push((row) => valuesEqual(getCellText(row, column), value) === want);
+    } else {
+      // A bound that is not a number contributes NO predicate — a half-typed
+      // `Value>` must not blank the table. Surfaced on the chip instead.
+      const bound = parseFloat(value);
+      if (!Number.isFinite(bound)) {
+        token.warning = 'non-numeric-bound';
+        return;
+      }
+      predicates.push((row) => {
+        const n = parseFloat(getCellText(row, column));
+        if (!Number.isFinite(n)) return false;
+        return op === '>' ? n > bound : op === '<' ? n < bound : op === '>=' ? n >= bound : n <= bound;
+      });
+    }
+  };
+
+  const prefixRe = buildPrefixRe(labelMap);
+  // Chunks up front rather than a streaming matchAll: a condition may span several
+  // of them, so this loop sometimes has to swallow the ones that follow.
   const chunks = [...text.matchAll(/(?:[^\s"]+|"[^"]*")+/g)].map((m) => ({
     raw: m[0],
     start: m.index,
@@ -254,27 +382,22 @@ export function parseFilterExpression<T extends FilterableRow>(
   }));
 
   for (let ci = 0; ci < chunks.length; ci++) {
-    let { raw, start, end } = chunks[ci];
-    if (multiWordLabelRe) {
-      multiWordLabelRe.lastIndex = start;
-      const label = multiWordLabelRe.exec(text);
-      if (label) {
-        // The operator sits in a later chunk (the label's own space ended this
-        // one). Extend the token to the end of THAT chunk, so the value comes with
-        // it and the recorded span still covers exactly what the chip removes.
-        const opAt = start + label[0].length;
-        const opChunk = chunks.findIndex((c, i) => i >= ci && c.start <= opAt && opAt < c.end);
-        if (opChunk !== -1) {
-          end = chunks[opChunk].end;
-          raw = text.slice(start, end);
-          ci = opChunk;
-        }
-      }
+    const { start } = chunks[ci];
+
+    // A condition first, reading across whitespace. Its span ends where the
+    // condition ends, so the chip's `×` removes every piece of it and nothing else.
+    const cond = readCondition(text, start, prefixRe, labelMap, vocabulary, true);
+    if (cond) {
+      emitColumn(text.slice(start, cond.end), start, cond.end, cond.column, cond.op, cond.value);
+      while (ci + 1 < chunks.length && chunks[ci + 1].start < cond.end) ci++;
+      continue;
     }
+
+    // Otherwise the chunk stands alone. Still needed for the quoted prefix form
+    // (`"Data Type":double`, which no bare label matches) and for a prefix that
+    // looks like a column but names none — the `unknown-column` warning.
+    const { raw, end } = chunks[ci];
     const hit = findOperator(raw);
-    // Whitespace in the prefix is collapsed before resolving, because the label
-    // scanner above accepts `Data  Type:x` and the label map holds one space. The
-    // two have to agree or a tolerated typo resolves to no column at all.
     const prefix = hit ? unquote(raw.slice(0, hit.prefixEnd)).toLowerCase().replace(/\s+/g, ' ') : '';
     const column = hit ? resolveColumn(prefix, labelMap, vocabulary) : null;
 
@@ -298,35 +421,7 @@ export function parseFilterExpression<T extends FilterableRow>(
       continue;
     }
 
-    const value = unquote(raw.slice(hit.valueStart));
-    const label = vocabulary?.labels?.[column] ?? column;
-    const token: FilterToken = { raw, start, end, column, columnLabel: label, op: hit.op, value };
-    tokens.push(token);
-
-    if (hit.op === 'contains') {
-      const lower = value.toLowerCase();
-      addTerm(column, lower);
-      predicates.push((row) => getCellText(row, column).toLowerCase().includes(lower));
-    } else if (hit.op === '=' || hit.op === '!=') {
-      // `=` highlights (its value IS in the cell); `!=` cannot — nothing matched.
-      if (hit.op === '=') addTerm(column, value.toLowerCase());
-      const want = hit.op === '=';
-      predicates.push((row) => valuesEqual(getCellText(row, column), value) === want);
-    } else {
-      // A bound that is not a number contributes NO predicate — a half-typed
-      // `Value>` must not blank the table. Surfaced on the chip instead.
-      const bound = parseFloat(value);
-      if (!Number.isFinite(bound)) {
-        token.warning = 'non-numeric-bound';
-        continue;
-      }
-      const op = hit.op;
-      predicates.push((row) => {
-        const n = parseFloat(getCellText(row, column));
-        if (!Number.isFinite(n)) return false;
-        return op === '>' ? n > bound : op === '<' ? n < bound : op === '>=' ? n >= bound : n <= bound;
-      });
-    }
+    emitColumn(raw, start, end, column, hit.op, unquote(raw.slice(hit.valueStart)));
   }
 
   return { tokens, predicates, terms };
