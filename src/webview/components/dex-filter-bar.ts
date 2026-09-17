@@ -124,6 +124,31 @@ export class DexFilterBar extends LitElement {
       font: inherit;
       outline: none;
     }
+    /* Clear everything. Sized and shaped like a chip's own × because it does the
+       same kind of thing, one row up: this removes the whole query, that one
+       condition. Sits after the input, which flexes, so it lands at the right end. */
+    .clear-all {
+      flex: 0 0 auto;
+      width: 16px;
+      height: 16px;
+      padding: 0;
+      border: none;
+      border-radius: 2px;
+      background: none;
+      color: var(--dex-color-text-secondary, #666);
+      font: inherit;
+      font-size: 13px;
+      line-height: 1;
+      cursor: pointer;
+      outline: none;
+    }
+    .clear-all:hover {
+      background: var(--dex-bg-hover, #e8e8e8);
+      color: var(--dex-color-text, inherit);
+    }
+    .clear-all:focus-visible {
+      outline: 1px solid var(--dex-color-accent, #0078d4);
+    }
     /* Without this, Enter-to-filter reads as a search box that stopped working. */
     .pending-hint {
       flex: 0 0 auto;
@@ -146,7 +171,8 @@ export class DexFilterBar extends LitElement {
       .chip.warning {
         border: 2px solid Highlight !important;
       }
-      .chip-remove:focus-visible {
+      .chip-remove:focus-visible,
+      .clear-all:focus-visible {
         outline: 2px solid Highlight !important;
       }
     }
@@ -180,6 +206,19 @@ export class DexFilterBar extends LitElement {
     if (!tail) return;
     this._tail = '';
     this._propose(this.text ? `${this.text} ${tail}` : tail);
+  }
+
+  // Everything at once, which is the one thing Escape cannot do in a single press:
+  // it clears the tail first and the filter second, deliberately, so a half-typed
+  // word can be abandoned without losing an applied search. A × is aimed, not
+  // typed, so it means all of it. Proposing only when something IS applied keeps
+  // "abandon what I was typing" a local edit that no consumer hears about.
+  private _clearAll(): void {
+    const hadFilter = this.text !== '';
+    this._tail = '';
+    if (hadFilter) this._propose('');
+    // The next thing the user does is type, so leave the caret where they left it.
+    this._input?.focus();
   }
 
   private _removeAt(index: number): void {
@@ -272,6 +311,20 @@ export class DexFilterBar extends LitElement {
         @blur=${() => this.classList.remove('focused')}
       />
       ${this._tail.trim() ? html`<span class="pending-hint">⏎ to filter</span>` : nothing}
+      ${this.text || this._tail
+        ? html`<button
+            type="button"
+            class="clear-all"
+            aria-label="Clear search"
+            title="Clear search (Escape)"
+            @click=${(e: MouseEvent) => {
+              e.stopPropagation();
+              this._clearAll();
+            }}
+          >
+            ×
+          </button>`
+        : nothing}
     `;
   }
 }

@@ -107,6 +107,64 @@ describe('dex-filter-bar', () => {
   });
 });
 
+describe('dex-filter-bar clear-all', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  const clearAll = (el: DexFilterBar) => el.shadowRoot!.querySelector('.clear-all') as HTMLButtonElement | null;
+
+  it('offers nothing to clear when there is nothing to clear', async () => {
+    // A × on an empty box is a control that does nothing, sitting where the eye
+    // looks for one that does.
+    expect(clearAll(await bar())).toBeNull();
+  });
+
+  it('appears once anything is in the box, applied or still being typed', async () => {
+    expect(clearAll(await bar('abc'))).not.toBeNull();
+    const el = await bar();
+    await type(el, 'ga');
+    expect(clearAll(el)).not.toBeNull();
+  });
+
+  it('clears the applied filter and the pending tail in one click', async () => {
+    const el = await bar('abc Name:gain');
+    const seen = applied(el);
+    await type(el, 'Value>1');
+    clearAll(el)!.click();
+    await el.updateComplete;
+    expect(seen).toEqual(['']);
+    expect(input(el).value).toBe('');
+  });
+
+  it('leaves the caret in the box, ready for the next search', async () => {
+    const el = await bar('abc');
+    clearAll(el)!.click();
+    await el.updateComplete;
+    expect(el.shadowRoot!.activeElement).toBe(input(el));
+  });
+
+  it('is a labelled button, so it is reachable without a mouse', async () => {
+    const el = await bar('abc');
+    const button = clearAll(el)!;
+    expect(button.tagName).toBe('BUTTON');
+    expect(button.getAttribute('aria-label')).toBe('Clear search');
+  });
+
+  it('proposes nothing when only a tail was pending — there is no filter to replace', async () => {
+    // Clearing an uncommitted tail is a local edit. Proposing '' would look the
+    // same here and would clear an applied filter that a later Escape should have
+    // kept, so the two cases stay distinct.
+    const el = await bar();
+    const seen = applied(el);
+    await type(el, 'ga');
+    clearAll(el)!.click();
+    await el.updateComplete;
+    expect(seen).toEqual([]);
+    expect(input(el).value).toBe('');
+  });
+});
+
 describe('dex-filter-bar keyboard', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
