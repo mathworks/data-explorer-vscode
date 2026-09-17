@@ -278,3 +278,37 @@ describe('the operator scanner', () => {
     expect(tokens.map((t) => text.slice(t.start, t.end))).toEqual(['abc', 'Name=x', 'Value>1']);
   });
 });
+
+describe('the = rule', () => {
+  const VOCAB = { labels: { Name: 'Name', Value: 'Value' }, keys: COLUMNS };
+  const match = (text: string, r: Row) =>
+    parseFilterExpression(text, COLUMNS, getCellText, VOCAB).predicates.every((p) => p(r));
+
+  it('compares as numbers when both sides are numbers, so 10 equals 10.0', () => {
+    expect(match('Value=10', row('a', null, { Value: '10.0' }))).toBe(true);
+    expect(match('Value=10', row('a', null, { Value: '1e1' }))).toBe(true);
+    expect(match('Value=10', row('a', null, { Value: '100' }))).toBe(false);
+  });
+
+  it('compares as text, case-insensitively, when either side is not a number', () => {
+    expect(match('Name=MYVAR', row('a', null, { Name: 'myVar' }))).toBe(true);
+    expect(match('Name=myVa', row('a', null, { Name: 'myVar' }))).toBe(false);
+  });
+
+  it('an empty value asks for empty cells', () => {
+    expect(match('Value=', row('a', null, { Value: '' }))).toBe(true);
+    expect(match('Value=', row('a', null, { Value: '0' }))).toBe(false);
+  });
+
+  it('!= includes a row whose cell is empty', () => {
+    expect(match('Value!=5', row('a', null, { Value: '' }))).toBe(true);
+    expect(match('Value!=5', row('a', null, { Value: '5' }))).toBe(false);
+    expect(match('Value~=5', row('a', null, { Value: '5' }))).toBe(false);
+  });
+
+  it('a comparison with a non-numeric bound is ignored, not empty-matching', () => {
+    const { predicates, tokens } = parseFilterExpression('Value>abc', COLUMNS, getCellText, VOCAB);
+    expect(predicates).toEqual([]);
+    expect(tokens[0].warning).toBe('non-numeric-bound');
+  });
+});
