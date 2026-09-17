@@ -151,13 +151,22 @@ describe('the table and the popup together', () => {
     expect(popupOf(el)).toBeNull();
   });
 
-  it('the search box shows the text the popup wrote', async () => {
-    // Apply that filters without updating the box would leave the user looking at a
-    // table narrowed by text they cannot see, edit, or clear.
+  it('the search bar shows the condition the popup wrote, as a chip', async () => {
+    // Apply that filters without updating the bar would leave the user looking at a
+    // table narrowed by a condition they cannot see, edit, or clear. The bar shows
+    // it as a chip rather than as raw text now, so the chip is what this reads —
+    // spelled from the same label and value the popup applied.
     const el = await table();
     (el as any)._applyColumnFilter('DataType', 'contains', 'double');
     await el.updateComplete;
-    expect((el.shadowRoot!.querySelector('.filter-input') as HTMLInputElement).value).toBe('"Data Type":double');
+    const bar = el.shadowRoot!.querySelector('dex-filter-bar') as HTMLElement & {
+      updateComplete: Promise<unknown>;
+    };
+    await bar.updateComplete;
+    const chip = bar.shadowRoot!.querySelector('.chip') as HTMLElement;
+    expect(chip.querySelector('.chip-label')!.textContent).toBe('Data Type');
+    expect(chip.querySelector('.chip-value')!.textContent).toBe('double');
+    expect((el as any)._filterText).toBe('"Data Type":double');
   });
 
   it('applying twice on one column replaces its condition rather than stacking', async () => {

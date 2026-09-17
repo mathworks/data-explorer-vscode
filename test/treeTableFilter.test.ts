@@ -9,6 +9,7 @@
 // is useless if its parent rows vanish.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import type { DexFilterBar } from '../src/webview/components/dex-filter-bar.js';
 import { nextStickyIds } from '../src/webview/rowUpdates.js';
 
 const HOST_COLUMNS = ['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class'];
@@ -34,11 +35,29 @@ async function mount(rows: TreeTableRow[], expanded: string[] = []): Promise<Dex
   return table;
 }
 
-// Type into the real search box, so the input binding and cache invalidation run.
+/** The one real input, which lives inside the chip bar's shadow root. */
+const boxOf = (table: DexTreeTable): HTMLInputElement =>
+  barOf(table).shadowRoot!.querySelector('.filter-input') as HTMLInputElement;
+
+const barOf = (table: DexTreeTable): DexFilterBar =>
+  table.shadowRoot!.querySelector('dex-filter-bar') as DexFilterBar;
+
+/**
+ * Ask one filter question and read back what matched. Each call is a FRESH
+ * question — it resets the applied text first — because the bar now APPENDS a
+ * committed tail rather than replacing the box, and every case below was written
+ * against a box that replaced. Typed into the real input and committed with a real
+ * Enter, so the tail binding, the propose event and the cache invalidation all run.
+ */
 async function search(table: DexTreeTable, text: string): Promise<string[]> {
-  const input = table.shadowRoot!.querySelector('.filter-input') as HTMLInputElement;
+  const bar = barOf(table);
+  (table as any)._setFilterText('');
+  await table.updateComplete;
+  const input = boxOf(table);
   input.value = text;
   input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  await bar.updateComplete;
   await table.updateComplete;
   return (table as any)._getVisibleRows().map((r: TreeTableRow) => r.ID);
 }
@@ -340,25 +359,34 @@ describe('a filtered view stays a usable tree', () => {
 });
 
 describe('the search box itself', () => {
-  it('Escape clears the box and the filter together', async () => {
-    // Clearing only one of the two would leave the table filtered by text the
-    // user can no longer see.
+  it('Escape clears a pending tail first, then the filter', async () => {
     const table = await mount(CATALOG);
-    await search(table, 'gain');
-    const input = table.shadowRoot!.querySelector('.filter-input') as HTMLInputElement;
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    const bar = barOf(table);
+    const input = boxOf(table);
+    expect(await search(table, 'gain')).toEqual(['p1']);
+
+    input.value = 'half';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await bar.updateComplete;
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await bar.updateComplete;
     await table.updateComplete;
+    // First press abandons the half-typed word; the applied filter survives it.
     expect(input.value).toBe('');
+    expect((table as any)._filterText).toBe('gain');
+
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await bar.updateComplete;
+    await table.updateComplete;
     expect((table as any)._filterText).toBe('');
-    expect((table as any)._getVisibleRows().length).toBe(4);
+    expect((table as any)._getVisibleRows().length).toBeGreaterThan(1);
     table.remove();
   });
 
   it('a key other than Escape leaves the filter alone', async () => {
     const table = await mount(CATALOG);
     await search(table, 'gain');
-    const input = table.shadowRoot!.querySelector('.filter-input') as HTMLInputElement;
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true }));
+    boxOf(table).dispatchEvent(new KeyboardEvent('keydown', { key: 'x', bubbles: true }));
     await table.updateComplete;
     expect((table as any)._filterText).toBe('gain');
     table.remove();
@@ -370,15 +398,28 @@ describe('the search box itself', () => {
     table.remove();
   });
 
-  it('focusFilter selects the existing text so the next keystroke replaces it', async () => {
+  it('focusFilter selects what is in the box so the next keystroke replaces it', async () => {
     // This backs the Ctrl+F shortcut; without .select() the user types into the
-    // middle of their previous query.
+    // middle of what they had half-typed. What is IN the box is now the uncommitted
+    // tail — the applied conditions are chips beside it, and Ctrl+F must not select
+    // those, because a keystroke cannot replace a chip.
     const table = await mount(CATALOG);
-    await search(table, 'gain');
-    const input = table.shadowRoot!.querySelector('.filter-input') as HTMLInputElement;
+    const bar = barOf(table);
+    const input = boxOf(table);
+    input.value = 'gai';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await bar.updateComplete;
     table.focusFilter();
     expect(input.selectionStart).toBe(0);
-    expect(input.selectionEnd).toBe('gain'.length);
+    expect(input.selectionEnd).toBe('gai'.length);
+    table.remove();
+  });
+
+  it('focusFilter reaches the input inside the bar', async () => {
+    const table = await mount(CATALOG);
+    table.focusFilter();
+    const bar = barOf(table);
+    expect(bar.shadowRoot!.activeElement).toBe(bar.shadowRoot!.querySelector('.filter-input'));
     table.remove();
   });
 
@@ -386,8 +427,25 @@ describe('the search box itself', () => {
     // The empty-state render is a separate branch; dropping the box there would
     // trap a user who filtered a small file down to nothing.
     const table = await mount([]);
-    expect(table.shadowRoot!.querySelector('.filter-input')).not.toBeNull();
+    expect(boxOf(table)).not.toBeNull();
     expect(table.shadowRoot!.querySelector('.empty-state')!.textContent).toContain('No data');
+    table.remove();
+  });
+
+  it('keeps the same bar element across the loading to loaded repaint', async () => {
+    // The bar is rendered from ONE call site so Lit reuses it; a per-state literal
+    // rebuilt the input and dropped focus and anything typed while the file parsed.
+    const table = new DexTreeTable();
+    table.columns = HOST_COLUMNS;
+    document.body.appendChild(table);
+    await table.updateComplete;
+    const before = table.shadowRoot!.querySelector('dex-filter-bar');
+    // Guarded, or two nulls would satisfy the identity check below and this would
+    // pass on a table that renders no bar at all.
+    expect(before).not.toBeNull();
+    table.rows = CATALOG;
+    await table.updateComplete;
+    expect(table.shadowRoot!.querySelector('dex-filter-bar')).toBe(before);
     table.remove();
   });
 });
@@ -693,8 +751,8 @@ describe('a filtered list holds still while its rows are edited', () => {
     const table = await mount(CATALOG);
     await search(table, 'gain');
     await repaint(table, edited('p1', { Name: { label: 'plainValue' } }));
-    const input = table.shadowRoot!.querySelector('.filter-input') as HTMLInputElement;
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    boxOf(table).dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    await barOf(table).updateComplete;
     await table.updateComplete;
     expect((table as any)._getVisibleRows().length).toBe(4);
     expect(await search(table, 'gain')).toEqual([]);

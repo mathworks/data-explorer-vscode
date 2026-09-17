@@ -33,6 +33,18 @@ async function mount(rows: TreeTableRow[]): Promise<DexTreeTable> {
 const cell = (table: DexTreeTable, rowId: string, col: string): HTMLElement =>
   table.shadowRoot!.querySelector(`tr[data-row-id="${rowId}"] td.col-${col}`) as HTMLElement;
 
+// Search through the real box, which lives inside the chip bar's shadow root and
+// commits on Enter — typing alone no longer filters.
+async function search(table: DexTreeTable, query: string): Promise<void> {
+  const bar = table.shadowRoot!.querySelector('dex-filter-bar') as HTMLElement & { updateComplete: Promise<unknown> };
+  const input = bar.shadowRoot!.querySelector('.filter-input') as HTMLInputElement;
+  input.value = query;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  await bar.updateComplete;
+  await table.updateComplete;
+}
+
 const text = (table: DexTreeTable, rowId: string, col: string): string =>
   (cell(table, rowId, col).textContent || '').trim();
 
@@ -68,10 +80,7 @@ describe('user-supplied text is rendered as text, never as markup', () => {
     // pieces have to stay escaped or a crafted name becomes markup as soon as the
     // user searches for part of it.
     const table = await mount([makeRow('x', '<img src=x onerror="boom">')]);
-    const input = table.shadowRoot!.querySelector('.filter-input') as HTMLInputElement;
-    input.value = 'img';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    await table.updateComplete;
+    await search(table, 'img');
 
     expect(table.shadowRoot!.querySelectorAll('img').length).toBe(0);
     expect(cell(table, 'x', 'Name').querySelector('mark')!.textContent).toBe('img');
@@ -417,10 +426,7 @@ describe('links navigate rather than following an href', () => {
     it('is still highlighted by a search that matches it', async () => {
       // Highlighting is about finding the text, which is there whether or not it links.
       const table = await mount([makeRow('u', 'u', { UsedBy: { paramLinks: [UNRESOLVED] } as any })]);
-      const input = table.shadowRoot!.querySelector('.filter-input') as HTMLInputElement;
-      input.value = 'final';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      await table.updateComplete;
+      await search(table, 'final');
       expect(cell(table, 'u', 'UsedBy').querySelector('mark')!.textContent).toBe('final');
       table.remove();
     });
@@ -803,10 +809,7 @@ describe('cell text for sorting and searching', () => {
       makeRow('a', 'A', { DataType: { links: [{ text: 'myBus', linkTarget: 'x' }] } as any }),
       makeRow('b', 'B', { DataType: 'double' }),
     ]);
-    const input = table.shadowRoot!.querySelector('.filter-input') as HTMLInputElement;
-    input.value = 'type:myBus';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    await table.updateComplete;
+    await search(table, 'type:myBus');
     expect(
       Array.from(table.shadowRoot!.querySelectorAll('tr.data-row')).map((r) => r.getAttribute('data-row-id')),
     ).toEqual(['a']);
@@ -1212,10 +1215,7 @@ describe('a Data Type that names a type definition', () => {
       makeRow('s', 'sig', { DataType: QUALIFIED as any }),
       makeRow('p', 'param', { DataType: { text: 'adtUint8', linkTarget: 'adtUint8@d.sldd' } as any }),
     ]);
-    const input = table.shadowRoot!.querySelector('.filter-input') as HTMLInputElement;
-    input.value = 'type:bus';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    await table.updateComplete;
+    await search(table, 'type:bus');
 
     expect(cell(table, 's', 'DataType'), 'the bus-typed row survives type:bus').not.toBeNull();
     expect(table.shadowRoot!.querySelector('tr[data-row-id="p"]'), 'the uint8-typed row does not').toBeNull();

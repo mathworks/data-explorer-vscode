@@ -43,6 +43,10 @@ async function mount(opts: { loading?: boolean; rows?: TreeTableRow[] } = {}): P
 
 const q = (table: DexTreeTable, sel: string) => table.shadowRoot!.querySelector(sel);
 
+// The one real search input, one shadow root down inside the chip bar.
+const box = (table: DexTreeTable): HTMLInputElement | null =>
+  (q(table, 'dex-filter-bar') as HTMLElement | null)?.shadowRoot?.querySelector('.filter-input') ?? null;
+
 // The component's own stylesheet text, whitespace collapsed so a rule reads as one
 // line — the only place a keyframe or an animation delay can be pinned.
 const styleText = (): string => {
@@ -72,7 +76,7 @@ describe('waiting for the first payload', () => {
     // the bar; the bar appeared at boot, vanished, and came back with the rows.
     const table = await mount({ loading: true });
     expect(q(table, '.filter-bar')).not.toBeNull();
-    expect(q(table, '.filter-input')).not.toBeNull();
+    expect(box(table)).not.toBeNull();
     table.remove();
   });
 
@@ -106,12 +110,19 @@ describe('waiting for the first payload', () => {
     // node: a second literal would be a different template, the input would be
     // rebuilt, and text typed while waiting (plus the caret) would be lost.
     const table = await mount({ loading: true });
-    const before = q(table, '.filter-input') as HTMLInputElement;
+    const bar = q(table, 'dex-filter-bar') as HTMLElement & { updateComplete: Promise<unknown> };
+    const before = box(table)!;
     before.value = 'gain';
+    // Through a real input event, so the bar holds it as its pending tail rather than
+    // the test relying on a raw DOM value the next render would overwrite.
+    before.dispatchEvent(new Event('input', { bubbles: true }));
+    await bar.updateComplete;
     table.loading = false;
     table.rows = [makeRow('a')];
     await table.updateComplete;
-    const after = q(table, '.filter-input') as HTMLInputElement;
+    await bar.updateComplete;
+    expect(q(table, 'dex-filter-bar')).toBe(bar);
+    const after = box(table)!;
     expect(after).toBe(before);
     expect(after.value).toBe('gain');
     table.remove();
