@@ -120,6 +120,75 @@ function resolveColumn(prefix: string, labelMap: Map<string, string>, vocab?: Co
   return alias;
 }
 
+// The tokenizer keeps a "quoted phrase" together as ONE token specifically so its
+// spaces don't split it into separate terms; the quotes themselves are syntax, not
+// text to match, so they must come off before comparing. Leaving them on makes
+// every quoted search silently match nothing.
+function unquote(s: string): string {
+  return s.length > 1 && s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s;
+}
+
+const OP_CHARS = new Set([':', '=', '<', '>', '!', '~']);
+
+interface OpHit {
+  /** Where the prefix ends, i.e. the operator's first character. */
+  prefixEnd: number;
+  op: FilterOp;
+  valueStart: number;
+}
+
+// Finds the operator inside ONE token, skipping anything inside quotes so that
+// `type:"Bus: myBus"` splits at its first colon and not at the one in the value.
+// Returns null when the token holds no operator at all — then the whole token is
+// ordinary text, which is also how `a>b` and `~foo` keep working.
+function findOperator(raw: string): OpHit | null {
+  let inQuote = false;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (ch === '"') {
+      inQuote = !inQuote;
+      continue;
+    }
+    // A leading operator is not an empty prefix: `:abc` is text (and `:` alone
+    // must never resolve to a column, or every row would match).
+    if (inQuote || !OP_CHARS.has(ch) || i === 0) continue;
+
+    const two = raw.slice(i, i + 2);
+    if (two === '!=' || two === '~=') return { prefixEnd: i, op: '!=', valueStart: i + 2 };
+    if (two === '>=' || two === '<=') return { prefixEnd: i, op: two as FilterOp, valueStart: i + 2 };
+    // `!` and `~` mean nothing on their own — `Name!abc` is text.
+    if (ch === '!' || ch === '~') continue;
+    if (ch === '=') return { prefixEnd: i, op: '=', valueStart: i + 1 };
+    if (ch === '>' || ch === '<') return { prefixEnd: i, op: ch as FilterOp, valueStart: i + 1 };
+
+    // ':' — contains, unless the value opens with an operator. That is the legacy
+    // `value:>10` spelling, now accepted on every column.
+    const legacy = raw.slice(i + 1).match(/^(>=|<=|!=|~=|=|>|<)/);
+    if (legacy) {
+      const g = legacy[1];
+      return { prefixEnd: i, op: g === '~=' ? '!=' : (g as FilterOp), valueStart: i + 1 + g.length };
+    }
+    return { prefixEnd: i, op: 'contains', valueStart: i + 1 };
+  }
+  return null;
+}
+
+// `=` on a table whose cells are all strings. Numbers compare as numbers so that
+// `Value=10` finds a cell holding `10.0`; anything else compares as trimmed,
+// case-insensitive text, because one case rule for the whole box is worth more
+// than an exception nobody can see. An empty wanted value asks for empty cells,
+// which is the only way to ask "which entries have no Unit?".
+function valuesEqual(cell: string, wanted: string): boolean {
+  const c = cell.trim();
+  const w = wanted.trim();
+  if (c !== '' && w !== '') {
+    const cn = Number(c);
+    const wn = Number(w);
+    if (Number.isFinite(cn) && Number.isFinite(wn)) return cn === wn;
+  }
+  return c.toLowerCase() === w.toLowerCase();
+}
+
 // Compiles the search box text into the row predicates AND the terms to
 // highlight, in one pass over the tokens. Highlighting used to re-derive its
 // term from the raw filter text, which held for a single word and broke for
@@ -132,92 +201,83 @@ export function parseFilterExpression<T extends FilterableRow>(
   text: string,
   searchColumns: string[],
   getCellText: (row: T, col: string) => string,
+  vocabulary?: ColumnVocabulary,
 ): {
+  tokens: FilterToken[];
   predicates: Array<(row: T) => boolean>;
   terms: FilterTerm[];
 } {
+  const tokens: FilterToken[] = [];
   const predicates: Array<(row: T) => boolean> = [];
   const terms: FilterTerm[] = [];
-  const tokens = text.match(/(?:[^\s"]+|"[^"]*")+/g) || [];
+  const labelMap = buildLabelMap(vocabulary);
 
-  // The tokenizer keeps a "quoted phrase" together as ONE token specifically so
-  // its spaces don't split it into separate terms; the quotes themselves are
-  // syntax, not text to match, so they must come off before comparing. Leaving
-  // them on makes every quoted search silently match nothing.
-  const unquote = (s: string): string => (s.length > 1 && s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s);
-  // An EMPTY term must never be recorded. `name:` on its own is a half-typed
-  // query that matches every row, but as a highlight term it would match at
-  // every offset of every cell — and the scan advances by the term's length, so
-  // a zero-length one never advances and hangs the webview mid-keystroke.
+  // An EMPTY term must never be recorded: as a highlight term it would match at
+  // every offset of every cell, and the scan advances by the term's length, so a
+  // zero-length one never advances and hangs the webview mid-keystroke.
   const addTerm = (column: string | null, term: string): void => {
     if (term) terms.push({ column, text: term });
   };
-  const makeGenericPredicate = (term: string): ((row: T) => boolean) => {
-    const lower = unquote(term).toLowerCase();
-    addTerm(null, lower);
-    return (row) => searchColumns.some((col) => getCellText(row, col).toLowerCase().includes(lower));
-  };
 
-  for (const token of tokens) {
-    const colonIdx = token.indexOf(':');
-    if (colonIdx > 0) {
-      const prefix = token.slice(0, colonIdx).toLowerCase();
-      const rawValue = token.slice(colonIdx + 1);
+  for (const m of text.matchAll(/(?:[^\s"]+|"[^"]*")+/g)) {
+    const raw = m[0];
+    const start = m.index;
+    const end = start + raw.length;
+    const hit = findOperator(raw);
+    const column = hit ? resolveColumn(unquote(raw.slice(0, hit.prefixEnd)).toLowerCase(), labelMap, vocabulary) : null;
 
-      const column = SUBSTRING_FILTER_COLUMNS.get(prefix);
-      if (column) {
-        const term = unquote(rawValue).toLowerCase();
-        addTerm(column, term);
-        predicates.push((row) => getCellText(row, column).toLowerCase().includes(term));
-      } else if (prefix === 'value') {
-        if (rawValue.startsWith('"') && rawValue.endsWith('"')) {
-          const exact = rawValue.slice(1, -1);
-          addTerm('Value', exact.toLowerCase());
-          predicates.push((row) => {
-            return getCellText(row, 'Value') === exact;
-          });
-        } else if (/^(>=|<=|>|<|=)/.test(rawValue)) {
-          const opMatch = rawValue.match(/^(>=|<=|>|<|=)/);
-          const op = opMatch![0];
-          const numStr = rawValue.slice(op.length);
-          const num = parseFloat(numStr);
-          if (!isNaN(num)) {
-            predicates.push((row) => {
-              const val = getCellText(row, 'Value');
-              const rowNum = parseFloat(val);
-              if (isNaN(rowNum)) return false;
-              switch (op) {
-                case '>':
-                  return rowNum > num;
-                case '<':
-                  return rowNum < num;
-                case '>=':
-                  return rowNum >= num;
-                case '<=':
-                  return rowNum <= num;
-                case '=':
-                  return rowNum === num;
-                default:
-                  return false;
-              }
-            });
-          }
-        } else {
-          const term = unquote(rawValue).toLowerCase();
-          addTerm('Value', term);
-          predicates.push((row) => {
-            return getCellText(row, 'Value').toLowerCase().includes(term);
-          });
-        }
-      } else {
-        predicates.push(makeGenericPredicate(token));
-      }
+    // No operator, or a prefix that names no column: the whole token is text,
+    // colon included. `constructor:` is ordinary text a user may well look for.
+    if (!hit || !column) {
+      const value = unquote(raw);
+      const lower = value.toLowerCase();
+      tokens.push({
+        raw,
+        start,
+        end,
+        column: null,
+        columnLabel: null,
+        op: 'contains',
+        value,
+        ...(hit ? { warning: 'unknown-column' as const } : {}),
+      });
+      addTerm(null, lower);
+      predicates.push((row) => searchColumns.some((col) => getCellText(row, col).toLowerCase().includes(lower)));
+      continue;
+    }
+
+    const value = unquote(raw.slice(hit.valueStart));
+    const label = vocabulary?.labels?.[column] ?? column;
+    const token: FilterToken = { raw, start, end, column, columnLabel: label, op: hit.op, value };
+    tokens.push(token);
+
+    if (hit.op === 'contains') {
+      const lower = value.toLowerCase();
+      addTerm(column, lower);
+      predicates.push((row) => getCellText(row, column).toLowerCase().includes(lower));
+    } else if (hit.op === '=' || hit.op === '!=') {
+      // `=` highlights (its value IS in the cell); `!=` cannot — nothing matched.
+      if (hit.op === '=') addTerm(column, value.toLowerCase());
+      const want = hit.op === '=';
+      predicates.push((row) => valuesEqual(getCellText(row, column), value) === want);
     } else {
-      predicates.push(makeGenericPredicate(token));
+      // A bound that is not a number contributes NO predicate — a half-typed
+      // `Value>` must not blank the table. Surfaced on the chip instead.
+      const bound = parseFloat(value);
+      if (!Number.isFinite(bound)) {
+        token.warning = 'non-numeric-bound';
+        continue;
+      }
+      const op = hit.op;
+      predicates.push((row) => {
+        const n = parseFloat(getCellText(row, column));
+        if (!Number.isFinite(n)) return false;
+        return op === '>' ? n > bound : op === '<' ? n < bound : op === '>=' ? n >= bound : n <= bound;
+      });
     }
   }
 
-  return { predicates, terms };
+  return { tokens, predicates, terms };
 }
 
 export function filterRows<T extends FilterableRow>(

@@ -230,3 +230,51 @@ describe('filterRows', () => {
     expect(ids(rows, 'gain', new Set())).toEqual(['a']);
   });
 });
+
+describe('the operator scanner', () => {
+  const VOCAB = { labels: { Name: 'Name', Value: 'Value', DataType: 'Data Type' }, keys: COLUMNS };
+
+  it('reads a header label as the prefix, quoted when it has a space', () => {
+    const { tokens } = parseFilterExpression('"Data Type"=double', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0].column).toBe('DataType');
+    expect(tokens[0].op).toBe('=');
+    expect(tokens[0].value).toBe('double');
+  });
+
+  it('normalizes ~= to != while keeping the raw text the user typed', () => {
+    const { tokens } = parseFilterExpression('Name~=abc', COLUMNS, getCellText, VOCAB);
+    expect(tokens[0].op).toBe('!=');
+    expect(tokens[0].raw).toBe('Name~=abc');
+  });
+
+  it('reads the two-character operators before the one-character ones', () => {
+    for (const [text, op] of [['Value>=1', '>='], ['Value<=1', '<='], ['Value!=1', '!=']] as const) {
+      expect(parseFilterExpression(text, COLUMNS, getCellText, VOCAB).tokens[0].op).toBe(op);
+    }
+  });
+
+  it('still accepts the legacy colon-then-operator form on any column', () => {
+    const { tokens } = parseFilterExpression('Value:>10', COLUMNS, getCellText, VOCAB);
+    expect(tokens[0].op).toBe('>');
+    expect(tokens[0].value).toBe('10');
+  });
+
+  it('leaves a bare word containing an operator character as ordinary text', () => {
+    const { tokens } = parseFilterExpression('a>b', COLUMNS, getCellText, VOCAB);
+    expect(tokens[0].column).toBeNull();
+    expect(tokens[0].op).toBe('contains');
+    expect(tokens[0].value).toBe('a>b');
+  });
+
+  it('does not read a lone ! or ~ as an operator', () => {
+    expect(parseFilterExpression('Name!abc', COLUMNS, getCellText, VOCAB).tokens[0].column).toBeNull();
+    expect(parseFilterExpression('~abc', COLUMNS, getCellText, VOCAB).tokens[0].value).toBe('~abc');
+  });
+
+  it('records the span so removing a token is a splice', () => {
+    const text = 'abc Name=x Value>1';
+    const { tokens } = parseFilterExpression(text, COLUMNS, getCellText, VOCAB);
+    expect(tokens.map((t) => text.slice(t.start, t.end))).toEqual(['abc', 'Name=x', 'Value>1']);
+  });
+});
