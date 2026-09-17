@@ -185,3 +185,46 @@ describe('dex-filter-bar keyboard', () => {
     expect(seen).toEqual(['']);
   });
 });
+
+describe('dex-filter-bar leaves the browser its own keys', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('does not preventDefault on ordinary typing, arrows or select-all', async () => {
+    const el = await bar('abc');
+    await type(el, 'gain');
+    for (const key of ['a', 'ArrowLeft', 'ArrowRight', 'Home', 'End']) {
+      const e = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+      input(el).dispatchEvent(e);
+      expect(e.defaultPrevented, key).toBe(false);
+    }
+  });
+
+  it('leaves ArrowLeft at position 0 to the browser rather than eating a chip', async () => {
+    const el = await bar('abc Name:gain');
+    const seen = applied(el);
+    input(el).setSelectionRange(0, 0);
+    const e = new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true });
+    input(el).dispatchEvent(e);
+    expect(e.defaultPrevented).toBe(false);
+    expect(seen).toEqual([]);
+  });
+
+  it('pastes a whole query as one tail, committed by one Enter', async () => {
+    const el = await bar();
+    const seen = applied(el);
+    await type(el, 'Name:a "Data Type"=double Value>1');
+    await press(el, 'Enter');
+    expect(seen).toEqual(['Name:a "Data Type"=double Value>1']);
+  });
+
+  it('Backspace on a selection deletes the selection, not a chip', async () => {
+    const el = await bar('abc');
+    const seen = applied(el);
+    await type(el, 'gain');
+    input(el).setSelectionRange(0, 4);
+    await press(el, 'Backspace');
+    expect(seen).toEqual([]);
+  });
+});
