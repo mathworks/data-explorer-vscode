@@ -463,6 +463,28 @@ describe('feedback when a search matches nothing', () => {
     table.remove();
   });
 
+  it('names the conditions in the empty state the way the chips do', async () => {
+    const table = await mount(CATALOG);
+    table.columnLabels = { Name: 'Name', Value: 'Value', DataType: 'Data Type' };
+    await table.updateComplete;
+    await search(table, 'Name=nosuchthing');
+    const msg = table.shadowRoot!.querySelector('.no-match-state')!.textContent!.replace(/\s+/g, ' ').trim();
+    expect(msg).toBe('No entries match Name equal to “nosuchthing”');
+    table.remove();
+  });
+
+  it('joins several conditions into one sentence', async () => {
+    // The bar shows three chips; the message has to account for all three, or the
+    // user reads it as "one of my conditions was ignored".
+    const table = await mount(CATALOG);
+    table.columnLabels = { Name: 'Name', Value: 'Value', DataType: 'Data Type' };
+    await table.updateComplete;
+    await search(table, 'zzz Name:gain Value>10');
+    const msg = table.shadowRoot!.querySelector('.no-match-state')!.textContent!.replace(/\s+/g, ' ').trim();
+    expect(msg).toBe('No entries match “zzz”, Name containing “gain” and Value greater than “10”');
+    table.remove();
+  });
+
   it('the message is absent whenever rows are showing', async () => {
     const table = await mount(CATALOG);
     expect(table.shadowRoot!.querySelector('.no-match-state')).toBeNull();

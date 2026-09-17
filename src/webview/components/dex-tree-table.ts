@@ -265,6 +265,18 @@ function groupBlockLinks(links: unknown): BlockLinkGroup[] {
   return groups;
 }
 
+// Words rather than glyphs: this is a sentence, and `Data Type ≠ double` inside one
+// reads as a typo.
+const OP_WORD_TEXT: Record<FilterOp, string> = {
+  contains: 'containing',
+  '=': 'equal to',
+  '!=': 'not equal to',
+  '>': 'greater than',
+  '<': 'less than',
+  '>=': 'at least',
+  '<=': 'at most',
+};
+
 @customElement('dex-tree-table')
 export class DexTreeTable extends LitElement {
   static override styles = [
@@ -3205,6 +3217,18 @@ export class DexTreeTable extends LitElement {
 
   private _pendingFlashId: string | null = null;
 
+  // Described from the TOKENS, not the raw text: the bar shows chips, so the empty
+  // state has to name the same conditions the same way or the two disagree about
+  // what was asked.
+  private _noMatchMessage(): string {
+    const parts = this._filterTokens.map((t) =>
+      t.columnLabel ? `${t.columnLabel} ${OP_WORD_TEXT[t.op]} “${t.value}”` : `“${t.value}”`,
+    );
+    if (parts.length === 0) return 'No entries match';
+    if (parts.length === 1) return `No entries match ${parts[0]}`;
+    return `No entries match ${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+  }
+
   // The search bar. Rendered by BOTH branches below from this one function, so the
   // bar is the same element in the same place whether or not there are rows yet:
   // Lit reuses it across the repaint that brings the table in, which is what makes
@@ -3325,7 +3349,7 @@ export class DexTreeTable extends LitElement {
           </table>
           ${totalRows === 0 && this._filterText
             ? html`<div class="no-match-state" style="top: ${headerHeight}px">
-                No entries match "${this._filterText}"
+                ${this._noMatchMessage()}
               </div>`
             : nothing}
           <table class="rows-table" style="top: ${offsetTop}px;">
