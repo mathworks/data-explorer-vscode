@@ -138,15 +138,42 @@ describe('buildPropertyGroups', () => {
   });
 
   it('carries the "Other" catch-all group through with its dotted nested names', () => {
-    // "Other" is how the user sees raw properties the schema does not model
-    // (CoderInfo.*, Breakpoints.*). Dropping the group, or flattening the dotted
-    // path, would hide which nested object a value came from.
+    // "Other" is how the user sees raw properties the schema does not model. Dropping
+    // the group, or flattening the dotted path, would hide which nested object a value
+    // came from — so the assertion is on a name that is still dotted.
     const bp = firstOfClass(load('test://pi_other.sldd', 'mcos/all.sldd'), 'BreakpointNode');
     const other = buildPropertyGroups(bp).find((g) => g.title === 'Other');
     expect(other, 'the Breakpoint carries unmodeled raw properties').toBeTruthy();
     const names = other!.properties.map((p) => p.name);
-    expect(names).toContain('CoderInfo.StorageClass');
     expect(names).toContain('Breakpoints.FieldName');
+    expect(names).toContain('Breakpoints.Unit');
+  });
+
+  it('drops a raw bag out of "Other" once the schema models any key inside it', () => {
+    // Used to assert CoderInfo.StorageClass appeared in the Breakpoint's "Other".
+    // core v1.22.0 gave Simulink.Breakpoint a modeled `storageClass`, and schemaBridge
+    // marks the FIRST path segment as shown — so modelling CoderInfo.StorageClass
+    // suppresses the whole CoderInfo bag, and Storage Class appears as a real row
+    // instead. That is the intended convergence, not a loss: Simulink.Parameter and
+    // Simulink.Signal have modeled storageClass all along and have never shown
+    // CoderInfo.* here, so the same rule now covers all four classes rather than two.
+    //
+    // The cost is explicit: CSCPackageName, CustomStorageClass and ParameterOrSignal are
+    // no longer displayed for a Breakpoint. They were already undisplayed for Parameter
+    // and Signal, so no class of data becomes invisible that was visible elsewhere.
+    const root = load('test://pi_bag.sldd', 'mcos/all.sldd');
+    for (const cls of ['ParameterNode', 'SignalNode', 'LookupTableNode', 'BreakpointNode']) {
+      const node = firstOfClass(root, cls);
+      const groups = buildPropertyGroups(node);
+      const other = groups.find((g) => g.title === 'Other');
+      const otherNames = other ? other.properties.map((p) => p.name) : [];
+      // The raw bag is present in the file for all four — so its absence below is
+      // suppression, not a fixture that happens to lack it.
+      expect(Object.keys(node.serial._properties as Record<string, unknown>), cls).toContain('CoderInfo');
+      expect(otherNames.filter((n) => n.startsWith('CoderInfo.')), cls).toEqual([]);
+      const codeGen = groups.find((g) => g.title === 'Code Generation');
+      expect(codeGen!.properties.map((p) => p.name), cls).toContain('Storage Class');
+    }
   });
 
   it('marks every property read-only because V1 cannot write back from the panel', () => {
