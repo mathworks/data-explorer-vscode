@@ -6,7 +6,9 @@
 // unchanged — these tests exist to reach the grammar's edge cases without paying
 // for a happy-dom component mount per case, and to cover the module in isolation.
 import { describe, it, expect } from 'vitest';
-import { parseFilterExpression, filterRows, SUBSTRING_FILTER_COLUMNS } from '../src/webview/rowFilter.js';
+import {
+  parseFilterExpression, filterRows, formatToken, removeToken, SUBSTRING_FILTER_COLUMNS,
+} from '../src/webview/rowFilter.js';
 
 interface Row {
   ID: string;
@@ -310,5 +312,35 @@ describe('the = rule', () => {
     const { predicates, tokens } = parseFilterExpression('Value>abc', COLUMNS, getCellText, VOCAB);
     expect(predicates).toEqual([]);
     expect(tokens[0].warning).toBe('non-numeric-bound');
+  });
+});
+
+describe('formatToken and removeToken', () => {
+  it('quotes a label or value only when it needs quoting', () => {
+    expect(formatToken('Name', 'contains', 'abc')).toBe('Name:abc');
+    expect(formatToken('Data Type', '=', 'double')).toBe('"Data Type"=double');
+    expect(formatToken('Name', '=', 'my var')).toBe('Name="my var"');
+    expect(formatToken('Value', '>', '10')).toBe('Value>10');
+  });
+
+  it('round-trips through the parser to the same column, op and value', () => {
+    const VOCAB = { labels: { DataType: 'Data Type' }, keys: ['DataType'] };
+    const text = formatToken('Data Type', '!=', 'my type');
+    const { tokens } = parseFilterExpression(text, ['DataType'], getCellText, VOCAB);
+    expect(tokens[0]).toMatchObject({ column: 'DataType', op: '!=', value: 'my type' });
+  });
+
+  it('removes one token and leaves the rest re-parsing unchanged', () => {
+    const text = 'abc Name=x Value>1';
+    const { tokens } = parseFilterExpression(text, COLUMNS, getCellText);
+    expect(removeToken(text, tokens[1])).toBe('abc Value>1');
+    expect(removeToken(text, tokens[0])).toBe('Name=x Value>1');
+    expect(removeToken(text, tokens[2])).toBe('abc Name=x');
+  });
+
+  it('does not disturb whitespace inside a quoted value', () => {
+    const text = 'Name="my  var" abc';
+    const { tokens } = parseFilterExpression(text, COLUMNS, getCellText);
+    expect(removeToken(text, tokens[1])).toBe('Name="my  var"');
   });
 });

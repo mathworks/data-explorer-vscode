@@ -351,3 +351,31 @@ export function filterRows<T extends FilterableRow>(
 
   return rows.filter((r) => includeSet.has(r.ID));
 }
+
+// Quote only what has to be quoted: a space would otherwise split the token in
+// two, and a quote character would confuse the scanner's quote tracking.
+function quoteIfNeeded(s: string): string {
+  return /[\s"]/.test(s) ? `"${s.replace(/"/g, '')}"` : s;
+}
+
+/**
+ * The text one condition is spelled as. Used BOTH by the header popup's `writes:`
+ * preview and by the text it applies, so the preview cannot promise one thing and
+ * do another — and by nothing else, so there is one speller.
+ */
+export function formatToken(columnLabel: string, op: FilterOp, value: string): string {
+  const lhs = quoteIfNeeded(columnLabel);
+  const rhs = quoteIfNeeded(value);
+  return op === 'contains' ? `${lhs}:${rhs}` : `${lhs}${op}${rhs}`;
+}
+
+/**
+ * `text` with one token spliced out, closing the gap it leaves. Splices by SPAN
+ * rather than re-serializing the survivors, so a value's own spacing and quoting
+ * come through untouched.
+ */
+export function removeToken(text: string, token: FilterToken): string {
+  const before = text.slice(0, token.start).replace(/\s+$/, '');
+  const after = text.slice(token.end).replace(/^\s+/, '');
+  return before && after ? `${before} ${after}` : before || after;
+}
