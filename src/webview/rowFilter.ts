@@ -37,6 +37,41 @@ export interface FilterableRow {
 // another.
 export type FilterTerm = { column: string | null; text: string };
 
+/** Every comparison the box understands. `~=` is normalized to `!=`. */
+export type FilterOp = 'contains' | '=' | '!=' | '>' | '<' | '>=' | '<=';
+
+/**
+ * One condition the user typed. Emitted alongside the predicates so the chip
+ * strip, the highlighter and the header popup all read the same answer.
+ */
+export interface FilterToken {
+  /** Exactly as typed, so Backspace can round-trip a chip back into the input. */
+  raw: string;
+  /** Span in the source text. Removing a chip is a splice, not a re-serialize. */
+  start: number;
+  end: number;
+  /** Resolved column key; null means "every visible column" (a bare term). */
+  column: string | null;
+  /** What the chip shows. Null for a bare term. */
+  columnLabel: string | null;
+  op: FilterOp;
+  /** Unquoted, as typed. Empty is legal: `Unit=` asks for empty cells. */
+  value: string;
+  /**
+   * Why this token is not doing what its text appears to ask.
+   *   'unknown-column'    — `notacol:abc`; DOES filter, but as ordinary text
+   *   'non-numeric-bound' — `Value>abc`; contributes no predicate at all
+   */
+  warning?: 'unknown-column' | 'non-numeric-bound';
+}
+
+/** The columns a table has, and the label each one prints in its header. */
+export interface ColumnVocabulary {
+  labels: Record<string, string> | null;
+  /** Every column the table has, visible or not. Null = do not restrict. */
+  keys: string[] | null;
+}
+
 // Search prefixes that mean "substring-match this ONE column", and the column
 // each names. `type:` deliberately reads DataType — the prefix is what the user
 // types, the column is what the table calls it, and they are not the same word.
@@ -57,6 +92,33 @@ export const SUBSTRING_FILTER_COLUMNS = new Map<string, string>([
   ['kind', 'Kind'],
   ['status', 'Status'],
 ]);
+
+// Header label (lowercased) → column key. Built per parse from the table's own
+// columns, so a prefix is always the name printed on the header the user is
+// looking at — and so a `.prj` table resolves `Type` to its own Type column
+// rather than to the dictionary's DataType.
+function buildLabelMap(vocab?: ColumnVocabulary): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!vocab) return map;
+  const keys = vocab.keys ?? (vocab.labels ? Object.keys(vocab.labels) : []);
+  for (const key of keys) {
+    map.set((vocab.labels?.[key] ?? key).toLowerCase(), key);
+  }
+  return map;
+}
+
+// Resolves the text before an operator to a column, label first and legacy alias
+// second. A legacy alias must also EXIST in this table: `type:` means DataType in
+// a dictionary, and in a project table (Name/Type/Location/Labels) it must not
+// silently match nothing while naming a column that is on screen.
+function resolveColumn(prefix: string, labelMap: Map<string, string>, vocab?: ColumnVocabulary): string | null {
+  const byLabel = labelMap.get(prefix);
+  if (byLabel) return byLabel;
+  const alias = prefix === 'value' ? 'Value' : SUBSTRING_FILTER_COLUMNS.get(prefix);
+  if (!alias) return null;
+  if (vocab?.keys && !vocab.keys.includes(alias)) return null;
+  return alias;
+}
 
 // Compiles the search box text into the row predicates AND the terms to
 // highlight, in one pass over the tokens. Highlighting used to re-derive its
