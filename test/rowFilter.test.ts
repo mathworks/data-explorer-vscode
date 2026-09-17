@@ -111,14 +111,19 @@ describe('parseFilterExpression', () => {
     expect(predicates[0](row('a', null, { Value: '5' }))).toBe(true);
   });
 
-  it('value:"..." is an exact match, distinct from the substring form', () => {
-    const { predicates: exact } = parseFilterExpression('value:"5"', COLUMNS, getCellText);
+  it('a quoted value groups, it does not mean exact — = is what does', () => {
+    // The one grammar exception that used to live here: `value:"5"` was exact AND
+    // case-sensitive while its five sibling prefixes were neither. Now quoting only
+    // holds a phrase together, and `=` is the operator that means exactly.
+    const { predicates: quoted } = parseFilterExpression('value:"5"', COLUMNS, getCellText);
+    expect(quoted[0](row('a', null, { Value: '15' }))).toBe(true);
+
+    const VOCAB = { labels: { Value: 'Value' }, keys: COLUMNS };
+    const { predicates: exact } = parseFilterExpression('Value=5', COLUMNS, getCellText, VOCAB);
     expect(exact[0](row('a', null, { Value: '5' }))).toBe(true);
     expect(exact[0](row('a', null, { Value: '15' }))).toBe(false);
-    expect(exact[0](row('a', null, { Value: '5.0' }))).toBe(false);
-
-    const { predicates: sub } = parseFilterExpression('value:5', COLUMNS, getCellText);
-    expect(sub[0](row('a', null, { Value: '15' }))).toBe(true);
+    // Numeric, so a differently-spelled 5 still counts.
+    expect(exact[0](row('a', null, { Value: '5.0' }))).toBe(true);
   });
 
   it('col: prefixes resolve through SUBSTRING_FILTER_COLUMNS, case-insensitively', () => {
