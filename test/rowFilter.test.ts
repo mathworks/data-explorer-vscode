@@ -286,6 +286,69 @@ describe('the operator scanner', () => {
   });
 });
 
+// A user types the prefix off the header they are looking at, and that header says
+// `Data Type`, not `"Data Type"`. Without this the space split the label in two and
+// `Data Type:double` silently became `Data` AND `Type:double` — two conditions, one
+// of them a stray word, which reads as the filter being broken.
+describe('a header label with a space, unquoted', () => {
+  const VOCAB = {
+    labels: { Name: 'Name', Value: 'Value', DataType: 'Data Type', lastModified: 'Last Modified', lastModifiedBy: 'Last Modified By' },
+    keys: [...COLUMNS, 'lastModified', 'lastModifiedBy'],
+  };
+
+  it('reads the whole label as the prefix', () => {
+    const { tokens } = parseFilterExpression('Data Type:double', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]).toMatchObject({ column: 'DataType', op: 'contains', value: 'double', raw: 'Data Type:double' });
+  });
+
+  it('works for every operator, and case-insensitively', () => {
+    for (const [text, op] of [['Data Type=double', '='], ['data type!=double', '!='], ['DATA TYPE:double', 'contains']] as const) {
+      const { tokens } = parseFilterExpression(text, COLUMNS, getCellText, VOCAB);
+      expect(tokens).toHaveLength(1);
+      expect(tokens[0]).toMatchObject({ column: 'DataType', op });
+    }
+  });
+
+  it('prefers the longest label, so Last Modified By is not Last Modified + By', () => {
+    const { tokens } = parseFilterExpression('Last Modified By:ww', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]).toMatchObject({ column: 'lastModifiedBy', value: 'ww' });
+  });
+
+  it('keeps a quoted value together after an unquoted label', () => {
+    const { tokens } = parseFilterExpression('Data Type="fixed point"', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]).toMatchObject({ column: 'DataType', op: '=', value: 'fixed point' });
+  });
+
+  it('leaves the same words alone when no operator follows them', () => {
+    const { tokens } = parseFilterExpression('Data Type', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(2);
+    expect(tokens.map((t) => t.column)).toEqual([null, null]);
+    expect(tokens.map((t) => t.value)).toEqual(['Data', 'Type']);
+  });
+
+  it('records one span covering the label, so its chip removes in one go', () => {
+    const text = 'abc Data Type:double Value>1';
+    const { tokens } = parseFilterExpression(text, COLUMNS, getCellText, VOCAB);
+    expect(tokens.map((t) => text.slice(t.start, t.end))).toEqual(['abc', 'Data Type:double', 'Value>1']);
+    expect(removeToken(text, tokens[1])).toBe('abc Value>1');
+  });
+
+  it('tolerates a double space inside the label', () => {
+    const { tokens } = parseFilterExpression('Data  Type:double', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]).toMatchObject({ column: 'DataType', value: 'double' });
+  });
+
+  it('is not fooled by a quoted phrase that happens to start with a label', () => {
+    const { tokens } = parseFilterExpression('"Data Type: double"', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]).toMatchObject({ column: null, value: 'Data Type: double' });
+  });
+});
+
 describe('the = rule', () => {
   const VOCAB = { labels: { Name: 'Name', Value: 'Value' }, keys: COLUMNS };
   const match = (text: string, r: Row) =>

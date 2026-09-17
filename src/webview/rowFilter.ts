@@ -130,6 +130,31 @@ function unquote(s: string): string {
 
 const OP_CHARS = new Set([':', '=', '<', '>', '!', '~']);
 
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// One sticky alternation of every header label that CONTAINS A SPACE, so the
+// tokenizer can keep such a label in one token. Whitespace splits tokens, and a
+// user types the prefix off the header they are reading — which says `Data Type`,
+// not `"Data Type"`. Without this, `Data Type:double` parsed as the bare word
+// `Data` AND `Type:double`: two conditions ANDed, one of them a word the user
+// never meant to search for, so the query returned less than it should have while
+// showing a chip that looked right.
+//
+// Longest first, or `Last Modified By:ww` would match `Last Modified` and leave
+// `By:ww` behind. The lookahead is what keeps this from stealing ordinary text:
+// the label only counts as a prefix when an operator follows it immediately, so
+// `Data Type` on its own stays two words to search for.
+function buildMultiWordLabelRe(labelMap: Map<string, string>): RegExp | null {
+  const labels = [...labelMap.keys()].filter((l) => /\s/.test(l)).sort((a, b) => b.length - a.length);
+  if (labels.length === 0) return null;
+  // `\s+` between the words: the label came off a header, so a double space there
+  // is a typo rather than a different question.
+  const alts = labels.map((l) => l.trim().split(/\s+/).map(escapeRe).join('\\s+'));
+  return new RegExp(`(?:${alts.join('|')})(?=[:=<>!~])`, 'iy');
+}
+
 interface OpHit {
   /** Where the prefix ends, i.e. the operator's first character. */
   prefixEnd: number;
@@ -219,12 +244,39 @@ export function parseFilterExpression<T extends FilterableRow>(
     if (term) terms.push({ column, text: term });
   };
 
-  for (const m of text.matchAll(/(?:[^\s"]+|"[^"]*")+/g)) {
-    const raw = m[0];
-    const start = m.index;
-    const end = start + raw.length;
+  const multiWordLabelRe = buildMultiWordLabelRe(labelMap);
+  // Chunks up front rather than a streaming matchAll: a multi-word label spans a
+  // whitespace boundary, so this loop sometimes has to swallow the NEXT chunk too.
+  const chunks = [...text.matchAll(/(?:[^\s"]+|"[^"]*")+/g)].map((m) => ({
+    raw: m[0],
+    start: m.index,
+    end: m.index + m[0].length,
+  }));
+
+  for (let ci = 0; ci < chunks.length; ci++) {
+    let { raw, start, end } = chunks[ci];
+    if (multiWordLabelRe) {
+      multiWordLabelRe.lastIndex = start;
+      const label = multiWordLabelRe.exec(text);
+      if (label) {
+        // The operator sits in a later chunk (the label's own space ended this
+        // one). Extend the token to the end of THAT chunk, so the value comes with
+        // it and the recorded span still covers exactly what the chip removes.
+        const opAt = start + label[0].length;
+        const opChunk = chunks.findIndex((c, i) => i >= ci && c.start <= opAt && opAt < c.end);
+        if (opChunk !== -1) {
+          end = chunks[opChunk].end;
+          raw = text.slice(start, end);
+          ci = opChunk;
+        }
+      }
+    }
     const hit = findOperator(raw);
-    const column = hit ? resolveColumn(unquote(raw.slice(0, hit.prefixEnd)).toLowerCase(), labelMap, vocabulary) : null;
+    // Whitespace in the prefix is collapsed before resolving, because the label
+    // scanner above accepts `Data  Type:x` and the label map holds one space. The
+    // two have to agree or a tolerated typo resolves to no column at all.
+    const prefix = hit ? unquote(raw.slice(0, hit.prefixEnd)).toLowerCase().replace(/\s+/g, ' ') : '';
+    const column = hit ? resolveColumn(prefix, labelMap, vocabulary) : null;
 
     // No operator, or a prefix that names no column: the whole token is text,
     // colon included. `constructor:` is ordinary text a user may well look for.
