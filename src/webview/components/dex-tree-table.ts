@@ -9,6 +9,8 @@ import {
   type FilterOp, type FilterTerm, type FilterToken,
 } from '../rowFilter.js';
 import './dex-column-filter.js';
+import './dex-filter-bar.js';
+import type { DexFilterBar } from './dex-filter-bar.js';
 import './dex-icon.js';
 import './dex-matrix-open.js';
 import type { MatrixPayload } from './dex-matrix-grid.js';
@@ -313,22 +315,11 @@ export class DexTreeTable extends LitElement {
         border-color: var(--dex-color-accent, #0078d4);
       }
 
-      .filter-input {
+      /* The bar draws its own border, background and focus ring (dex-filter-bar.ts);
+         all this side owns is how much of the row it takes. */
+      dex-filter-bar {
         flex: 1 1 auto;
         min-width: 0;
-        width: 100%;
-        height: 24px;
-        padding: 2px 8px;
-        border: 1px solid var(--dex-border-color, #d0d0d0);
-        border-radius: 3px;
-        font-size: 12px;
-        font-family: inherit;
-        box-sizing: border-box;
-        outline: none;
-      }
-
-      .filter-input:focus {
-        border-color: var(--dex-color-accent, #0078d4);
       }
 
       .table-container {
@@ -1274,7 +1265,7 @@ export class DexTreeTable extends LitElement {
   private _dragOverColId: string | null = null;
   private _dragOverSide: 'left' | 'right' | null = null;
 
-  @query('.filter-input') private _filterInput!: HTMLInputElement;
+  @query('dex-filter-bar') private _filterBar?: DexFilterBar;
   @query('.table-container') private _container!: HTMLElement;
 
   private get _rowH(): number {
@@ -1718,8 +1709,11 @@ export class DexTreeTable extends LitElement {
   // The ONE place the applied text changes. Everything that filters — Enter, popup
   // Apply, Escape — goes through here, so "a new search resets the sticky rows" is
   // stated once instead of at four call sites.
+  // Trimmed here rather than at each caller: the bar trims every tail it commits, but
+  // removing a chip splices a span out of the text and can leave an edge space behind,
+  // and a leading space would make the applied text differ from what the chips say.
   private _setFilterText(text: string): void {
-    this._filterText = text;
+    this._filterText = text.trim();
     this._newSearch();
   }
 
@@ -2763,26 +2757,11 @@ export class DexTreeTable extends LitElement {
     }
   }
 
-  /** Focus (and select) the search/filter input — e.g. for a Ctrl+F shortcut. */
+  /** Focus (and select) the search input — e.g. for a Ctrl+F shortcut. */
   focusFilter(): void {
-    const input = this._filterInput;
-    if (!input) return;
-    input.focus();
-    input.select();
-  }
-
-  private _onFilterInput(e: Event): void {
-    this._setFilterText((e.target as HTMLInputElement).value.trim());
-  }
-
-  private _onFilterKeyDown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') {
-      // The box is cleared directly as well as through the binding: Escape on an
-      // already-empty filter leaves _filterText unchanged, and then the binding has
-      // nothing to commit and whitespace the user typed would stay on screen.
-      this._filterInput.value = '';
-      this._setFilterText('');
-    }
+    // Forwarded rather than reached into: the input lives in the bar's shadow root,
+    // and table-main.ts only knows about this method.
+    this._filterBar?.focusInput();
   }
 
   // Touching the box is the user asking for a fresh answer, so the rows the previous
@@ -3234,14 +3213,11 @@ export class DexTreeTable extends LitElement {
   private _renderFilterBar() {
     return html`
       <div class="filter-bar">
-        <input
-          type="search"
-          class="filter-input"
-          placeholder="Search"
-          .value=${this._filterText}
-          @input=${this._onFilterInput}
-          @keydown=${this._onFilterKeyDown}
-        />
+        <dex-filter-bar
+          .text=${this._filterText}
+          .tokens=${this._filterTokens}
+          @dex-filter-applied=${(e: CustomEvent) => this._setFilterText((e.detail as { text: string }).text)}
+        ></dex-filter-bar>
         ${this._renderColumnsButton()}
       </div>
     `;
