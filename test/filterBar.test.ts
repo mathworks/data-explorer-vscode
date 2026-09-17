@@ -106,3 +106,82 @@ describe('dex-filter-bar', () => {
     expect(seen).toEqual(['abc Value>10']);
   });
 });
+
+describe('dex-filter-bar keyboard', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('typing proposes nothing; Enter proposes', async () => {
+    const el = await bar();
+    const seen = applied(el);
+    await type(el, 'gain');
+    expect(seen).toEqual([]);
+    await press(el, 'Enter');
+    expect(seen).toEqual(['gain']);
+  });
+
+  it('appends the tail to what is already applied and clears the tail', async () => {
+    const el = await bar('abc');
+    const seen = applied(el);
+    await type(el, 'Name:gain');
+    await press(el, 'Enter');
+    expect(seen).toEqual(['abc Name:gain']);
+    expect(input(el).value).toBe('');
+  });
+
+  it('one Enter can commit several conditions at once', async () => {
+    const el = await bar();
+    const seen = applied(el);
+    await type(el, 'Name:a Value>1');
+    await press(el, 'Enter');
+    // Two chips once the table re-parses; here, one proposal holding both.
+    expect(seen).toEqual(['Name:a Value>1']);
+  });
+
+  it('Enter on an empty tail proposes nothing', async () => {
+    const el = await bar('abc');
+    const seen = applied(el);
+    await press(el, 'Enter');
+    expect(seen).toEqual([]);
+  });
+
+  it('shows the ⏎ hint only while a tail is pending', async () => {
+    const el = await bar();
+    expect(el.shadowRoot!.querySelector('.pending-hint')).toBeNull();
+    await type(el, 'ga');
+    expect(el.shadowRoot!.querySelector('.pending-hint')!.textContent).toContain('to filter');
+    await press(el, 'Enter');
+    expect(el.shadowRoot!.querySelector('.pending-hint')).toBeNull();
+  });
+
+  it('Backspace at the start of an empty tail pops the last chip back as text', async () => {
+    const el = await bar('abc Name~=gain');
+    const seen = applied(el);
+    input(el).setSelectionRange(0, 0);
+    await press(el, 'Backspace');
+    // The user's own spelling comes back, `~=` and all — not the normalized `!=`.
+    expect(input(el).value).toBe('Name~=gain');
+    expect(seen).toEqual(['abc']);
+  });
+
+  it('Backspace with a tail present deletes text, not a chip', async () => {
+    const el = await bar('abc');
+    const seen = applied(el);
+    await type(el, 'g');
+    input(el).setSelectionRange(1, 1);
+    await press(el, 'Backspace');
+    expect(seen).toEqual([]);
+  });
+
+  it('Escape clears a pending tail first and the filter second', async () => {
+    const el = await bar('abc');
+    const seen = applied(el);
+    await type(el, 'gain');
+    await press(el, 'Escape');
+    expect(input(el).value).toBe('');
+    expect(seen).toEqual([]);
+    await press(el, 'Escape');
+    expect(seen).toEqual(['']);
+  });
+});
