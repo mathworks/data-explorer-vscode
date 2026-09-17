@@ -4,7 +4,13 @@ import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { highContrastStyles } from './styles/high-contrast.styles.js';
 import { dragModeFromModifiers, type DragMode } from './dragMode.js';
-import { filterRows, parseFilterExpression, type FilterTerm } from '../rowFilter.js';
+import {
+  filterRows, formatToken, parseFilterExpression, removeToken,
+  type FilterOp, type FilterTerm, type FilterToken,
+} from '../rowFilter.js';
+import './dex-column-filter.js';
+import './dex-filter-bar.js';
+import type { DexFilterBar } from './dex-filter-bar.js';
 import './dex-icon.js';
 import './dex-matrix-open.js';
 import type { MatrixPayload } from './dex-matrix-grid.js';
@@ -259,6 +265,18 @@ function groupBlockLinks(links: unknown): BlockLinkGroup[] {
   return groups;
 }
 
+// Words rather than glyphs: this is a sentence, and `Data Type ≠ double` inside one
+// reads as a typo.
+const OP_WORD_TEXT: Record<FilterOp, string> = {
+  contains: 'containing',
+  '=': 'equal to',
+  '!=': 'not equal to',
+  '>': 'greater than',
+  '<': 'less than',
+  '>=': 'at least',
+  '<=': 'at most',
+};
+
 @customElement('dex-tree-table')
 export class DexTreeTable extends LitElement {
   static override styles = [
@@ -309,22 +327,11 @@ export class DexTreeTable extends LitElement {
         border-color: var(--dex-color-accent, #0078d4);
       }
 
-      .filter-input {
+      /* The bar draws its own border, background and focus ring (dex-filter-bar.ts);
+         all this side owns is how much of the row it takes. */
+      dex-filter-bar {
         flex: 1 1 auto;
         min-width: 0;
-        width: 100%;
-        height: 24px;
-        padding: 2px 8px;
-        border: 1px solid var(--dex-border-color, #d0d0d0);
-        border-radius: 3px;
-        font-size: 12px;
-        font-family: inherit;
-        box-sizing: border-box;
-        outline: none;
-      }
-
-      .filter-input:focus {
-        border-color: var(--dex-color-accent, #0078d4);
       }
 
       .table-container {
@@ -499,6 +506,46 @@ export class DexTreeTable extends LitElement {
 
       th.drag-over-right {
         box-shadow: inset -3px 0 0 0 var(--dex-color-accent, #0078d4);
+      }
+
+      /* Hidden until the header is hovered or the button itself is focused, so
+         eighteen funnels do not compete with eighteen labels; always visible once
+         that column is actually filtered, because then it is state, not an affordance. */
+      .th-filter {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        padding: 0;
+        border: none;
+        border-radius: 2px;
+        background: none;
+        color: inherit;
+        cursor: pointer;
+        opacity: 0;
+        outline: none;
+      }
+
+      th:hover .th-filter,
+      .th-filter:focus-visible,
+      .th-filter.active {
+        opacity: 0.75;
+      }
+
+      .th-filter:hover {
+        opacity: 1;
+        background: var(--dex-bg-hover, #e8e8e8);
+      }
+
+      .th-filter.active {
+        color: var(--dex-color-accent, #0078d4);
+        opacity: 1;
+      }
+
+      .th-filter:focus-visible {
+        outline: 1px solid var(--dex-color-accent, #0078d4);
       }
 
       .column-menu {
@@ -1141,7 +1188,7 @@ export class DexTreeTable extends LitElement {
   @state() private _expandedIds: Set<string> = new Set();
   @state() private _filterText = '';
   // Not @state: derived from _filterText, and keyed by it so it cannot go stale.
-  private _filterTermsCache: { text: string; terms: FilterTerm[] } | null = null;
+  private _filterParseCache: { text: string; terms: FilterTerm[]; tokens: FilterToken[] } | null = null;
   // Rows kept in the filtered list although they no longer match, because the user
   // edited them there. Written by installRows (table-main.ts) on every repaint from
   // nextStickyIds; dropped here the moment the user searches again.
@@ -1209,6 +1256,12 @@ export class DexTreeTable extends LitElement {
   @state() private _menuDragOverCol: string | null = null;
   @state() private _menuDragOverSide: 'top' | 'bottom' | null = null;
 
+  // The column whose filter popup is open, null when none is. Anchored in
+  // viewport coordinates because the popup is position:fixed, like the column menu.
+  @state() private _filterPopupCol: string | null = null;
+  @state() private _filterPopupX = 0;
+  @state() private _filterPopupY = 0;
+
   private _resizingCol: string | null = null;
   private _resizeStartX = 0;
   private _resizeStartWidth = 0;
@@ -1224,7 +1277,7 @@ export class DexTreeTable extends LitElement {
   private _dragOverColId: string | null = null;
   private _dragOverSide: 'left' | 'right' | null = null;
 
-  @query('.filter-input') private _filterInput!: HTMLInputElement;
+  @query('dex-filter-bar') private _filterBar?: DexFilterBar;
   @query('.table-container') private _container!: HTMLElement;
 
   private get _rowH(): number {
@@ -1272,14 +1325,23 @@ export class DexTreeTable extends LitElement {
     if (this._columnMenuOpen) {
       this._columnMenuOpen = false;
     }
+    this._filterPopupCol = null;
   }
 
   private _onDocumentClick(e: Event): void {
+    const path = e.composedPath();
     if (this._columnMenuOpen) {
-      const path = e.composedPath();
       const menu = this.shadowRoot?.querySelector('.column-menu');
       if (menu && !path.includes(menu)) {
         this._columnMenuOpen = false;
+      }
+    }
+    if (this._filterPopupCol) {
+      // composedPath, not `contains`: the popup's controls live in its own shadow
+      // root, so a click on Apply is not a descendant of the host in the light DOM.
+      const popup = this.shadowRoot?.querySelector('dex-column-filter');
+      if (popup && !path.includes(popup)) {
+        this._filterPopupCol = null;
       }
     }
   }
@@ -1596,6 +1658,87 @@ export class DexTreeTable extends LitElement {
     this._columnMenuOpen = true;
   }
 
+  // --- Per-column filter popup ---
+
+  // Right-click, or the funnel button, on a column header. Prefills from the
+  // token the applied text already holds for this column, so opening a filtered
+  // column twice edits its condition instead of stacking a second one.
+  private _openColumnFilter(col: string, anchor: HTMLElement): void {
+    const rect = anchor.getBoundingClientRect();
+    this._filterPopupX = Math.min(rect.left, Math.max(0, window.innerWidth - 260));
+    this._filterPopupY = rect.bottom + 2;
+    this._filterPopupCol = col;
+    this._columnMenuOpen = false;
+  }
+
+  private _onHeaderContextMenu(col: string, e: MouseEvent): void {
+    // preventDefault suppresses the native menu; stopPropagation keeps the
+    // container's own contextmenu handler out of it.
+    e.preventDefault();
+    e.stopPropagation();
+    this._openColumnFilter(col, e.currentTarget as HTMLElement);
+  }
+
+  private _onFunnelClick(col: string, e: MouseEvent): void {
+    // Without stopPropagation the click reaches the <th> and SORTS the column —
+    // opening a filter must not reorder the table under the user.
+    e.preventDefault();
+    e.stopPropagation();
+    if (this._filterPopupCol === col) {
+      this._filterPopupCol = null;
+      return;
+    }
+    this._openColumnFilter(col, (e.currentTarget as HTMLElement).closest('th') as HTMLElement);
+  }
+
+  /** The token in the applied text scoped to `col`, if there is one. */
+  private _tokenForColumn(col: string): FilterToken | undefined {
+    return this._filterTokens.find((t) => t.column === col);
+  }
+
+  // Splice the condition for `col` into the applied text: in place if the column
+  // already has one, appended otherwise. Appending unconditionally would build
+  // `Name:a Name:b` — two conditions ANDed, so nothing matches, which reads as a
+  // bug rather than as a replaced filter.
+  private _applyColumnFilter(col: string, op: FilterOp, value: string): void {
+    const label = this.columnLabels?.[col] || col;
+    const text = formatToken(label, op, value);
+    const existing = this._tokenForColumn(col);
+    const next = existing
+      ? `${this._filterText.slice(0, existing.start)}${text}${this._filterText.slice(existing.end)}`
+      : this._filterText
+        ? `${this._filterText} ${text}`
+        : text;
+    this._setFilterText(next);
+  }
+
+  private _clearColumnFilter(col: string): void {
+    const existing = this._tokenForColumn(col);
+    if (existing) this._setFilterText(removeToken(this._filterText, existing));
+    this._filterPopupCol = null;
+  }
+
+  // The ONE place the applied text changes. Everything that filters — Enter, popup
+  // Apply, Escape — goes through here, so "a new search resets the sticky rows" is
+  // stated once instead of at four call sites.
+  // Trimmed here rather than at each caller: the bar trims every tail it commits, but
+  // removing a chip splices a span out of the text and can leave an edge space behind,
+  // and a leading space would make the applied text differ from what the chips say.
+  private _setFilterText(text: string): void {
+    this._filterText = text.trim();
+    this._newSearch();
+  }
+
+  private _onColumnFilterApplied(e: CustomEvent): void {
+    const { column, op, value } = e.detail as { column: string; op: FilterOp; value: string };
+    this._applyColumnFilter(column, op, value);
+    this._filterPopupCol = null;
+  }
+
+  private _onColumnFilterCleared(e: CustomEvent): void {
+    this._clearColumnFilter((e.detail as { column: string }).column);
+  }
+
   private _toggleColumnVisibility(col: string): void {
     if (col === 'Name') return;
     const updated = new Set(this._hiddenColumns);
@@ -1725,6 +1868,41 @@ export class DexTreeTable extends LitElement {
     const entry = this._sortState.find((s) => s.column === col);
     if (!entry) return nothing;
     return html`<span class="sort-indicator">${entry.direction === 'asc' ? '▲' : '▼'}</span>`;
+  }
+
+  // The standing cue that a column is filterable: faint on hover, solid while that
+  // column has a condition. A real <button> so Tab reaches it and Shift+F10 on it
+  // opens the same popup (the browser synthesizes contextmenu on that key), which
+  // is the keyboard path without making eighteen <th>s focusable.
+  //
+  // There is no funnel in the icon set, so the glyph is inline SVG drawn in
+  // currentColor — it inherits the header's colour and therefore themes for free.
+  private _renderFunnel(col: string) {
+    const label = this.columnLabels?.[col] || col;
+    const active = this._tokenForColumn(col) !== undefined;
+    return html`
+      <button
+        type="button"
+        class="th-filter ${active ? 'active' : ''}"
+        tabindex="0"
+        title=${active ? `Filtered. Edit the filter on ${label}` : `Filter ${label}`}
+        aria-label=${`Filter ${label}`}
+        aria-haspopup="true"
+        aria-expanded=${this._filterPopupCol === col}
+        @click=${(e: MouseEvent) => this._onFunnelClick(col, e)}
+        @contextmenu=${(e: MouseEvent) => this._onHeaderContextMenu(col, e)}
+        @mousedown=${(e: MouseEvent) => e.stopPropagation()}
+      >
+        <svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
+          <path
+            d="M2 3h12l-4.6 5.4V13L6.6 11.4V8.4z"
+            fill=${active ? 'currentColor' : 'none'}
+            stroke="currentColor"
+            stroke-width="1.2"
+          />
+        </svg>
+      </button>
+    `;
   }
 
   // Sort a group of sibling rows in place. Sorting must never cross
@@ -1938,31 +2116,50 @@ export class DexTreeTable extends LitElement {
   // MEANS belongs here, emitted to both consumers together, rather than being
   // guessed a second time at render.
   private _parseFilterExpression(text: string): {
+    tokens: FilterToken[];
     predicates: Array<(row: TreeTableRow) => boolean>;
     terms: FilterTerm[];
   } {
     // An unqualified term matches against every visible column, so the search
-    // stays in sync with whatever columns the user actually sees (Class, Kind,
-    // etc.) instead of a hardcoded subset. `_getCellText` is passed rather than
-    // reached for inside rowFilter.ts because reading a cell's text depends on
-    // cell shape, which is this component's concern, not the grammar's.
-    return parseFilterExpression(text, this._visibleColumns, (row, col) => this._getCellText(row, col));
+    // stays in sync with whatever columns the user actually sees. The VOCABULARY,
+    // by contrast, is every column the table has — a `Unit=` typed by hand has to
+    // work with Unit hidden, and only a bare term is limited to what is on screen.
+    // `_getCellText` is passed rather than reached for inside rowFilter.ts because
+    // reading a cell's text depends on cell shape, which is this component's
+    // concern, not the grammar's.
+    return parseFilterExpression(text, this._visibleColumns, (row, col) => this._getCellText(row, col), {
+      labels: this.columnLabels,
+      keys: this.columns,
+    });
   }
 
-  // The terms behind the current search, cached because _highlight runs once per
-  // rendered cell and the tokens only change when the box does.
-  private get _filterTerms(): FilterTerm[] {
-    if (this._filterTermsCache?.text !== this._filterText) {
-      this._filterTermsCache = { text: this._filterText, terms: this._parseFilterExpression(this._filterText).terms };
+  // The parse behind the current search, cached because _highlight runs once per
+  // rendered cell and the chips render once per repaint, while the tokens only
+  // change when the box does.
+  private get _filterParse(): { terms: FilterTerm[]; tokens: FilterToken[] } {
+    if (this._filterParseCache?.text !== this._filterText) {
+      const { terms, tokens } = this._parseFilterExpression(this._filterText);
+      this._filterParseCache = { text: this._filterText, terms, tokens };
     }
-    return this._filterTermsCache.terms;
+    return this._filterParseCache;
+  }
+
+  private get _filterTerms(): FilterTerm[] {
+    return this._filterParse.terms;
+  }
+
+  private get _filterTokens(): FilterToken[] {
+    return this._filterParse.tokens;
   }
 
   private _filterRows(rows: TreeTableRow[], text: string): TreeTableRow[] {
     // `_stickyRowIds` is passed rather than reached for inside rowFilter.ts
     // because it is this component's edit-tracking state, not part of the
     // grammar (see nextStickyIds in rowUpdates.ts).
-    return filterRows(rows, text, this._visibleColumns, (row, col) => this._getCellText(row, col), this._stickyRowIds);
+    return filterRows(
+      rows, text, this._visibleColumns, (row, col) => this._getCellText(row, col), this._stickyRowIds,
+      { labels: this.columnLabels, keys: this.columns },
+    );
   }
 
   private _flattenToVisible(rows: TreeTableRow[]): TreeTableRow[] {
@@ -2572,25 +2769,11 @@ export class DexTreeTable extends LitElement {
     }
   }
 
-  /** Focus (and select) the search/filter input — e.g. for a Ctrl+F shortcut. */
+  /** Focus (and select) the search input — e.g. for a Ctrl+F shortcut. */
   focusFilter(): void {
-    const input = this._filterInput;
-    if (!input) return;
-    input.focus();
-    input.select();
-  }
-
-  private _onFilterInput(e: Event): void {
-    this._filterText = (e.target as HTMLInputElement).value.trim();
-    this._newSearch();
-  }
-
-  private _onFilterKeyDown(e: KeyboardEvent): void {
-    if (e.key === 'Escape') {
-      this._filterText = '';
-      this._filterInput.value = '';
-      this._newSearch();
-    }
+    // Forwarded rather than reached into: the input lives in the bar's shadow root,
+    // and table-main.ts only knows about this method.
+    this._filterBar?.focusInput();
   }
 
   // Touching the box is the user asking for a fresh answer, so the rows the previous
@@ -3034,6 +3217,18 @@ export class DexTreeTable extends LitElement {
 
   private _pendingFlashId: string | null = null;
 
+  // Described from the TOKENS, not the raw text: the bar shows chips, so the empty
+  // state has to name the same conditions the same way or the two disagree about
+  // what was asked.
+  private _noMatchMessage(): string {
+    const parts = this._filterTokens.map((t) =>
+      t.columnLabel ? `${t.columnLabel} ${OP_WORD_TEXT[t.op]} “${t.value}”` : `“${t.value}”`,
+    );
+    if (parts.length === 0) return 'No entries match';
+    if (parts.length === 1) return `No entries match ${parts[0]}`;
+    return `No entries match ${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+  }
+
   // The search bar. Rendered by BOTH branches below from this one function, so the
   // bar is the same element in the same place whether or not there are rows yet:
   // Lit reuses it across the repaint that brings the table in, which is what makes
@@ -3042,13 +3237,11 @@ export class DexTreeTable extends LitElement {
   private _renderFilterBar() {
     return html`
       <div class="filter-bar">
-        <input
-          type="search"
-          class="filter-input"
-          placeholder="Search"
-          @input=${this._onFilterInput}
-          @keydown=${this._onFilterKeyDown}
-        />
+        <dex-filter-bar
+          .text=${this._filterText}
+          .tokens=${this._filterTokens}
+          @dex-filter-applied=${(e: CustomEvent) => this._setFilterText((e.detail as { text: string }).text)}
+        ></dex-filter-bar>
         ${this._renderColumnsButton()}
       </div>
     `;
@@ -3069,7 +3262,8 @@ export class DexTreeTable extends LitElement {
     const body =
       this.rows.length === 0 ? this._renderNoRows() : this._renderTable(allVisible, totalRows, visibleCols);
     return html`
-      ${this._renderFilterBar()} ${body} ${this._renderColumnMenu()} ${this._renderDropTooltip()}
+      ${this._renderFilterBar()} ${body} ${this._renderColumnMenu()} ${this._renderColumnFilterPopup()}
+      ${this._renderDropTooltip()}
     `;
   }
 
@@ -3131,6 +3325,7 @@ export class DexTreeTable extends LitElement {
                         ? 'drag-over-left'
                         : ''} ${this._dragOverColId === col && this._dragOverSide === 'right' ? 'drag-over-right' : ''}"
                       @click=${(e: MouseEvent) => this._onHeaderClick(col, e)}
+                      @contextmenu=${(e: MouseEvent) => this._onHeaderContextMenu(col, e)}
                       @dragstart=${(e: DragEvent) => this._onHeaderDragStart(col, e)}
                       @dragover=${(e: DragEvent) => this._onHeaderDragOver(col, e)}
                       @dragleave=${(e: DragEvent) => this._onHeaderDragLeave(e)}
@@ -3139,7 +3334,7 @@ export class DexTreeTable extends LitElement {
                     >
                       <div class="th-content">
                         <span class="th-label">${this.columnLabels?.[col] || col}</span>
-                        ${this._getSortIndicator(col)}
+                        ${this._renderFunnel(col)} ${this._getSortIndicator(col)}
                       </div>
                       <div
                         class="resize-handle ${this._resizingCol === col ? 'active' : ''}"
@@ -3154,7 +3349,7 @@ export class DexTreeTable extends LitElement {
           </table>
           ${totalRows === 0 && this._filterText
             ? html`<div class="no-match-state" style="top: ${headerHeight}px">
-                No entries match "${this._filterText}"
+                ${this._noMatchMessage()}
               </div>`
             : nothing}
           <table class="rows-table" style="top: ${offsetTop}px;">
@@ -3258,6 +3453,27 @@ export class DexTreeTable extends LitElement {
       >
         Columns ▾
       </button>
+    `;
+  }
+
+  private _renderColumnFilterPopup() {
+    const col = this._filterPopupCol;
+    if (!col) return nothing;
+    const existing = this._tokenForColumn(col);
+    return html`
+      <dex-column-filter
+        style="left: ${this._filterPopupX}px; top: ${this._filterPopupY}px;"
+        .column=${col}
+        .columnLabel=${this.columnLabels?.[col] || col}
+        .op=${existing?.op ?? 'contains'}
+        .value=${existing?.value ?? ''}
+        .hasExisting=${existing !== undefined}
+        @dex-column-filter-applied=${this._onColumnFilterApplied}
+        @dex-column-filter-cleared=${this._onColumnFilterCleared}
+        @dex-column-filter-closed=${() => {
+          this._filterPopupCol = null;
+        }}
+      ></dex-column-filter>
     `;
   }
 

@@ -6,7 +6,9 @@
 // unchanged — these tests exist to reach the grammar's edge cases without paying
 // for a happy-dom component mount per case, and to cover the module in isolation.
 import { describe, it, expect } from 'vitest';
-import { parseFilterExpression, filterRows, SUBSTRING_FILTER_COLUMNS } from '../src/webview/rowFilter.js';
+import {
+  parseFilterExpression, filterRows, formatToken, removeToken, SUBSTRING_FILTER_COLUMNS,
+} from '../src/webview/rowFilter.js';
 
 interface Row {
   ID: string;
@@ -109,14 +111,19 @@ describe('parseFilterExpression', () => {
     expect(predicates[0](row('a', null, { Value: '5' }))).toBe(true);
   });
 
-  it('value:"..." is an exact match, distinct from the substring form', () => {
-    const { predicates: exact } = parseFilterExpression('value:"5"', COLUMNS, getCellText);
+  it('a quoted value groups, it does not mean exact — = is what does', () => {
+    // The one grammar exception that used to live here: `value:"5"` was exact AND
+    // case-sensitive while its five sibling prefixes were neither. Now quoting only
+    // holds a phrase together, and `=` is the operator that means exactly.
+    const { predicates: quoted } = parseFilterExpression('value:"5"', COLUMNS, getCellText);
+    expect(quoted[0](row('a', null, { Value: '15' }))).toBe(true);
+
+    const VOCAB = { labels: { Value: 'Value' }, keys: COLUMNS };
+    const { predicates: exact } = parseFilterExpression('Value=5', COLUMNS, getCellText, VOCAB);
     expect(exact[0](row('a', null, { Value: '5' }))).toBe(true);
     expect(exact[0](row('a', null, { Value: '15' }))).toBe(false);
-    expect(exact[0](row('a', null, { Value: '5.0' }))).toBe(false);
-
-    const { predicates: sub } = parseFilterExpression('value:5', COLUMNS, getCellText);
-    expect(sub[0](row('a', null, { Value: '15' }))).toBe(true);
+    // Numeric, so a differently-spelled 5 still counts.
+    expect(exact[0](row('a', null, { Value: '5.0' }))).toBe(true);
   });
 
   it('col: prefixes resolve through SUBSTRING_FILTER_COLUMNS, case-insensitively', () => {
@@ -228,5 +235,117 @@ describe('filterRows', () => {
   it('with no sticky rows, keepSet is exactly the hit set', () => {
     const rows = [row('a', null, { Name: 'gain' }), row('b', null, { Name: 'other' })];
     expect(ids(rows, 'gain', new Set())).toEqual(['a']);
+  });
+});
+
+describe('the operator scanner', () => {
+  const VOCAB = { labels: { Name: 'Name', Value: 'Value', DataType: 'Data Type' }, keys: COLUMNS };
+
+  it('reads a header label as the prefix, quoted when it has a space', () => {
+    const { tokens } = parseFilterExpression('"Data Type"=double', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0].column).toBe('DataType');
+    expect(tokens[0].op).toBe('=');
+    expect(tokens[0].value).toBe('double');
+  });
+
+  it('normalizes ~= to != while keeping the raw text the user typed', () => {
+    const { tokens } = parseFilterExpression('Name~=abc', COLUMNS, getCellText, VOCAB);
+    expect(tokens[0].op).toBe('!=');
+    expect(tokens[0].raw).toBe('Name~=abc');
+  });
+
+  it('reads the two-character operators before the one-character ones', () => {
+    for (const [text, op] of [['Value>=1', '>='], ['Value<=1', '<='], ['Value!=1', '!=']] as const) {
+      expect(parseFilterExpression(text, COLUMNS, getCellText, VOCAB).tokens[0].op).toBe(op);
+    }
+  });
+
+  it('still accepts the legacy colon-then-operator form on any column', () => {
+    const { tokens } = parseFilterExpression('Value:>10', COLUMNS, getCellText, VOCAB);
+    expect(tokens[0].op).toBe('>');
+    expect(tokens[0].value).toBe('10');
+  });
+
+  it('leaves a bare word containing an operator character as ordinary text', () => {
+    const { tokens } = parseFilterExpression('a>b', COLUMNS, getCellText, VOCAB);
+    expect(tokens[0].column).toBeNull();
+    expect(tokens[0].op).toBe('contains');
+    expect(tokens[0].value).toBe('a>b');
+  });
+
+  it('does not read a lone ! or ~ as an operator', () => {
+    expect(parseFilterExpression('Name!abc', COLUMNS, getCellText, VOCAB).tokens[0].column).toBeNull();
+    expect(parseFilterExpression('~abc', COLUMNS, getCellText, VOCAB).tokens[0].value).toBe('~abc');
+  });
+
+  it('records the span so removing a token is a splice', () => {
+    const text = 'abc Name=x Value>1';
+    const { tokens } = parseFilterExpression(text, COLUMNS, getCellText, VOCAB);
+    expect(tokens.map((t) => text.slice(t.start, t.end))).toEqual(['abc', 'Name=x', 'Value>1']);
+  });
+});
+
+describe('the = rule', () => {
+  const VOCAB = { labels: { Name: 'Name', Value: 'Value' }, keys: COLUMNS };
+  const match = (text: string, r: Row) =>
+    parseFilterExpression(text, COLUMNS, getCellText, VOCAB).predicates.every((p) => p(r));
+
+  it('compares as numbers when both sides are numbers, so 10 equals 10.0', () => {
+    expect(match('Value=10', row('a', null, { Value: '10.0' }))).toBe(true);
+    expect(match('Value=10', row('a', null, { Value: '1e1' }))).toBe(true);
+    expect(match('Value=10', row('a', null, { Value: '100' }))).toBe(false);
+  });
+
+  it('compares as text, case-insensitively, when either side is not a number', () => {
+    expect(match('Name=MYVAR', row('a', null, { Name: 'myVar' }))).toBe(true);
+    expect(match('Name=myVa', row('a', null, { Name: 'myVar' }))).toBe(false);
+  });
+
+  it('an empty value asks for empty cells', () => {
+    expect(match('Value=', row('a', null, { Value: '' }))).toBe(true);
+    expect(match('Value=', row('a', null, { Value: '0' }))).toBe(false);
+  });
+
+  it('!= includes a row whose cell is empty', () => {
+    expect(match('Value!=5', row('a', null, { Value: '' }))).toBe(true);
+    expect(match('Value!=5', row('a', null, { Value: '5' }))).toBe(false);
+    expect(match('Value~=5', row('a', null, { Value: '5' }))).toBe(false);
+  });
+
+  it('a comparison with a non-numeric bound is ignored, not empty-matching', () => {
+    const { predicates, tokens } = parseFilterExpression('Value>abc', COLUMNS, getCellText, VOCAB);
+    expect(predicates).toEqual([]);
+    expect(tokens[0].warning).toBe('non-numeric-bound');
+  });
+});
+
+describe('formatToken and removeToken', () => {
+  it('quotes a label or value only when it needs quoting', () => {
+    expect(formatToken('Name', 'contains', 'abc')).toBe('Name:abc');
+    expect(formatToken('Data Type', '=', 'double')).toBe('"Data Type"=double');
+    expect(formatToken('Name', '=', 'my var')).toBe('Name="my var"');
+    expect(formatToken('Value', '>', '10')).toBe('Value>10');
+  });
+
+  it('round-trips through the parser to the same column, op and value', () => {
+    const VOCAB = { labels: { DataType: 'Data Type' }, keys: ['DataType'] };
+    const text = formatToken('Data Type', '!=', 'my type');
+    const { tokens } = parseFilterExpression(text, ['DataType'], getCellText, VOCAB);
+    expect(tokens[0]).toMatchObject({ column: 'DataType', op: '!=', value: 'my type' });
+  });
+
+  it('removes one token and leaves the rest re-parsing unchanged', () => {
+    const text = 'abc Name=x Value>1';
+    const { tokens } = parseFilterExpression(text, COLUMNS, getCellText);
+    expect(removeToken(text, tokens[1])).toBe('abc Value>1');
+    expect(removeToken(text, tokens[0])).toBe('Name=x Value>1');
+    expect(removeToken(text, tokens[2])).toBe('abc Name=x');
+  });
+
+  it('does not disturb whitespace inside a quoted value', () => {
+    const text = 'Name="my  var" abc';
+    const { tokens } = parseFilterExpression(text, COLUMNS, getCellText);
+    expect(removeToken(text, tokens[1])).toBe('Name="my  var"');
   });
 });
