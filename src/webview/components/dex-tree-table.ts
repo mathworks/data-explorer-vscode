@@ -5,8 +5,10 @@ import { customElement, property, state, query } from 'lit/decorators.js';
 import { highContrastStyles } from './styles/high-contrast.styles.js';
 import { dragModeFromModifiers, type DragMode } from './dragMode.js';
 import {
-  filterRows, parseFilterExpression, removeToken, type FilterTerm, type FilterToken,
+  filterRows, formatToken, parseFilterExpression, removeToken,
+  type FilterOp, type FilterTerm, type FilterToken,
 } from '../rowFilter.js';
+import './dex-column-filter.js';
 import './dex-icon.js';
 import './dex-matrix-open.js';
 import type { MatrixPayload } from './dex-matrix-grid.js';
@@ -501,6 +503,46 @@ export class DexTreeTable extends LitElement {
 
       th.drag-over-right {
         box-shadow: inset -3px 0 0 0 var(--dex-color-accent, #0078d4);
+      }
+
+      /* Hidden until the header is hovered or the button itself is focused, so
+         eighteen funnels do not compete with eighteen labels; always visible once
+         that column is actually filtered, because then it is state, not an affordance. */
+      .th-filter {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        padding: 0;
+        border: none;
+        border-radius: 2px;
+        background: none;
+        color: inherit;
+        cursor: pointer;
+        opacity: 0;
+        outline: none;
+      }
+
+      th:hover .th-filter,
+      .th-filter:focus-visible,
+      .th-filter.active {
+        opacity: 0.75;
+      }
+
+      .th-filter:hover {
+        opacity: 1;
+        background: var(--dex-bg-hover, #e8e8e8);
+      }
+
+      .th-filter.active {
+        color: var(--dex-color-accent, #0078d4);
+        opacity: 1;
+      }
+
+      .th-filter:focus-visible {
+        outline: 1px solid var(--dex-color-accent, #0078d4);
       }
 
       .column-menu {
@@ -1211,6 +1253,12 @@ export class DexTreeTable extends LitElement {
   @state() private _menuDragOverCol: string | null = null;
   @state() private _menuDragOverSide: 'top' | 'bottom' | null = null;
 
+  // The column whose filter popup is open, null when none is. Anchored in
+  // viewport coordinates because the popup is position:fixed, like the column menu.
+  @state() private _filterPopupCol: string | null = null;
+  @state() private _filterPopupX = 0;
+  @state() private _filterPopupY = 0;
+
   private _resizingCol: string | null = null;
   private _resizeStartX = 0;
   private _resizeStartWidth = 0;
@@ -1274,14 +1322,23 @@ export class DexTreeTable extends LitElement {
     if (this._columnMenuOpen) {
       this._columnMenuOpen = false;
     }
+    this._filterPopupCol = null;
   }
 
   private _onDocumentClick(e: Event): void {
+    const path = e.composedPath();
     if (this._columnMenuOpen) {
-      const path = e.composedPath();
       const menu = this.shadowRoot?.querySelector('.column-menu');
       if (menu && !path.includes(menu)) {
         this._columnMenuOpen = false;
+      }
+    }
+    if (this._filterPopupCol) {
+      // composedPath, not `contains`: the popup's controls live in its own shadow
+      // root, so a click on Apply is not a descendant of the host in the light DOM.
+      const popup = this.shadowRoot?.querySelector('dex-column-filter');
+      if (popup && !path.includes(popup)) {
+        this._filterPopupCol = null;
       }
     }
   }
@@ -1598,6 +1655,44 @@ export class DexTreeTable extends LitElement {
     this._columnMenuOpen = true;
   }
 
+  // --- Per-column filter popup ---
+
+  // Right-click, or the funnel button, on a column header. Prefills from the
+  // token the applied text already holds for this column, so opening a filtered
+  // column twice edits its condition instead of stacking a second one.
+  private _openColumnFilter(col: string, anchor: HTMLElement): void {
+    const rect = anchor.getBoundingClientRect();
+    this._filterPopupX = Math.min(rect.left, Math.max(0, window.innerWidth - 260));
+    this._filterPopupY = rect.bottom + 2;
+    this._filterPopupCol = col;
+    this._columnMenuOpen = false;
+  }
+
+  private _onHeaderContextMenu(col: string, e: MouseEvent): void {
+    // preventDefault suppresses the native menu; stopPropagation keeps the
+    // container's own contextmenu handler out of it.
+    e.preventDefault();
+    e.stopPropagation();
+    this._openColumnFilter(col, e.currentTarget as HTMLElement);
+  }
+
+  private _onFunnelClick(col: string, e: MouseEvent): void {
+    // Without stopPropagation the click reaches the <th> and SORTS the column —
+    // opening a filter must not reorder the table under the user.
+    e.preventDefault();
+    e.stopPropagation();
+    if (this._filterPopupCol === col) {
+      this._filterPopupCol = null;
+      return;
+    }
+    this._openColumnFilter(col, (e.currentTarget as HTMLElement).closest('th') as HTMLElement);
+  }
+
+  /** The token in the applied text scoped to `col`, if there is one. */
+  private _tokenForColumn(col: string): FilterToken | undefined {
+    return this._filterTokens.find((t) => t.column === col);
+  }
+
   private _toggleColumnVisibility(col: string): void {
     if (col === 'Name') return;
     const updated = new Set(this._hiddenColumns);
@@ -1727,6 +1822,41 @@ export class DexTreeTable extends LitElement {
     const entry = this._sortState.find((s) => s.column === col);
     if (!entry) return nothing;
     return html`<span class="sort-indicator">${entry.direction === 'asc' ? '▲' : '▼'}</span>`;
+  }
+
+  // The standing cue that a column is filterable: faint on hover, solid while that
+  // column has a condition. A real <button> so Tab reaches it and Shift+F10 on it
+  // opens the same popup (the browser synthesizes contextmenu on that key), which
+  // is the keyboard path without making eighteen <th>s focusable.
+  //
+  // There is no funnel in the icon set, so the glyph is inline SVG drawn in
+  // currentColor — it inherits the header's colour and therefore themes for free.
+  private _renderFunnel(col: string) {
+    const label = this.columnLabels?.[col] || col;
+    const active = this._tokenForColumn(col) !== undefined;
+    return html`
+      <button
+        type="button"
+        class="th-filter ${active ? 'active' : ''}"
+        tabindex="0"
+        title=${active ? `Filtered. Edit the filter on ${label}` : `Filter ${label}`}
+        aria-label=${`Filter ${label}`}
+        aria-haspopup="true"
+        aria-expanded=${this._filterPopupCol === col}
+        @click=${(e: MouseEvent) => this._onFunnelClick(col, e)}
+        @contextmenu=${(e: MouseEvent) => this._onHeaderContextMenu(col, e)}
+        @mousedown=${(e: MouseEvent) => e.stopPropagation()}
+      >
+        <svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
+          <path
+            d="M2 3h12l-4.6 5.4V13L6.6 11.4V8.4z"
+            fill=${active ? 'currentColor' : 'none'}
+            stroke="currentColor"
+            stroke-width="1.2"
+          />
+        </svg>
+      </button>
+    `;
   }
 
   // Sort a group of sibling rows in place. Sorting must never cross
@@ -3090,7 +3220,8 @@ export class DexTreeTable extends LitElement {
     const body =
       this.rows.length === 0 ? this._renderNoRows() : this._renderTable(allVisible, totalRows, visibleCols);
     return html`
-      ${this._renderFilterBar()} ${body} ${this._renderColumnMenu()} ${this._renderDropTooltip()}
+      ${this._renderFilterBar()} ${body} ${this._renderColumnMenu()} ${this._renderColumnFilterPopup()}
+      ${this._renderDropTooltip()}
     `;
   }
 
@@ -3152,6 +3283,7 @@ export class DexTreeTable extends LitElement {
                         ? 'drag-over-left'
                         : ''} ${this._dragOverColId === col && this._dragOverSide === 'right' ? 'drag-over-right' : ''}"
                       @click=${(e: MouseEvent) => this._onHeaderClick(col, e)}
+                      @contextmenu=${(e: MouseEvent) => this._onHeaderContextMenu(col, e)}
                       @dragstart=${(e: DragEvent) => this._onHeaderDragStart(col, e)}
                       @dragover=${(e: DragEvent) => this._onHeaderDragOver(col, e)}
                       @dragleave=${(e: DragEvent) => this._onHeaderDragLeave(e)}
@@ -3160,7 +3292,7 @@ export class DexTreeTable extends LitElement {
                     >
                       <div class="th-content">
                         <span class="th-label">${this.columnLabels?.[col] || col}</span>
-                        ${this._getSortIndicator(col)}
+                        ${this._renderFunnel(col)} ${this._getSortIndicator(col)}
                       </div>
                       <div
                         class="resize-handle ${this._resizingCol === col ? 'active' : ''}"
@@ -3279,6 +3411,25 @@ export class DexTreeTable extends LitElement {
       >
         Columns ▾
       </button>
+    `;
+  }
+
+  private _renderColumnFilterPopup() {
+    const col = this._filterPopupCol;
+    if (!col) return nothing;
+    const existing = this._tokenForColumn(col);
+    return html`
+      <dex-column-filter
+        style="left: ${this._filterPopupX}px; top: ${this._filterPopupY}px;"
+        .column=${col}
+        .columnLabel=${this.columnLabels?.[col] || col}
+        .op=${existing?.op ?? 'contains'}
+        .value=${existing?.value ?? ''}
+        .hasExisting=${existing !== undefined}
+        @dex-column-filter-closed=${() => {
+          this._filterPopupCol = null;
+        }}
+      ></dex-column-filter>
     `;
   }
 
