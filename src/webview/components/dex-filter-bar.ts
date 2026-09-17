@@ -36,7 +36,7 @@ export class DexFilterBar extends LitElement {
          as conditions accumulate, and the row under the caret is the one that matters. */
       max-height: 52px;
       overflow-y: auto;
-      padding: 2px 6px;
+      padding: 1px 4px;
       box-sizing: border-box;
       border: 1px solid var(--dex-border-color, #d0d0d0);
       border-radius: 3px;
@@ -56,8 +56,8 @@ export class DexFilterBar extends LitElement {
       align-items: baseline;
       gap: 3px;
       max-width: 100%;
-      padding: 1px 2px 1px 6px;
-      border-radius: 9px;
+      padding: 1px 2px 1px 5px;
+      border-radius: 3px;
       background: var(--dex-bg-badge, rgba(128, 128, 128, 0.18));
       white-space: nowrap;
     }
@@ -98,7 +98,7 @@ export class DexFilterBar extends LitElement {
       height: 14px;
       padding: 0;
       border: none;
-      border-radius: 7px;
+      border-radius: 2px;
       background: none;
       color: var(--dex-color-text-secondary, #666);
       font: inherit;
