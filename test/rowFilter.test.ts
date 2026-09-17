@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseFilterExpression, filterRows, formatToken, removeToken, SUBSTRING_FILTER_COLUMNS,
+  type ColumnVocabulary,
 } from '../src/webview/rowFilter.js';
 
 interface Row {
@@ -33,8 +34,13 @@ function row(id: string, parent: string | null, extra: Partial<Row> = {}): Row {
 
 // Runs the whole pipeline `filterRows` exercises: parse + filter, returning just
 // the surviving ids in original order — the shape most of these tests care about.
-function ids(rows: Row[], text: string, stickyRowIds: Set<string> = new Set()): string[] {
-  return filterRows(rows, text, COLUMNS, getCellText, stickyRowIds).map((r) => r.ID);
+function ids(
+  rows: Row[],
+  text: string,
+  stickyRowIds: Set<string> = new Set(),
+  vocabulary?: ColumnVocabulary,
+): string[] {
+  return filterRows(rows, text, COLUMNS, getCellText, stickyRowIds, vocabulary).map((r) => r.ID);
 }
 
 describe('parseFilterExpression', () => {
@@ -283,6 +289,167 @@ describe('the operator scanner', () => {
     const text = 'abc Name=x Value>1';
     const { tokens } = parseFilterExpression(text, COLUMNS, getCellText, VOCAB);
     expect(tokens.map((t) => text.slice(t.start, t.end))).toEqual(['abc', 'Name=x', 'Value>1']);
+  });
+});
+
+// A user types the prefix off the header they are looking at, and that header says
+// `Data Type`, not `"Data Type"`. Without this the space split the label in two and
+// `Data Type:double` silently became `Data` AND `Type:double` — two conditions, one
+// of them a stray word, which reads as the filter being broken.
+describe('a header label with a space, unquoted', () => {
+  const VOCAB = {
+    labels: { Name: 'Name', Value: 'Value', DataType: 'Data Type', lastModified: 'Last Modified', lastModifiedBy: 'Last Modified By' },
+    keys: [...COLUMNS, 'lastModified', 'lastModifiedBy'],
+  };
+
+  it('reads the whole label as the prefix', () => {
+    const { tokens } = parseFilterExpression('Data Type:double', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]).toMatchObject({ column: 'DataType', op: 'contains', value: 'double', raw: 'Data Type:double' });
+  });
+
+  it('works for every operator, and case-insensitively', () => {
+    for (const [text, op] of [['Data Type=double', '='], ['data type!=double', '!='], ['DATA TYPE:double', 'contains']] as const) {
+      const { tokens } = parseFilterExpression(text, COLUMNS, getCellText, VOCAB);
+      expect(tokens).toHaveLength(1);
+      expect(tokens[0]).toMatchObject({ column: 'DataType', op });
+    }
+  });
+
+  it('prefers the longest label, so Last Modified By is not Last Modified + By', () => {
+    const { tokens } = parseFilterExpression('Last Modified By:ww', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]).toMatchObject({ column: 'lastModifiedBy', value: 'ww' });
+  });
+
+  it('keeps a quoted value together after an unquoted label', () => {
+    const { tokens } = parseFilterExpression('Data Type="fixed point"', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]).toMatchObject({ column: 'DataType', op: '=', value: 'fixed point' });
+  });
+
+  it('leaves the same words alone when no operator follows them', () => {
+    const { tokens } = parseFilterExpression('Data Type', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(2);
+    expect(tokens.map((t) => t.column)).toEqual([null, null]);
+    expect(tokens.map((t) => t.value)).toEqual(['Data', 'Type']);
+  });
+
+  it('records one span covering the label, so its chip removes in one go', () => {
+    const text = 'abc Data Type:double Value>1';
+    const { tokens } = parseFilterExpression(text, COLUMNS, getCellText, VOCAB);
+    expect(tokens.map((t) => text.slice(t.start, t.end))).toEqual(['abc', 'Data Type:double', 'Value>1']);
+    expect(removeToken(text, tokens[1])).toBe('abc Value>1');
+  });
+
+  it('tolerates a double space inside the label', () => {
+    const { tokens } = parseFilterExpression('Data  Type:double', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]).toMatchObject({ column: 'DataType', value: 'double' });
+  });
+
+  it('is not fooled by a quoted phrase that happens to start with a label', () => {
+    const { tokens } = parseFilterExpression('"Data Type: double"', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]).toMatchObject({ column: null, value: 'Data Type: double' });
+  });
+});
+
+// `Value > 5` and `Name: abc` are how a person writes a condition. Whitespace around
+// the operator used to split one condition into two or three junk terms that matched
+// nothing. It is insignificant now — but ONLY once the prefix has resolved to a real
+// column, which is what keeps `a > b` ordinary text.
+describe('whitespace around the operator', () => {
+  const VOCAB = {
+    labels: { Name: 'Name', Value: 'Value', DataType: 'Data Type', Unit: 'Unit' },
+    keys: [...COLUMNS, 'Unit'],
+  };
+  const one = (text: string) => {
+    const { tokens } = parseFilterExpression(text, COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(1);
+    return tokens[0];
+  };
+
+  it('accepts a space after the colon, multi-word label included', () => {
+    expect(one('data type: double')).toMatchObject({ column: 'DataType', op: 'contains', value: 'double' });
+    expect(one('Name: abc')).toMatchObject({ column: 'Name', op: 'contains', value: 'abc' });
+  });
+
+  it('accepts spaces on both sides of any operator', () => {
+    expect(one('Value > 5')).toMatchObject({ column: 'Value', op: '>', value: '5' });
+    expect(one('Value >= 5')).toMatchObject({ column: 'Value', op: '>=', value: '5' });
+    expect(one('Name != abc')).toMatchObject({ column: 'Name', op: '!=', value: 'abc' });
+    expect(one('Data Type = double')).toMatchObject({ column: 'DataType', op: '=', value: 'double' });
+    expect(one('Value< 5')).toMatchObject({ column: 'Value', op: '<', value: '5' });
+    expect(one('Value :5')).toMatchObject({ column: 'Value', op: 'contains', value: '5' });
+  });
+
+  it('reads the legacy colon-then-operator form across a space too', () => {
+    expect(one('Value: >10')).toMatchObject({ op: '>', value: '10' });
+    expect(one('Value: > 10')).toMatchObject({ op: '>', value: '10' });
+  });
+
+  it('takes a quoted value from after the space', () => {
+    expect(one('Data Type: "fixed point"')).toMatchObject({ column: 'DataType', value: 'fixed point' });
+  });
+
+  it('does not swallow the NEXT condition as a value', () => {
+    const { tokens } = parseFilterExpression('Unit= Value>5', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(2);
+    expect(tokens[0]).toMatchObject({ column: 'Unit', op: '=', value: '' });
+    expect(tokens[1]).toMatchObject({ column: 'Value', op: '>', value: '5' });
+  });
+
+  it('still reads a trailing operator as an empty value, which asks for empty cells', () => {
+    expect(one('Unit=')).toMatchObject({ column: 'Unit', op: '=', value: '' });
+    expect(one('Unit= ')).toMatchObject({ column: 'Unit', op: '=', value: '' });
+  });
+
+  it('leaves an operator between two non-columns as ordinary text', () => {
+    const { tokens } = parseFilterExpression('a > b', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(3);
+    expect(tokens.map((t) => t.column)).toEqual([null, null, null]);
+  });
+
+  it('leaves a column name followed by an ordinary word alone', () => {
+    const { tokens } = parseFilterExpression('Name gain', COLUMNS, getCellText, VOCAB);
+    expect(tokens).toHaveLength(2);
+    expect(tokens.map((t) => t.value)).toEqual(['Name', 'gain']);
+  });
+
+  it('spans the whole condition, so the chip removes every part of it', () => {
+    const text = 'abc Data Type: double Value>1';
+    const { tokens } = parseFilterExpression(text, COLUMNS, getCellText, VOCAB);
+    expect(tokens.map((t) => text.slice(t.start, t.end))).toEqual(['abc', 'Data Type: double', 'Value>1']);
+    expect(removeToken(text, tokens[1])).toBe('abc Value>1');
+  });
+
+  it('filters the rows it says it does', () => {
+    const rows = [
+      row('a', null, { Name: 'gain', Value: '10', DataType: 'double' }),
+      row('b', null, { Name: 'other', Value: '2', DataType: 'single' }),
+    ];
+    expect(ids(rows, 'Value > 5', new Set(), VOCAB)).toEqual(['a']);
+    expect(ids(rows, 'data type: single', new Set(), VOCAB)).toEqual(['b']);
+  });
+
+  it('reads every spelling of one condition the same way', () => {
+    // Two code paths now: one that scans a bare label across whitespace, and the
+    // per-chunk one that still handles a QUOTED prefix (which no bare label can
+    // match). Pin the invariant BETWEEN them — a user who quotes, spaces, or does
+    // neither is asking the same question and must get the same answer.
+    const want = { column: 'DataType', op: '=' as const, value: 'double' };
+    for (const text of ['Data Type=double', 'Data Type = double', 'Data Type =double', '"Data Type"=double']) {
+      expect(one(text), text).toMatchObject(want);
+    }
+  });
+
+  it('takes the word after the operator as the value, so Unit= abc is not two conditions', () => {
+    // The cost of crossing whitespace: `Unit= abc` used to mean "no Unit, and abc
+    // somewhere". It now means Unit equals abc, which is what the spacing looks
+    // like. Asking for empty cells still works — leave nothing after the operator.
+    expect(one('Unit= abc')).toMatchObject({ column: 'Unit', op: '=', value: 'abc' });
+    expect(one('Unit=')).toMatchObject({ column: 'Unit', op: '=', value: '' });
   });
 });
 
