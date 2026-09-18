@@ -19,6 +19,12 @@ jobs:
           node-version: 20
           cache: npm
 
+      # Before `npm ci`, deliberately: the check needs no dependencies, and a leak
+      # should be reported in seconds rather than behind a five-minute build. It is
+      # also the one check whose failure cannot be fixed by retrying.
+      - name: Leak check
+        run: npm run check:leak
+
       - name: Install dependencies
         run: npm ci
 
