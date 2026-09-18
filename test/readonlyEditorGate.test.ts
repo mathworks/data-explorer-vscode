@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 // @vitest-environment happy-dom
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { shouldOpenCellEditor } from '../src/webview/menuItems.js';
 
 // The vendored dex-tree-table opens its inline cell editor from handlers bound
@@ -11,9 +11,9 @@ import { shouldOpenCellEditor } from '../src/webview/menuItems.js';
 // stopPropagation on the host must prevent a shadow-internal listener from
 // firing, and must do so exactly when the document is read-only.
 //
-// This mirrors the component's event contract without depending on the vendored
-// component (which we must not edit) or on table-main.ts (which runs top-level
-// acquireVsCodeApi()/DOM wiring that can't be imported in isolation).
+// This half mirrors the component's event contract on a bare host+shadow pair, so the
+// mechanism is pinned independently of the table. The second half below drives the
+// listener table-main.ts actually installs — which is where the interesting bug was.
 
 describe('read-only cell-editor gate (capture-phase interception)', () => {
   let host: HTMLElement;
@@ -123,5 +123,101 @@ describe('read-only cell-editor gate (capture-phase interception)', () => {
       shadowCell.dispatchEvent(new CustomEvent('dex-matrix-open', { bubbles: true, composed: true }));
       expect(opened).toBe(1);
     });
+  });
+});
+
+// ── the same gate, as it actually ships ───────────────────────────────────────────
+// Everything above installs a COPY of the guard. That is one rule on two paths, and
+// this is the bug it let through: Enter became how a search commits, and the guard —
+// which knows only "read-only" and "the key is Enter" — swallowed it in the capture
+// phase before it could reach the search box. Every read-only view (.slx, .mdl, .mat,
+// .prj) had a filter box that did nothing; .sldd, being editable, was fine, which is
+// exactly the shape the bug was reported in.
+//
+// So this half drives the LISTENER THAT SHIPS. table-main.ts is importable with two
+// stubs — `acquireVsCodeApi` as a global, since the module calls it at top level, and a
+// <dex-tree-table> in the body for it to bind to — both in place before the dynamic
+// import. Imported once, in beforeAll: a module body runs once per test FILE, and this
+// one wires window and body listeners.
+describe('the shipped gate keeps a read-only view searchable', () => {
+  let table: any;
+
+  beforeAll(async () => {
+    (globalThis as any).acquireVsCodeApi = () => ({ postMessage: () => {} });
+    document.body.innerHTML = '<dex-tree-table></dex-tree-table>';
+    await import('../src/webview/table-main.js');
+    table = document.querySelector('dex-tree-table');
+  });
+
+  // A .slx-shaped payload: two rows and the read-only flag the gate reads.
+  async function paint(editable: boolean): Promise<void> {
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          type: 'setRows',
+          docUri: 'file:///fx/m.slx',
+          rows: [
+            { ID: 's', parent: null, Name: { label: 'Model Elements' } },
+            { ID: 'b', parent: 's', Name: { label: 'ChainGain' } },
+          ],
+          columns: ['Name', 'Value', 'DataType'],
+          columnLabels: { Name: 'Name', Value: 'Value', DataType: 'Data Type' },
+          editable,
+        },
+      }),
+    );
+    await table.updateComplete;
+  }
+
+  const barOf = () => table.shadowRoot.querySelector('dex-filter-bar');
+  const boxOf = () => barOf().shadowRoot.querySelector('.filter-input') as HTMLInputElement;
+
+  /**
+   * Type a search and commit it with a real Enter, from inside the bar's shadow root.
+   * Each call is a FRESH question: the bar APPENDS its committed tail to what is already
+   * applied, and one table serves every case here.
+   */
+  async function searchFor(text: string): Promise<void> {
+    table._setFilterText('');
+    await table.updateComplete;
+    const input = boxOf();
+    input.value = text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, composed: true }));
+    await barOf().updateComplete;
+    await table.updateComplete;
+  }
+
+  it('read-only: Enter in the search box commits the search', async () => {
+    await paint(false);
+    await searchFor('ChainGain');
+    expect(table._filterText).toBe('ChainGain');
+    expect(table._getVisibleRows().map((r: { ID: string }) => r.ID)).toEqual(['s', 'b']);
+  });
+
+  it('editable: Enter in the search box commits the search too', async () => {
+    // The two views must agree. The gate is about the GRID, and the box is not the grid.
+    await paint(true);
+    await searchFor('ChainGain');
+    expect(table._filterText).toBe('ChainGain');
+  });
+
+  it('read-only: Enter on the grid is still swallowed before the cell editor sees it', async () => {
+    // The gate's whole purpose, unchanged: this is what the exemption above must not cost.
+    await paint(false);
+    let reached = 0;
+    const grid = table.shadowRoot.querySelector('[role="treegrid"]') as HTMLElement;
+    grid.addEventListener('keydown', () => reached++);
+    grid.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, composed: true }));
+    expect(reached).toBe(0);
+  });
+
+  it('editable: Enter on the grid still reaches it, so a cell can be opened', async () => {
+    await paint(true);
+    let reached = 0;
+    const grid = table.shadowRoot.querySelector('[role="treegrid"]') as HTMLElement;
+    grid.addEventListener('keydown', () => reached++);
+    grid.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, composed: true }));
+    expect(reached).toBe(1);
   });
 });

@@ -389,6 +389,19 @@ window.addEventListener('message', (event: MessageEvent) => {
   }
 });
 
+// Whether this keystroke is TEXT ENTRY rather than a gesture on the grid: the search
+// box, the column-filter popup, the inline cell editor. Read off the COMPOSED PATH,
+// because every one of those fields lives inside the table's shadow tree and `e.target`
+// at this listener is the host element, which tells us nothing about where the caret is.
+//
+// The rule lives here once because both capture guards below need it and they must not
+// disagree: a key that a field owns is not the table's to claim.
+function isTypingInField(ev: KeyboardEvent): boolean {
+  const active = (ev.composedPath?.()[0] as HTMLElement) ?? (ev.target as HTMLElement);
+  const tag = active?.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !!active?.isContentEditable;
+}
+
 // Read-only documents never open the inline cell editor. The vendored table
 // opens it on double-click and on Enter, gating only on per-row flags (which we
 // keep intact for cell coloring). Intercept both gestures in the CAPTURE phase
@@ -405,7 +418,13 @@ table.addEventListener(
 table.addEventListener(
   'keydown',
   (e: Event) => {
-    if ((e as KeyboardEvent).key === 'Enter' && !shouldOpenCellEditor(editable)) {
+    const ev = e as KeyboardEvent;
+    // Only Enter on the GRID is the cell-editor gesture this gate exists for. Enter in a
+    // FIELD belongs to that field: the search box commits a search with it and the
+    // column-filter popup applies with it. Without this exemption, a read-only view
+    // (.slx, .mdl, .mat, .prj) had a search box that did nothing at all — the keystroke
+    // died here, one element above the box, and .sldd looked fine because it is editable.
+    if (ev.key === 'Enter' && !isTypingInField(ev) && !shouldOpenCellEditor(editable)) {
       e.stopPropagation();
     }
   },
@@ -462,13 +481,9 @@ table.addEventListener(
     const action = resolveShortcutAction(ev);
     if (!action) return;
 
-    // While typing in the inline cell editor or the column filter, C/X/V and
-    // Delete/Backspace are text editing — let the field handle them natively.
-    const active = (ev.composedPath?.()[0] as HTMLElement) ?? (ev.target as HTMLElement);
-    const tag = active?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || active?.isContentEditable) {
-      return;
-    }
+    // While typing in the inline cell editor, the search box or the column filter, C/X/V
+    // and Delete/Backspace are text editing — let the field handle them natively.
+    if (isTypingInField(ev)) return;
 
     // The primary selection anchors the gesture, the same way the right-clicked row
     // does: it is what a paste targets the section of.
