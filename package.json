@@ -189,6 +189,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "check:leak": "node scripts/leak-check.mjs",
+    "verify": "npm run typecheck && npm run build && npm run build:web && npm run test && npm run check:leak",
     "compile:test": "node esbuild.test.mjs",
     "test:integration": "npm run build && npm run compile:test && vscode-test",
     "package": "vsce package"
