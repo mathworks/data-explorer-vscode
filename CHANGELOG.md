@@ -6,6 +6,14 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.24.5] — 2026-09-19
+
+Opening a JSON dictionary with the binary table editor no longer errors
+
+## [1.24.4] — 2026-09-18
+
+A struct's fields in a current-MATLAB .sldd
+
 ## [1.24.3] — 2026-09-18
 
 An array inside a cell in a binary .sldd
