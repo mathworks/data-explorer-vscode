@@ -38,6 +38,7 @@ import {
 // that a dictionary this host could not read is not passed on as an empty one, which
 // the reader itself no longer enforces (it recovers and warns instead).
 import { readSlddParts } from './slddContent.js';
+import { isZipBytes } from './slddFormat.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import {
   findOwningEntry,
@@ -89,6 +90,12 @@ import { basename } from '../common/pathUtil.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { binaryEditSrcId } from '../common/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
+
+// viewType of the default byte-backed view (BinaryEditorProvider), which owns the rule
+// that picks an editor from a .sldd's bytes. A constant here rather than an import,
+// because importing that provider would be circular — the same reason it spells this
+// provider's viewType out as a constant of its own.
+const BINARY_VIEW_TYPE = 'dataExplorer.binaryView';
 
 /**
  * One open view of a document: the two ways the document can ask it to repaint.
@@ -183,13 +190,23 @@ class BinarySlddDocument implements vscode.CustomDocument {
    */
   baselineCaptured = false;
 
+  /**
+   * Whether the bytes behind this document are not a zip, so this editor is the wrong one
+   * for them — see the misroute guard in `openCustomDocument`. Such a document holds no
+   * content at all; `resolveCustomEditor` hands the file back to the default view and
+   * disposes its panel before anything reads `chunkXml`.
+   */
+  readonly misrouted: boolean;
+
   constructor(
     public readonly uri: vscode.Uri,
     chunkXml: string,
     zipMeta: Record<string, Uint8Array>,
+    misrouted = false,
   ) {
     this.chunkXml = chunkXml;
     this.zipMeta = zipMeta;
+    this.misrouted = misrouted;
   }
 
   // Prefixed, so this editable model never collides with the read-only
@@ -331,6 +348,22 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   ): Promise<BinarySlddDocument> {
     const source = openContext.backupId ? vscode.Uri.parse(openContext.backupId) : uri;
     const bytes = await vscode.workspace.fs.readFile(source);
+    // A custom editor's selector is a filename glob, and the two .sldd formats are not
+    // distinguishable by name — so "Reopen Editor With…" offers THIS view for every
+    // *.sldd, including a JSON one, which has nothing for `unzipSync` to read. That
+    // unzip used to throw here, before any panel existed, which the user saw as
+    // "invalid zip data" on a file the default view opens perfectly well.
+    //
+    // Answer it the way the default view answers the mirror case, by handing the file
+    // back rather than by classifying it here: `resolveCustomEditor` reopens it with
+    // `dataExplorer.binaryView`, which owns the one format-to-editor rule. Deciding
+    // "JSON ⇒ the table view" locally would be that rule's second copy, and would get
+    // the over-the-sync-limit dictionary wrong — the default view keeps that one
+    // read-only, because the text-backed table cannot resolve it at all.
+    //
+    // Restoring a hot-exit backup reaches here too, and `writeTo` always writes a zip,
+    // so a backup takes the normal path.
+    if (!isZipBytes(bytes)) return new BinarySlddDocument(uri, '', {}, true);
     const zip = unzipSync(bytes);
     const chunk = zip[DATA_PART_XML];
     if (!chunk) throw new Error(`Missing ${DATA_PART_XML} in binary SLDD`);
@@ -346,6 +379,15 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     webviewPanel: vscode.WebviewPanel,
     _token: vscode.CancellationToken,
   ): Promise<void> {
+    // Not a zip, so not ours — see the misroute guard in openCustomDocument. Reopen with
+    // the default byte-backed view, which routes on the bytes, and dispose THIS panel so
+    // only the tab that cannot render the file goes away.
+    if (document.misrouted) {
+      await vscode.commands.executeCommand('vscode.openWith', document.uri, BINARY_VIEW_TYPE);
+      webviewPanel.dispose();
+      return;
+    }
+
     const webview = webviewPanel.webview;
     const distRoot = vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview');
     webview.options = { enableScripts: true, localResourceRoots: [distRoot] };
