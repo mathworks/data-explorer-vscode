@@ -187,4 +187,44 @@ suite('BinarySlddEditorProvider', () => {
     doc.dispose();
     await vscode.workspace.fs.delete(dst);
   });
+
+  // "Reopen Editor With…" offers this viewType for EVERY *.sldd, because a selector
+  // is a filename glob and the two .sldd formats are not distinguishable by name. So
+  // the user can land here with a JSON dictionary, which is not a zip and has nothing
+  // for `unzipSync` to read. Opening it must route to the editor that fits the bytes,
+  // the way an Explorer double-click already does — not throw at the user.
+  test('a JSON-text .sldd opened here routes to the view that fits its bytes', async () => {
+    const uri = wsUri('data.sldd');
+    // The failure this pins is in openCustomDocument, BEFORE any panel exists: the
+    // unconditional unzip threw "invalid zip data", which VS Code surfaces as a
+    // notification and an empty tab.
+    const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
+    const panel = makePanel();
+    let disposed = false;
+    panel.onDidDispose(() => (disposed = true));
+
+    await provider.resolveCustomEditor(doc, panel, token());
+
+    assert.ok(disposed, 'the panel for the wrong-format document disposes itself');
+
+    // Routed to the DEFAULT byte-backed view, which owns the one format-to-editor
+    // rule — it then lands an editable JSON .sldd in the table view (and keeps an
+    // over-the-sync-limit one read-only, which is why the choice is not made here).
+    // So the tab the user ends up looking at is the table view.
+    const start = Date.now();
+    let found = false;
+    while (Date.now() - start < 5000) {
+      found = vscode.window.tabGroups.all
+        .flatMap((g) => g.tabs)
+        .some(
+          (t) =>
+            (t.input as { viewType?: string })?.viewType === 'dataExplorer.tableView' &&
+            (t.input as { uri?: vscode.Uri })?.uri?.toString() === uri.toString(),
+        );
+      if (found) break;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    assert.ok(found, 'the JSON .sldd ended up in the editable table view');
+    doc.dispose();
+  });
 });
