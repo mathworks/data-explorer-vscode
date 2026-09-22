@@ -74,6 +74,41 @@ describe('customEditors: text-backed table for JSON .sldd + byte-backed binary e
   });
 });
 
+describe('configurationDefaults: redirect-only editors stay out of the editor-type picker', () => {
+  // VS Code >= 1.129 shows an editor-type picker in the breadcrumbs, listing every
+  // editor whose selector matches the file. Our selectors are filename globs only
+  // (VS Code offers no content-based selector), so all three Data Explorer editors
+  // match *.sldd and the picker offered three entries for one file — two of them
+  // internal redirect targets that FAIL when a user picks them by hand (issue #24:
+  // tableView on a compressed-binary .sldd cannot be resolved as text at all).
+  //
+  // `workbench.editor.hiddenEditorTypes` (VS Code >= 1.134) drops an editor from
+  // that picker while leaving "Reopen Editor With…", `workbench.editorAssociations`
+  // and our own `vscode.openWith` redirects working — and VS Code keeps the ACTIVE
+  // type visible, so the picker still names the editor you are in. It is
+  // WINDOW-scoped, which is what makes it legal for an extension to default; on
+  // VS Code < 1.134 the key is simply unregistered and the default goes unread.
+  const hidden = contributes.configurationDefaults?.['workbench.editor.hiddenEditorTypes'];
+  const editors = contributes.customEditors as Array<{ viewType: string; priority: string }>;
+
+  it('hides exactly the two editors reached only by redirect', () => {
+    expect(Array.isArray(hidden), 'hiddenEditorTypes must be declared as an array').toBe(true);
+    expect([...hidden].sort()).toEqual([TABLE_VIEW, BINARY_SLDD_VIEW].sort());
+  });
+
+  it('hides only `option`-priority editors, never the default one users pick', () => {
+    // The rule that keeps this honest as editors are added: an editor a user is
+    // meant to choose (priority `default`) must stay in the picker; one that only
+    // ever arrives via a content-based redirect must not be offered by hand.
+    for (const id of hidden) {
+      const editor = editors.find((e) => e.viewType === id);
+      expect(editor, `hidden editor ${id} must be a declared custom editor`).toBeTruthy();
+      expect(editor!.priority, `hidden editor ${id} must be option-priority`).toBe('option');
+    }
+    expect(hidden, 'the default editor must remain pickable').not.toContain(BINARY_VIEW);
+  });
+});
+
 describe('editor-toggle commands', () => {
   it('declares viewAsText and viewAsTable with icons', () => {
     for (const id of ['dataExplorer.viewAsText', 'dataExplorer.viewAsTable']) {

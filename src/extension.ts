@@ -26,47 +26,42 @@ function isSlddUri(uri: vscode.Uri | undefined): boolean {
   return !!uri && isSlddFile(uri.path);
 }
 
-// True if the .sldd at `uri` is editable JSON (not zip/binary). Editable JSON
-// opens in the CustomTextEditorProvider (native undo/redo); binary/zip .sldd and
-// all other formats open in the read-only BinaryEditorProvider.
+// The ONE format→editor rule: which viewType a URI belongs in, decided by its
+// CONTENT. Editable JSON .sldd → the text-backed table view (native undo/redo);
+// compressed-binary (zip/OPC) .sldd → the writable BinarySlddEditorProvider
+// (table editing + re-zip on save); everything else → the read-only
+// BinaryEditorProvider, which opens any bytes.
 //
 // A JSON .sldd larger than VS Code's TextDocument sync limit is NOT treated as
 // editable: the CustomTextEditorProvider can't resolve it (the ext host can't
 // mirror an over-limit document — it throws "Unable to retrieve document from
 // URI"), so it falls through to the read-only byte-backed view, which opens it
 // fine. See exceedsTextSyncLimit in slddFormat.ts.
-async function isEditableJsonSldd(uri: vscode.Uri): Promise<boolean> {
-  if (!isSlddFile(uri.path)) return false;
+//
+// Returned as a viewType rather than opened, because two callers need it: the
+// open path (openInBestEditor) and the misroute repair in activate(), which has
+// to compare a tab's view type against the rule WITHOUT opening anything.
+// Reading the bytes once here also spares a second full read of the file, which
+// on a 47 MB dictionary is not free.
+async function bestViewType(uri: vscode.Uri): Promise<string> {
+  if (!isSlddFile(uri.path)) return BinaryEditorProvider.viewType;
+  let bytes: Uint8Array;
   try {
-    const bytes = await vscode.workspace.fs.readFile(uri);
-    return isEditableJsonSlddBytes(bytes) && !exceedsTextSyncLimit(bytes);
+    bytes = await vscode.workspace.fs.readFile(uri);
   } catch {
-    return false;
+    // Unreadable: the read-only view reports the failure in its own shell.
+    return BinaryEditorProvider.viewType;
   }
+  if (isEditableJsonSlddBytes(bytes) && !exceedsTextSyncLimit(bytes)) {
+    return SlddTextEditorProvider.viewType;
+  }
+  if (isZipBytes(bytes)) return BinarySlddEditorProvider.viewType;
+  return BinaryEditorProvider.viewType;
 }
 
-// True if the .sldd at `uri` is a compressed-binary (zip/OPC) dictionary. These
-// open in the writable BinarySlddEditorProvider (table editing + re-zip on save).
-async function isZipSldd(uri: vscode.Uri): Promise<boolean> {
-  if (!isSlddFile(uri.path)) return false;
-  try {
-    const bytes = await vscode.workspace.fs.readFile(uri);
-    return isZipBytes(bytes);
-  } catch {
-    return false;
-  }
-}
-
-// Route a URI to the right editor by content: editable JSON .sldd → table view
-// (native undo/redo); compressed-binary .sldd → writable binary table view;
-// everything else → binary read-only view.
+// Route a URI to the right editor by content (see bestViewType).
 async function openInBestEditor(uri: vscode.Uri, options?: { preview?: boolean }): Promise<void> {
-  let viewType = BinaryEditorProvider.viewType;
-  if (await isEditableJsonSldd(uri)) {
-    viewType = SlddTextEditorProvider.viewType;
-  } else if (await isZipSldd(uri)) {
-    viewType = BinarySlddEditorProvider.viewType;
-  }
+  const viewType = await bestViewType(uri);
   // VS Code's `vscode.openWith` hardcodes `pinned: true` before spreading the
   // caller's options, so `{ preview: true }` alone is ignored — the tab opens
   // pinned, not as a reused preview tab (microsoft/vscode#235535, fix PR #255247
@@ -145,6 +140,47 @@ export function activate(context: vscode.ExtensionContext): void {
   const refreshBadges = (): void => {
     provider.refresh();
     healthProvider.refresh();
+  };
+
+  // URIs whose repair is in flight (see repairMisroutedTab).
+  const repairing = new Set<string>();
+
+  // Repair a .sldd sitting in the text-backed table view (tableView) whose bytes
+  // are NOT editable JSON. Such a tab cannot render: VS Code fails to resolve the
+  // TextDocument — "File seems to be binary and cannot be opened as text" — before
+  // our provider is ever reached, so the tab shows VS Code's own error page and
+  // there is no resolveCustomEditor call to redirect from. BinarySlddEditorProvider
+  // can hand a misrouted file back itself precisely because it DOES get a document;
+  // here the surviving tab is the only handle, so the repair is driven from the tab
+  // API instead of from the provider.
+  //
+  // Reached whenever something picks the view type for us instead of going through
+  // openInBestEditor: "Reopen Editor With…", the editor-type picker, a stale
+  // `workbench.editorAssociations`, a restored session, or `vscode.openWith` from
+  // the command palette.
+  const repairMisroutedTab = async (tab: vscode.Tab): Promise<void> => {
+    const input = tab.input;
+    if (!(input instanceof vscode.TabInputCustom)) return;
+    if (input.viewType !== SlddTextEditorProvider.viewType) return;
+    const key = input.uri.toString();
+    // Re-entrancy guard, not a memo: the open+close below is itself tab churn that
+    // re-enters this handler, so a repair must not see its own. Dropped once the
+    // repair settles rather than remembered, because the same file can legitimately
+    // need repairing again later in the session (nothing stops a second Reopen With).
+    if (repairing.has(key)) return;
+    const target = await bestViewType(input.uri);
+    if (target === input.viewType) return; // editable JSON: already the right editor
+    repairing.add(key);
+    try {
+      await openInBestEditor(input.uri);
+      // Closed only after the replacement is open, so the file never disappears
+      // from the editor area in between.
+      await vscode.window.tabGroups.close(tab);
+    } catch {
+      /* tab already gone, or the open failed: the error page stays, nothing to undo */
+    } finally {
+      repairing.delete(key);
+    }
   };
 
   // Watch the workspace for supported files so the tree stays in sync with
@@ -245,6 +281,10 @@ export function activate(context: vscode.ExtensionContext): void {
       clearUsageSources();
       refreshAll();
     }),
+    // A tab opened in the wrong custom editor for its content: re-route it.
+    vscode.window.tabGroups.onDidChangeTabs((e) => {
+      for (const tab of e.opened) void repairMisroutedTab(tab);
+    }),
     // Saving clears the dirty state → update the modified badge.
     vscode.workspace.onDidSaveTextDocument((doc) => {
       if (isSupportedPath(doc.uri.path)) {
@@ -300,6 +340,14 @@ export function activate(context: vscode.ExtensionContext): void {
       }),
     ),
   );
+
+  // Tabs that already exist are never reported as `opened`, and the failing open
+  // is itself what activates us (onCustomEditor:dataExplorer.tableView), so the
+  // tab needing repair is typically already there by the time this line runs — as
+  // are tabs restored from the previous session. Sweep what is open once.
+  for (const group of vscode.window.tabGroups.all) {
+    for (const tab of group.tabs) void repairMisroutedTab(tab);
+  }
 }
 
 export function deactivate(): void {}
