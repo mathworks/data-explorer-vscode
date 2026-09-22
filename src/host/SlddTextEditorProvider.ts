@@ -76,6 +76,52 @@ import { buildSectionRowId } from '../common/sectionRowId.js';
 import { basename } from '../common/pathUtil.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 
+/**
+ * What belongs to the DOCUMENT rather than to one of its tabs.
+ *
+ * A CustomTextEditorProvider has no custom document object to hang state on — VS Code owns
+ * the TextDocument — so the per-document facts live here, keyed by URI, and each call of
+ * resolveCustomTextEditor opens one view against them and closes it on dispose.
+ *
+ * Both facts guard something a URI-keyed registry already treats as document-scoped: the
+ * "Modified" baseline (slddBaseline) and the cross-document-move deleter (editorHub).
+ * Tearing either down when ANY tab closed left a surviving split panel showing no Modified
+ * marks at all — with no baseline, computeModified answers "nothing is modified" by design —
+ * and unable to complete a move, while the document itself stayed open and edited. And
+ * because captureBaseline OVERWRITES by URI, letting each tab capture its own on-open
+ * baseline re-baselined an already-edited document against the EDITED text, clearing the
+ * marks in every tab at once.
+ *
+ * BinarySlddEditorProvider carries these same two facts on its custom document
+ * (`views` / `baselineCaptured`) and for the same reasons; this is that one rule on the
+ * other path.
+ */
+type DocState = { views: number; baselineCaptured: boolean };
+const openDocs = new Map<string, DocState>();
+
+/** Count one more open view of this document, and answer what it already knows. */
+function openView(uriString: string): DocState {
+  const state = openDocs.get(uriString) ?? { views: 0, baselineCaptured: false };
+  state.views++;
+  openDocs.set(uriString, state);
+  return state;
+}
+
+/**
+ * Close one view of this document; true when it was the LAST, i.e. the document-scoped
+ * teardown is now owed. Forgets the document then, so the next open captures a fresh
+ * baseline rather than trusting one that has been cleared.
+ */
+function closeView(uriString: string): boolean {
+  const state = openDocs.get(uriString);
+  // Defensive: an untracked view is treated as the last one, so a teardown can never be
+  // skipped — leaking a stale baseline is the worse of the two failures.
+  if (!state) return true;
+  if (--state.views > 0) return false;
+  openDocs.delete(uriString);
+  return true;
+}
+
 // Custom editor for EDITABLE JSON .sldd, backed by VS Code's native TextDocument
 // (CustomTextEditorProvider). Because every edit is a WorkspaceEdit on that
 // TextDocument, undo/redo, dirty state, save, and revert are all handled
@@ -123,9 +169,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     const uriString = document.uri.toString();
     const name = basename(document.uri.path) || 'document';
 
-    // Capture the on-open baseline once so per-entry "Modified" marks are diffed
-    // against the initial content.
-    let initialized = false;
+    // Capture the on-open baseline once PER DOCUMENT — not per tab — so per-entry
+    // "Modified" marks are diffed against the content this document was opened with, and a
+    // second tab does not re-baseline it to the edited text. See openDocs.
+    const docState = openView(uriString);
 
     /**
      * Whether both the tree this document holds and every row on screen were built from the
@@ -220,9 +267,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       try {
         invalidate(uriString);
         const node = getModel(uriString, name, document.getText());
-        if (!initialized) {
+        if (!docState.baselineCaptured) {
           captureBaseline(uriString, node);
-          initialized = true;
+          docState.baselineCaptured = true;
         }
         const modified = computeModified(uriString, node);
         const clipMark = clipMarkOfDoc();
@@ -1808,7 +1855,6 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     webview.html = this.getHtml(webview, distRoot);
     webviewPanel.onDidDispose(() => {
       unregisterWebview(webview);
-      unregisterSourceDeleter(uriString);
       // If a drag originated from this now-closing view, drop it so a stale
       // register can't complete against another document.
       if (getDrag()?.sourceDocUri === uriString) {
@@ -1819,7 +1865,14 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       changeSub.dispose();
       saveSub.dispose();
       navSub.dispose();
-      clearBaseline(uriString);
+      // Only once the LAST tab of this document closes. Both of these are keyed by URI,
+      // i.e. document-scoped, so tearing them down when ANY tab closed left a surviving
+      // split panel showing no Modified marks and unable to complete a cross-document
+      // move — while the document itself stayed open and editable. See openDocs.
+      if (closeView(uriString)) {
+        unregisterSourceDeleter(uriString);
+        clearBaseline(uriString);
+      }
     });
   }
 
