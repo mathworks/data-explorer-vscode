@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.24.6] — 2026-09-22
+
+A dictionary open in two tabs keeps its Modified marks when one tab closes
+
 ## [1.24.5] — 2026-09-19
 
 Opening a JSON dictionary with the binary table editor no longer errors
