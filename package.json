@@ -2,7 +2,7 @@
   "name": "simulink-data-explorer",
   "displayName": "Simulink Data Explorer",
   "description": "Explore Simulink models, data dictionaries, MAT-files, and projects as interactive tables and relationship trees.",
-  "version": "1.24.6",
+  "version": "1.24.7",
   "publisher": "mathworks",
   "icon": "media/icon.png",
   "private": true,
@@ -73,6 +73,12 @@
         "priority": "option"
       }
     ],
+    "configurationDefaults": {
+      "workbench.editor.hiddenEditorTypes": [
+        "dataExplorer.tableView",
+        "dataExplorer.binarySlddView"
+      ]
+    },
     "languages": [
       {
         "id": "json",

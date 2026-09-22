@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.24.7] — 2026-09-22
+
+One Data Explorer entry per dictionary in the editor type picker, and a dictionary opened in the wrong one lands in the view that fits its bytes
+
 ## [1.24.6] — 2026-09-22
 
 A dictionary open in two tabs keeps its Modified marks when one tab closes
