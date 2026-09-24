@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.24.8] — 2026-09-24
+
+The extension now carries the official Simulink product icon
+
 ## [1.24.7] — 2026-09-22
 
 One Data Explorer entry per dictionary in the editor type picker, and a dictionary opened in the wrong one lands in the view that fits its bytes
