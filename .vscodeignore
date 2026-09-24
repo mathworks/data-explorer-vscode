@@ -21,6 +21,10 @@ CLAUDE.md
 **/.DS_Store
 
 # Sources, tests and their outputs.
+#
+# `media/icon.svg` is the vector the marketplace icon is rasterized from; only
+# the rasterized `media/icon.png` is what package.json points at and ships.
+media/icon.svg
 src/**
 test/**
 test-integration/**
