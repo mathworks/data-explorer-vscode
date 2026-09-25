@@ -164,6 +164,20 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       // disposed above). Give its tab the same 'table' icon the editable-JSON .sldd
       // tab uses (SlddTextEditorProvider), so both .sldd forms look consistent.
       webviewPanel.iconPath = new vscode.ThemeIcon('table');
+    } else {
+      // Every other format this editor owns — .slx, .mdl, .mat, .prj — is read-only
+      // with no editable counterpart to switch to, and nothing in the table says so:
+      // VS Code has no read-only affordance of its own (a read-only editor renders
+      // exactly like a writable one), and the banner is reserved for the SURPRISING
+      // read-only, above. So the tab carries it, quietly and for the whole session: a
+      // padlock in place of the file glyph. .sldd keeps 'table' above — both of its
+      // forms are dictionaries, and its editable views use that same icon, so here the
+      // icon answers "which format is this" rather than "can I edit it".
+      //
+      // A custom editor's iconPath only reaches the tab on VS Code >= 1.106
+      // (microsoft/vscode#105028); older hosts ignore it and show the file glyph, which
+      // is what these tabs show today.
+      webviewPanel.iconPath = new vscode.ThemeIcon('lock');
     }
 
     // Source bytes for the file, read from disk (read-only view) — except for the first ask
