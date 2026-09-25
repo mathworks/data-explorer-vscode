@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.25.1] — 2026-09-25
+
+A model, MAT-file or project tab now carries a padlock, because the whole file opens read-only
+
 ## [1.25.0] — 2026-09-25
 
 Read-only table cells are readable in every theme, and a column that does not apply to a row says so on the cell's surface rather than by dimming its text further
