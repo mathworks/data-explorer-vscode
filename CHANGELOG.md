@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.25.0] — 2026-09-25
+
+Read-only table cells are readable in every theme, and a column that does not apply to a row says so on the cell's surface rather than by dimming its text further
+
 ## [1.24.8] — 2026-09-24
 
 The extension now carries the official Simulink product icon
