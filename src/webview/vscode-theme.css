@@ -4,11 +4,65 @@
 :root {
   --dex-color-text: var(--vscode-foreground);
   --dex-color-text-secondary: var(--vscode-descriptionForeground, var(--vscode-foreground));
-  --dex-color-text-muted: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+  /* Understated-but-readable text: read-only cells, element names, section headers,
+     object summaries, menu accelerators. Deliberately NOT disabledForeground, which is
+     what --dex-color-text-disabled below still uses — that token is `#CCCCCC80`, i.e.
+     half-transparent, and it means "you cannot interact with this" rather than "this is
+     computed". Composited it measures 3.69:1 on Dark Modern and 2.13:1 on Light Modern,
+     both under WCAG AA 4.5 (issue #26). Deriving the colour instead — the theme's own
+     foreground mixed toward the table's own background, opaque — measures 7.16:1 and
+     5.52:1, and holds in any theme including ones that do not exist yet. The 78% is the
+     readability/distinctness trade: raise it and read-only text gets easier to read but
+     harder to tell from editable text.
+
+     Why `transparent` rather than mixing toward --dex-bg-secondary, which renders the exact
+     same pixels (78% of the foreground over whatever is behind, either way):
+       1. It depends on --vscode-foreground alone, and that has a registry default in every
+          theme variant. Naming a background token puts that token in the dependency chain,
+          and a var() that resolves to nothing makes this whole declaration INVALID — at
+          which point every consumer silently falls back to its own hard-coded literal
+          (#666, #767676, …) and the theme is not involved at all. That is not theoretical:
+          HC Black and HC Light specify no sideBar.background, so the chain is one registry
+          default deep already.
+       2. Alpha composites over the surface the text is ACTUALLY on. Muted text on a hovered
+          or selected row sits on list.hoverBackground / list.activeSelectionBackground, not
+          on the table background, and a fixed opaque colour is mixed for the wrong surface
+          there. The context menu's accelerator sits on menu.background, further still.
+     The 50% of disabledForeground was never wrong because it used alpha; it was wrong
+     because 50% is too little ink.
+
+     THIS TOKEN IS DECLARED TWICE. dex-tree-table.ts redeclares it on tr.data-row.selected,
+     over the selection foreground instead of the editor foreground, because a row that
+     supplies its own ink has to supply its dim ink too. Change the 78% here and you must
+     change it there; a test pins the two together. A var() nested inside a custom property
+     is substituted where the property is DECLARED, not where it is used, so there is no way
+     to express this as one declaration parameterised by the row. */
+  --dex-color-text-muted: color-mix(in srgb, var(--vscode-foreground) 78%, transparent);
   --dex-color-text-disabled: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
   --dex-color-accent: var(--vscode-focusBorder);
   --dex-color-accent-hover: var(--vscode-focusBorder);
-  --dex-color-accent-bg: var(--vscode-list-activeSelectionBackground);
+  /* The selected row's surface. `list.activeSelectionBackground` is registered
+     `{dark:"#04395E", light:"#0060C0", hcDark:NULL, hcLight:"#0F4A85" at .1}` — so on HC
+     Black the variable does not exist, this declaration would be invalid at
+     computed-value time, and every consumer would fall back to its own literal. The
+     literal in dex-tree-table.ts is `#cde4f7`, a PALE BLUE, which on HC Black painted a
+     near-white row under near-white text: measured 1.24:1 for read-only cells and 1.31:1
+     for editable ones, i.e. a selected row nobody could read. Same trap as
+     --dex-color-text-muted above and --dex-color-bg-na below, and the reason all three
+     derive their fallback from --vscode-foreground, which the registry defines in every
+     variant.
+
+     25% rather than the 10% VS Code uses for list.hoverBackground on HC Black, so
+     selection stays distinguishable from hover instead of collapsing into it. Read-only
+     text over it measures 6.94:1 on HC Black.
+
+     One token, aliased twice: both public names map to this same VS Code colour here, and
+     writing the color-mix out twice is how the two drift apart later. */
+  --dex-selection-bg: var(
+    --vscode-list-activeSelectionBackground,
+    color-mix(in srgb, var(--vscode-foreground) 25%, transparent)
+  );
+  --dex-color-accent-bg: var(--dex-selection-bg);
   --dex-color-error: var(--vscode-errorForeground);
   --dex-color-warning: var(--vscode-editorWarning-foreground, var(--vscode-errorForeground));
 
@@ -16,12 +70,44 @@
   --dex-bg-secondary: var(--vscode-sideBar-background, var(--vscode-editor-background));
   --dex-bg-tertiary: var(--vscode-editorWidget-background, var(--vscode-editor-background));
   --dex-bg-hover: var(--vscode-list-hoverBackground);
-  --dex-bg-active: var(--vscode-list-activeSelectionBackground);
+  --dex-bg-active: var(--dex-selection-bg);
   --dex-bg-activity-bar: var(--vscode-activityBar-background, var(--vscode-sideBar-background));
 
   --dex-border-color: var(--vscode-panel-border, var(--vscode-editorWidget-border));
   --dex-border-color-light: var(--vscode-editorWidget-border, var(--vscode-panel-border));
   --dex-focus-ring: 0 0 0 1px var(--vscode-focusBorder);
+  /* The wash over a cell the column does not apply to — the surface half of the issue #26
+     design, where --dex-color-text-muted above is the ink half.
+
+     Derived from --vscode-foreground rather than borrowing a VS Code background
+     colour, for two independent reasons:
+       1. It self-inverts. A fraction of the theme's own text colour is a LIGHTENING on a
+          dark theme and a DARKENING on a light one, so one declaration is right in both
+          directions. Any fixed colour is wrong in half the themes, and VS Code has no
+          registered "subtle surface" colour to borrow that is defined in all four
+          variants — the same null-default trap documented on --dex-selection-bg above.
+       2. Alpha, so it composites over whatever the ROW is painted rather than over an
+          assumed table background. The rule that reads this sits on a <td> whose row
+          may be hovered or selected, and the wash has to stay visible on all three
+          surfaces.
+
+     5%, and the number is the end of a series worth recording, because every step in it
+     was a person looking at the table and saying there was too much on it:
+       - 7% flat, applied to every empty read-only cell. Rejected for SCOPE, not strength:
+         Usage and Status are blank on 100% of rows, so it shaded whole columns. Fixed by
+         NOT_APPLICABLE_WHEN_BLANK, which is why the strength was never actually judged.
+       - a 45deg hatch at 22% on a 5px period. Rejected as too eye-catching. Its average
+         ink was LESS than the 7% wash — a fifth of the cell at a fifth of the alpha — so
+         the lesson is that total ink is not what the eye reacts to in a grid. Hard edges
+         are, and a pattern is nothing but edges.
+       - the same hatch quietened to 10% on a 7px period, measured at 18/255. Still a
+         pattern, and a pattern is what was not wanted.
+     So: flat again, and 5% rather than the original 7% — around 9/255 on Dark Modern,
+     roughly two thirds of the wash that shipped first. A flat tint has no edges to catch
+     the eye, which is the property that lets it go this faint and still read as a different
+     surface. The cell is always EMPTY when this applies, so no text sits on the wash and
+     there is no contrast floor to respect. */
+  --dex-color-bg-na: color-mix(in srgb, var(--vscode-foreground) 5%, transparent);
 
   --dex-font-family: var(--vscode-font-family);
   --dex-font-mono: var(--vscode-editor-font-family, monospace);
@@ -41,6 +127,10 @@
   --dex-context-menu-bg: var(--vscode-menu-background, var(--vscode-editorWidget-background));
   --dex-context-menu-border: var(--vscode-menu-border, var(--vscode-editorWidget-border));
   --dex-context-menu-hover: var(--vscode-menu-selectionBackground, var(--vscode-list-hoverBackground));
-  --dex-context-menu-active: var(--vscode-menu-selectionBackground, var(--vscode-list-activeSelectionBackground));
+  /* Ends at --dex-selection-bg, not at --vscode-list-activeSelectionBackground: the LAST
+     link in a var() chain is the one that decides whether the declaration is valid, and
+     that colour is registered null on HC Black. A chain of two possibly-undefined
+     variables is not two chances, it is one failure. */
+  --dex-context-menu-active: var(--vscode-menu-selectionBackground, var(--dex-selection-bg));
   --dex-context-menu-separator: var(--vscode-menu-separatorBackground, var(--vscode-editorWidget-border));
 }
