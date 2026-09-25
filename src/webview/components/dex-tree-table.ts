@@ -178,6 +178,23 @@ const DEFAULT_COLUMN_ORDER = [
 ];
 const DEFAULT_HIDDEN_COLUMNS = ['Kind', 'Class', 'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit', 'storageClass', 'headerFile', 'alignment', 'lastModified', 'lastModifiedBy'];
 
+// The columns where an empty read-only cell means "this property does not exist for this
+// kind of object" rather than "this property is unset". Only these get the not-applicable
+// wash; see _cellStateClass for the measurement that picked them, and issue #26.
+//
+// Value and Data Type describe what the object IS, so a blank is structural: a
+// Simulink.Bus has no value, a service bus and an enum type have no data type — core
+// returns '' from ServiceBusNode.dataType and EnumTypeNode.dataType under a comment
+// saying exactly "not applicable". Every other column is a property that may simply not
+// be filled in, and a blank there is an empty value like any other.
+//
+// An ALLOW-list and not a deny-list, deliberately: a column added later gets no wash
+// until someone establishes that its blank is structural. That errs toward too few marks,
+// which is the safe direction here — the drawn state is the exception, and two separate
+// rounds of feedback on this table have been that there is too much on it, never too
+// little.
+const NOT_APPLICABLE_WHEN_BLANK = new Set(['Value', 'DataType']);
+
 // The display text of a cell value, which the host emits either as a plain
 // string or as an object carrying `text`.
 //
@@ -667,8 +684,40 @@ export class DexTreeTable extends LitElement {
         background: var(--dex-bg-hover, #e8e8e8);
       }
 
+      /* A selected row supplies its own INK as well as its own surface, because VS Code
+         chooses the two together and we were only taking one of them.
+
+         Without the color declaration below the row kept --vscode-foreground, safe exactly
+         as long as the theme's selection colour is a muted one. Both default Modern themes
+         are (#04395E dark, #E8E8E8 light), so nothing ever showed. But a theme that leaves
+         list.activeSelectionBackground unspecified gets the REGISTRY DEFAULT #0060C0 — a
+         saturated blue that VS Code pairs with white text — and measured against that the
+         selected row read 1.83:1 for editable ink and 1.66:1 for read-only on a light
+         theme. That is the issue #26 failure again, on the one surface issue #26 did not
+         look at.
+
+         --dex-row-ink exists so the colour is named once and read twice; the fallback is
+         --vscode-foreground, i.e. exactly the behaviour this replaces, which matters
+         because list.activeSelectionForeground is registered
+         {dark:#FFFFFF, light:#FFFFFF, hcDark:NULL, hcLight:NULL} — on both high-contrast
+         themes the fallback is the normal path, not an edge case.
+
+         The muted token is REDECLARED here rather than left to inherit, and that is the
+         whole point of the change: read-only ink has to be dim relative to the ink the ROW
+         is using, or it stays 78% of the editor foreground and goes invisible on a
+         saturated selection. Redeclared, not switched to currentColor, because a
+         currentColor mix compounds wherever these elements nest — .value-object sits inside
+         a read-only Value cell that has already taken 78%, so it would land on 78% x 78%
+         and measure about 4.3:1 on a light theme. A re-declaration is substituted once, on
+         this <tr>, so every descendant that reads the token gets one 78%.
+
+         The 78% is therefore written in two places (here and vscode-theme.css) and the two
+         must agree; treeTableCellStates.test.ts pins that they do. */
       tr.data-row.selected {
+        --dex-row-ink: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
         background: var(--dex-color-accent-bg, #cde4f7);
+        color: var(--dex-row-ink);
+        --dex-color-text-muted: color-mix(in srgb, var(--dex-row-ink) 78%, transparent);
       }
 
       tr.data-row.cut {
@@ -770,11 +819,6 @@ export class DexTreeTable extends LitElement {
 
       td:last-child {
         border-right: none;
-      }
-
-      /* The Data Type column is rendered in italics. */
-      td.col-DataType {
-        font-style: italic;
       }
 
       :host([table-style='light']) td {
@@ -1079,6 +1123,58 @@ export class DexTreeTable extends LitElement {
         color: var(--dex-color-text-muted, #666);
       }
 
+      /* --- The three cell states ----------------------------------------------
+         Issue #26 asked for two things that fight when one channel carries both:
+         read-only text has to be READABLE (AA), and read-only has to be TELLABLE
+         from editable. Text lightness cannot do both, because they are the same
+         axis — every step that makes the dim easier to read makes it look more
+         editable, which is why raising it to 78% fixed the contrast complaint and
+         made the differentiation complaint worse.
+
+         So the two states are drawn on two different channels, and neither one
+         moves: dim INK means "computed, not yours", and a washed SURFACE means
+         "this column does not apply to this row". Editable cells are the ones left
+         untouched — full-strength text on the plain row background — which is the
+         right way round, because they are what the user is looking for.
+
+         A hover-revealed version of this shipped first and was rejected in use: a
+         cue that appears under the pointer is motion in the corner of your eye on
+         every mouse move across a grid, and it answers the question only for the
+         one row you happen to be on when you are usually scanning a column. Both
+         cues are therefore permanent and at rest. */
+      td.cell-readonly {
+        color: var(--dex-color-text-muted, #666);
+      }
+
+      /* The wash. background-color and not a border, an outline or a pseudo-element:
+         it is the only one of those that reads as a property of the SURFACE rather
+         than as a mark placed in the cell. That is the whole distinction being drawn
+         here — the cell is not missing something, it is a cell that was never asked a
+         question — and anything with an edge to it says the opposite.
+
+         A flat tint and not the 45deg hatch this wore for a while, which was the same
+         statement made with edges. Edges are what the eye picks up in a grid: the hatch
+         carried LESS ink than the wash (a fifth of the cell at a fifth of the alpha) and
+         still read as louder, twice, at two different strengths. So the cue goes back onto
+         the one channel that can be very faint and still register — an even surface, which
+         has no edge anywhere in it to draw a glance.
+
+         Semi-transparent, and that is load-bearing rather than tasteful. A washed
+         cell has to stay washed on a row that is hovered or selected, and those
+         surfaces are painted by the <tr> underneath this cell. An opaque colour
+         would be mixed for the table background and would then either hide the row
+         state or clash with it; alpha composites over whatever the row is actually
+         painted, so the cell keeps its offset from its neighbours on every surface.
+
+         Excluded from the frozen first column, which is sticky over an OPAQUE
+         background of its own (see the td:first-child rule): a translucent colour
+         there would let the scrolled content show through. No loss — Name is not in
+         NOT_APPLICABLE_WHEN_BLANK, so this cannot match the first column anyway, and every
+         row has a name, so a blank there is a bug to fix rather than a state to draw. */
+      td.cell-blank:not(:first-child) {
+        background-color: var(--dex-color-bg-na, rgba(127, 127, 127, 0.05));
+      }
+
       /* Section header rows are intentionally understated: muted gray, italic
          Name, and no vertical cell borders so the row reads as one continuous
          strip rather than a set of columns. */
@@ -1107,11 +1203,11 @@ export class DexTreeTable extends LitElement {
       }
 
       .param-property {
-        color: var(--dex-text-muted, #888);
+        color: var(--dex-color-text-muted, #666);
       }
 
       .param-source {
-        color: var(--dex-text-muted, #888);
+        color: var(--dex-color-text-muted, #666);
         font-style: italic;
         font-size: 0.9em;
       }
@@ -1124,7 +1220,7 @@ export class DexTreeTable extends LitElement {
         /* 8px, which is what it has always rendered as: 4px of this used to come
            from the flex gap, and the qualifier is no longer a flex item. */
         margin-left: 8px;
-        color: var(--dex-text-muted, #888);
+        color: var(--dex-color-text-muted, #666);
         font-style: italic;
         font-size: 0.9em;
       }
@@ -2482,32 +2578,88 @@ export class DexTreeTable extends LitElement {
     );
   }
 
-  private _onCellDblClickIfEditable(row: TreeTableRow, columnId: string): void {
+  /**
+   * What a double-click on this cell would open, or null when the cell has no editor.
+   *
+   * Extracted so that editability is decided ONCE and read twice: here by the
+   * double-click handler that opens the editor, and by `_cellStateClass` below, whose
+   * `cell-editable` class draws a field boundary promising that an editor is there.
+   * Written out separately they were the same knowledge in two places — this table's
+   * recurring bug class — and the failure is worse than a missing cue: a boundary over
+   * a cell that will not open teaches the user to distrust the one signal the design
+   * rests on. treeTableCellStates.test.ts pins the two against each other.
+   */
+  private _cellEditTarget(
+    row: TreeTableRow,
+    columnId: string,
+  ): { text: string; editor?: string; options?: string[] } | null {
     if (columnId === 'Name') {
-      const editable = row.Name?.editable ?? false;
-      if (!editable) return;
-      this._onCellDblClick(row.ID, 'Name', row.Name?.label || '');
-    } else if (columnId === 'Value') {
+      return row.Name?.editable ? { text: row.Name?.label || '' } : null;
+    }
+    if (columnId === 'Value') {
       const val = isCellObject(row.Value)
         ? (row.Value as { text: string; editable?: boolean })
         : { text: cellText(row.Value), editable: row._valueEditable ?? false };
-      if (!val.editable) return;
-      this._onCellDblClick(row.ID, 'Value', val.text || '', (val as { editor?: string }).editor, (val as { options?: string[] }).options);
-    } else if (columnId === 'Description') {
+      if (!val.editable) return null;
+      return {
+        text: val.text || '',
+        editor: (val as { editor?: string }).editor,
+        options: (val as { options?: string[] }).options,
+      };
+    }
+    if (columnId === 'Description') {
       // The row's OWN Description flag, not its Value's: the node that cannot keep a
       // Description says so here (core: BaseNode.descriptionEditable), and offering an
       // editor anyway showed the user text that serialize drops on the next read.
-      if (row._descriptionEditable === false) return;
-      this._onCellDblClick(row.ID, 'Description', cellText(row.Description));
-    } else {
-      // Generic editable column (e.g. the schema Code Generation columns): the
-      // cell is an object carrying editable/editor/options. Read-only columns are
-      // plain strings and fall through with no editor.
-      const raw = (row as any)[columnId];
-      if (raw && typeof raw === 'object' && raw.editable === true) {
-        this._onCellDblClick(row.ID, columnId, String(raw.text ?? ''), raw.editor, raw.options);
-      }
+      if (row._descriptionEditable === false) return null;
+      return { text: cellText(row.Description) };
     }
+    // Generic editable column (e.g. the schema Code Generation columns): the
+    // cell is an object carrying editable/editor/options. Read-only columns are
+    // plain strings and fall through with no editor.
+    const raw = (row as any)[columnId];
+    if (raw && typeof raw === 'object' && raw.editable === true) {
+      return { text: String(raw.text ?? ''), editor: raw.editor, options: raw.options };
+    }
+    return null;
+  }
+
+  /**
+   * Which of the three cell states this cell is in, as a class the stylesheet acts on:
+   * `cell-editable`, `cell-readonly`, or `cell-readonly cell-blank` when the column does
+   * not apply to this row at all.
+   *
+   * Emptiness is decided by `_getCellText` — the same string this table searches, sorts
+   * and copies by — so "this cell is blank" means one thing across the component instead
+   * of one thing per column renderer. Several renderers return `html``` for an empty
+   * value, i.e. no element at all, which is exactly why the state has to live on the
+   * <td>: there is nothing inside an empty cell to hang it on.
+   *
+   * But emptiness ALONE is not the state. An empty cell means one of two different things
+   * and only one of them is worth drawing:
+   *   - the property does not exist for this kind of object (a Simulink.Bus has no value,
+   *     a service bus has no data type) — nothing will ever go here;
+   *   - the property exists and is simply unset (no usage recorded, not modified, no unit
+   *     given) — an empty VALUE, which is ordinary and needs no cue.
+   * Only NOT_APPLICABLE_WHEN_BLANK columns are the first kind. Measured over five real
+   * dictionaries with every column shown, the second kind is the overwhelming majority:
+   * Usage, Status, Unit and Header File are blank on 100% of rows, Storage Class and
+   * Alignment on 97%, Dimensions/Dimensions Mode/Complexity/Min/Max on 87-91%, Last
+   * Modified on 81%. Washing those painted whole columns solid, which is what it looks
+   * like — a cue carried by every row in a column distinguishes nothing, it just
+   * redecorates the table. Value (11%) and Data Type (26%) are the only columns where a
+   * blank is genuinely exceptional.
+   */
+  private _cellStateClass(row: TreeTableRow, columnId: string): string {
+    if (this._cellEditTarget(row, columnId)) return 'cell-editable';
+    if (!NOT_APPLICABLE_WHEN_BLANK.has(columnId)) return 'cell-readonly';
+    return this._getCellText(row, columnId) === '' ? 'cell-readonly cell-blank' : 'cell-readonly';
+  }
+
+  private _onCellDblClickIfEditable(row: TreeTableRow, columnId: string): void {
+    const target = this._cellEditTarget(row, columnId);
+    if (!target) return;
+    this._onCellDblClick(row.ID, columnId, target.text, target.editor, target.options);
   }
 
   private _onTableKeyDown(e: KeyboardEvent): void {
@@ -3394,10 +3546,14 @@ export class DexTreeTable extends LitElement {
                   >
                     ${visibleCols.map((col, ci) => {
                       const isFocused = this.selectedRowId === row.ID && this._focusedCol === ci;
+                      // A section row is a strip of heading, not a set of cells with
+                      // states: nothing on it is editable and its blanks are not
+                      // questions left unanswered, so it gets neither cue.
+                      const state = isSection ? '' : this._cellStateClass(row, col);
                       return html`<td
                         role="gridcell"
                         aria-colindex=${ci + 1}
-                        class="col-${col} ${isFocused ? 'focused' : ''}"
+                        class="col-${col} ${state} ${isFocused ? 'focused' : ''}"
                         @click=${(e: MouseEvent) => this._onCellClick(row.ID, ci, e)}
                         @dblclick=${() => this._onCellDblClickIfEditable(row, col)}
                       >
