@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 //
-// One table UI, three editors behind it, and the same fifteen messages dispatched three
+// One table UI, three editors behind it, and the same sixteen messages dispatched three
 // times.
 //
 // `TableToHostMessage` is the whole vocabulary the webview can speak. Every custom
@@ -28,7 +28,7 @@
 // The tier a provider sits in is read off the vscode interface it declares rather than
 // listed here, so it cannot be quietly wrong: making the read-only viewer editable means
 // changing `CustomReadonlyEditorProvider` to `CustomEditorProvider`, and that alone makes
-// this file demand all eleven editing messages of it.
+// this file demand all twelve editing messages of it.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -73,7 +73,20 @@ const ALWAYS = ['ready', 'select', 'navigate'];
 // the webview is told it is read-only and does not offer the gestures; an EDITABLE one
 // has no excuse, and this is the list that had to be implemented twice — once against a
 // TextDocument's edits, once against a re-zipped archive.
-const EDITING = ['edit', 'delete', 'addChild', 'copy', 'cut', 'paste', 'drop', 'dragStart', 'dragEnd', 'undo', 'redo'];
+const EDITING = [
+  'edit',
+  'delete',
+  'addChild',
+  'addEntry',
+  'copy',
+  'cut',
+  'paste',
+  'drop',
+  'dragStart',
+  'dragEnd',
+  'undo',
+  'redo',
+];
 
 // Reveal a range in the underlying text. Only meaningful for the one provider whose
 // document IS text: there is no offset to jump to inside a zip, and no text editor to

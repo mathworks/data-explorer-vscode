@@ -8,6 +8,8 @@ import {
   filterRows, formatToken, parseFilterExpression, removeToken,
   type FilterOp, type FilterTerm, type FilterToken,
 } from '../rowFilter.js';
+import './dex-add-gallery.js';
+import { ADD_GALLERY_WIDTH } from './dex-add-gallery.js';
 import './dex-column-filter.js';
 import './dex-filter-bar.js';
 import type { DexFilterBar } from './dex-filter-bar.js';
@@ -318,7 +320,10 @@ export class DexTreeTable extends LitElement {
         flex: 0 0 auto;
       }
 
-      .columns-button {
+      /* Add and Columns are one kind of control — a bar button that opens an anchored
+         popover — so they share the rule rather than each owning a copy of it. */
+      .columns-button,
+      .add-button {
         flex: 0 0 auto;
         height: 24px;
         display: inline-flex;
@@ -336,11 +341,13 @@ export class DexTreeTable extends LitElement {
         outline: none;
       }
 
-      .columns-button:hover {
+      .columns-button:hover,
+      .add-button:hover {
         background: var(--dex-bg-hover, #e8e8e8);
       }
 
-      .columns-button:focus-visible {
+      .columns-button:focus-visible,
+      .add-button:focus-visible {
         border-color: var(--dex-color-accent, #0078d4);
       }
 
@@ -1274,6 +1281,12 @@ export class DexTreeTable extends LitElement {
   // put, and why nothing visible happens here on a fast open.
   @property({ type: Boolean }) loading = false;
 
+  // Whether this view can create entries, i.e. whether the `⊞ Add` button exists at all.
+  // The host-facing module sets it from the same `editable` flag the context menu is
+  // gated on; a read-only view gets no button rather than a disabled one, because a
+  // disabled button invites a click and explains nothing.
+  @property({ type: Boolean }) canAdd = false;
+
   get selectedRowId(): string {
     return this.selectedRowIds[this.selectedRowIds.length - 1] || '';
   }
@@ -1352,6 +1365,15 @@ export class DexTreeTable extends LitElement {
   @state() private _menuDragOverCol: string | null = null;
   @state() private _menuDragOverSide: 'top' | 'bottom' | null = null;
 
+  // The Add gallery: open state and its viewport anchor, same as the column menu, but
+  // LEFT-anchored because the button is on the left of the bar.
+  @state() private _addGalleryOpen = false;
+  @state() private _addGalleryX = 0;
+  @state() private _addGalleryY = 0;
+  // Lives on the table, not in the popover, so the choice outlives a close/reopen: a
+  // user who pins is saying something about their next few minutes, not this one popover.
+  @state() private _addPinned = false;
+
   // The column whose filter popup is open, null when none is. Anchored in
   // viewport coordinates because the popup is position:fixed, like the column menu.
   @state() private _filterPopupCol: string | null = null;
@@ -1421,6 +1443,10 @@ export class DexTreeTable extends LitElement {
     if (this._columnMenuOpen) {
       this._columnMenuOpen = false;
     }
+    // Pinned or not. The pin means "an add does not close you", not "outlive the focus
+    // that opened you" — a popover still floating over the table after the user has
+    // clicked away to another tab is a popover that has stopped belonging to anything.
+    this._closeAddGallery();
     this._filterPopupCol = null;
   }
 
@@ -1430,6 +1456,14 @@ export class DexTreeTable extends LitElement {
       const menu = this.shadowRoot?.querySelector('.column-menu');
       if (menu && !path.includes(menu)) {
         this._columnMenuOpen = false;
+      }
+    }
+    if (this._addGalleryOpen) {
+      // composedPath, as below: the tiles and the pin live in the gallery's own shadow
+      // root, so a click on one is not a light-DOM descendant of the host element.
+      const gallery = this.shadowRoot?.querySelector('dex-add-gallery');
+      if (gallery && !path.includes(gallery)) {
+        this._closeAddGallery();
       }
     }
     if (this._filterPopupCol) {
@@ -1733,6 +1767,69 @@ export class DexTreeTable extends LitElement {
     this._dragOverColId = null;
     this._dragOverSide = null;
     this.requestUpdate();
+  }
+
+  // --- Add gallery ---
+
+  // Toggle the gallery, anchored under the button.
+  private _onAddButtonClick(e: MouseEvent): void {
+    e.preventDefault();
+    e.stopPropagation();
+    if (this._addGalleryOpen) {
+      this._closeAddGallery();
+      return;
+    }
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    // Left-anchored, because the button is at the left of the bar and the popover grows
+    // rightward — then clamped, because a split editor is routinely narrower than the
+    // popover and an unclamped left anchor would push the destination badges, which sit
+    // on the right of a tile, off the edge of the pane.
+    this._addGalleryX = Math.max(0, Math.min(rect.left, window.innerWidth - ADD_GALLERY_WIDTH - 4));
+    this._addGalleryY = rect.bottom + 2;
+    this._addGalleryOpen = true;
+  }
+
+  private _closeAddGallery(): void {
+    this._addGalleryOpen = false;
+  }
+
+  // A tile was clicked. Relayed rather than handled: the host owns every document edit,
+  // so this element's whole job is to say which class and which section (see
+  // dex-add-gallery.ts). Unpinned, the popover closes on the way out — the add is
+  // immediately followed by naming the row, and the popover would be in the way.
+  private _onAddTile(e: CustomEvent): void {
+    // The gallery's own event is composed, so without this it would also reach the
+    // host-facing module, which would see the same click twice under two names.
+    e.stopPropagation();
+    const detail = e.detail as { className: string; section: string; label: string };
+    // Whether the new row should open its name editor travels WITH the request, because it
+    // is a fact about this gesture and nothing later can recover it: by the time the host
+    // has written the entry and the rows have come back, the pin may have been toggled or
+    // the popover closed. Unpinned means one add and then naming it; pinned means a batch,
+    // where an editor opening under each tile click would fight the next one.
+    const rename = !this._addPinned;
+    this.dispatchEvent(
+      new CustomEvent('dex-add-entry', { detail: { ...detail, rename }, bubbles: true, composed: true }),
+    );
+    if (rename) {
+      this._closeAddGallery();
+    }
+  }
+
+  /**
+   * Open the inline name editor on a row, from outside the component.
+   *
+   * The host asks for this after creating an entry from the gallery (`beginRename`), and it
+   * goes through the very path a double-click takes — `_cellEditTarget`, which is the one
+   * place that knows whether a cell may be edited at all. So a row whose Name the host would
+   * refuse gets no editor rather than one whose commit bounces. Returns whether the editor
+   * opened, so a caller can keep holding a request whose row has not arrived yet.
+   */
+  beginRename(rowId: string): boolean {
+    const row = ((this.rows ?? []) as TreeTableRow[]).find((r) => r.ID === rowId);
+    if (!row) return false;
+    this._onCellDblClickIfEditable(row, 'Name');
+    return this._editingCell?.rowId === rowId;
   }
 
   // --- Column Customization Menu ---
@@ -3389,6 +3486,7 @@ export class DexTreeTable extends LitElement {
   private _renderFilterBar() {
     return html`
       <div class="filter-bar">
+        ${this._renderAddButton()}
         <dex-filter-bar
           .text=${this._filterText}
           .tokens=${this._filterTokens}
@@ -3414,8 +3512,8 @@ export class DexTreeTable extends LitElement {
     const body =
       this.rows.length === 0 ? this._renderNoRows() : this._renderTable(allVisible, totalRows, visibleCols);
     return html`
-      ${this._renderFilterBar()} ${body} ${this._renderColumnMenu()} ${this._renderColumnFilterPopup()}
-      ${this._renderDropTooltip()}
+      ${this._renderFilterBar()} ${body} ${this._renderAddGallery()} ${this._renderColumnMenu()}
+      ${this._renderColumnFilterPopup()} ${this._renderDropTooltip()}
     `;
   }
 
@@ -3595,6 +3693,37 @@ export class DexTreeTable extends LitElement {
         ? html`<span class="drop-tooltip-action">${this._dropTooltip}</span>`
         : ''}
     </div>`;
+  }
+
+  private _renderAddButton() {
+    if (!this.canAdd) return nothing;
+    return html`
+      <button
+        type="button"
+        class="add-button"
+        title="Add an entry"
+        aria-haspopup="dialog"
+        aria-expanded=${this._addGalleryOpen}
+        @click=${(e: MouseEvent) => this._onAddButtonClick(e)}
+      >
+        ⊞ Add
+      </button>
+    `;
+  }
+
+  private _renderAddGallery() {
+    if (!this._addGalleryOpen) return nothing;
+    return html`
+      <dex-add-gallery
+        style="left: ${this._addGalleryX}px; top: ${this._addGalleryY}px;"
+        .pinned=${this._addPinned}
+        @dex-add-tile=${this._onAddTile}
+        @dex-add-pin-changed=${(e: CustomEvent) => {
+          this._addPinned = !!(e.detail as { pinned: boolean }).pinned;
+        }}
+        @dex-add-closed=${() => this._closeAddGallery()}
+      ></dex-add-gallery>
+    `;
   }
 
   private _renderColumnsButton() {
