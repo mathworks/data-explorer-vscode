@@ -66,24 +66,33 @@ export const ADD_GALLERY_INSET = 12;
  * remainder that used to be shared out is now dead space at the end of each row — and that is
  * the price of a stable target to click.
  *
- * 124 is the number the badge in the top-right corner sets, not the label. The icon is centred,
- * so it moves right at half the rate the right-anchored badge does: the gap between them is
- * width / 2 - 11 - badge, and the widest badge ("Config") inks 42px — so a tile of this width
- * leaves 9px of gap, measured in all four themes. 100 was measured in the browser at a 1px
- * OVERLAP, which is what set a floor here in the first place.
+ * 112 is what the BADGE allows, and that is the whole answer to why it is not smaller. The
+ * maintainer asked for the narrowest width that still works for all the labels, and the labels
+ * turn out never to have been the constraint: a line gets `TILE_WIDTH` less 10px of padding and
+ * border, and the widest word in the catalog ("Connection") inks 65px, so on the labels alone a
+ * tile of 80 would do.
  *
- * (The comment this replaces claimed 11px. That was a real harness number belonging to a
- * different tile: `auto-fill` stretched every tile past this floor, so what got measured was a
- * 128px tile and what got written down was a property of 124. A fixed width is why it is worth
- * correcting — the floor is now the width, so the 9px is what ships. Each 2px of width buys 1px
- * of gap, and 128 would cost a column at 1200px, which is the trade this stays on the tidy side
- * of while `clearsIcon` holds.)
+ * The badge in the top-right corner is what stops it. It is right-anchored 3px in from the tile's
+ * edge and the icon is centred, so the icon approaches it at half the rate the tile narrows:
  *
- * A label line then gets 114px, where the widest word in the catalog ("Connection") inks 65 —
- * so the label has never been what set this number. Changing it is a harness measurement, not an
- * edit here: it now moves every tile rather than only the narrowest one.
+ *     gap = width / 2 - iconWidth / 2 - rightInset - badgeWidth
+ *         = width / 2 - 8 - 3 - badgeWidth
+ *
+ * The widest badge is "Config", and trimming its horizontal padding from 4px to 3px takes it from
+ * 42 to 40 — so the gap is width / 2 - 51, and this width leaves **5px**, measured in all four
+ * themes. The floor is therefore 102 and not 80: at 106 the two touch. 100 was measured in the
+ * browser at a 1px OVERLAP, which is what set a floor here in the first place.
+ *
+ * Down from 124, which left a 9px gap — a gap nobody was looking at, spent on white space inside
+ * every tile that the maintainer was (F5, 2026-09-28). 5px is still a visible separation at 2x,
+ * and `badge.clearsIcon` in the harness is what would notice if a future badge word ate it.
+ *
+ * The packing is better too, which was luck rather than design: 10 columns fit a 1200px editor
+ * with 2px left over, where 124 fit 9 with 10px and 116 would fit 9 with 82. The cost is at the
+ * other end — a 340px pane still holds two columns, so its dead space at the end of a row grows
+ * from 46px to 70. Changing this number is a harness measurement, not an edit here.
  */
-const TILE_WIDTH = 124;
+const TILE_WIDTH = 112;
 
 @customElement('dex-add-gallery')
 export class DexAddGallery extends LitElement {
@@ -236,7 +245,7 @@ export class DexAddGallery extends LitElement {
     }
 
     /* break-word is a backstop, not the mechanism: it only matters if a future one-word
-       label outgrows the 81px a line gets, and then it wraps inside its own tile rather
+       label outgrows the 102px a line gets, and then it wraps inside its own tile rather
        than over its neighbour. */
     .tile-line {
       display: block;
@@ -253,14 +262,19 @@ export class DexAddGallery extends LitElement {
        a flex child it added a third row to the six tiles that carry one, and a row of tiles
        is as tall as its tallest, so those six dragged twelve neighbours up with them. The
        corner it sits in is the tile's own, beside the centred icon — TILE_WIDTH is what keeps
-       the two from touching, and now that the width is fixed so is the 9px gap it leaves: it no
+       the two from touching, and now that the width is fixed so is the 5px gap it leaves: it no
        longer widens in a wide editor. Still last in DOM order, after the label; nothing about
-       the reading order changed, and the tile's accessible name was never these words. */
+       the reading order changed, and the tile's accessible name was never these words.
+
+       3px of horizontal padding rather than 4, which is 2px off the widest badge and so 1px of
+       the gap above bought back — the reason a tile could go to 112 instead of stopping at 116.
+       It is the cheapest px in this component: the badge is a 10px word on a rounded surface,
+       and at 4px it had more air inside it than the tile had beside it. */
     .tile-badge {
       position: absolute;
       top: 2px;
       right: 2px;
-      padding: 0 4px;
+      padding: 0 3px;
       border: 1px solid var(--dex-border-color, #d0d0d0);
       border-radius: 8px;
       font-size: 10px;

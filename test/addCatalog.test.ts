@@ -243,17 +243,17 @@ describe('how the catalog states a destination', () => {
     // — and it showed up there once already, as `Variant Config Data` clipped to
     // `Variant Co…` two rows under `Variant Control` and indistinguishable from it.
     //
-    // The numbers come from that harness run. Every tile is `TILE_WIDTH` (124px) wide — a fixed
+    // The numbers come from that harness run. Every tile is `TILE_WIDTH` (112px) wide — a fixed
     // size the row wraps rather than stretches, so there is one width to fear instead of a
-    // range — which leaves a label line 114px. The widest line in the catalog (`Connection`, 10
-    // characters) inks 65 of them — 6.5px per character, so 114 holds 17, and the fence keeps a
+    // range — which leaves a label line 102px. The widest line in the catalog (`Connection`, 10
+    // characters) inks 65 of them — 6.5px per character, so 102 holds 15, and the fence keeps a
     // character back. A third line is the other failure, because a row is as tall as its tallest
     // tile, so one three-line label makes its whole row grow. Both limits are deliberately
     // crude: a `W` is wider than an `i`, and this is a fence a new tile trips over rather than
     // a layout engine. A label that cannot fit should be broken differently (see `labelLines`)
     // or shortened; widening the tile is the last resort, and it means re-measuring with the
     // harness rather than raising a constant here.
-    const LIMIT = { chars: 16, lines: 2 };
+    const LIMIT = { chars: 14, lines: 2 };
     const problems: string[] = [];
     for (const tile of allTiles()) {
       const lines = labelLinesOf(tile);
