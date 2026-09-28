@@ -1588,6 +1588,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * Always narrow. The paste's wide fallback exists for a same-document MOVE whose sources
      * the model can no longer find; an add removes nothing, so there is no second text and
      * nothing to re-resolve.
+     *
+     * Call it through `queueAddEntry`, never directly — see the note there.
      */
     const applyAddEntry = async (msg: {
       section: string;
@@ -1644,6 +1646,33 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           webview.postMessage({ type: 'error', message });
         }
       }
+    };
+
+    /**
+     * Adds, one document state at a time.
+     *
+     * Every structural handler here reads `document.getText()` when it starts and applies its
+     * WorkspaceEdit at the end, which is safe for gestures a person can only make one at a
+     * time — a paste, a delete, a cell edit. The Add gallery's pin is different BY DESIGN: it
+     * exists so the user can click three tiles in a second, and each click posts its own
+     * message immediately. A second handler entered while the first was still inside
+     * `applyEdit` would read the text from before the first entry existed, compute its
+     * insertion offset there (`findEntriesArrayInsertion` answers the same offset for both),
+     * and write it — leaving the FILE listing the two entries in the opposite order from the
+     * MODEL, which is the narrow-vs-wide divergence the rows reorder under the user on the
+     * next full repaint. `test/addEntryHost.test.ts` pins that hazard.
+     *
+     * So the click is never dropped or coalesced; it just waits for the write in front of it.
+     * The `catch` keeps one failed add from poisoning the chain and silently swallowing every
+     * add after it — `applyAddEntry` reports its own failures and the next one starts clean.
+     *
+     * The compressed-binary provider needs none of this: its add is synchronous from
+     * `document.chunkXml` to `pushEdit`, so two messages cannot interleave at all.
+     */
+    let addChain: Promise<void> = Promise.resolve();
+    const queueAddEntry = (msg: { section: string; className: string; rename: boolean }): Promise<void> => {
+      addChain = addChain.catch(() => {}).then(() => applyAddEntry(msg));
+      return addChain;
     };
 
     // --- Drag start: snapshot the dragged rows into the host drag register ------
@@ -1849,7 +1878,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       } else if (msg?.type === 'paste') {
         void applyPaste(msg);
       } else if (msg?.type === 'addEntry') {
-        void applyAddEntry(msg);
+        void queueAddEntry(msg);
       } else if (msg?.type === 'dragStart') {
         applyDragStart(msg);
       } else if (msg?.type === 'dragEnd') {

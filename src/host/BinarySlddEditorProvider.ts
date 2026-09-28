@@ -1051,6 +1051,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
      * an add in a compressed dictionary produces the same class, name and stamps as an add in
      * a text one. The section is named by the message, because a gallery tile carries its own
      * destination rather than reading one off the selection.
+     *
+     * Synchronous end to end — `chunkXml` in, `pushEdit` out — so a pinned run of tile clicks
+     * arriving faster than a write needs no queue here. The JSON provider's add does (see
+     * `queueAddEntry` there): its write is a `WorkspaceEdit` it has to await, so two handlers
+     * can interleave around it. Same gesture, two document kinds, one of them exposed.
      */
     const applyAddEntry = (msg: { section: string; className: string; rename: boolean }): void => {
       try {

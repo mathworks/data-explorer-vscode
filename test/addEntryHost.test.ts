@@ -130,6 +130,40 @@ describe('an add creates the entry core says it creates', () => {
     for (const name of names) expect(sectionNames(reread, 'design')).toContain(name);
   });
 
+  it('needs each add of a run computed against the text the last one wrote', () => {
+    // WHY the JSON provider serializes adds on the write (`queueAddEntry`). Every structural
+    // handler there reads the document when it starts and writes when it ends; the gallery's
+    // pin is the one gesture that can arrive faster than that, so a second handler could read
+    // the text from before the first entry existed. Both adds then name the SAME insertion
+    // offset — and applied in order, the file lists them backwards from the model.
+    const uri = 'test://add-stale.sldd';
+    const { model, text } = openJson(uri);
+    const design = sectionByName(model, 'design');
+
+    const first = addNewEntry(text, design, 'Simulink.Parameter');
+    const stale = addNewEntry(text, design, 'Simulink.Parameter'); // the same text, twice
+    expect(stale.patch!.offset).toBe(first.patch!.offset);
+    // The model has them in click order…
+    const modelOrder = (design.children as any[]).slice(-2).map((e) => e.name);
+    // …and the file, written that way, does not. Inserting at a stale offset puts the second
+    // entry in FRONT of the first: rows that reorder under the user on the next full repaint,
+    // which is the narrow-vs-wide divergence this whole path is built to avoid.
+    const at = stale.patch!.offset;
+    const collided = first.newText.slice(0, at) + stale.patch!.text + first.newText.slice(at);
+    invalidate(uri);
+    const fileOrder = sectionNames(getModel(uri, 'arch.sldd', collided), 'design').slice(-2);
+    expect(fileOrder).toEqual([...modelOrder].reverse());
+
+    // Serialized — the second add reading the first's output — and the two agree.
+    invalidate(uri);
+    const fresh = getModel(uri, 'arch.sldd', text);
+    const freshDesign = sectionByName(fresh, 'design');
+    let working = text;
+    for (let i = 0; i < 2; i++) working = addNewEntry(working, freshDesign, 'Simulink.Parameter').newText;
+    invalidate(uri);
+    expect(sectionNames(getModel(uri, 'arch.sldd', working), 'design')).toEqual(sectionNames(fresh, 'design'));
+  });
+
   it('refuses a class the section does not allow, and says which section refused', () => {
     // Architectural Data stopped allowing a Signal in core v1.26.0 — the change this
     // gallery's catalog was built against. The gallery offers no such tile; reaching this
