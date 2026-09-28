@@ -125,8 +125,12 @@ export const ADD_CATALOG: readonly GalleryCategory[] = [
       iconId: 'typeEnum',
     },
   ]),
-  // Variant Config Data sits here, not under Configurations, because the word you
-  // search for is "variant". Its badge tells the truth about where the row lands.
+  // Variant Config sits here, not under Configurations, because the word you search for
+  // is "variant". Its badge tells the truth about where the row lands — and makes the
+  // shorter label safe, since the "Data" this drops is the part the badge already implies.
+  // The label is short because it is the one tile carrying both an icon and a badge whose
+  // full name did not fit the tile, which read as an ambiguous `Variant Co…` two rows under
+  // `Variant Control` (measured; see ADD_GALLERY_WIDTH).
   category('Variants', [
     { label: 'Variant Expression', className: 'Simulink.VariantExpression', section: 'design', iconId: 'wsVariant' },
     { label: 'Variant Control', className: 'Simulink.VariantControl', section: 'design', iconId: 'twoConnected_wsDefault' },
@@ -139,7 +143,7 @@ export const ADD_CATALOG: readonly GalleryCategory[] = [
       iconId: 'wsParameters_bankCoderInfo',
     },
     {
-      label: 'Variant Config Data',
+      label: 'Variant Config',
       className: 'Simulink.VariantConfigurationData',
       section: 'config',
       iconId: 'variantSettings',

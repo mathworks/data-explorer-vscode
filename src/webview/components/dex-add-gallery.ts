@@ -26,10 +26,18 @@ import type { GalleryCategory, GalleryTile } from '../../common/addCatalog.js';
  *
  * Exported because the table anchors the popover and has to clamp it against the right
  * edge of a narrow split pane, and a second copy of this number would put the clamp and
- * the box in quiet disagreement — the popover would render 340 wide and be positioned as
+ * the box in quiet disagreement — the popover would render one width and be positioned as
  * if it were something else.
+ *
+ * 380 rather than the 340 this started at, and the 40px is measured rather than chosen: two
+ * columns of `minmax(150px, 1fr)` split 340 into tiles whose label had 75px once the icon
+ * and a destination badge had taken theirs, which cut `Variant Config` short — and a tile
+ * reading `Variant Co…` sits two rows under `Variant Control` and cannot be told from it.
+ * At 380 that label has 95px for the 80 it needs, so the slack survives a platform whose
+ * 12px font is wider than this one's. Found by the browser harness; happy-dom lays nothing
+ * out, so no unit test here can see a clipped label.
  */
-export const ADD_GALLERY_WIDTH = 340;
+export const ADD_GALLERY_WIDTH = 380;
 
 @customElement('dex-add-gallery')
 export class DexAddGallery extends LitElement {
