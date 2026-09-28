@@ -42,6 +42,8 @@ import { setDrag, getDrag, clearDrag } from './dragState.js';
 import {
   registerWebview,
   unregisterWebview,
+  registerAddGalleryView,
+  unregisterAddGalleryView,
   registerSourceDeleter,
   unregisterSourceDeleter,
   broadcastClipboardState,
@@ -759,6 +761,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // any editor reach it — including a lazy cut, which only marks the clipboard
     // and needs a repaint to show the source row's affordance.
     registerWebview(webview, repaintClipMark);
+    // Register the keyboard's way into the Add gallery. The command (dataExplorer.addEntry)
+    // has no view of its own to act on, so each editable view says here how to open its
+    // gallery, and the hub picks the one whose panel is active.
+    registerAddGalleryView(webviewPanel, () => void webview.postMessage({ type: 'openAddGallery' }));
     // Register how to delete named entries from THIS document, so a cross-
     // document move whose SOURCE is this .sldd can complete its source-delete
     // via a format-appropriate edit (here: a full-text WorkspaceEdit).
@@ -1957,6 +1963,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     webview.html = this.getHtml(webview, distRoot);
     webviewPanel.onDidDispose(() => {
       unregisterWebview(webview);
+      unregisterAddGalleryView(webviewPanel);
       // If a drag originated from this now-closing view, drop it so a stale
       // register can't complete against another document.
       if (getDrag()?.sourceDocUri === uriString) {

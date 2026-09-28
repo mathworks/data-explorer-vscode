@@ -345,9 +345,58 @@ export class DexTreeTable extends LitElement {
         background: var(--dex-bg-hover, #e8e8e8);
       }
 
+      /* Held down for as long as its popover is showing, so the button says that clicking
+         it again will close what is on screen — the popover covers the table under it, and
+         without this the only way to find out is to try.
+
+         Keyed off aria-expanded rather than a class, because that attribute is already on
+         both buttons and already true exactly when the popover is open: a class would be a
+         second copy of the same fact, free to disagree with the one screen readers read.
+         After the hover rule on purpose — the two have equal specificity, and "this is open"
+         is worth more than "the pointer is here" when both are true.
+
+         The ink is switched WITH the surface, for the reason spelled out at
+         tr.data-row.selected below: --dex-bg-active is list.activeSelectionBackground, a
+         saturated blue VS Code pairs with white, and leaving the label at the editor
+         foreground measured 1.8:1 there the last time this file made that mistake. The
+         fallback chain ends at --vscode-foreground because activeSelectionForeground is
+         registered NULL on both high-contrast themes, where the background is a wash of the
+         foreground rather than a blue — so on those themes both halves stay as they were.
+
+         The border is what carries the state in LIGHT themes, and it is the reason this rule
+         is not a background alone. Light Modern's list.activeSelectionBackground is #E8E8E8
+         and its list.hoverBackground is #F2F2F2: measured side by side those are four percent
+         apart, so a pointer resting on the open button erased the only cue it had.
+         inputOption.activeBorder is VS Code's own "this toggle is on" colour — #005FB8 light,
+         #2488DB dark, contrastBorder on both HC themes, i.e. never invisible.
+
+         Only the BORDER comes from that group, deliberately. inputOption.activeBackground is
+         registered fully transparent on the HC themes, and a registered value satisfies var()
+         — so taking the surface from it would hand HC a pressed button with no surface at all
+         and no fallback to rescue it, which is the one place this cue is least affordable. */
+      .columns-button[aria-expanded='true'],
+      .add-button[aria-expanded='true'] {
+        background: var(--dex-bg-active, #e0e0e0);
+        color: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground, inherit));
+        border-color: var(--vscode-inputOption-activeBorder, var(--dex-color-accent, #0078d4));
+      }
+
       .columns-button:focus-visible,
       .add-button:focus-visible {
         border-color: var(--dex-color-accent, #0078d4);
+      }
+
+      /* Forced colors throws away every author background above, pressed included — so the
+         one state that has to survive is spelled again in system colors. Highlight is the
+         same pair the workbench uses for a selected item, and the plus glyph is stroked in
+         currentColor, so setting the text color carries the icon with it. */
+      @media (forced-colors: active) {
+        .columns-button[aria-expanded='true'],
+        .add-button[aria-expanded='true'] {
+          background: Highlight;
+          color: HighlightText;
+          border-color: Highlight;
+        }
       }
 
       /* Block, not inline, so the glyph sits on the button's centre line rather than on
@@ -1783,13 +1832,37 @@ export class DexTreeTable extends LitElement {
 
   // Toggle the gallery, anchored under the button.
   private _onAddButtonClick(e: MouseEvent): void {
+    // Stopped so the document-click listener above does not see this click as a click
+    // OUTSIDE the gallery and close what this is about to open — which is also what makes
+    // the second click on the button a close rather than a close-then-reopen.
     e.preventDefault();
     e.stopPropagation();
+    this.toggleAddGallery();
+  }
+
+  /**
+   * Open or close the Add gallery, anchored under the Add button.
+   *
+   * Public because the keyboard's way in comes from outside this element: the host's
+   * `dataExplorer.addEntry` command posts `openAddGallery`, and table-main calls this. It
+   * TOGGLES, so the accelerator behaves exactly as the button does rather than being a
+   * second, subtly different way to open the same popover.
+   *
+   * Anchored off the button found in the render root rather than off a click event, so the
+   * two callers agree on the geometry. A view that cannot add has no button to anchor to and
+   * nothing to open — the command is a no-op there, which is the right answer for a read-only
+   * .slx: the keybinding's `when` clause already excludes that view, but the Command Palette
+   * does not have to.
+   */
+  public toggleAddGallery(): void {
     if (this._addGalleryOpen) {
       this._closeAddGallery();
       return;
     }
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (!this.canAdd) return;
+    const button = this.renderRoot.querySelector<HTMLElement>('.add-button');
+    if (!button) return;
+    const rect = button.getBoundingClientRect();
     // The gallery spans this table, not a column of it (the maintainer's call): it takes the
     // table's own left edge and width, so it lines up with the editor tab underneath it and
     // its column count follows from how wide that tab is. Taken from the table rather than

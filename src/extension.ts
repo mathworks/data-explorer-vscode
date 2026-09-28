@@ -12,6 +12,7 @@ import { handleNavigate, requestSelect } from './host/navigate.js';
 import { invalidateUsageGraph } from './host/usageGraph.js';
 import { clearUsageSources } from './host/usageSources.js';
 import { searchDataSources } from './host/searchSources.js';
+import { openAddGalleryInActiveView } from './host/editorHub.js';
 import {
   listEntries,
   reindexFile,
@@ -339,6 +340,16 @@ export function activate(context: vscode.ExtensionContext): void {
         await openInBestEditor(vscode.Uri.parse(sourceUri), { preview: true });
       }),
     ),
+    // The keyboard's way to the Add gallery. Nothing is decided here: the hub posts to
+    // whichever editable table is active, and the webview toggles its own popover — so
+    // the accelerator and the button are one gesture rather than two code paths.
+    //
+    // Silent when no table is focused. The keybinding is `when`-scoped to the two editable
+    // views, but the Command Palette runs anything it lists, and "no gallery to open" is
+    // not an error worth a notification.
+    vscode.commands.registerCommand('dataExplorer.addEntry', () => {
+      openAddGalleryInActiveView();
+    }),
   );
 
   // Tabs that already exist are never reported as `opened`, and the failing open

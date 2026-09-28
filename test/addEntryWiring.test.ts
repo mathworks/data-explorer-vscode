@@ -120,6 +120,48 @@ describe('the Add gallery, wired through the webview entry point', () => {
     });
   });
 
+  describe('inward: openAddGallery is the accelerator arriving', () => {
+    const popover = () => table.shadowRoot.querySelector('dex-add-gallery');
+
+    it('opens the gallery, and toggles it exactly as the button does', async () => {
+      await paint(true);
+      send({ type: 'openAddGallery' });
+      await table.updateComplete;
+      expect(popover()).not.toBeNull();
+      // Toggled, not re-opened: the accelerator is the same gesture as the button, so a
+      // second press closes what the first opened rather than leaving it up.
+      send({ type: 'openAddGallery' });
+      await table.updateComplete;
+      expect(popover()).toBeNull();
+    });
+
+    it('opens nothing on a read-only view', async () => {
+      // The Command Palette lists what its `when` clause allows, but a palette entry is not
+      // a promise — and a read-only .slx has no Add button to anchor a popover to.
+      await paint(false);
+      send({ type: 'openAddGallery' });
+      await table.updateComplete;
+      expect(popover()).toBeNull();
+    });
+
+    it('adds from the gallery it opened, like any other', async () => {
+      // The whole point of routing the key through the button's own method: what opens is
+      // the same popover, wired to the same outward relay.
+      await paint(true);
+      send({ type: 'openAddGallery' });
+      await table.updateComplete;
+      const g = popover() as any;
+      await g.updateComplete;
+      const tile = [...g.shadowRoot.querySelectorAll('.tile')].find(
+        (t: any) => t.dataset.className === 'Simulink.Parameter',
+      ) as HTMLElement;
+      tile.click();
+      expect(addsOf()).toEqual([
+        { type: 'addEntry', section: 'design', className: 'Simulink.Parameter', rename: true },
+      ]);
+    });
+  });
+
   describe('inward: beginRename opens the editor on the new entry', () => {
     const editingCell = () => table._editingCell ?? null;
     const editorInput = () => table.shadowRoot.querySelector('.edit-input') as HTMLInputElement | null;

@@ -82,6 +82,8 @@ import { setDrag, getDrag, clearDrag } from './dragState.js';
 import {
   registerWebview,
   unregisterWebview,
+  registerAddGalleryView,
+  unregisterAddGalleryView,
   registerSourceDeleter,
   unregisterSourceDeleter,
   broadcastClipboardState,
@@ -624,6 +626,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // source-delete via a format-appropriate edit (an in-memory chunkXml splice
     // pushed onto this document's own undo stack, then a repaint).
     registerWebview(webview, repaintClipMark);
+    // And so the Add-gallery keybinding, which has no view of its own to act on, can open
+    // this one's gallery when this is the panel the user is looking at.
+    registerAddGalleryView(webviewPanel, () => void webview.postMessage({ type: 'openAddGallery' }));
     registerSourceDeleter(uriString, (targets) => {
       const before = document.chunkXml;
       const after = deleteEntriesByNameXml(before, targets);
@@ -1232,6 +1237,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
 
     webviewPanel.onDidDispose(() => {
       unregisterWebview(webview);
+      unregisterAddGalleryView(webviewPanel);
       document.views.delete(view);
       // If a drag originated from this now-closing view, drop it so a stale
       // register can't complete against another document.

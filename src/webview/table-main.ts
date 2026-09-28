@@ -391,6 +391,11 @@ window.addEventListener('message', (event: MessageEvent) => {
     // (the host paints the new rows before it asks), else hold until the repaint arrives.
     pendingRenameId = typeof msg.rowId === 'string' ? msg.rowId : null;
     applyPendingRename();
+  } else if (msg.type === 'openAddGallery') {
+    // The Add-gallery accelerator (dataExplorer.addEntry) arriving from the host. Handed
+    // straight to the same method the button calls, so the keyboard and the pointer share
+    // one path — including the toggle, and including the no-op on a view that cannot add.
+    table.toggleAddGallery();
   } else if (msg.type === 'clipboardState') {
     clipboardState = {
       canPaste: !!msg.canPaste,

@@ -181,6 +181,21 @@ export interface BeginRenameMessage {
   rowId: string;
 }
 
+/**
+ * Open the Add gallery, as if its button had been clicked.
+ *
+ * The keyboard's way in. A webview cannot own a VS Code keybinding for a control inside itself,
+ * so the accelerator is a contributed command (`dataExplorer.addEntry`) that lands in the host
+ * and posts this to the focused table. It toggles, exactly as the button does — the same gesture
+ * arriving by another road, rather than a second way to open the same popover.
+ *
+ * Carries nothing: where the gallery goes and how wide it is are measured in the webview from
+ * the table's own box, and the host knows neither.
+ */
+export interface OpenAddGalleryMessage {
+  type: 'openAddGallery';
+}
+
 /** Transient red error banner. */
 export interface ErrorMessage {
   type: 'error';
@@ -219,6 +234,7 @@ export type HostToTableMessage =
   | SelectByNameMessage
   | SelectRowsMessage
   | BeginRenameMessage
+  | OpenAddGalleryMessage
   | ErrorMessage
   | ValidationErrorMessage;
 

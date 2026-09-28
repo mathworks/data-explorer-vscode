@@ -146,6 +146,12 @@
         "title": "Search Data Source Entries",
         "category": "Data Explorer",
         "icon": "$(search)"
+      },
+      {
+        "command": "dataExplorer.addEntry",
+        "title": "Add an Entry",
+        "category": "Data Explorer",
+        "icon": "$(add)"
       }
     ],
     "menus": {
@@ -169,6 +175,10 @@
         {
           "command": "dataExplorer.viewAsTable",
           "when": "resourceExtname == .sldd"
+        },
+        {
+          "command": "dataExplorer.addEntry",
+          "when": "activeCustomEditorId == dataExplorer.tableView || activeCustomEditorId == dataExplorer.binarySlddView"
         }
       ],
       "view/title": [
@@ -184,6 +194,12 @@
         "command": "dataExplorer.searchDataSources",
         "key": "ctrl+alt+e",
         "mac": "cmd+alt+e"
+      },
+      {
+        "command": "dataExplorer.addEntry",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a",
+        "when": "activeCustomEditorId == dataExplorer.tableView || activeCustomEditorId == dataExplorer.binarySlddView"
       }
     ]
   },

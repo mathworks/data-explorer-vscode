@@ -16,7 +16,7 @@
 // them is a run of single clicks.
 
 import { LitElement, html, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import './dex-icon.js';
 import { ADD_CATALOG, SECTION_LABEL, badgeOf, labelLinesOf } from '../../common/addCatalog.js';
 import type { GalleryCategory, GalleryTile } from '../../common/addCatalog.js';
@@ -242,9 +242,122 @@ export class DexAddGallery extends LitElement {
    */
   @property({ type: Boolean }) pinned = false;
 
+  /**
+   * Which tile is the grid's one tab stop — the roving tabindex.
+   *
+   * 28 tiles were 28 tab stops, so reaching Configurations from the keyboard cost 20-odd
+   * presses of Tab and leaving the gallery cost the rest. The pattern every grid of buttons
+   * uses instead is this: the grid is ONE stop, and the arrows move within it. Tab then means
+   * "leave", which is what a user pressing it wants.
+   *
+   * An index into the tiles in DOM order, which is the catalog's order. Not a tile identity,
+   * because the movement is positional: Left/Right is a step along this list and runs from the
+   * end of one row into the start of the next, while Up/Down is measured off the boxes the
+   * grid actually drew (see _rowStep) — the column count depends on how wide the editor is,
+   * so it is not a number this component can do arithmetic with.
+   */
+  @state() private _activeIndex = 0;
+
   /** Focus the first tile, so the popover is usable from the keyboard on open. */
   override firstUpdated(): void {
-    this.renderRoot.querySelector<HTMLButtonElement>('.tile')?.focus();
+    this._focusTile(0);
+  }
+
+  /** The tiles in drawn order. Read from the DOM, because that IS the order arrows step. */
+  private _tiles(): HTMLButtonElement[] {
+    return [...this.renderRoot.querySelectorAll<HTMLButtonElement>('.tile')];
+  }
+
+  private _focusTile(index: number): void {
+    this._activeIndex = index;
+    this._tiles()[index]?.focus();
+  }
+
+  /**
+   * Keep the tab stop on whatever the user last touched.
+   *
+   * Focus can land on a tile without an arrow key: a click, a Shift+Tab back in from the
+   * pin. If the stop did not follow, Tab would leave from one tile while the arrows carried
+   * on from another, and the first arrow press after a click would jump somewhere unrelated.
+   */
+  private _onFocusIn(e: FocusEvent): void {
+    const index = this._tiles().indexOf(e.target as HTMLButtonElement);
+    if (index >= 0) this._activeIndex = index;
+  }
+
+  /**
+   * Where a key takes the focus, or null if this component has no answer for it.
+   *
+   * Clamped at both ends rather than wrapping. A gallery is a surface with a shape, not a
+   * carousel: Right at the last tile wrapping to the first would lose the user's place in a
+   * list six headings long, and the bottom of the list is where the arrow keys should stop.
+   */
+  private _nextIndex(key: string): number | null {
+    const tiles = this._tiles();
+    if (tiles.length === 0) return null;
+    const last = tiles.length - 1;
+    // Clamped on the way IN as well, so a catalog that shrank under a stale index cannot
+    // make every key a no-op.
+    const from = Math.min(Math.max(this._activeIndex, 0), last);
+    switch (key) {
+      case 'ArrowRight':
+        return Math.min(from + 1, last);
+      case 'ArrowLeft':
+        return Math.max(from - 1, 0);
+      case 'Home':
+        return 0;
+      case 'End':
+        return last;
+      case 'ArrowDown':
+        return this._rowStep(tiles, from, 1);
+      case 'ArrowUp':
+        return this._rowStep(tiles, from, -1);
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * The tile one row down (dir 1) or up (dir -1), by geometry.
+   *
+   * Geometry rather than index arithmetic, because the column count is not a constant here:
+   * the gallery is as wide as the editor tab, so a row holds nine tiles in a maximised window
+   * and two in a narrow pane. Measuring the boxes also makes a heading no obstacle — the
+   * nearest row above the first row of Types is the last row of Interfaces, which is exactly
+   * where Up should go.
+   *
+   * Finds the nearest row edge in that direction, then the tile in it whose centre is closest
+   * horizontally, so a column is held while moving down it. Returns `from` at the ends.
+   *
+   * Needs a layout engine, so it is the one part of this that happy-dom cannot exercise: every
+   * box there is 0x0, every top is equal, and this correctly answers "no row that way". It is
+   * checked in the browser harness instead.
+   */
+  private _rowStep(tiles: HTMLElement[], from: number, dir: 1 | -1): number {
+    const boxes = tiles.map((el) => el.getBoundingClientRect());
+    const here = boxes[from];
+    const centre = here.left + here.width / 2;
+    // A row is "the same top, within a pixel" — a tile's height is uniform, but a subpixel
+    // grid position is not something to compare exactly.
+    let rowTop: number | null = null;
+    for (const box of boxes) {
+      const beyond = dir === 1 ? box.top > here.top + 1 : box.top < here.top - 1;
+      if (!beyond) continue;
+      if (rowTop === null || (dir === 1 ? box.top < rowTop : box.top > rowTop)) rowTop = box.top;
+    }
+    if (rowTop === null) return from;
+    const top = rowTop;
+    let best = from;
+    let bestDistance = Infinity;
+    boxes.forEach((box, index) => {
+      if (Math.abs(box.top - top) > 1) return;
+      const distance = Math.abs(box.left + box.width / 2 - centre);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = index;
+      }
+    });
+    return best;
   }
 
   private _onTile(tile: GalleryTile): void {
@@ -267,17 +380,36 @@ export class DexAddGallery extends LitElement {
   }
 
   private _onKeyDown(e: KeyboardEvent): void {
-    if (e.key !== 'Escape') return;
-    // Stopped so the table's own Escape — which clears the whole filter — does not also
-    // fire. Dismissing a popover must not throw away the user's search.
+    if (e.key === 'Escape') {
+      // Stopped so the table's own Escape — which clears the whole filter — does not also
+      // fire. Dismissing a popover must not throw away the user's search.
+      e.preventDefault();
+      e.stopPropagation();
+      this._close();
+      return;
+    }
+    // Only from a tile. The one other focusable thing in here is the pin checkbox, and a key
+    // pressed on a checkbox belongs to the checkbox — the grid taking the arrows from it would
+    // teleport the focus out of the header.
+    if (!(e.target as HTMLElement | null)?.classList?.contains('tile')) return;
+    const next = this._nextIndex(e.key);
+    if (next === null) return;
+    // Both halves matter. preventDefault stops the arrow from ALSO scrolling the popover,
+    // which would move the tile out from under the focus it just landed on; stopPropagation
+    // keeps it off the table behind, where an arrow moves the row selection.
     e.preventDefault();
     e.stopPropagation();
-    this._close();
+    this._focusTile(next);
   }
 
   override render() {
+    // The flat position of each tile, counted across categories as they are drawn, because
+    // that is the list the arrows walk — Right at the end of Parameters goes to the first
+    // Signal, not nowhere. Counted here rather than looked up per tile so the number cannot
+    // disagree with the DOM order it names.
+    let index = 0;
     return html`
-      <div role="dialog" aria-label="Add an entry" @keydown=${this._onKeyDown}>
+      <div role="dialog" aria-label="Add an entry" @keydown=${this._onKeyDown} @focusin=${this._onFocusIn}>
         <div class="gallery-header">
           <span class="gallery-title">Add</span>
           <label
@@ -298,7 +430,7 @@ export class DexAddGallery extends LitElement {
               <span class="kind-name">${category.title}</span>
             </div>
             <div class="tiles" role="group" aria-label=${category.title}>
-              ${category.tiles.map((tile) => this._renderTile(category, tile))}
+              ${category.tiles.map((tile) => this._renderTile(category, tile, index++))}
             </div>
           `,
         )}
@@ -306,7 +438,7 @@ export class DexAddGallery extends LitElement {
     `;
   }
 
-  private _renderTile(category: GalleryCategory, tile: GalleryTile) {
+  private _renderTile(category: GalleryCategory, tile: GalleryTile, index: number) {
     const badge = badgeOf(category, tile);
     // The accessible name has to carry the destination whether or not a badge does:
     // a screen reader gets no heading context from a button inside a group, and the
@@ -318,6 +450,8 @@ export class DexAddGallery extends LitElement {
         class="tile"
         data-class-name=${tile.className}
         data-section=${tile.section}
+        data-index=${index}
+        tabindex=${index === this._activeIndex ? 0 : -1}
         aria-label=${description}
         title=${description}
         @click=${() => this._onTile(tile)}

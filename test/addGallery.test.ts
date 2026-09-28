@@ -144,6 +144,106 @@ describe('dex-add-gallery', () => {
     const el = await gallery();
     expect(el.shadowRoot!.activeElement).toBe($(el, '.tile'));
   });
+
+  // --- Roving tabindex -------------------------------------------------------
+  //
+  // 28 tiles were 28 tab stops: Configurations was twenty-odd presses of Tab away, and
+  // leaving the gallery was the rest of them. One stop for the grid, arrows within it.
+
+  const stop = (el: DexAddGallery) => $$(el, '.tile').findIndex((t) => t.getAttribute('tabindex') === '0');
+  const focused = (el: DexAddGallery) => $$(el, '.tile').indexOf(el.shadowRoot!.activeElement as HTMLElement);
+  const press = async (el: DexAddGallery, key: string) => {
+    const ev = new KeyboardEvent('keydown', { key, bubbles: true, composed: true, cancelable: true });
+    (el.shadowRoot!.activeElement as HTMLElement).dispatchEvent(ev);
+    await el.updateComplete;
+    return ev;
+  };
+
+  it('is one tab stop, not twenty-eight', async () => {
+    const el = await gallery();
+    const tiles = $$(el, '.tile');
+    expect(tiles.filter((t) => t.getAttribute('tabindex') === '0').length).toBe(1);
+    expect(tiles.filter((t) => t.getAttribute('tabindex') === '-1').length).toBe(tiles.length - 1);
+    expect(stop(el)).toBe(0);
+  });
+
+  it('steps sideways with the arrows, and the stop follows the focus', async () => {
+    const el = await gallery();
+    await press(el, 'ArrowRight');
+    expect(focused(el)).toBe(1);
+    expect(stop(el)).toBe(1);
+    await press(el, 'ArrowLeft');
+    expect(focused(el)).toBe(0);
+    expect(stop(el)).toBe(0);
+  });
+
+  // The step is along the flat list, so it runs off the end of one category into the start
+  // of the next rather than stopping at a heading. Parameters holds six tiles, so the
+  // seventh is the first Signal.
+  it('steps across a category boundary, because the list is flat', async () => {
+    const el = await gallery();
+    const first = ADD_CATALOG[0].tiles.length;
+    for (let i = 0; i < first; i++) await press(el, 'ArrowRight');
+    expect(focused(el)).toBe(first);
+    expect($$(el, '.tile')[first].dataset.className).toBe(ADD_CATALOG[1].tiles[0].className);
+  });
+
+  // Clamped, not wrapped: a gallery is a surface with a shape, and Right at the last tile
+  // landing back on the first would lose the user's place in a list six headings long.
+  it('stops at both ends rather than wrapping round', async () => {
+    const el = await gallery();
+    await press(el, 'ArrowLeft');
+    expect(focused(el)).toBe(0);
+    await press(el, 'End');
+    const last = $$(el, '.tile').length - 1;
+    expect(focused(el)).toBe(last);
+    await press(el, 'ArrowRight');
+    expect(focused(el)).toBe(last);
+    await press(el, 'Home');
+    expect(focused(el)).toBe(0);
+  });
+
+  // Vertical movement is measured off the boxes the grid drew, because the column count is
+  // not a constant — the gallery is as wide as the editor tab, so a row holds nine tiles in
+  // a maximised window and two in a narrow pane. happy-dom draws no boxes at all, so what is
+  // pinned here is the degenerate answer ("no row that way", focus unmoved, nothing thrown);
+  // that it really moves a row is measured in the browser harness.
+  it('answers up and down without a layout engine by not moving', async () => {
+    const el = await gallery();
+    await press(el, 'ArrowDown');
+    expect(focused(el)).toBe(0);
+    await press(el, 'ArrowUp');
+    expect(focused(el)).toBe(0);
+  });
+
+  it('keeps the arrows to itself, so the table behind does not move its selection', async () => {
+    const el = await gallery();
+    const ev = await press(el, 'ArrowRight');
+    expect(ev.defaultPrevented).toBe(true);
+    expect(ev.cancelBubble).toBe(true);
+  });
+
+  it('leaves a key pressed on the pin to the pin', async () => {
+    const el = await gallery();
+    const ev = new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, composed: true, cancelable: true });
+    $(el, '.gallery-pin input').dispatchEvent(ev);
+    await el.updateComplete;
+    expect(ev.defaultPrevented).toBe(false);
+    expect(focused(el)).toBe(0);
+    expect(stop(el)).toBe(0);
+  });
+
+  // A click, or a Shift+Tab back in from the pin, moves the focus without an arrow key. If
+  // the stop did not follow, Tab would leave from one tile while the arrows carried on from
+  // another, and the first arrow press after a click would jump somewhere unrelated.
+  it('moves the stop to a tile that was focused some other way', async () => {
+    const el = await gallery();
+    $$(el, '.tile')[5].focus();
+    await el.updateComplete;
+    expect(stop(el)).toBe(5);
+    await press(el, 'ArrowRight');
+    expect(focused(el)).toBe(6);
+  });
 });
 
 describe('the table and the gallery together', () => {
@@ -226,6 +326,64 @@ describe('the table and the gallery together', () => {
     button(el)!.click();
     await el.updateComplete;
     expect(popover(el)).toBeNull();
+  });
+
+  // The pressed look (maintainer's ask, 2026-09-28): while the popover is showing, the
+  // button that opened it is drawn held down, so it is clear that clicking it again closes
+  // what is on screen rather than opening a second one.
+  //
+  // What is checked here is that the state the rule keys off is the aria attribute, and that
+  // the rule exists for BOTH bar buttons — Add and Columns are one kind of control and both
+  // toggle, so a pressed look on one and not the other would be a bug either way. The pixels
+  // are not visible from happy-dom (no stylesheet is applied and nothing is laid out); the
+  // colours are measured in the browser harness.
+  it('draws a bar button held down while its popover shows, keyed off aria-expanded', async () => {
+    const el = await table();
+    const cssText = [(customElements.get('dex-tree-table') as any).styles]
+      .flat()
+      .map((s: any) => s.cssText)
+      .join('\n');
+    expect(cssText).toContain(".add-button[aria-expanded='true']");
+    expect(cssText).toContain(".columns-button[aria-expanded='true']");
+
+    // The pressed rule carries a border as well as a surface, because in Light Modern the
+    // surface alone (#E8E8E8 selection over #F2F2F2 hover) is four percent of grey.
+    expect(cssText).toContain('--vscode-inputOption-activeBorder');
+    // And the surface is NOT taken from that same group: inputOption.activeBackground is
+    // registered `transparent` on the high-contrast themes, where a var() fallback therefore
+    // never fires and the button would lose its only cue. Cheap to write, invisible to review,
+    // and exactly the kind of regression a browser harness cannot catch either — the harness
+    // leaves the HC token undefined, so the trap would measure as though it worked.
+    expect(cssText).not.toContain('--vscode-inputOption-activeBackground');
+
+    // And the attribute is a live answer on both, not decoration on one.
+    const columns = el.shadowRoot!.querySelector('.columns-button') as HTMLElement;
+    expect(columns.getAttribute('aria-expanded')).toBe('false');
+    columns.click();
+    await el.updateComplete;
+    expect(columns.getAttribute('aria-expanded')).toBe('true');
+    expect(button(el)!.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  // The keyboard's way in (dataExplorer.addEntry → openAddGallery → here). A method rather
+  // than a synthetic click so the host does not have to find a button in a shadow root, and
+  // a TOGGLE so the accelerator behaves exactly as the button does.
+  it('opens and closes from toggleAddGallery, and does nothing where nothing can be added', async () => {
+    const el = await table();
+    el.toggleAddGallery();
+    await el.updateComplete;
+    expect(popover(el)).not.toBeNull();
+    expect(button(el)!.getAttribute('aria-expanded')).toBe('true');
+    el.toggleAddGallery();
+    await el.updateComplete;
+    expect(popover(el)).toBeNull();
+
+    // A read-only view has no button to anchor to and nothing to add. The keybinding's `when`
+    // clause already excludes it, but the Command Palette does not have to.
+    const readOnly = await table(false);
+    readOnly.toggleAddGallery();
+    await readOnly.updateComplete;
+    expect(popover(readOnly)).toBeNull();
   });
 
   it('relays a tile as one outward request per click', async () => {

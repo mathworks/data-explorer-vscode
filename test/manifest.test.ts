@@ -160,9 +160,66 @@ describe('menu wiring', () => {
     expect(textNeedsCustom && tableNeedsNoCustom).toBe(true);
   });
 
-  it('restricts the palette entries to .sldd files', () => {
+  // Every palette entry has to be scoped to something it can actually act on, and there are
+  // two honest ways to say so. The editor toggles are about the FILE, so they name the
+  // extension. "Add an Entry" is about the VIEW: a .sldd open in the plain text editor has no
+  // gallery to open, and the two editable table editors are only ever .sldd anyway — so
+  // naming them is both narrower and more precise than naming the extension.
+  it('scopes every palette entry to a .sldd file or to an editable table view', () => {
+    const EDITABLE_VIEWS = [TABLE_VIEW, BINARY_SLDD_VIEW];
     for (const entry of contributes.menus.commandPalette) {
-      expect(entry.when).toContain('resourceExtname == .sldd');
+      const byFile = entry.when.includes('resourceExtname == .sldd');
+      const byView = EDITABLE_VIEWS.some((v: string) => entry.when.includes(`activeCustomEditorId == ${v}`));
+      expect(byFile || byView, `palette entry ${entry.command} is offered everywhere`).toBe(true);
     }
+  });
+});
+
+// The keyboard's way into the Add gallery. The command itself is the whole feature on the
+// host side (it posts to the focused table and decides nothing), so what is worth pinning is
+// the manifest: a declared command, a palette entry, and an accelerator that can only fire
+// where there is a gallery to open.
+describe('the Add-gallery accelerator', () => {
+  const keybindings = contributes.keybindings as Array<{
+    command: string;
+    key: string;
+    mac?: string;
+    when?: string;
+  }>;
+  const ADD = 'dataExplorer.addEntry';
+
+  it('declares the command, with an icon, in the Data Explorer category', () => {
+    const cmd = contributes.commands.find((c: { command: string }) => c.command === ADD);
+    expect(cmd).toBeTruthy();
+    expect(cmd.category).toBe('Data Explorer');
+    expect(cmd.icon).toMatch(/^\$\(/);
+  });
+
+  it('binds one accelerator on both platforms', () => {
+    const entries = keybindings.filter((k) => k.command === ADD);
+    expect(entries.length).toBe(1);
+    expect(entries[0].key).toBe('ctrl+alt+a');
+    expect(entries[0].mac).toBe('cmd+alt+a');
+  });
+
+  // Unscoped, this would steal cmd+alt+a from every other editor in the workbench. Scoped to
+  // the two EDITABLE table views — the read-only .slx/.mat view has no Add button, so binding
+  // a key there would be a key that does nothing.
+  it('fires only where an entry can be added', () => {
+    const when = keybindings.find((k) => k.command === ADD)!.when!;
+    expect(when).toContain(`activeCustomEditorId == ${TABLE_VIEW}`);
+    expect(when).toContain(`activeCustomEditorId == ${BINARY_SLDD_VIEW}`);
+    expect(when).not.toContain(BINARY_VIEW);
+  });
+
+  it('takes a key no other Data Explorer binding has', () => {
+    const keys = keybindings.map((k) => `${k.key} ${k.mac ?? ''}`);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('is offered in the palette, scoped the same way as the key', () => {
+    const entry = contributes.menus.commandPalette.find((m: { command: string }) => m.command === ADD);
+    expect(entry).toBeTruthy();
+    expect(entry.when).toBe(keybindings.find((k) => k.command === ADD)!.when);
   });
 });
