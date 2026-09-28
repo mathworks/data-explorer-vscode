@@ -12,7 +12,7 @@
     "url": "https://github.com/mathworks/data-explorer-vscode.git"
   },
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.106.0"
   },
   "categories": [
     "Visualization",
@@ -93,7 +93,9 @@
           "id": "dataExplorer",
           "title": "Simulink Data Explorer",
           "icon": "media/dataexplorer.svg"
-        },
+        }
+      ],
+      "secondarySidebar": [
         {
           "id": "dataExplorerProperties",
           "title": "Properties",
@@ -212,7 +214,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.0.0",
-    "@types/vscode": "^1.90.0",
+    "@types/vscode": "^1.106.0",
     "@vitest/coverage-v8": "^4.1.11",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.0.0",

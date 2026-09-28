@@ -27,7 +27,7 @@ It adds a native experience for Simulink file types — a **Simulink Data Explor
 - **Table editor** — open a model, dictionary, MAT-file, or project in a spreadsheet-style, tree-structured table. Sections are always shown (e.g. a dictionary's Design Data, Architectural Data, Configurations, Other Data), even when empty.
 - **Editing for `.sldd`** — edit a data dictionary directly in the table: change entry values and names, add child elements, and cut/copy/paste/delete entries via the right-click context menu, with **undo/redo, a dirty indicator, and save**. Both textual (JSON) and compressed-binary `.sldd` are editable; `.slx`, `.mdl`, `.mat`, and `.prj` open read-only.
 - **Live two-way sync (textual `.sldd`)** — because a textual (JSON) `.sldd` is backed by its JSON text document, edits in the table and edits in the JSON text editor update each other instantly, and there is a single shared undo history across both views.
-- **Properties panel** — a selection-following webview that shows the full properties of the entry selected in the table. It lives in its own view container and can be docked in the secondary sidebar.
+- **Properties panel** — a selection-following webview that shows the full properties of the entry selected in the table. It lives in its own view container in the secondary sidebar, and can be dragged anywhere else — activity bar or panel — like any other view.
 - **Variable Editor for matrix values** — a value with two or more dimensions stays a short descriptor in its cell (`<2x3x2 double>`) with a grid glyph beside it; clicking the glyph opens the whole array in a floating spreadsheet-style grid, laid out the way MATLAB displays it. Anything above rank 2 gets a `(:,:,k)` page selector to step through its trailing dimensions. Available from both the table and the Properties panel; view-only.
 - **Search** — filter entries with the table's built-in filter bar. Type a word and press <kbd>Enter</kbd>; each condition becomes a chip you can remove with its `×`, and the `×` at the right end of the box clears the whole search. Scope a condition to one column by naming that column's header exactly as the header spells it — `Name:gain`, `Data Type=double`, `Value>10` — or right-click any column header to build the same thing from a popup, which shows you the text it writes. The operators are `:` (contains), `=`, `!=` (also `~=`), `>`, `<`, `>=` and `<=`, and spaces around one are ignored, so `Data Type: double` and `Value > 5` each read as a single condition. Quote a *value* that contains a space (`Name:"my var"`); a header's own space needs no quoting. Or search across every data source in the workspace with **Data Explorer: Search Data Source Entries** (<kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd>), which lists each match with the file it comes from. A model's blocks are listed one hit per block, qualified by the subsystem the block sits in — so the several blocks named `Gain` a model may hold stay distinguishable, and the subsystem name is searchable too.
   > Quoting now only groups words: `value:"5"` matches any value *containing* 5. To ask for exactly 5, use `Value=5`.
@@ -71,7 +71,7 @@ For a textual `.sldd`, you can switch to the raw JSON via **View: Reopen Editor 
 
 ## Requirements
 
-- Visual Studio Code 1.90.0 or later.
+- Visual Studio Code 1.106.0 or later.
 
 No MATLAB&reg; or Simulink installation is required to view or edit files — Simulink Data Explorer reads and writes the files directly.
 
