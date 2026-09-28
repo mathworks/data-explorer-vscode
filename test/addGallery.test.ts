@@ -187,6 +187,37 @@ describe('the table and the gallery together', () => {
     expect(b.textContent!.trim()).toBe('Add');
   });
 
+  // The width is the table's, not a constant: a 300px popover under a 1400px editor read as
+  // a narrow strip of a much larger surface (maintainer, from using it), and the column count
+  // follows from the width, so this is also what decides how many tiles are in a row. Taken
+  // from the table rather than from `window` because a split editor gives the table a
+  // fraction of the window, and it is the table the user is aiming at.
+  //
+  // The rect is stubbed because happy-dom lays nothing out — every box there is 0 by 0, so
+  // without this the test could only watch a 0 travel. What the popover then DOES with the
+  // width is layout, and is measured in the browser harness, not here.
+  it('hands the gallery the table’s own width, clamped to the viewport', async () => {
+    const el = await table();
+    const stubRect = (left: number, width: number) => {
+      el.getBoundingClientRect = () =>
+        ({ left, width, right: left + width, top: 0, bottom: 0, height: 0, x: left, y: 0 }) as DOMRect;
+    };
+
+    stubRect(40, 600);
+    let g = await open(el);
+    expect(g.style.left).toBe('40px');
+    expect(g.style.getPropertyValue('--dex-add-gallery-width')).toBe('600px');
+
+    // A table scrolled horizontally can start left of the viewport, and one wider than the
+    // window would otherwise spill off its right edge. Neither may push the gallery out.
+    button(el)!.click();
+    await el.updateComplete;
+    stubRect(-30, window.innerWidth + 200);
+    g = await open(el);
+    expect(g.style.left).toBe('0px');
+    expect(g.style.getPropertyValue('--dex-add-gallery-width')).toBe(`${window.innerWidth}px`);
+  });
+
   it('shows the button on an editable view and toggles the popover with it', async () => {
     const el = await table();
     expect(button(el)!.getAttribute('aria-expanded')).toBe('false');

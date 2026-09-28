@@ -243,16 +243,17 @@ describe('how the catalog states a destination', () => {
     // — and it showed up there once already, as `Variant Config Data` clipped to
     // `Variant Co…` two rows under `Variant Control` and indistinguishable from it.
     //
-    // The numbers come from that harness run: three columns make a tile 91px wide, so a label
-    // line gets 81px, and the widest line in the catalog (`Connection`, 10 characters) inks 65
-    // of them — 6.5px per character, which puts 12 characters in the 81. A third line is the
-    // other failure, because a grid row is as tall as its tallest tile, so one three-line
-    // label makes two innocent neighbours grow with it. Both limits are deliberately crude: a
-    // `W` is wider than an `i`, and this is a fence a new tile trips over rather than a layout
-    // engine. A label that cannot fit should be broken differently (see `labelLines`) or
-    // shortened; widening the popover is the last resort, and it means re-measuring with the
+    // The numbers come from that harness run. The gallery is as wide as the table now, so the
+    // tile to fear is the NARROWEST one the grid can draw: `MIN_TILE_WIDTH` (124px), which
+    // leaves a label line 114px. The widest line in the catalog (`Connection`, 10 characters)
+    // inks 65 of them — 6.5px per character, so 114 holds 17, and the fence keeps a character
+    // back. A third line is the other failure, because a grid row is as tall as its tallest
+    // tile, so one three-line label makes its whole row grow. Both limits are deliberately
+    // crude: a `W` is wider than an `i`, and this is a fence a new tile trips over rather than
+    // a layout engine. A label that cannot fit should be broken differently (see `labelLines`)
+    // or shortened; widening the tile is the last resort, and it means re-measuring with the
     // harness rather than raising a constant here.
-    const LIMIT = { chars: 12, lines: 2 };
+    const LIMIT = { chars: 16, lines: 2 };
     const problems: string[] = [];
     for (const tile of allTiles()) {
       const lines = labelLinesOf(tile);

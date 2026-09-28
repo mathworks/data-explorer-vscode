@@ -22,25 +22,35 @@ import { ADD_CATALOG, SECTION_LABEL, badgeOf, labelLinesOf } from '../../common/
 import type { GalleryCategory, GalleryTile } from '../../common/addCatalog.js';
 
 /**
- * The popover's width, in px.
+ * The popover's width when nobody says otherwise, in px.
  *
- * Exported because the table anchors the popover and has to clamp it against the right
- * edge of a narrow split pane, and a second copy of this number would put the clamp and
- * the box in quiet disagreement — the popover would render one width and be positioned as
- * if it were something else.
+ * Normally somebody does: the table sets `--dex-add-gallery-width` to its own width, so the
+ * gallery spans the editor tab rather than sitting in a column beside it (the maintainer's
+ * call — a 300px popover in a 1400px editor read as a narrow strip of a much larger surface).
+ * The column count follows from that width instead of being fixed, which is why the grid is
+ * back to `auto-fill`.
  *
- * Three tile columns, and the number is measured rather than chosen: 300 leaves 284px inside
- * the padding, so a tile is 91px and a label line 81px. A line is at most one word (see
- * `labelLinesOf`), and the widest word in the catalog — "Connection" — inks 65px of those 81.
- * The 16px left over is insurance against a platform whose 12px font is wider than this one's,
- * not spare room looking for a use.
- *
- * It was 380 while a label wrapped wherever its box ran out, because then a tile had to be as
- * wide as `Simulink Parameter`. Breaking at the space instead is what paid for the 80px.
- * Measured with the browser harness; happy-dom lays nothing out, so no unit test here can see
- * how wide a tile rendered.
+ * This fallback is what a `dex-add-gallery` rendered on its own gets. 300px holds two tile
+ * columns of `MIN_TILE_WIDTH`, which is a legible gallery rather than a good one — it is a
+ * default that keeps the component standalone-renderable, not a size anybody sees. Measured
+ * with the browser harness; happy-dom lays nothing out, so no unit test here can see how wide
+ * anything rendered.
  */
 export const ADD_GALLERY_WIDTH = 300;
+
+/**
+ * The narrowest a tile may be, in px, and so what decides how many columns a width holds.
+ *
+ * Set by the badge in the top-right corner, not by the label. The icon is centred, so it moves
+ * right at half the rate the right-anchored badge does: the gap between them is
+ * width / 2 - 11 - badge, and the widest badge ("Config") inks 42px. 100 was measured in the
+ * browser at a 1px OVERLAP; 124 leaves 11px of gap, which is also what a platform whose 10px
+ * font is a fifth wider than this one's would spend before they touch.
+ *
+ * A label line then gets 114px at the narrowest tile, where the widest word in the catalog
+ * ("Connection") inks 65 — so the label has never been what set this number.
+ */
+const MIN_TILE_WIDTH = 124;
 
 @customElement('dex-add-gallery')
 export class DexAddGallery extends LitElement {
@@ -50,7 +60,9 @@ export class DexAddGallery extends LitElement {
       z-index: 1001;
       display: block;
       box-sizing: border-box;
-      width: ${ADD_GALLERY_WIDTH}px;
+      /* The table sets this to its own width so the gallery matches the editor tab; the
+         constant is the fallback for a gallery rendered on its own. */
+      width: var(--dex-add-gallery-width, ${ADD_GALLERY_WIDTH}px);
       /* Six headings and 28 tiles do not fit a short editor. Capped against the
          viewport rather than a constant so a split pane scrolls instead of spilling
          past the bottom of the table it belongs to. */
@@ -122,11 +134,12 @@ export class DexAddGallery extends LitElement {
 
     .tiles {
       display: grid;
-      /* Three, stated rather than fitted. auto-fill would answer a wider platform font by
-         quietly reflowing to two columns, which changes the shape of the whole gallery; a
-         fixed three answers it by using the per-line slack ADD_GALLERY_WIDTH leaves. The
-         minmax floor is 0 so a column can never be pushed wider than its third. */
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      /* As many columns as the width holds, because the width is now the editor tab's and
+         not a constant — a fixed three would draw three very wide tiles in a 1400px editor.
+         The floor is a real minimum rather than 0: it is what keeps a column wide enough for
+         the widest word plus a corner badge, and the 1fr then shares the remainder out, so a
+         tile ends up within a few px of the floor rather than stretched. */
+      grid-template-columns: repeat(auto-fill, minmax(${MIN_TILE_WIDTH}px, 1fr));
       gap: 4px;
     }
 
@@ -136,6 +149,8 @@ export class DexAddGallery extends LitElement {
        scrolls — and the gain is that a label gets the full tile width on two lines
        instead of whatever the icon and a badge left it on one. */
     .tile {
+      /* For the badge, which is positioned into this tile's own top-right corner. */
+      position: relative;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -182,9 +197,18 @@ export class DexAddGallery extends LitElement {
     /* Only on a tile whose section differs from the rest of its category, which is 6 of
        28 — and, now that the heading states no destination, the only thing on the face of
        the gallery distinguishing the four Types tiles that appear twice under one heading.
-       Badging every tile would make the badge furniture instead of a warning. */
+       Badging every tile would make the badge furniture instead of a warning.
+
+       In the corner and OUT OF THE FLOW, which is what makes every tile the same height: as
+       a flex child it added a third row to the six tiles that carry one, and a grid row is
+       as tall as its tallest tile, so those six dragged twelve neighbours up with them. The
+       corner it sits in is the tile's own, beside the centred icon — MIN_TILE_WIDTH is what
+       keeps the two from touching. Still last in DOM order, after the label; nothing about
+       the reading order changed, and the tile's accessible name was never these words. */
     .tile-badge {
-      flex: 0 0 auto;
+      position: absolute;
+      top: 2px;
+      right: 2px;
       padding: 0 4px;
       border: 1px solid var(--dex-border-color, #d0d0d0);
       border-radius: 8px;

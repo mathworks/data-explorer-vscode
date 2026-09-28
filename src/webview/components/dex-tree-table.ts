@@ -9,7 +9,6 @@ import {
   type FilterOp, type FilterTerm, type FilterToken,
 } from '../rowFilter.js';
 import './dex-add-gallery.js';
-import { ADD_GALLERY_WIDTH } from './dex-add-gallery.js';
 import './dex-column-filter.js';
 import './dex-filter-bar.js';
 import type { DexFilterBar } from './dex-filter-bar.js';
@@ -1373,10 +1372,14 @@ export class DexTreeTable extends LitElement {
   @state() private _menuDragOverSide: 'top' | 'bottom' | null = null;
 
   // The Add gallery: open state and its viewport anchor, same as the column menu, but
-  // LEFT-anchored because the button is on the left of the bar.
+  // LEFT-anchored because the button is on the left of the bar — and as wide as this table,
+  // measured when it opens. Not watched afterwards: a resize under an open popover leaves it
+  // at the width it was given, exactly as it leaves the column menu at the position it was
+  // anchored at, and the first click anywhere closes it.
   @state() private _addGalleryOpen = false;
   @state() private _addGalleryX = 0;
   @state() private _addGalleryY = 0;
+  @state() private _addGalleryWidth = 0;
   // Lives on the table, not in the popover, so the choice outlives a close/reopen: a
   // user who pins is saying something about their next few minutes, not this one popover.
   @state() private _addPinned = false;
@@ -1787,11 +1790,16 @@ export class DexTreeTable extends LitElement {
       return;
     }
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    // Left-anchored, because the button is at the left of the bar and the popover grows
-    // rightward — then clamped, because a split editor is routinely narrower than the
-    // popover and an unclamped left anchor would push the destination badges, which sit
-    // on the right of a tile, off the edge of the pane.
-    this._addGalleryX = Math.max(0, Math.min(rect.left, window.innerWidth - ADD_GALLERY_WIDTH - 4));
+    // The gallery spans this table, not a column of it (the maintainer's call): it takes the
+    // table's own left edge and width, so it lines up with the editor tab underneath it and
+    // its column count follows from how wide that tab is. Taken from the table rather than
+    // from `window`, because a split editor gives the table a fraction of the window and it
+    // is the table the user is aiming at. Clamped to the viewport all the same — a table
+    // scrolled horizontally can start left of it.
+    const host = this.getBoundingClientRect();
+    const left = Math.max(0, host.left);
+    this._addGalleryX = left;
+    this._addGalleryWidth = Math.max(0, Math.min(host.width, window.innerWidth - left));
     this._addGalleryY = rect.bottom + 2;
     this._addGalleryOpen = true;
   }
@@ -3730,7 +3738,8 @@ export class DexTreeTable extends LitElement {
     if (!this._addGalleryOpen) return nothing;
     return html`
       <dex-add-gallery
-        style="left: ${this._addGalleryX}px; top: ${this._addGalleryY}px;"
+        style="left: ${this._addGalleryX}px; top: ${this._addGalleryY}px; --dex-add-gallery-width: ${this
+          ._addGalleryWidth}px;"
         .pinned=${this._addPinned}
         @dex-add-tile=${this._onAddTile}
         @dex-add-pin-changed=${(e: CustomEvent) => {
