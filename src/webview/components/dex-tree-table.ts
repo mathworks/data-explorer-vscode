@@ -318,6 +318,41 @@ export class DexTreeTable extends LitElement {
         border-bottom: 1px solid var(--dex-border-color-light, #e0e0e0);
         background: var(--dex-bg-secondary, #f8f8f8);
         flex: 0 0 auto;
+        /* The Add gallery hangs off this box, so this box has to be the one percentages in
+           the rule below are measured against. Relative and not a stacking context (no
+           z-index here), so the gallery still sorts against the rest of the table rather
+           than being trapped in a layer with the bar. */
+        position: relative;
+      }
+
+      /* WHERE the Add gallery goes, in CSS and nothing else — no measuring on open and no
+         resize listener, so it follows the editor tab by construction (the maintainer's call:
+         it "should follow" when the tab is resized). Absolute inside .filter-bar, which is a
+         flex container, so the gallery is out of flow: it is not a flex item, takes no share
+         of the row and no gap beside the buttons.
+
+         top: the bar's padding box ends at 100%, then 1px of its bottom border, then 2px of
+         air. Written against the bar rather than the Add button because it is the bar's
+         height that changes under a narrow pane.
+
+         width: exactly what toggleAddGallery used to measure on open. The margin is
+         ADD_GALLERY_INSET down each side until the pane gets too narrow to afford both, at which
+         point the margin gives way rather than the gallery going below ADD_GALLERY_WIDTH — one
+         clamp says that, since its own lower bound is capped at 100% for a pane narrower than
+         the floor. left/right plus margin-inline: auto then splits whatever is left over in two,
+         which is what makes the two margins equal without either of them being named here. */
+      dex-add-gallery {
+        position: absolute;
+        top: calc(100% + 3px);
+        left: 0;
+        right: 0;
+        margin-inline: auto;
+        z-index: 1001;
+        --dex-add-gallery-width: clamp(
+          min(${ADD_GALLERY_WIDTH}px, 100%),
+          calc(100% - ${2 * ADD_GALLERY_INSET}px),
+          100%
+        );
       }
 
       /* Add and Columns are one kind of control — a bar button that opens an anchored
@@ -1421,15 +1456,11 @@ export class DexTreeTable extends LitElement {
   @state() private _menuDragOverCol: string | null = null;
   @state() private _menuDragOverSide: 'top' | 'bottom' | null = null;
 
-  // The Add gallery: open state and its viewport anchor, same as the column menu, but
-  // LEFT-anchored because the button is on the left of the bar — and as wide as this table,
-  // measured when it opens. Not watched afterwards: a resize under an open popover leaves it
-  // at the width it was given, exactly as it leaves the column menu at the position it was
-  // anchored at, and the first click anywhere closes it.
+  // The Add gallery: whether it shows, and nothing else. Unlike the column menu, none of its
+  // geometry is here — it is anchored under the search bar in the stylesheet (see the
+  // dex-add-gallery rule), which is why a resize of the editor tab needs no notification to
+  // be followed: there is no number to bring up to date.
   @state() private _addGalleryOpen = false;
-  @state() private _addGalleryX = 0;
-  @state() private _addGalleryY = 0;
-  @state() private _addGalleryWidth = 0;
   // Lives on the table, not in the popover, so the choice outlives a close/reopen: a
   // user who pins is saying something about their next few minutes, not this one popover.
   @state() private _addPinned = false;
@@ -1849,11 +1880,11 @@ export class DexTreeTable extends LitElement {
    * TOGGLES, so the accelerator behaves exactly as the button does rather than being a
    * second, subtly different way to open the same popover.
    *
-   * Anchored off the button found in the render root rather than off a click event, so the
-   * two callers agree on the geometry. A view that cannot add has no button to anchor to and
-   * nothing to open — the command is a no-op there, which is the right answer for a read-only
-   * .slx: the keybinding's `when` clause already excludes that view, but the Command Palette
-   * does not have to.
+   * Opening is one flag because the popover is anchored in CSS, so both callers land on the
+   * same geometry without either of them measuring anything. A view that cannot add has no
+   * Add button and nothing to open — the command is a no-op there, which is the right answer
+   * for a read-only .slx: the keybinding's `when` clause already excludes that view, but the
+   * Command Palette does not have to.
    */
   public toggleAddGallery(): void {
     if (this._addGalleryOpen) {
@@ -1861,31 +1892,6 @@ export class DexTreeTable extends LitElement {
       return;
     }
     if (!this.canAdd) return;
-    const button = this.renderRoot.querySelector<HTMLElement>('.add-button');
-    if (!button) return;
-    const rect = button.getBoundingClientRect();
-    // The gallery spans this table, not a column of it (the maintainer's call): it takes the
-    // table's own left edge and width, so it lines up with the editor tab underneath it and
-    // its column count follows from how wide that tab is. Taken from the table rather than
-    // from `window`, because a split editor gives the table a fraction of the window and it
-    // is the table the user is aiming at. Clamped to the viewport all the same — a table
-    // scrolled horizontally can start left of it.
-    //
-    // Inset from both of the table's edges by ADD_GALLERY_INSET so it reads as floating over
-    // the table rather than as a panel bolted to the tab. The inset is what gives way when
-    // there is not room for everything: it shrinks toward 0 as the pane approaches
-    // ADD_GALLERY_WIDTH, so a narrow split loses its margins before it loses a column of
-    // tiles. Computed from the table's width and not from the popover's, because the popover's
-    // width is the thing being computed.
-    const host = this.getBoundingClientRect();
-    const inset = Math.max(0, Math.min(ADD_GALLERY_INSET, (host.width - ADD_GALLERY_WIDTH) / 2));
-    const left = Math.max(0, host.left + inset);
-    this._addGalleryX = left;
-    // The viewport clamp is applied to the inset width, so it can only ever take MORE off: a
-    // table wider than the window keeps its right edge at the window's, which is a table with
-    // no visible edge to leave a margin against anyway.
-    this._addGalleryWidth = Math.max(0, Math.min(host.width - 2 * inset, window.innerWidth - left));
-    this._addGalleryY = rect.bottom + 2;
     this._addGalleryOpen = true;
   }
 
@@ -3586,7 +3592,7 @@ export class DexTreeTable extends LitElement {
   private _renderFilterBar() {
     return html`
       <div class="filter-bar">
-        ${this._renderAddButton()}
+        ${this._renderAddButton()}${this._renderAddGallery()}
         <dex-filter-bar
           .text=${this._filterText}
           .tokens=${this._filterTokens}
@@ -3612,8 +3618,8 @@ export class DexTreeTable extends LitElement {
     const body =
       this.rows.length === 0 ? this._renderNoRows() : this._renderTable(allVisible, totalRows, visibleCols);
     return html`
-      ${this._renderFilterBar()} ${body} ${this._renderAddGallery()} ${this._renderColumnMenu()}
-      ${this._renderColumnFilterPopup()} ${this._renderDropTooltip()}
+      ${this._renderFilterBar()} ${body} ${this._renderColumnMenu()} ${this._renderColumnFilterPopup()}
+      ${this._renderDropTooltip()}
     `;
   }
 
@@ -3819,12 +3825,19 @@ export class DexTreeTable extends LitElement {
     `;
   }
 
+  /**
+   * The gallery, rendered INSIDE the search bar — not beside it as the other popovers are.
+   *
+   * That is what pays for the stylesheet doing all the positioning: an absolute box measures
+   * its percentages against the bar, so "as wide as the tab, inset, just underneath" is three
+   * declarations that keep being true while the tab is resized. Out of flow, so being a child
+   * of a flex row costs the bar nothing. Right after the Add button, which is also where the
+   * keyboard wants it: Tab from the pressed button reaches the tiles.
+   */
   private _renderAddGallery() {
     if (!this._addGalleryOpen) return nothing;
     return html`
       <dex-add-gallery
-        style="left: ${this._addGalleryX}px; top: ${this._addGalleryY}px; --dex-add-gallery-width: ${this
-          ._addGalleryWidth}px;"
         .pinned=${this._addPinned}
         @dex-add-tile=${this._onAddTile}
         @dex-add-pin-changed=${(e: CustomEvent) => {

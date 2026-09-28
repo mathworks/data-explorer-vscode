@@ -15,6 +15,7 @@
 //     relays that outward, which is the split that keeps one path writing documents.
 import { describe, it, expect, beforeEach } from 'vitest';
 import '../src/webview/components/dex-add-gallery.js';
+import { ADD_GALLERY_INSET, ADD_GALLERY_WIDTH } from '../src/webview/components/dex-add-gallery.js';
 import type { DexAddGallery } from '../src/webview/components/dex-add-gallery.js';
 import '../src/webview/components/dex-tree-table.js';
 import type { DexTreeTable, TreeTableRow } from '../src/webview/components/dex-tree-table.js';
@@ -287,48 +288,101 @@ describe('the table and the gallery together', () => {
     expect(b.textContent!.trim()).toBe('Add');
   });
 
-  // The width is the table's, not a constant: a 300px popover under a 1400px editor read as
-  // a narrow strip of a much larger surface (maintainer, from using it), and the column count
-  // follows from the width, so this is also what decides how many tiles are in a row. Taken
-  // from the table rather than from `window` because a split editor gives the table a
-  // fraction of the window, and it is the table the user is aiming at.
+  const tableCss = () =>
+    [(customElements.get('dex-tree-table') as any).styles]
+      .flat()
+      .map((s: any) => s.cssText)
+      .join('\n');
+
+  // The declarations of one rule, by selector. Crude on purpose — these are our own hand-written
+  // stylesheets, and a real parser would only obscure the one question being asked, which is
+  // WHICH rule a declaration landed in. `position: relative` on the wrong box anchors nothing.
+  const ruleBody = (selector: string) => {
+    const css = tableCss();
+    const at = css.indexOf(`${selector} {`);
+    expect(at, `no ${selector} rule`).toBeGreaterThanOrEqual(0);
+    return css.slice(at, css.indexOf('}', at));
+  };
+
+  // Where the popover goes is a stylesheet fact, not a measurement. It followed the tab first
+  // by re-measuring on resize, and the maintainer's next question was why that needed TS at all
+  // (2026-09-28). It does not: an absolutely positioned box inside the search bar resolves its
+  // percentages against that bar on every layout, so "as wide as the tab, inset, just below it"
+  // keeps being true through a drag with no listener, no ResizeObserver and no state.
   //
-  // The rect is stubbed because happy-dom lays nothing out — every box there is 0 by 0, so
-  // without this the test could only watch a 0 travel. What the popover then DOES with the
-  // width is layout, and is measured in the browser harness, not here.
-  it('hands the gallery the table’s own width, inset on both sides and clamped to the viewport', async () => {
+  // Which leaves the two halves of the anchor to pin, both of which happy-dom can see even
+  // though it lays nothing out: the pair of rules, and the popover being rendered INSIDE the
+  // bar. Either half alone parks the gallery in the corner of the editor.
+  it('anchors the gallery under the search bar in CSS, with nothing measured in script', async () => {
     const el = await table();
-    const stubRect = (left: number, width: number) => {
-      el.getBoundingClientRect = () =>
-        ({ left, width, right: left + width, top: 0, bottom: 0, height: 0, x: left, y: 0 }) as DOMRect;
+    const g = await open(el);
+
+    // In the bar, so the bar is the box its percentages are against.
+    expect(g.parentElement).toBe(el.shadowRoot!.querySelector('.filter-bar'));
+    // And carrying no geometry of its own. This is the regression that matters, because the
+    // code it replaces looked reasonable: an inline left/top/width written at open time, which
+    // is correct exactly once and then is whatever the user last dragged past.
+    expect(g.getAttribute('style')).toBeNull();
+
+    // The bar is the containing block, and deliberately not a stacking context — no z-index
+    // here, or the gallery's 1001 would sort inside the bar instead of over the table.
+    const bar = ruleBody('.filter-bar');
+    expect(bar).toContain('position: relative');
+    expect(bar).not.toContain('z-index:');
+
+    const gallery = ruleBody('dex-add-gallery');
+    expect(gallery).toContain('position: absolute');
+    // Just under the bar: its padding box ends at 100%, then 1px of bottom border, then air.
+    expect(gallery).toContain('top: calc(100% + 3px)');
+    // Stretched across the bar and then centred in what it does not fill, which is what makes
+    // the two side margins equal without either being written down.
+    expect(gallery).toContain('left: 0');
+    expect(gallery).toContain('right: 0');
+    expect(gallery).toContain('margin-inline: auto');
+    expect(gallery).toContain('z-index: 1001');
+  });
+
+  // The width is the tab's, not a constant: a 300px popover under a 1400px editor read as a
+  // narrow strip of a much larger surface (maintainer, from using it), and the column count
+  // follows from the width, so this is also what decides how many tiles are in a row.
+  //
+  // One clamp carries the whole rule the six cases below used to be TS for, so what is checked
+  // is that it is built from the two exported constants and that those constants still produce
+  // the intended boxes. The arithmetic is evaluated here rather than resolved by a browser —
+  // happy-dom resolves no percentage — so this pins our intent against the shipped numbers;
+  // that a browser agrees is the harness's job (`narrow.galleryWidth` at a 340px pane).
+  it('takes the tab’s width less a margin down each side, and spends the margin first', () => {
+    const decl = ruleBody('dex-add-gallery');
+    const clamp = /--dex-add-gallery-width:\s*clamp\(\s*min\((\d+)px,\s*100%\),\s*calc\(100% - (\d+)px\),\s*100%\s*\)/.exec(
+      decl,
+    );
+    expect(clamp, 'the width is not a clamp of the two constants').not.toBeNull();
+    const [floor, bothInsets] = [Number(clamp![1]), Number(clamp![2])];
+    expect(floor).toBe(ADD_GALLERY_WIDTH);
+    expect(bothInsets).toBe(2 * ADD_GALLERY_INSET);
+
+    // clamp(MIN, VAL, MAX) is max(MIN, min(VAL, MAX)); the leftover is halved by margin-inline.
+    const box = (tab: number) => {
+      const width = Math.max(Math.min(floor, tab), Math.min(tab - bothInsets, tab));
+      return [width, (tab - width) / 2];
     };
-    const reopen = async (left: number, width: number) => {
-      if (popover(el)) {
-        button(el)!.click();
-        await el.updateComplete;
-      }
-      stubRect(left, width);
-      return open(el);
-    };
-    const box = (g: DexAddGallery) => [g.style.left, g.style.getPropertyValue('--dex-add-gallery-width')];
 
     // A margin each side, so it floats over the table instead of meeting its edges
-    // (maintainer's call): 12px in from 40, and 24px off 600.
-    expect(box(await reopen(40, 600))).toEqual(['52px', '576px']);
+    // (maintainer's call): 12px off each end, whatever the tab is worth.
+    expect(box(1200)).toEqual([1176, 12]);
+    expect(box(600)).toEqual([576, 12]);
+    expect(box(400)).toEqual([376, 12]);
 
-    // A table scrolled horizontally can start left of the viewport, and one wider than the
-    // window would otherwise spill off its right edge. Neither may push the gallery out — and
-    // the clamp wins over the margin, because a table with no visible edge inside the window
-    // has no edge to leave a margin against.
-    expect(box(await reopen(-30, window.innerWidth + 200))).toEqual(['0px', `${window.innerWidth}px`]);
+    // The margin is the part that gives way. At exactly the popover's floor there is none left
+    // to spend — 300px of tiles beats 276px with a gap down each side — and between there and
+    // 324 the margin takes the growth so the gallery stays at two full columns.
+    expect(box(324)).toEqual([300, 12]);
+    expect(box(310)).toEqual([300, 5]);
+    expect(box(300)).toEqual([300, 0]);
 
-    // The inset is the part that gives way. At exactly the popover's own width there is no
-    // margin to spend — 300px of tiles beats 276px of tiles with a gap down each side — and
-    // between there and 324 the inset takes the growth so the gallery stays at its floor.
-    expect(box(await reopen(0, 300))).toEqual(['0px', '300px']);
-    expect(box(await reopen(0, 310))).toEqual(['5px', '300px']);
-    expect(box(await reopen(0, 324))).toEqual(['12px', '300px']);
-    expect(box(await reopen(0, 400))).toEqual(['12px', '376px']);
+    // Narrower than the floor, the floor gives way too rather than the popover hanging out over
+    // the edge of the tab: the lower bound is capped at the tab's own width.
+    expect(box(200)).toEqual([200, 0]);
   });
 
   it('shows the button on an editable view and toggles the popover with it', async () => {

@@ -88,9 +88,11 @@ const TILE_WIDTH = 124;
 @customElement('dex-add-gallery')
 export class DexAddGallery extends LitElement {
   static override styles = css`
+    /* No position and no z-index here. WHERE this goes is the table's business, because the
+       anchor is the table's search bar and the width comes off the editor tab — see the
+       dex-add-gallery rule in dex-tree-table.ts, which hangs this box under the bar in CSS
+       alone. What is left here is what the panel IS, which is the same wherever it hangs. */
     :host {
-      position: fixed;
-      z-index: 1001;
       display: block;
       box-sizing: border-box;
       /* The table sets this to its own width so the gallery matches the editor tab; the
@@ -98,7 +100,10 @@ export class DexAddGallery extends LitElement {
       width: var(--dex-add-gallery-width, ${ADD_GALLERY_WIDTH}px);
       /* Six headings and 28 tiles do not fit a short editor. Capped against the
          viewport rather than a constant so a split pane scrolls instead of spilling
-         past the bottom of the table it belongs to. */
+         past the bottom of the table it belongs to. 70vh also keeps it inside that
+         table, which matters now that the table clips it: the bar it hangs from is
+         ~35px tall, so the two only add up past 100vh in an editor no taller than a
+         toolbar, where nothing would have been readable anyway. */
       max-height: min(70vh, 560px);
       overflow-y: auto;
       font-family: var(--dex-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
