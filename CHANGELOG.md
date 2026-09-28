@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.27.0] — 2026-09-28
+
+An editable dictionary has an `⊞ Add` button in its filter bar: 28 tiles, grouped the way the domain names them, each one creating an entry of a named class in a named section — and the new row opens its name ready to be typed over
+
 ## [1.26.0] — 2026-09-28
 
 The Properties panel opens in the Secondary Side Bar, and the activity bar icon is a mono outline of the Simulink product icon — this release requires VS Code 1.106 or later
