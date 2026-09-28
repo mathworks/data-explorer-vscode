@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.26.0] — 2026-09-28
+
+The Properties panel opens in the Secondary Side Bar, and the activity bar icon is a mono outline of the Simulink product icon — this release requires VS Code 1.106 or later
+
 ## [1.25.1] — 2026-09-25
 
 A model, MAT-file or project tab now carries a padlock, because the whole file opens read-only
