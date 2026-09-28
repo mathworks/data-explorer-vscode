@@ -27,11 +27,11 @@ import type { GalleryCategory, GalleryTile } from '../../common/addCatalog.js';
  * Normally somebody does: the table sets `--dex-add-gallery-width` to its own width, so the
  * gallery spans the editor tab rather than sitting in a column beside it (the maintainer's
  * call — a 300px popover in a 1400px editor read as a narrow strip of a much larger surface).
- * The column count follows from that width instead of being fixed, which is why the grid is
- * back to `auto-fill`.
+ * The column count follows from that width instead of being fixed, which is what the wrapping
+ * row of fixed-size tiles gives.
  *
  * This fallback is what a `dex-add-gallery` rendered on its own gets. 300px holds two tile
- * columns of `MIN_TILE_WIDTH`, which is a legible gallery rather than a good one — it is a
+ * columns of `TILE_WIDTH`, which is a legible gallery rather than a good one — it is a
  * default that keeps the component standalone-renderable, not a size anybody sees. Measured
  * with the browser harness; happy-dom lays nothing out, so no unit test here can see how wide
  * anything rendered.
@@ -47,8 +47,8 @@ export const ADD_GALLERY_WIDTH = 300;
  * says "above". A strip of the table showing down each side is that cue.
  *
  * 12 rather than a larger number because it is spent twice and comes out of the tiles: 24px
- * is a fifth of a `MIN_TILE_WIDTH` column, so a wider margin starts costing a column at the
- * widths where the grid is about to gain one.
+ * is a fifth of a `TILE_WIDTH` column, so a wider margin starts costing a column at the
+ * widths where the row is about to gain one.
  *
  * It is also the part that gives way first. {@link ADD_GALLERY_WIDTH} is the floor — the width
  * two tile columns need — and the table shrinks this inset toward 0 rather than squeezing the
@@ -57,18 +57,33 @@ export const ADD_GALLERY_WIDTH = 300;
 export const ADD_GALLERY_INSET = 12;
 
 /**
- * The narrowest a tile may be, in px, and so what decides how many columns a width holds.
+ * How wide every tile is, in px. Exactly this wide — not a minimum.
  *
- * Set by the badge in the top-right corner, not by the label. The icon is centred, so it moves
- * right at half the rate the right-anchored badge does: the gap between them is
- * width / 2 - 11 - badge, and the widest badge ("Config") inks 42px. 100 was measured in the
- * browser at a 1px OVERLAP; 124 leaves 11px of gap, which is also what a platform whose 10px
- * font is a fifth wider than this one's would spend before they touch.
+ * The maintainer's call: the tiles are a fixed size and the gallery wraps them, rather than the
+ * row stretching them to share out whatever the editor's width left over. Which means a tile is
+ * the same size in a 1400px editor as in a 340px pane, and resizing the editor moves tiles
+ * between rows instead of resizing all 28 of them. The cost is the ragged right-hand edge — the
+ * remainder that used to be shared out is now dead space at the end of each row — and that is
+ * the price of a stable target to click.
  *
- * A label line then gets 114px at the narrowest tile, where the widest word in the catalog
- * ("Connection") inks 65 — so the label has never been what set this number.
+ * 124 is the number the badge in the top-right corner sets, not the label. The icon is centred,
+ * so it moves right at half the rate the right-anchored badge does: the gap between them is
+ * width / 2 - 11 - badge, and the widest badge ("Config") inks 42px — so a tile of this width
+ * leaves 9px of gap, measured in all four themes. 100 was measured in the browser at a 1px
+ * OVERLAP, which is what set a floor here in the first place.
+ *
+ * (The comment this replaces claimed 11px. That was a real harness number belonging to a
+ * different tile: `auto-fill` stretched every tile past this floor, so what got measured was a
+ * 128px tile and what got written down was a property of 124. A fixed width is why it is worth
+ * correcting — the floor is now the width, so the 9px is what ships. Each 2px of width buys 1px
+ * of gap, and 128 would cost a column at 1200px, which is the trade this stays on the tidy side
+ * of while `clearsIcon` holds.)
+ *
+ * A label line then gets 114px, where the widest word in the catalog ("Connection") inks 65 —
+ * so the label has never been what set this number. Changing it is a harness measurement, not an
+ * edit here: it now moves every tile rather than only the narrowest one.
  */
-const MIN_TILE_WIDTH = 124;
+const TILE_WIDTH = 124;
 
 @customElement('dex-add-gallery')
 export class DexAddGallery extends LitElement {
@@ -150,14 +165,20 @@ export class DexAddGallery extends LitElement {
       color: var(--dex-color-text-secondary, #666);
     }
 
+    /* Wrap fixed-size tiles; do not stretch them to fill the row (the maintainer's call).
+       This was a grid of repeat(auto-fill, minmax(124px, 1fr)) tracks, whose 1fr shared the
+       row's remainder across the tiles — so a tile was 125px in a wide editor and 147px in a
+       narrow pane, and every drag of the editor's edge resized all 28 of them. Flex-wrap with
+       a rigid basis moves tiles between rows instead.
+
+       Left-aligned rather than centred or space-between, so the columns line up across all
+       six categories and with the headings above them: a row of two tiles and a row of nine
+       start at the same x. Centring each row would make the grid look ragged on both sides
+       instead of one, for nothing. */
     .tiles {
-      display: grid;
-      /* As many columns as the width holds, because the width is now the editor tab's and
-         not a constant — a fixed three would draw three very wide tiles in a 1400px editor.
-         The floor is a real minimum rather than 0: it is what keeps a column wide enough for
-         the widest word plus a corner badge, and the 1fr then shares the remainder out, so a
-         tile ends up within a few px of the floor rather than stretched. */
-      grid-template-columns: repeat(auto-fill, minmax(${MIN_TILE_WIDTH}px, 1fr));
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-start;
       gap: 4px;
     }
 
@@ -169,6 +190,12 @@ export class DexAddGallery extends LitElement {
     .tile {
       /* For the badge, which is positioned into this tile's own top-right corner. */
       position: relative;
+      /* The fixed size, and the shorthand says all three parts of it on purpose: never grow
+         into the row's remainder, never shrink out of the way of a neighbour, and take the
+         basis from the constant. With box-sizing: border-box below, that is the whole tile
+         including its 1px border. A pane too narrow for one tile scrolls sideways rather than
+         squeezing it, which the grid did too — and a pane that narrow shows no usable table. */
+      flex: 0 0 ${TILE_WIDTH}px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -218,10 +245,11 @@ export class DexAddGallery extends LitElement {
        Badging every tile would make the badge furniture instead of a warning.
 
        In the corner and OUT OF THE FLOW, which is what makes every tile the same height: as
-       a flex child it added a third row to the six tiles that carry one, and a grid row is
-       as tall as its tallest tile, so those six dragged twelve neighbours up with them. The
-       corner it sits in is the tile's own, beside the centred icon — MIN_TILE_WIDTH is what
-       keeps the two from touching. Still last in DOM order, after the label; nothing about
+       a flex child it added a third row to the six tiles that carry one, and a row of tiles
+       is as tall as its tallest, so those six dragged twelve neighbours up with them. The
+       corner it sits in is the tile's own, beside the centred icon — TILE_WIDTH is what keeps
+       the two from touching, and now that the width is fixed so is the 9px gap it leaves: it no
+       longer widens in a wide editor. Still last in DOM order, after the label; nothing about
        the reading order changed, and the tile's accessible name was never these words. */
     .tile-badge {
       position: absolute;

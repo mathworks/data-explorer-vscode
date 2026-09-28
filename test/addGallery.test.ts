@@ -341,6 +341,35 @@ describe('the table and the gallery together', () => {
     expect(popover(el)).toBeNull();
   });
 
+  // Fixed-size tiles that WRAP (maintainer's ask, 2026-09-28): the gallery flexes, the tile
+  // does not. This is a stylesheet assertion rather than a measurement because happy-dom lays
+  // nothing out — the sizes it produces are all 0 — and the browser harness has the pixels
+  // (`layout.tileWidth` is equal in a 1200px editor and a 340px pane, `columns` is not).
+  //
+  // Worth pinning at all because the regression is one word long and looks like a tidy-up: an
+  // `auto-fill` grid with a `1fr`, or a `flex: 1`, draws a gallery that is right in every
+  // screenshot of a single width and stretches the tiles at every other one.
+  it('sizes every tile from one constant and wraps the row instead of stretching them', async () => {
+    const cssText = [(customElements.get('dex-add-gallery') as any).styles]
+      .flat()
+      .map((s: any) => s.cssText)
+      .join('\n');
+
+    // A wrapping flex row, and not a grid whose tracks would share out the remainder.
+    expect(cssText).toContain('flex-wrap: wrap');
+    expect(cssText).not.toContain('grid-template-columns:');
+
+    // Rigid in both directions: `0 0` is the claim. A tile that may grow fills the row it is
+    // in, and a tile that may shrink gets narrower as its row fills up — either one puts the
+    // badge back on a collision course with the icon, which is what set this width.
+    expect(cssText).toMatch(/flex:\s*0 0 \d+px/);
+
+    // One number, not one per rule: every tile is the same width because they all read the
+    // same constant, so there is a single place to re-measure if the badge ever grows.
+    const bases = [...cssText.matchAll(/flex:\s*0 0 (\d+px)/g)].map((m) => m[1]);
+    expect(new Set(bases).size).toBe(1);
+  });
+
   // The pressed look (maintainer's ask, 2026-09-28): while the popover is showing, the
   // button that opened it is drawn held down, so it is clear that clicking it again closes
   // what is on screen rather than opening a second one.
