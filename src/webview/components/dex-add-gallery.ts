@@ -18,7 +18,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import './dex-icon.js';
-import { ADD_CATALOG, SECTION_LABEL, badgeOf } from '../../common/addCatalog.js';
+import { ADD_CATALOG, SECTION_LABEL, badgeOf, labelLinesOf } from '../../common/addCatalog.js';
 import type { GalleryCategory, GalleryTile } from '../../common/addCatalog.js';
 
 /**
@@ -29,14 +29,18 @@ import type { GalleryCategory, GalleryTile } from '../../common/addCatalog.js';
  * the box in quiet disagreement — the popover would render one width and be positioned as
  * if it were something else.
  *
- * 380 holds exactly three tile columns, and the number is measured rather than chosen: the
- * grid's `minmax(105px, 1fr)` fits three of them in the 362px inside the padding with 39px
- * to spare, and a fourth would need 432. That slack is the point — a platform whose 12px
- * font is wider than this one's must not silently reflow the gallery to two columns.
- * Found by the browser harness; happy-dom lays nothing out, so no unit test here can see
- * how many columns rendered.
+ * Three tile columns, and the number is measured rather than chosen: 300 leaves 284px inside
+ * the padding, so a tile is 91px and a label line 81px. A line is at most one word (see
+ * `labelLinesOf`), and the widest word in the catalog — "Connection" — inks 65px of those 81.
+ * The 16px left over is insurance against a platform whose 12px font is wider than this one's,
+ * not spare room looking for a use.
+ *
+ * It was 380 while a label wrapped wherever its box ran out, because then a tile had to be as
+ * wide as `Simulink Parameter`. Breaking at the space instead is what paid for the 80px.
+ * Measured with the browser harness; happy-dom lays nothing out, so no unit test here can see
+ * how wide a tile rendered.
  */
-export const ADD_GALLERY_WIDTH = 380;
+export const ADD_GALLERY_WIDTH = 300;
 
 @customElement('dex-add-gallery')
 export class DexAddGallery extends LitElement {
@@ -118,8 +122,11 @@ export class DexAddGallery extends LitElement {
 
     .tiles {
       display: grid;
-      /* Three columns at ADD_GALLERY_WIDTH — see the constant, where the fit is measured. */
-      grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+      /* Three, stated rather than fitted. auto-fill would answer a wider platform font by
+         quietly reflowing to two columns, which changes the shape of the whole gallery; a
+         fixed three answers it by using the per-line slack ADD_GALLERY_WIDTH leaves. The
+         minmax floor is 0 so a column can never be pushed wider than its third. */
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 4px;
     }
 
@@ -154,16 +161,22 @@ export class DexAddGallery extends LitElement {
       border-color: var(--dex-color-accent, #0078d4);
     }
 
-    /* Wraps rather than truncates. An ellipsis cost us "Variant Co…" sitting two rows
-       under "Variant Control" once already; a tile is free to be two lines tall, and
-       break-word keeps a long single word inside its own tile instead of over its
-       neighbour. */
+    /* One element per line, and the lines are chosen in the catalog rather than by this
+       box running out of room (labelLinesOf). So a tile is only as wide as the longest
+       WORD, never the longest label — which is what made the popover 80px narrower — and
+       no label can be clipped the way "Variant Config Data" once was to "Variant Co…". */
     .tile-label {
       flex: 0 0 auto;
       align-self: stretch;
-      white-space: normal;
-      overflow-wrap: break-word;
+    }
+
+    /* break-word is a backstop, not the mechanism: it only matters if a future one-word
+       label outgrows the 81px a line gets, and then it wraps inside its own tile rather
+       than over its neighbour. */
+    .tile-line {
+      display: block;
       line-height: 14px;
+      overflow-wrap: break-word;
     }
 
     /* Only on a tile whose section differs from the rest of its category, which is 6 of
@@ -286,7 +299,9 @@ export class DexAddGallery extends LitElement {
         @click=${() => this._onTile(tile)}
       >
         <dex-icon .iconId=${tile.iconId} .size=${16}></dex-icon>
-        <span class="tile-label">${tile.label}</span>
+        <span class="tile-label"
+          >${labelLinesOf(tile).map((line) => html`<span class="tile-line">${line}</span>`)}</span
+        >
         ${badge ? html`<span class="tile-badge">${badge}</span>` : ''}
       </button>
     `;

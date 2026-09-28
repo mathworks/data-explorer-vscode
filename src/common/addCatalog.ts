@@ -18,7 +18,13 @@ export type SectionKey = 'design' | 'arch' | 'config';
 
 /** One tile: a button that creates one entry of one class in one section. */
 export interface GalleryTile {
-  /** What the tile says. Domain wording, not the class name. */
+  /**
+   * What the tile says. Domain wording, not the class name.
+   *
+   * One line, always — this is the canonical name, and it is what the accessible name
+   * and the title reach for. How the label is BROKEN across lines on the face of a tile
+   * is a drawing question, answered by `labelLinesOf` below.
+   */
   label: string;
   /** The `$class` core is asked to create. */
   className: string;
@@ -30,6 +36,15 @@ export interface GalleryTile {
    * A tile whose art differs from the row it produces is a tile that lies.
    */
   iconId: string;
+  /**
+   * How to break the label across the tile's lines, where one word per line is wrong.
+   *
+   * Needed by exactly one tile today (see `labelLinesOf`), so it is an exception rather
+   * than data every tile repeats. The guard test holds it to spelling the same label:
+   * joined with spaces it must equal `label`, or the tile would draw a name nothing else
+   * in the extension knows.
+   */
+  labelLines?: readonly string[];
 }
 
 /** One heading and the tiles under it. */
@@ -128,9 +143,10 @@ export const ADD_CATALOG: readonly GalleryCategory[] = [
   // Variant Config sits here, not under Configurations, because the word you search for
   // is "variant". Its badge tells the truth about where the row lands — and makes the
   // shorter label safe, since the "Data" this drops is the part the badge already implies.
-  // The label is short because it is the one tile carrying both an icon and a badge whose
-  // full name did not fit the tile, which read as an ambiguous `Variant Co…` two rows under
-  // `Variant Control` (measured; see ADD_GALLERY_WIDTH).
+  // The name was shortened from `Variant Config Data` when a tile ellipsed its label and
+  // this one read as `Variant Co…` two rows under `Variant Control`. Labels now break at
+  // their spaces instead, so nothing is clipped, but the shorter name stays: a third line
+  // for a word the badge already says would make its whole grid row taller.
   category('Variants', [
     { label: 'Variant Expression', className: 'Simulink.VariantExpression', section: 'design', iconId: 'wsVariant' },
     { label: 'Variant Control', className: 'Simulink.VariantControl', section: 'design', iconId: 'twoConnected_wsDefault' },
@@ -138,6 +154,12 @@ export const ADD_CATALOG: readonly GalleryCategory[] = [
     { label: 'Variant Bank', className: 'Simulink.VariantBank', section: 'design', iconId: 'wsParameters_bank' },
     {
       label: 'Bank Coder Info',
+      // The only three-word label, and the only tile that states its own break. One word
+      // per line would make this tile three lines tall and, since a grid row is as tall as
+      // its tallest tile, the whole row with it. "Coder Info" is the noun — it is one
+      // property name in MATLAB (`CoderInfo`) — and "Bank" is what qualifies it, so this is
+      // also where the label reads best broken.
+      labelLines: ['Bank', 'Coder Info'],
       className: 'Simulink.VariantBankCoderInfo',
       section: 'design',
       iconId: 'wsParameters_bankCoderInfo',
@@ -187,6 +209,24 @@ export const OMITTED: readonly { className: string; section: string; why: string
 /** Every tile, flat, in display order — the order a keyboard walk follows. */
 export function allTiles(): GalleryTile[] {
   return ADD_CATALOG.flatMap((c) => c.tiles as GalleryTile[]);
+}
+
+/**
+ * The lines this tile's label draws on — one word per line, unless the tile says otherwise.
+ *
+ * The break is chosen here rather than left to the text box, and that is what lets a tile be
+ * narrow. A wrapping box has to be as wide as the longest LABEL before it breaks anywhere
+ * sensible ("Simulink Parameter" is 18 characters); breaking at the space ourselves means a
+ * tile only has to be as wide as the widest WORD, which is "Connection" at 65px measured. The
+ * popover went from 380px to 300px as a direct result, and no label is at the mercy of where
+ * its box happened to run out.
+ *
+ * Deliberately not `white-space: pre-line` over a label with a newline in it: `label` is the
+ * name the accessible name, the title and the event all carry, and a newline inside it would
+ * travel with them into a tooltip and a screen reader.
+ */
+export function labelLinesOf(tile: GalleryTile): readonly string[] {
+  return tile.labelLines ?? tile.label.split(' ');
 }
 
 /**

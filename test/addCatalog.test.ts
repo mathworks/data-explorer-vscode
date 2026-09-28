@@ -18,7 +18,15 @@ import { describe, it, expect } from 'vitest';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { SlddNode } from 'data-explorer-core';
-import { ADD_CATALOG, OMITTED, SECTION_BADGE, allTiles, badgeOf, categorySection } from '../src/common/addCatalog.js';
+import {
+  ADD_CATALOG,
+  OMITTED,
+  SECTION_BADGE,
+  allTiles,
+  badgeOf,
+  categorySection,
+  labelLinesOf,
+} from '../src/common/addCatalog.js';
 import type { GalleryTile, SectionKey } from '../src/common/addCatalog.js';
 
 /** Every section of a fresh, empty dictionary — one per tile, so names never collide. */
@@ -223,36 +231,53 @@ describe('how the catalog states a destination', () => {
     expect(allTiles().length).toBe(28);
   });
 
-  it('keeps every label short enough for the tile that has to draw it', () => {
-    // A proxy for a pixel measurement this environment cannot take. happy-dom lays
-    // nothing out, so a label that does not fit its tile shows up only in the browser
-    // harness (`scenarios/add-gallery.mjs`, which reports `truncatedLabels`, `labelLines`
-    // and `wrappedLabels`) — and it showed up there once already, as `Variant Config Data`
-    // rendered `Variant Co…` two rows under `Variant Control` and indistinguishable
-    // from it.
+  it('breaks every label into lines that spell it and fit a tile', () => {
+    // Three claims, and the first is the one that matters most: the lines a tile draws have
+    // to say the label. A break is the only place in this file where a tile's name is
+    // written twice, and a tile drawing `Simulnk` / `Parameter` would be a name nothing else
+    // in the extension — the title, the accessible name, the event — has ever heard of.
     //
-    // The numbers come from that harness run: three columns make a tile 118px wide, so
-    // its label box is 108px, and at the ~5.8px/char the shipped 12px font measured that
-    // is about 18 characters per line. A tile's label now WRAPS instead of ellipsing, so
-    // the two failures left are a word too long for one line (`overflow-wrap: break-word`
-    // chops it mid-word) and a label needing a third line (its whole grid row grows with
-    // it). Hence two crude limits rather than one: 14 characters for the longest word and
-    // 30 for the label, both with slack, because a `W` is wider than an `i` and this is a
-    // fence a new tile trips over, not a layout engine. If a label has to exceed either,
-    // widen the popover and re-measure with the harness rather than raising a constant
-    // here. Current worst cases: `Variant Expression` (18 characters, longest word 10).
-    const LIMIT = { label: 30, word: 14 };
-    const tooLong: string[] = [];
+    // The other two are a proxy for a pixel measurement this environment cannot take.
+    // happy-dom lays nothing out, so a line that does not fit shows up only in the browser
+    // harness (`scenarios/add-gallery.mjs`: `truncatedLabels`, `labelLines`, `wrappedLines`)
+    // — and it showed up there once already, as `Variant Config Data` clipped to
+    // `Variant Co…` two rows under `Variant Control` and indistinguishable from it.
+    //
+    // The numbers come from that harness run: three columns make a tile 91px wide, so a label
+    // line gets 81px, and the widest line in the catalog (`Connection`, 10 characters) inks 65
+    // of them — 6.5px per character, which puts 12 characters in the 81. A third line is the
+    // other failure, because a grid row is as tall as its tallest tile, so one three-line
+    // label makes two innocent neighbours grow with it. Both limits are deliberately crude: a
+    // `W` is wider than an `i`, and this is a fence a new tile trips over rather than a layout
+    // engine. A label that cannot fit should be broken differently (see `labelLines`) or
+    // shortened; widening the popover is the last resort, and it means re-measuring with the
+    // harness rather than raising a constant here.
+    const LIMIT = { chars: 12, lines: 2 };
+    const problems: string[] = [];
     for (const tile of allTiles()) {
-      if (tile.label.length > LIMIT.label) {
-        tooLong.push(`${tileName(tile)} — label ${tile.label.length} > ${LIMIT.label}`);
+      const lines = labelLinesOf(tile);
+      if (lines.join(' ') !== tile.label) {
+        problems.push(`${tileName(tile)} — lines spell "${lines.join(' ')}"`);
       }
-      for (const word of tile.label.split(' ')) {
-        if (word.length > LIMIT.word) {
-          tooLong.push(`${tileName(tile)} — word "${word}" ${word.length} > ${LIMIT.word}`);
+      if (lines.length > LIMIT.lines) {
+        problems.push(`${tileName(tile)} — ${lines.length} lines > ${LIMIT.lines}`);
+      }
+      for (const line of lines) {
+        if (line.length > LIMIT.chars) {
+          problems.push(`${tileName(tile)} — line "${line}" ${line.length} > ${LIMIT.chars}`);
         }
       }
     }
-    expect(tooLong).toEqual([]);
+    expect(problems).toEqual([]);
+  });
+
+  // An override that agrees with the default is dead weight that reads as a decision, and
+  // the next person to change the label would have to notice both halves.
+  it('states a break only where one word per line is wrong', () => {
+    const stated = allTiles().filter((t) => t.labelLines);
+    expect(stated.map(tileName)).toEqual(['Bank Coder Info (Simulink.VariantBankCoderInfo → design)']);
+    for (const tile of stated) {
+      expect(tile.labelLines).not.toEqual(tile.label.split(' '));
+    }
   });
 });

@@ -64,6 +64,23 @@ describe('dex-add-gallery', () => {
     expect(badged.getAttribute('aria-label')).toBe('Add Constant to Architectural Data');
   });
 
+  // The break is data, not something the text box arrived at: one word per line, so a tile
+  // only has to be as wide as the longest WORD in the catalog rather than the longest label.
+  // The accessible name above stays one line — a newline there would be read aloud and shown
+  // in the tooltip.
+  it('draws a label one word to a line, and the one three-word label as two', async () => {
+    const el = await gallery();
+    const linesOf = (className: string) =>
+      [
+        ...$$(el, '.tile')
+          .find((t) => t.dataset.className === className)!
+          .querySelectorAll('.tile-line'),
+      ].map((n) => n.textContent!.trim());
+    expect(linesOf('Simulink.Parameter')).toEqual(['Simulink', 'Parameter']);
+    expect(linesOf('Simulink.Breakpoint')).toEqual(['Breakpoint']);
+    expect(linesOf('Simulink.VariantBankCoderInfo')).toEqual(['Bank', 'Coder Info']);
+  });
+
   it('badges only the tiles that depart from their category', async () => {
     const el = await gallery();
     const badged = $$(el, '.tile')
