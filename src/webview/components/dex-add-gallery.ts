@@ -39,6 +39,24 @@ import type { GalleryCategory, GalleryTile } from '../../common/addCatalog.js';
 export const ADD_GALLERY_WIDTH = 300;
 
 /**
+ * How far in from each side of the table the popover sits, in px.
+ *
+ * So it reads as something floating over the table rather than a panel welded to the editor
+ * tab (the maintainer's call): spanning the tab exactly, the popover's own border met the
+ * tab's edges and the drop shadow had nowhere to fall, which is the whole of how a shadow
+ * says "above". A strip of the table showing down each side is that cue.
+ *
+ * 12 rather than a larger number because it is spent twice and comes out of the tiles: 24px
+ * is a fifth of a `MIN_TILE_WIDTH` column, so a wider margin starts costing a column at the
+ * widths where the grid is about to gain one.
+ *
+ * It is also the part that gives way first. {@link ADD_GALLERY_WIDTH} is the floor — the width
+ * two tile columns need — and the table shrinks this inset toward 0 rather than squeezing the
+ * gallery below it, because a margin is a nicety and a column of tiles is the content.
+ */
+export const ADD_GALLERY_INSET = 12;
+
+/**
  * The narrowest a tile may be, in px, and so what decides how many columns a width holds.
  *
  * Set by the badge in the top-right corner, not by the label. The icon is centred, so it moves

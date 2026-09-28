@@ -9,6 +9,7 @@ import {
   type FilterOp, type FilterTerm, type FilterToken,
 } from '../rowFilter.js';
 import './dex-add-gallery.js';
+import { ADD_GALLERY_INSET, ADD_GALLERY_WIDTH } from './dex-add-gallery.js';
 import './dex-column-filter.js';
 import './dex-filter-bar.js';
 import type { DexFilterBar } from './dex-filter-bar.js';
@@ -1869,10 +1870,21 @@ export class DexTreeTable extends LitElement {
     // from `window`, because a split editor gives the table a fraction of the window and it
     // is the table the user is aiming at. Clamped to the viewport all the same — a table
     // scrolled horizontally can start left of it.
+    //
+    // Inset from both of the table's edges by ADD_GALLERY_INSET so it reads as floating over
+    // the table rather than as a panel bolted to the tab. The inset is what gives way when
+    // there is not room for everything: it shrinks toward 0 as the pane approaches
+    // ADD_GALLERY_WIDTH, so a narrow split loses its margins before it loses a column of
+    // tiles. Computed from the table's width and not from the popover's, because the popover's
+    // width is the thing being computed.
     const host = this.getBoundingClientRect();
-    const left = Math.max(0, host.left);
+    const inset = Math.max(0, Math.min(ADD_GALLERY_INSET, (host.width - ADD_GALLERY_WIDTH) / 2));
+    const left = Math.max(0, host.left + inset);
     this._addGalleryX = left;
-    this._addGalleryWidth = Math.max(0, Math.min(host.width, window.innerWidth - left));
+    // The viewport clamp is applied to the inset width, so it can only ever take MORE off: a
+    // table wider than the window keeps its right edge at the window's, which is a table with
+    // no visible edge to leave a margin against anyway.
+    this._addGalleryWidth = Math.max(0, Math.min(host.width - 2 * inset, window.innerWidth - left));
     this._addGalleryY = rect.bottom + 2;
     this._addGalleryOpen = true;
   }

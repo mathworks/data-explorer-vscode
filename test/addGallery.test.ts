@@ -296,26 +296,39 @@ describe('the table and the gallery together', () => {
   // The rect is stubbed because happy-dom lays nothing out — every box there is 0 by 0, so
   // without this the test could only watch a 0 travel. What the popover then DOES with the
   // width is layout, and is measured in the browser harness, not here.
-  it('hands the gallery the table’s own width, clamped to the viewport', async () => {
+  it('hands the gallery the table’s own width, inset on both sides and clamped to the viewport', async () => {
     const el = await table();
     const stubRect = (left: number, width: number) => {
       el.getBoundingClientRect = () =>
         ({ left, width, right: left + width, top: 0, bottom: 0, height: 0, x: left, y: 0 }) as DOMRect;
     };
+    const reopen = async (left: number, width: number) => {
+      if (popover(el)) {
+        button(el)!.click();
+        await el.updateComplete;
+      }
+      stubRect(left, width);
+      return open(el);
+    };
+    const box = (g: DexAddGallery) => [g.style.left, g.style.getPropertyValue('--dex-add-gallery-width')];
 
-    stubRect(40, 600);
-    let g = await open(el);
-    expect(g.style.left).toBe('40px');
-    expect(g.style.getPropertyValue('--dex-add-gallery-width')).toBe('600px');
+    // A margin each side, so it floats over the table instead of meeting its edges
+    // (maintainer's call): 12px in from 40, and 24px off 600.
+    expect(box(await reopen(40, 600))).toEqual(['52px', '576px']);
 
     // A table scrolled horizontally can start left of the viewport, and one wider than the
-    // window would otherwise spill off its right edge. Neither may push the gallery out.
-    button(el)!.click();
-    await el.updateComplete;
-    stubRect(-30, window.innerWidth + 200);
-    g = await open(el);
-    expect(g.style.left).toBe('0px');
-    expect(g.style.getPropertyValue('--dex-add-gallery-width')).toBe(`${window.innerWidth}px`);
+    // window would otherwise spill off its right edge. Neither may push the gallery out — and
+    // the clamp wins over the margin, because a table with no visible edge inside the window
+    // has no edge to leave a margin against.
+    expect(box(await reopen(-30, window.innerWidth + 200))).toEqual(['0px', `${window.innerWidth}px`]);
+
+    // The inset is the part that gives way. At exactly the popover's own width there is no
+    // margin to spend — 300px of tiles beats 276px of tiles with a gap down each side — and
+    // between there and 324 the inset takes the growth so the gallery stays at its floor.
+    expect(box(await reopen(0, 300))).toEqual(['0px', '300px']);
+    expect(box(await reopen(0, 310))).toEqual(['5px', '300px']);
+    expect(box(await reopen(0, 324))).toEqual(['12px', '300px']);
+    expect(box(await reopen(0, 400))).toEqual(['12px', '376px']);
   });
 
   it('shows the button on an editable view and toggles the popover with it', async () => {
