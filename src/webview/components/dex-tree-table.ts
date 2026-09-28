@@ -1802,10 +1802,34 @@ export class DexTreeTable extends LitElement {
     // host-facing module, which would see the same click twice under two names.
     e.stopPropagation();
     const detail = e.detail as { className: string; section: string; label: string };
-    this.dispatchEvent(new CustomEvent('dex-add-entry', { detail, bubbles: true, composed: true }));
-    if (!this._addPinned) {
+    // Whether the new row should open its name editor travels WITH the request, because it
+    // is a fact about this gesture and nothing later can recover it: by the time the host
+    // has written the entry and the rows have come back, the pin may have been toggled or
+    // the popover closed. Unpinned means one add and then naming it; pinned means a batch,
+    // where an editor opening under each tile click would fight the next one.
+    const rename = !this._addPinned;
+    this.dispatchEvent(
+      new CustomEvent('dex-add-entry', { detail: { ...detail, rename }, bubbles: true, composed: true }),
+    );
+    if (rename) {
       this._closeAddGallery();
     }
+  }
+
+  /**
+   * Open the inline name editor on a row, from outside the component.
+   *
+   * The host asks for this after creating an entry from the gallery (`beginRename`), and it
+   * goes through the very path a double-click takes — `_cellEditTarget`, which is the one
+   * place that knows whether a cell may be edited at all. So a row whose Name the host would
+   * refuse gets no editor rather than one whose commit bounces. Returns whether the editor
+   * opened, so a caller can keep holding a request whose row has not arrived yet.
+   */
+  beginRename(rowId: string): boolean {
+    const row = ((this.rows ?? []) as TreeTableRow[]).find((r) => r.ID === rowId);
+    if (!row) return false;
+    this._onCellDblClickIfEditable(row, 'Name');
+    return this._editingCell?.rowId === rowId;
   }
 
   // --- Column Customization Menu ---

@@ -28,6 +28,7 @@ import {
   removeChildrenFromModel,
   addChildToModel,
   prepareEntryForPaste,
+  createEntry,
   foldPasteEntries,
   type StructuralResult,
 } from './structuralEdit.js';
@@ -100,6 +101,15 @@ export function pasteEntryXml(
   payload: Record<string, unknown>,
 ): StructuralResult {
   return insertNewEntry(text, prepareEntryForPaste(section, payload));
+}
+
+/**
+ * Add a new default entry of `className` to `section`. Every rule about what the new entry
+ * BECOMES is `createEntry` — really core's `addEntry` — shared with the JSON path; only the
+ * fragment insert below is XML-specific.
+ */
+export function addNewEntryXml(text: string, section: any, className: string): StructuralResult {
+  return insertNewEntry(text, createEntry(section, className));
 }
 
 /** Multi-paste for a binary .sldd (multi-select drop). See foldPasteEntries. */

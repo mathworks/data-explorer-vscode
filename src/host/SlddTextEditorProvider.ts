@@ -55,11 +55,13 @@ import {
   deleteChild,
   deleteChildren,
   addChild as addChildEdit,
+  addNewEntry,
   pasteEntries,
   deleteEntriesByName,
   findOwningEntry,
   reselectAfterRemoval,
   resolveSectionForPaste,
+  sectionByName,
   reserializeEntry,
   buildDragSnapshot,
   type StructuralResult,
@@ -1575,6 +1577,75 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       }
     };
 
+    /**
+     * Create ONE new default entry from the Add gallery.
+     *
+     * A paste with no source: the same insert into the entries array, the same ops for the
+     * undo, the same narrow repaint — only what the new entry IS differs, and that is
+     * `createEntry`, i.e. core's `addEntry` (see structuralEdit). The section comes from the
+     * message rather than from a row, because a tile states its own destination.
+     *
+     * Always narrow. The paste's wide fallback exists for a same-document MOVE whose sources
+     * the model can no longer find; an add removes nothing, so there is no second text and
+     * nothing to re-resolve.
+     */
+    const applyAddEntry = async (msg: {
+      section: string;
+      className: string;
+      rename: boolean;
+    }): Promise<void> => {
+      let painted = false;
+      try {
+        if (!ensureValidJson()) return;
+        const model = liveModel();
+        const section = sectionByName(model, msg.section);
+        if (!section) {
+          webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
+          return;
+        }
+        const currentText = document.getText();
+        // Read BEFORE the add, for the reason the paste reads it after its removals: this is
+        // the mark the new tail is measured from.
+        const addedFrom = (section.children as any[]).length;
+        const result = addNewEntry(currentText, section, msg.className);
+        // The entry is already attached to the section (addEntry did it), so this both
+        // indexes the new subtree and states the insert an undo has to take back.
+        const added = opsOfPastedEntries(section, addedFrom);
+        // PAINT — the rows go out ahead of the write, as every narrow edit here does.
+        painted = true;
+        repaintOps(added.applied);
+        if (result.selectId) {
+          webview.postMessage({ type: 'selectRows', rowIds: [result.selectId] });
+          // AFTER the selection, which is what expands and scrolls the row into view. Only
+          // for an unpinned add: during a pinned run the user is clicking tiles, and an
+          // editor stealing focus between two of them is worse than an unnamed entry.
+          if (msg.rename) webview.postMessage({ type: 'beginRename', rowId: result.selectId });
+        }
+
+        const patch = patchFor(result, currentText);
+        const submitted = submittedOf(patch);
+        paintedWrite = submitted;
+        await writePatch(patch);
+        remember({
+          submitted,
+          replaced: currentText.slice(patch.offset, patch.offset + patch.length),
+          patch: patchOfPairs(added.pairs),
+        });
+      } catch (err) {
+        paintedWrite = null;
+        const message = `Failed to apply edit: ${(err as Error).message}`;
+        // An entry may be in the tree and not in the file — `addEntry` attaches it before the
+        // splice can fail — so both arms have to put the text's answer back. Painted, the rows
+        // named an entry that does not exist and only a wide repaint can withdraw them;
+        // unpainted, the rows are still right and it is the tree the next edit would build on.
+        if (painted) resyncWide(message);
+        else {
+          rebuildModel();
+          webview.postMessage({ type: 'error', message });
+        }
+      }
+    };
+
     // --- Drag start: snapshot the dragged rows into the host drag register ------
     // Mirrors applyCopy but for possibly-many rows: each row's owning entry is
     // serialized (the payload the eventual paste uses) alongside the display
@@ -1777,6 +1848,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         applyCut(msg.rowIds);
       } else if (msg?.type === 'paste') {
         void applyPaste(msg);
+      } else if (msg?.type === 'addEntry') {
+        void applyAddEntry(msg);
       } else if (msg?.type === 'dragStart') {
         applyDragStart(msg);
       } else if (msg?.type === 'dragEnd') {

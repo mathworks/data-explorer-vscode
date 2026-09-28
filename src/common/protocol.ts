@@ -162,6 +162,25 @@ export interface SelectRowsMessage {
   rowIds: string[];
 }
 
+/**
+ * Put a row's Name cell straight into inline rename.
+ *
+ * Sent after the `selectRows` for an entry the host has just CREATED from the Add gallery,
+ * because a new entry's name is the one thing the gallery cannot supply: core names it
+ * `Parameter`, `Parameter1`, `Parameter2`, and the user's next act is always to say what it
+ * really is. Stated by the host rather than inferred in the webview from "a selectRows that
+ * arrived with an insert" — a paste and a drop are exactly that too, and their names came
+ * from the entries the user already had.
+ *
+ * Separate from `selectRows` rather than a flag on it, because the two are answered at
+ * different times: the selection can be held until the row exists (pendingSelectIds), and so
+ * can this, but a row that is never renameable still selects.
+ */
+export interface BeginRenameMessage {
+  type: 'beginRename';
+  rowId: string;
+}
+
 /** Transient red error banner. */
 export interface ErrorMessage {
   type: 'error';
@@ -199,6 +218,7 @@ export type HostToTableMessage =
   | DragStateMessage
   | SelectByNameMessage
   | SelectRowsMessage
+  | BeginRenameMessage
   | ErrorMessage
   | ValidationErrorMessage;
 
@@ -257,6 +277,30 @@ export interface AddChildMessage {
   rowId: string;
 }
 
+/**
+ * Create one new default entry from the Add gallery.
+ *
+ * Names the SECTION rather than a row, which is what makes the gallery independent of the
+ * selection: every tile carries its own destination (a Constant is architectural data
+ * wherever the cursor happens to be), so there is no "current section" to get wrong. The
+ * class name is core's, and core's `addEntry` is what re-checks that the section admits it.
+ */
+export interface AddEntryMessage {
+  type: 'addEntry';
+  /** Core's section key — `design`, `arch` or `config`. */
+  section: string;
+  /** The `$class` (or class-map key) to create. */
+  className: string;
+  /**
+   * Whether the new row should go straight into inline rename.
+   *
+   * True for an unpinned add, where naming the entry is the user's next act and the popover
+   * has already closed to get out of the way. False during a pinned run: prompting mid-run
+   * would interrupt the very batch the pin asked for.
+   */
+  rename: boolean;
+}
+
 /** Jump to the row's location in the plain-text view. */
 export interface LocateInTextMessage {
   type: 'locateInText';
@@ -302,6 +346,7 @@ export type TableToHostMessage =
   | PasteMessage
   | DeleteMessage
   | AddChildMessage
+  | AddEntryMessage
   | LocateInTextMessage
   | NavigateMessage
   | UndoRedoMessage

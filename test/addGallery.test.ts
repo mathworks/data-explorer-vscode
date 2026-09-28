@@ -184,7 +184,26 @@ describe('the table and the gallery together', () => {
     el.addEventListener('dex-add-tile', () => seen.push('leaked'));
     const g = await open(el);
     $$(g, '.tile').find((t) => t.dataset.className === 'Simulink.Signal')!.click();
-    expect(seen).toEqual([{ className: 'Simulink.Signal', section: 'design', label: 'Simulink Signal' }]);
+    // `rename` rides along with the class and the section: it is a fact about THIS gesture,
+    // and by the time the entry exists the pin may have been toggled.
+    expect(seen).toEqual([
+      { className: 'Simulink.Signal', section: 'design', label: 'Simulink Signal', rename: true },
+    ]);
+  });
+
+  it('asks for no rename during a pinned run, so a batch is not interrupted', async () => {
+    const el = await table();
+    const g = await open(el);
+    const box = $(g, '.gallery-pin input') as HTMLInputElement;
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    await el.updateComplete;
+    const seen: unknown[] = [];
+    el.addEventListener('dex-add-entry', (e) => seen.push((e as CustomEvent).detail));
+    $$(g, '.tile').find((t) => t.dataset.className === 'Simulink.Signal')!.click();
+    expect(seen).toEqual([
+      { className: 'Simulink.Signal', section: 'design', label: 'Simulink Signal', rename: false },
+    ]);
   });
 
   it('closes after an unpinned add, because naming the new row comes next', async () => {

@@ -43,6 +43,7 @@ import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import {
   findOwningEntry,
   resolveSectionForPaste,
+  sectionByName,
   buildDragSnapshot,
   reselectAfterRemoval,
 } from './structuralEdit.js';
@@ -53,6 +54,7 @@ import {
   deleteChildXml,
   deleteChildrenXml,
   addChildXml,
+  addNewEntryXml,
   pasteEntriesXml,
   deleteEntriesByNameXml,
   type StructuralResult,
@@ -1040,6 +1042,48 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       }
     };
 
+    /**
+     * Create ONE new default entry from the Add gallery.
+     *
+     * The same edit as a paste with nothing on the clipboard: one fragment into the XML, one
+     * insert op for the undo stack, one narrow repaint. What the entry IS comes from
+     * `createEntry` (inside addNewEntryXml) — core's `addEntry`, shared with the JSON path, so
+     * an add in a compressed dictionary produces the same class, name and stamps as an add in
+     * a text one. The section is named by the message, because a gallery tile carries its own
+     * destination rather than reading one off the selection.
+     */
+    const applyAddEntry = (msg: { section: string; className: string; rename: boolean }): void => {
+      try {
+        const model = liveModel();
+        const section = sectionByName(model, msg.section);
+        if (!section) {
+          webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
+          return;
+        }
+        const before = document.chunkXml;
+        // Before the add: the mark the new tail is measured from (see applyPaste).
+        const addedFrom = (section.children as any[]).length;
+        const { newText, selectId } = addNewEntryXml(before, section, msg.className);
+        // Indexes the new subtree and states the insert for the undo — owed because the entry
+        // joined the tree inside `addEntry` rather than through an op.
+        const added = opsOfPastedEntries(section, addedFrom);
+        document.pushEdit('Add', before, newText, patchOfPairs(added.pairs));
+        document.repaintOps(added.applied);
+        if (selectId) {
+          webview.postMessage({ type: 'selectRows', rowIds: [selectId] });
+          // After the selection, which expands and scrolls the row into view. Unpinned only:
+          // during a pinned run the next click is another tile, not a name.
+          if (msg.rename) webview.postMessage({ type: 'beginRename', rowId: selectId });
+        }
+      } catch (err) {
+        // `addEntry` attaches the new node before the XML splice can fail, so the model may be
+        // a step ahead of chunkXml. Rebuild from the text — the state the user still has —
+        // first, because the repaint clears the banner.
+        document.repaintAll();
+        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+      }
+    };
+
     // --- Drag start: snapshot the dragged rows into the host drag register ------
     // Each dragged row's owning entry is serialized (the payload the drop pastes)
     // alongside the display facts (class/kind) the target webview needs to predict
@@ -1168,6 +1212,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       else if (msg?.type === 'delete') applyDelete(msg.rowIds);
       else if (msg?.type === 'addChild') applyStructural(msg.rowId, (xml, node) => addChildXml(xml, node), 'Add child');
       else if (msg?.type === 'paste') void applyPaste(msg.rowId);
+      else if (msg?.type === 'addEntry') applyAddEntry(msg);
       else if (msg?.type === 'dragStart') applyDragStart(msg);
       else if (msg?.type === 'dragEnd') applyDragEnd();
       else if (msg?.type === 'drop') void applyDrop(msg);

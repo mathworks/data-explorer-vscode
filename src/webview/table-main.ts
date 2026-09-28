@@ -169,6 +169,24 @@ function applyPendingSelection(): void {
   pendingSelectIds = [];
 }
 
+// A row the host asked us to open the name editor on once it exists. Set only by an add
+// from the gallery: core names a new entry `Parameter`, `Parameter1`, … and saying what it
+// really is is the user's next act (see BeginRenameMessage). Held until the row arrives for
+// the same reason pendingSelectIds is — the request travels beside the repaint that carries
+// the row, and nothing here may assume which lands first.
+let pendingRenameId: string | null = null;
+
+function applyPendingRename(): void {
+  if (!pendingRenameId) return;
+  const rows = (table.rows ?? []) as { ID: string }[];
+  if (!rows.some((r) => r.ID === pendingRenameId)) return;
+  // Cleared whether or not the editor opened. A row that is present and NOT renameable is
+  // an answer, not a wait: holding the request would open the editor on whatever row next
+  // takes that id, which after an undo is a different entry.
+  table.beginRename(pendingRenameId);
+  pendingRenameId = null;
+}
+
 // A name a navigation asked us to select once its row exists. Set on a cross-tab
 // Usage-link click (the target is identified by name — block or variable — not
 // by hierarchical id); applied as soon as a matching row is present, else held
@@ -286,6 +304,10 @@ function installRows(rows: any[]): void {
   applyPendingSelection();
   // A cross-tab navigation may be waiting for its target row to appear.
   applyPendingNameSelection();
+  // AFTER the selection, because selecting expands the row's ancestors and scrolls it into
+  // view — an editor opened on a row still hidden under a collapsed section, or below the
+  // viewport, is a table that has silently stopped responding to the keyboard.
+  applyPendingRename();
 }
 
 window.addEventListener('message', (event: MessageEvent) => {
@@ -364,6 +386,11 @@ window.addEventListener('message', (event: MessageEvent) => {
     // are all present, else stash until a rebuild brings the rest.
     pendingSelectIds = Array.isArray(msg.rowIds) ? msg.rowIds.filter((id) => typeof id === 'string') : [];
     applyPendingSelection();
+  } else if (msg.type === 'beginRename') {
+    // Open the name editor on a just-created entry. Apply now if its row is already here
+    // (the host paints the new rows before it asks), else hold until the repaint arrives.
+    pendingRenameId = typeof msg.rowId === 'string' ? msg.rowId : null;
+    applyPendingRename();
   } else if (msg.type === 'clipboardState') {
     clipboardState = {
       canPaste: !!msg.canPaste,
@@ -584,6 +611,23 @@ table.addEventListener('dex-link-clicked', (e: Event) => {
     vscode.postMessage({ type: 'navigate', target });
     return;
   }
+});
+
+// A tile in the Add gallery was clicked: ask the host to create one entry of that class in
+// the section the tile names. Nothing about the current selection is sent, and that is the
+// point — a tile carries its own destination, so the add means the same thing wherever the
+// cursor happens to be. Gated on `editable` like every other structural gesture; the button
+// does not exist on a read-only view (table.canAdd), so this is the second lock on a door
+// that has no handle.
+table.addEventListener('dex-add-entry', (e: Event) => {
+  if (!editable) return;
+  const detail = (e as CustomEvent).detail;
+  vscode.postMessage({
+    type: 'addEntry',
+    section: detail.section,
+    className: detail.className,
+    rename: !!detail.rename,
+  });
 });
 
 // Relay committed cell edits to the host for write-back into the JSON text.

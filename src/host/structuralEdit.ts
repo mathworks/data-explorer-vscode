@@ -86,6 +86,18 @@ export function findOwningEntry(node: any): any {
   return owningEntryOf(node);
 }
 
+/**
+ * A dictionary's section by core's own key (`design`, `arch`, `config`, `other`), or null.
+ *
+ * One spelling, because two callers now ask the same question for different reasons: a paste
+ * into an empty section, which has only its header row to aim at, and the Add gallery, whose
+ * tiles name their destination outright and so never had a row to resolve from. A section is
+ * a direct child of the dictionary node, so this is a lookup and not a walk.
+ */
+export function sectionByName(model: any, sectionName: string): any {
+  return ((model?.children ?? []) as any[]).find((s) => s.name === sectionName) ?? null;
+}
+
 // Resolve the section a paste should target, given the right-clicked row's
 // model node (may be null) and its row id. Two cases:
 //  - The row is an entry or nested child → its owning entry's parent section.
@@ -98,9 +110,7 @@ export function resolveSectionForPaste(model: any, node: any, rowId: string): an
   const owning = node ? findOwningEntry(node) : null;
   if (owning?.parent) return owning.parent;
   if (typeof rowId === 'string' && isSectionRowId(rowId)) {
-    const sectionName = sectionNameFromRowId(rowId)!;
-    const section = (model?.children ?? []).find((s: any) => s.name === sectionName);
-    if (section) return section;
+    return sectionByName(model, sectionNameFromRowId(rowId)!);
   }
   return null;
 }
@@ -516,6 +526,48 @@ export function prepareEntryForPaste(section: any, payload: Record<string, unkno
 }
 
 /**
+ * Create a NEW default entry of `className` in `section`, attached to the model.
+ *
+ * The Add gallery's counterpart to prepareEntryForPaste, and it is one line for the same
+ * reason that one is long: core's `addEntry` already IS the rule. It re-tests the section's
+ * allow-list (the one gate — see SectionNode), builds the class's own default value, makes
+ * the name unique across the whole shared namespace, and stamps uuid, namespace, isderived
+ * and status for the section it was handed. Nothing here may re-derive any of that.
+ *
+ * Shared by both .sldd formats, like prepareEntryForPaste, so a JSON add and a binary add
+ * cannot produce differently-classed or differently-stamped entries.
+ */
+export function createEntry(section: any, className: string): any {
+  const node = section.addEntry(className);
+  if (!node) {
+    // Reached when the section refuses the class. Worth a real message rather than a
+    // silent no-op: the gallery only offers legal tiles (its guard test creates every
+    // one), so a refusal here means the catalog and core have gone out of step.
+    throw new Error(`${className} cannot be added to ${section.displayName || section.name}.`);
+  }
+  return node;
+}
+
+/**
+ * Splice a freshly-created or freshly-pasted entry into the `entries` array.
+ *
+ * Shared by the paste and the add below so there is ONE answer to where a new entry goes in
+ * a JSON dictionary. Two answers is the bug this repo has shipped before: the narrow insert
+ * and the wide re-parse disagreeing about an entry's position, so the row order changed
+ * under the user on the next full repaint.
+ */
+function insertNewEntry(text: string, newNode: any): StructuralResult {
+  const indent = detectIndent(text);
+  const entryText = reserializeEntry(newNode, indent);
+  const insertion = findEntriesArrayInsertion(text);
+  if (!insertion) throw new Error('Could not locate the entries array.');
+
+  const prefix = insertion.needsLeadingComma ? ',\n' + insertion.elementIndent : insertion.elementIndent;
+  const inserted = prefix + entryText;
+  return patchResult(text, { offset: insertion.offset, length: 0, text: inserted }, newNode.id);
+}
+
+/**
  * Paste a serialized entry as a NEW top-level entry in `section`, inserting the
  * element into the entries array and preserving sibling bytes. See
  * prepareEntryForPaste for every rule about what the pasted entry becomes.
@@ -525,16 +577,12 @@ export function pasteEntry(
   section: any,
   payload: Record<string, unknown>,
 ): StructuralResult {
-  const newNode = prepareEntryForPaste(section, payload);
+  return insertNewEntry(text, prepareEntryForPaste(section, payload));
+}
 
-  const indent = detectIndent(text);
-  const entryText = reserializeEntry(newNode, indent);
-  const insertion = findEntriesArrayInsertion(text);
-  if (!insertion) throw new Error('Could not locate the entries array.');
-
-  const prefix = insertion.needsLeadingComma ? ',\n' + insertion.elementIndent : insertion.elementIndent;
-  const inserted = prefix + entryText;
-  return patchResult(text, { offset: insertion.offset, length: 0, text: inserted }, newNode.id);
+/** Add a new default entry of `className` to `section`. See createEntry. */
+export function addNewEntry(text: string, section: any, className: string): StructuralResult {
+  return insertNewEntry(text, createEntry(section, className));
 }
 
 /**
