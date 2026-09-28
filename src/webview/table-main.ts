@@ -368,7 +368,7 @@ window.addEventListener('message', (event: MessageEvent) => {
     // into itself. Guarded so a provider that has not been updated leaves the old value
     // rather than blanking it.
     docUri = typeof msg.docUri === 'string' ? msg.docUri : docUri;
-    // The `⊞ Add` button exists only where entries can be created, which is the same
+    // The `+ Add` button exists only where entries can be created, which is the same
     // condition the context menu is gated on — the two editable .sldd views. A read-only
     // view gets no button rather than a dead one.
     table.canAdd = editable;

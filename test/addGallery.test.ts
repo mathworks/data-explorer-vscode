@@ -36,20 +36,15 @@ describe('dex-add-gallery', () => {
     document.body.innerHTML = '';
   });
 
-  it('renders every category in order, each heading naming where its tiles land', async () => {
+  it('renders every category in order, and states no destination in the heading', async () => {
     const el = await gallery();
     expect($$(el, '.kind-name').map((n) => n.textContent!.trim())).toEqual(
       ADD_CATALOG.map((c) => c.title),
     );
-    const dests = $$(el, '.kind-dest').map((n) => n.textContent!.trim());
-    expect(dests).toEqual([
-      '→ Design Data, except where badged',
-      '→ Design Data',
-      '→ Architectural Data',
-      '→ Design Data, except where badged',
-      '→ Design Data, except where badged',
-      '→ Configurations',
-    ]);
+    // A heading names the kind and nothing else (maintainer's call, 2026-09-28). Where a
+    // row lands is carried by the badge on the tiles that depart from their neighbours and
+    // by every tile's accessible name — not by a line under each heading repeating it.
+    expect($$(el, '.kind-dest')).toEqual([]);
   });
 
   it('renders one tile per catalog entry, in catalog order', async () => {
@@ -163,6 +158,16 @@ describe('the table and the gallery together', () => {
   it('shows no button at all on a read-only view', async () => {
     const el = await table(false);
     expect(button(el)).toBeNull();
+  });
+
+  // The button used to read `⊞ Add`, and at 12px that glyph is a small crossed square —
+  // close enough to the MATLAB-variable row icon a few pixels below it to be mistaken for
+  // one (maintainer, from using it). A drawn plus stroked in currentColor instead.
+  it('draws a plus rather than a box glyph', async () => {
+    const el = await table();
+    const b = button(el)!;
+    expect(b.querySelector('svg.add-glyph')).not.toBeNull();
+    expect(b.textContent!.trim()).toBe('Add');
   });
 
   it('shows the button on an editable view and toggles the popover with it', async () => {

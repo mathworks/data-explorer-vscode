@@ -225,25 +225,31 @@ describe('how the catalog states a destination', () => {
 
   it('keeps every label short enough for the tile that has to draw it', () => {
     // A proxy for a pixel measurement this environment cannot take. happy-dom lays
-    // nothing out, so the only place a clipped label shows up is the browser harness
-    // (`scenarios/add-gallery.mjs`, which reports `truncatedLabels`) — and it showed up
-    // there once already: `Variant Config Data` rendered as `Variant Co…`, two rows under
-    // `Variant Control` and indistinguishable from it.
+    // nothing out, so a label that does not fit its tile shows up only in the browser
+    // harness (`scenarios/add-gallery.mjs`, which reports `truncatedLabels`, `labelLines`
+    // and `wrappedLabels`) — and it showed up there once already, as `Variant Config Data`
+    // rendered `Variant Co…` two rows under `Variant Control` and indistinguishable
+    // from it.
     //
-    // The numbers come from that harness run at ADD_GALLERY_WIDTH = 380: two columns of
-    // `minmax(150px, 1fr)` leave a tile's label 141px, and a destination badge takes 46 of
-    // them. At the ~5.8px/char the shipped 12px font measured, that is 24 characters
-    // plain and 16 badged. Deliberately a crude character count: it is a fence a new tile
-    // trips over, not a layout engine, and a `W` is wider than an `i`. If a label has to
-    // exceed it, widen the popover and re-measure with the harness rather than raising
-    // the constant here.
-    const LIMIT = { plain: 24, badged: 16 };
+    // The numbers come from that harness run: three columns make a tile 118px wide, so
+    // its label box is 108px, and at the ~5.8px/char the shipped 12px font measured that
+    // is about 18 characters per line. A tile's label now WRAPS instead of ellipsing, so
+    // the two failures left are a word too long for one line (`overflow-wrap: break-word`
+    // chops it mid-word) and a label needing a third line (its whole grid row grows with
+    // it). Hence two crude limits rather than one: 14 characters for the longest word and
+    // 30 for the label, both with slack, because a `W` is wider than an `i` and this is a
+    // fence a new tile trips over, not a layout engine. If a label has to exceed either,
+    // widen the popover and re-measure with the harness rather than raising a constant
+    // here. Current worst cases: `Variant Expression` (18 characters, longest word 10).
+    const LIMIT = { label: 30, word: 14 };
     const tooLong: string[] = [];
-    for (const category of ADD_CATALOG) {
-      for (const tile of category.tiles) {
-        const limit = badgeOf(category, tile) === null ? LIMIT.plain : LIMIT.badged;
-        if (tile.label.length > limit) {
-          tooLong.push(`${tileName(tile)} — ${tile.label.length} > ${limit}`);
+    for (const tile of allTiles()) {
+      if (tile.label.length > LIMIT.label) {
+        tooLong.push(`${tileName(tile)} — label ${tile.label.length} > ${LIMIT.label}`);
+      }
+      for (const word of tile.label.split(' ')) {
+        if (word.length > LIMIT.word) {
+          tooLong.push(`${tileName(tile)} — word "${word}" ${word.length} > ${LIMIT.word}`);
         }
       }
     }

@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 //
-// The Add gallery: the popover the `⊞ Add` button opens, and the only surface in this
+// The Add gallery: the popover the `+ Add` button opens, and the only surface in this
 // extension that creates a dictionary entry from nothing.
 //
 // It creates nothing itself. A click dispatches `dex-add-tile` naming a class and a
@@ -18,7 +18,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import './dex-icon.js';
-import { ADD_CATALOG, SECTION_LABEL, badgeOf, categorySection } from '../../common/addCatalog.js';
+import { ADD_CATALOG, SECTION_LABEL, badgeOf } from '../../common/addCatalog.js';
 import type { GalleryCategory, GalleryTile } from '../../common/addCatalog.js';
 
 /**
@@ -29,13 +29,12 @@ import type { GalleryCategory, GalleryTile } from '../../common/addCatalog.js';
  * the box in quiet disagreement — the popover would render one width and be positioned as
  * if it were something else.
  *
- * 380 rather than the 340 this started at, and the 40px is measured rather than chosen: two
- * columns of `minmax(150px, 1fr)` split 340 into tiles whose label had 75px once the icon
- * and a destination badge had taken theirs, which cut `Variant Config` short — and a tile
- * reading `Variant Co…` sits two rows under `Variant Control` and cannot be told from it.
- * At 380 that label has 95px for the 80 it needs, so the slack survives a platform whose
- * 12px font is wider than this one's. Found by the browser harness; happy-dom lays nothing
- * out, so no unit test here can see a clipped label.
+ * 380 holds exactly three tile columns, and the number is measured rather than chosen: the
+ * grid's `minmax(105px, 1fr)` fits three of them in the 362px inside the padding with 39px
+ * to spare, and a fourth would need 432. That slack is the point — a platform whose 12px
+ * font is wider than this one's must not silently reflow the gallery to two columns.
+ * Found by the browser harness; happy-dom lays nothing out, so no unit test here can see
+ * how many columns rendered.
  */
 export const ADD_GALLERY_WIDTH = 380;
 
@@ -99,13 +98,13 @@ export class DexAddGallery extends LitElement {
       margin: 0;
     }
 
+    /* The heading names the kind and nothing else. It used to carry the destination
+       section too ("→ Design Data, except where badged"); the maintainer's call is that
+       the line was noise — where a row lands is on the tiles that depart from their
+       neighbours, and in every tile's accessible name. */
     .kind-header {
-      display: flex;
-      align-items: baseline;
-      gap: 6px;
       padding: 8px 2px 4px;
       font-size: 11px;
-      color: var(--dex-color-text-muted, #999);
       user-select: none;
       cursor: default;
     }
@@ -117,32 +116,32 @@ export class DexAddGallery extends LitElement {
       color: var(--dex-color-text-secondary, #666);
     }
 
-    .kind-dest {
-      flex: 1 1 auto;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
-    }
-
     .tiles {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      /* Three columns at ADD_GALLERY_WIDTH — see the constant, where the fit is measured. */
+      grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
       gap: 4px;
     }
 
+    /* A gallery tile, not a menu row: the icon sits over the label, centred, the way the
+       MATLAB toolstrip's galleries and the internal app's side panel draw one. The cost
+       against a single dense row is height — 28 tiles are ~10 rows, so the popover
+       scrolls — and the gain is that a label gets the full tile width on two lines
+       instead of whatever the icon and a badge left it on one. */
     .tile {
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 6px;
-      min-height: 26px;
-      padding: 3px 6px;
+      gap: 3px;
+      min-height: 58px;
+      padding: 6px 4px;
       box-sizing: border-box;
       border: 1px solid var(--dex-border-color, #d0d0d0);
       border-radius: 3px;
       background: var(--dex-bg-primary, #fff);
       color: inherit;
       font: inherit;
-      text-align: left;
+      text-align: center;
       cursor: pointer;
       outline: none;
     }
@@ -155,14 +154,21 @@ export class DexAddGallery extends LitElement {
       border-color: var(--dex-color-accent, #0078d4);
     }
 
+    /* Wraps rather than truncates. An ellipsis cost us "Variant Co…" sitting two rows
+       under "Variant Control" once already; a tile is free to be two lines tall, and
+       break-word keeps a long single word inside its own tile instead of over its
+       neighbour. */
     .tile-label {
-      flex: 1 1 auto;
-      overflow: hidden;
-      white-space: nowrap;
-      text-overflow: ellipsis;
+      flex: 0 0 auto;
+      align-self: stretch;
+      white-space: normal;
+      overflow-wrap: break-word;
+      line-height: 14px;
     }
 
-    /* Only on a tile whose section differs from its heading's, which is 6 of 28.
+    /* Only on a tile whose section differs from the rest of its category, which is 6 of
+       28 — and, now that the heading states no destination, the only thing on the face of
+       the gallery distinguishing the four Types tiles that appear twice under one heading.
        Badging every tile would make the badge furniture instead of a warning. */
     .tile-badge {
       flex: 0 0 auto;
@@ -175,9 +181,9 @@ export class DexAddGallery extends LitElement {
       background: var(--dex-bg-secondary, #f3f3f3);
     }
 
-    /* Forced colors drops every background and border above, which would take the
-       badge and the tile outline with it — the badge is the only thing on a mixed
-       tile saying the row lands somewhere other than the heading claims. */
+    /* Forced colors drops every background and border above, which would take the badge
+       and the tile outline with it — and the badge is the only thing telling a tile from
+       the same-labelled one a few rows up that writes to a different section. */
     @media (forced-colors: active) {
       .tile,
       .tile-badge {
@@ -232,18 +238,6 @@ export class DexAddGallery extends LitElement {
     this._close();
   }
 
-  /**
-   * What a heading says about where its tiles land.
-   *
-   * A uniform category states the section outright. A mixed one names the section most
-   * of its tiles go to and points at the badges for the rest, because the alternative —
-   * saying nothing — leaves the unbadged majority unexplained.
-   */
-  private _destText(category: GalleryCategory): string {
-    const label = SECTION_LABEL[categorySection(category)];
-    return category.uniformSection ? `→ ${label}` : `→ ${label}, except where badged`;
-  }
-
   override render() {
     return html`
       <div role="dialog" aria-label="Add an entry" @keydown=${this._onKeyDown}>
@@ -265,7 +259,6 @@ export class DexAddGallery extends LitElement {
           (category) => html`
             <div class="kind-header">
               <span class="kind-name">${category.title}</span>
-              <span class="kind-dest">${this._destText(category)}</span>
             </div>
             <div class="tiles" role="group" aria-label=${category.title}>
               ${category.tiles.map((tile) => this._renderTile(category, tile))}

@@ -351,6 +351,13 @@ export class DexTreeTable extends LitElement {
         border-color: var(--dex-color-accent, #0078d4);
       }
 
+      /* Block, not inline, so the glyph sits on the button's centre line rather than on
+         the text baseline — which would leave it a pixel low next to the word "Add". */
+      .add-glyph {
+        display: block;
+        flex: 0 0 auto;
+      }
+
       /* The bar draws its own border, background and focus ring (dex-filter-bar.ts);
          all this side owns is how much of the row it takes. */
       dex-filter-bar {
@@ -1281,7 +1288,7 @@ export class DexTreeTable extends LitElement {
   // put, and why nothing visible happens here on a fast open.
   @property({ type: Boolean }) loading = false;
 
-  // Whether this view can create entries, i.e. whether the `⊞ Add` button exists at all.
+  // Whether this view can create entries, i.e. whether the `+ Add` button exists at all.
   // The host-facing module sets it from the same `editable` flag the context menu is
   // gated on; a read-only view gets no button rather than a disabled one, because a
   // disabled button invites a click and explains nothing.
@@ -3706,7 +3713,15 @@ export class DexTreeTable extends LitElement {
         aria-expanded=${this._addGalleryOpen}
         @click=${(e: MouseEvent) => this._onAddButtonClick(e)}
       >
-        ⊞ Add
+        <!-- A drawn plus, not the ⊞ this shipped with: at 12px that glyph is a small
+             square with a cross inside it, which is very close to what the MATLAB-variable
+             row icon looks like a few pixels below in the same table. Inline rather than a
+             media/icons asset because that folder is core's ROW-icon vocabulary, and
+             stroking in currentColor is what keeps it visible under forced colors. -->
+        <svg class="add-glyph" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false">
+          <path d="M6 1.5v9M1.5 6h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none" />
+        </svg>
+        Add
       </button>
     `;
   }
