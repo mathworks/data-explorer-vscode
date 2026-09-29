@@ -75,17 +75,28 @@ export const ADD_GALLERY_INSET = 12;
  * The badge in the top-right corner is what stops it. It is right-anchored 3px in from the tile's
  * edge and the icon is centred, so the icon approaches it at half the rate the tile narrows:
  *
- *     gap = width / 2 - iconWidth / 2 - rightInset - badgeWidth
- *         = width / 2 - 8 - 3 - badgeWidth
+ *     gap = width / 2 - ICON_SIZE / 2 - rightInset - badgeWidth
+ *         = width / 2 - 12 - 3 - badgeWidth
+ *         = width / 2 - 55        (the widest badge, "Config", inks 40)
  *
- * The widest badge is "Config", and trimming its horizontal padding from 4px to 3px takes it from
- * 42 to 40 — so the gap is width / 2 - 51, and this width leaves **5px**, measured in all four
- * themes. The floor is therefore 102 and not 80: at 106 the two touch. 100 was measured in the
- * browser at a 1px OVERLAP, which is what set a floor here in the first place.
+ * So this width leaves **1px**, measured in all four themes, and the floor is 110. It was 102
+ * while the icon was 16px, and {@link ICON_SIZE} spent 8 of those 10 spare pixels on the icon
+ * the maintainer asked for — the two constants are one decision, and this is the half that has
+ * almost no slack left. 100 was measured in the browser at a 1px OVERLAP, which is what set a
+ * floor here in the first place, and trimming the badge's own padding from 4px to 3px is what
+ * bought the last pixel back.
  *
- * Down from 124, which left a 9px gap — a gap nobody was looking at, spent on white space inside
- * every tile that the maintainer was (F5, 2026-09-28). 5px is still a visible separation at 2x,
- * and `badge.clearsIcon` in the harness is what would notice if a future badge word ate it.
+ * Down from 124, which left a 9px gap at a 16px icon — air nobody was looking at, inside tiles
+ * whose emptiness the maintainer was (F5, 2026-09-28). A 1px gap is tight on purpose and it is
+ * where the reference lands too: the MATLAB toolstrip's gallery clears its corner star by 2px
+ * over an icon this size, in an item 44px narrower than this tile. The difference is that its
+ * corner carries an 18px star and ours carries a word, because the internal app ships a
+ * SEPARATE add gallery per destination — ten toolstrip tabs build one each — and so never has
+ * to say where an entry lands, where this one merges all 28 tiles into a single popover and says
+ * it in the corner. A 72px tile is available to whoever is willing to give that up.
+ *
+ * `badge.iconGap` in the browser harness is what notices when a platform's 10px font makes
+ * that word wider than this one's does.
  *
  * The packing is better too, which was luck rather than design: 10 columns fit a 1200px editor
  * with 2px left over, where 124 fit 9 with 10px and 116 would fit 9 with 82. The cost is at the
@@ -93,6 +104,32 @@ export const ADD_GALLERY_INSET = 12;
  * from 46px to 70. Changing this number is a harness measurement, not an edit here.
  */
 const TILE_WIDTH = 112;
+
+/**
+ * How big a tile's icon is, in px.
+ *
+ * 24, which is the size the MATLAB toolstrip's own gallery draws in exactly this layout — an
+ * item with the icon above a two-line label. Its rule is `oneRow twoLine .iconWrapper
+ * { height: 24px; width: 24px; margin: 4px auto 0 }` against a 68x64 item, so the icon is
+ * more than a third of the item's width there. Ours was 16, which is the size that same
+ * widget uses for its *dense* variants (the two- and three-row icon views, where a row is
+ * 22-30px tall and an icon has to share it with text) — the wrong end of the same
+ * stylesheet, and the reason a 112px tile read as mostly empty (maintainer, F5 2026-09-29).
+ *
+ * The badge is what caps it, on the same arithmetic {@link TILE_WIDTH} is built from: every
+ * 2px of icon spends 1px of the gap between the centred icon and the right-anchored badge.
+ * 24 leaves 1px, measured. That is deliberately tight and it is where the reference lands
+ * too: the toolstrip puts its favourites star at `right: 2px` over a 24px icon in a 68px
+ * item, which clears it by 2px. We are a pixel under that in a tile 44px wider, because our
+ * corner carries a WORD ("Config", 40px) where theirs carries an 18px star — see
+ * {@link TILE_WIDTH} for why that word exists at all.
+ *
+ * So this number and `TILE_WIDTH` are now one decision with two halves: at 24 the floor
+ * under `TILE_WIDTH` is 110, not the 102 the labels ask for. Growing either without
+ * re-measuring the other puts the badge on top of the icon, which is what `badge.iconGap`
+ * in the browser harness exists to catch.
+ */
+const ICON_SIZE = 24;
 
 @customElement('dex-add-gallery')
 export class DexAddGallery extends LitElement {
@@ -112,8 +149,14 @@ export class DexAddGallery extends LitElement {
          past the bottom of the table it belongs to. 70vh also keeps it inside that
          table, which matters now that the table clips it: the bar it hangs from is
          ~35px tall, so the two only add up past 100vh in an editor no taller than a
-         toolbar, where nothing would have been readable anyway. */
-      max-height: min(70vh, 560px);
+         toolbar, where nothing would have been readable anyway.
+
+         The absolute cap is 640 and not the 560 it was, because a 24px icon made every
+         tile 8px taller and the whole catalog 610px: at 560 an editor of any height
+         scrolled the last category out of sight, which is a worse trade than 80 more
+         pixels of a tall editor. It is still a cap and not the content height, so one
+         more category would scroll rather than grow this without a decision. */
+      max-height: min(70vh, 640px);
       overflow-y: auto;
       font-family: var(--dex-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
       font-size: 12px;
@@ -261,15 +304,17 @@ export class DexAddGallery extends LitElement {
        In the corner and OUT OF THE FLOW, which is what makes every tile the same height: as
        a flex child it added a third row to the six tiles that carry one, and a row of tiles
        is as tall as its tallest, so those six dragged twelve neighbours up with them. The
-       corner it sits in is the tile's own, beside the centred icon — TILE_WIDTH is what keeps
-       the two from touching, and now that the width is fixed so is the 5px gap it leaves: it no
-       longer widens in a wide editor. Still last in DOM order, after the label; nothing about
-       the reading order changed, and the tile's accessible name was never these words.
+       corner it sits in is the tile's own, beside the centred icon — TILE_WIDTH and ICON_SIZE
+       together are what keep the two from touching, and since both are fixed so is the 1px gap
+       they leave: it no longer widens in a wide editor. Still last in DOM order, after the
+       label; nothing about the reading order changed, and the tile's accessible name was never
+       these words.
 
        3px of horizontal padding rather than 4, which is 2px off the widest badge and so 1px of
-       the gap above bought back — the reason a tile could go to 112 instead of stopping at 116.
-       It is the cheapest px in this component: the badge is a 10px word on a rounded surface,
-       and at 4px it had more air inside it than the tile had beside it. */
+       the gap above bought back. It is the cheapest px in this component: the badge is a 10px
+       word on a rounded surface, and at 4px it had more air inside it than the tile has beside
+       it. That pixel is now the whole margin between a 24px icon and this badge, so this is a
+       declaration to leave alone rather than tidy. */
     .tile-badge {
       position: absolute;
       top: 2px;
@@ -465,6 +510,15 @@ export class DexAddGallery extends LitElement {
     e.preventDefault();
     e.stopPropagation();
     this._focusTile(next);
+    // Home and End mean the ends of the CATALOG, not just its end tiles. Focusing a tile
+    // scrolls it no further than it has to ("nearest"), which stops with the tile's edge against
+    // the popover's — so Home landed on the first tile with the "Parameters" heading above it
+    // still scrolled out of sight, and the gallery looked untouched by the key that was meant to
+    // take the user back to the start. Harmless while the whole catalog fitted; the taller tile
+    // that came with a 24px icon made the popover scroll at ordinary editor heights, which is
+    // where it started to show. Set after the focus, so it overrides that implicit scroll.
+    if (e.key === 'Home') this.scrollTop = 0;
+    if (e.key === 'End') this.scrollTop = this.scrollHeight;
   }
 
   override render() {
@@ -521,7 +575,7 @@ export class DexAddGallery extends LitElement {
         title=${description}
         @click=${() => this._onTile(tile)}
       >
-        <dex-icon .iconId=${tile.iconId} .size=${16}></dex-icon>
+        <dex-icon .iconId=${tile.iconId} .size=${ICON_SIZE}></dex-icon>
         <span class="tile-label"
           >${labelLinesOf(tile).map((line) => html`<span class="tile-line">${line}</span>`)}</span
         >

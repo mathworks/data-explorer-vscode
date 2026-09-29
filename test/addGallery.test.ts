@@ -82,6 +82,21 @@ describe('dex-add-gallery', () => {
     expect(linesOf('Simulink.VariantBankCoderInfo')).toEqual(['Bank', 'Coder Info']);
   });
 
+  // The icon is 24px because that is what the MATLAB toolstrip's gallery draws in this exact
+  // layout — an item with the icon over a two-line label — where 16px is what the same widget
+  // uses for its dense list-style variants. Pinned as a number because it is not a free
+  // parameter: the badge is right-anchored and the icon is centred, so every 2px of icon
+  // spends 1px of the gap between them, and at 24 that gap is down to 1px (measured in the
+  // browser harness, which is the only place any of this has a size at all — happy-dom
+  // reports every box as 0x0). A well-meant bump to 28 or 32 here silently puts the badge on
+  // top of the glyph; the harness's `badge.iconGap` is the other half of this guard.
+  it('draws every tile’s icon at the toolstrip gallery’s size, not the dense-list size', async () => {
+    const el = await gallery();
+    const sizes = $$(el, '.tile dex-icon').map((n) => (n as any).size);
+    expect(sizes.length).toBe(allTiles().length);
+    expect([...new Set(sizes)]).toEqual([24]);
+  });
+
   it('badges only the tiles that depart from their category', async () => {
     const el = await gallery();
     const badged = $$(el, '.tile')
@@ -202,6 +217,21 @@ describe('dex-add-gallery', () => {
     expect(focused(el)).toBe(last);
     await press(el, 'Home');
     expect(focused(el)).toBe(0);
+  });
+
+  // Home is the top of the CATALOG, not just its first tile. Focusing a tile scrolls it no
+  // further than it has to, which leaves the "Parameters" heading above it out of sight and the
+  // gallery looking untouched by the key. Only reachable when the popover scrolls, which the
+  // 24px icon made ordinary — the taller tile took the catalog past the cap. happy-dom lays
+  // nothing out, so the scroll offset is set by hand here; that the offset the browser really
+  // has comes back to 0 is `homeReturnsToTop` in the harness.
+  it('takes Home to the top of the list, not just to the first tile', async () => {
+    const el = await gallery();
+    await press(el, 'End');
+    el.scrollTop = 120;
+    await press(el, 'Home');
+    expect(focused(el)).toBe(0);
+    expect(el.scrollTop).toBe(0);
   });
 
   // Vertical movement is measured off the boxes the grid drew, because the column count is
