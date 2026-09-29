@@ -90,6 +90,13 @@ describe('dex-add-gallery', () => {
     const badged = $$(el, '.tile').find((t) => t.dataset.className === 'Constant')!;
     expect(unbadged.getAttribute('aria-label')).toBe('Add Simulink Parameter to Design Data');
     expect(badged.getAttribute('aria-label')).toBe('Add Constant to Architectural Data');
+    // The case this claim now carries alone: `Variant Config` departs from its heading and, since
+    // the badge came off it, states the departure nowhere on its face except inside its own label.
+    // A screen reader gets `Configurations` from here or from nothing.
+    const departsUnbadged = $$(el, '.tile').find(
+      (t) => t.dataset.className === 'Simulink.VariantConfigurationData',
+    )!;
+    expect(departsUnbadged.getAttribute('aria-label')).toBe('Add Variant Config to Configurations');
   });
 
   // The break is data, not something the text box arrived at: one word per line, so a tile
@@ -135,8 +142,19 @@ describe('dex-add-gallery', () => {
       'Simulink.AliasType Arch',
       'Simulink.ValueType Arch',
       'Simulink.data.dictionary.EnumTypeDefinition Arch',
-      'Simulink.VariantConfigurationData Config',
     ]);
+  });
+
+  // `Variant Config` departs from the Variants heading and still draws no badge (maintainer, F6
+  // 2026-09-29): its label already says `Config`, so the badge was that word twice on one tile.
+  // Pinned in the DOM as well as in the catalog because the two halves are separable — a renderer
+  // that badged every tile whose section differs from the heading's, ignoring the catalog's
+  // opt-out, would pass `addCatalog.test.ts` and draw the word twice anyway.
+  it('draws no badge on the tile whose label already names its section', async () => {
+    const el = await gallery();
+    const tile = $$(el, '.tile').find((t) => t.dataset.className === 'Simulink.VariantConfigurationData')!;
+    expect(tile.dataset.section).toBe('config');
+    expect(tile.querySelector('.tile-badge')).toBeNull();
   });
 
   it('asks for the class and section the tile names, and nothing more', async () => {
@@ -547,6 +565,23 @@ describe('the table and the gallery together', () => {
     // token, declared once, so there is a single place to re-measure if the badge ever grows.
     const declarations = [...cssText.matchAll(/--dex-add-gallery-tile-width:\s*(\d+)px/g)];
     expect(declarations.length, 'the tile width is declared more than once').toBe(1);
+
+    // And a fence around the number, because it is an answer and not a preference: the badge is
+    // right-anchored 3px in and the icon is centred, so the room between them is
+    // `width / 2 - 15 - badge`, and the widest badge left in the catalog (`Arch`) inks 30 in the
+    // browser harness. 92 is therefore where the badge lands ON the icon +1px, and anything below
+    // it is a collision this environment cannot see — happy-dom lays nothing out, so `iconGap` in
+    // `scenarios/add-gallery.mjs` is the only witness and this is its cheap proxy.
+    //
+    // The ceiling is the maintainer's F6 ask ("make all buttons a little bit narrower") given a
+    // number: 112 was what the wider `Config` badge demanded, and with that badge gone the same
+    // arithmetic allows 96 with 3px of clearance — more than the 1px it used to have, and more
+    // than the 2px the MATLAB toolstrip's own gallery leaves its corner star. Past 100 the tile is
+    // on its way back to the mostly-empty box that was objected to twice, and there would need to
+    // be a new reason for it, measured.
+    const width = Number(declarations[0][1]);
+    expect(width, 'a tile this narrow puts the badge on the icon').toBeGreaterThanOrEqual(92);
+    expect(width, 'a tile this wide is mostly empty again').toBeLessThanOrEqual(100);
     const bases = [...cssText.matchAll(/flex:\s*0 0 var\(--dex-add-gallery-tile-width, (\d+)px\)/g)];
     expect(bases.length).toBeGreaterThan(0);
     // And the fallback every read carries is that same number, or a webview whose :host rule was

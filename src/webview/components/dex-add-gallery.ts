@@ -34,14 +34,15 @@ import type { GalleryCategory, GalleryTile } from '../../common/addCatalog.js';
  *
  * The badge is what caps it, on the same arithmetic the tile's width is built from: every
  * 2px of icon spends 1px of the gap between the centred icon and the right-anchored badge.
- * 24 leaves 1px, measured. That is deliberately tight and it is where the reference lands
- * too: the toolstrip puts its favourites star at `right: 2px` over a 24px icon in a 68px
- * item, which clears it by 2px. We are a pixel under that in a tile 44px wider, because our
- * corner carries a WORD ("Config", 40px) where theirs carries an 18px star — see
- * `--dex-add-gallery-tile-width` on `:host` below for why that word exists at all.
+ * 24 leaves 3px in today's 96px tile, measured — and left 1px in the 112px one, because the
+ * widest badge was then `Config` at 40px rather than `Arch` at 30 (see
+ * `--dex-add-gallery-tile-width` on `:host` below, and `labelStatesSection` in addCatalog.ts
+ * for where the wider word went). The reference lands in the same place: the toolstrip puts
+ * its favourites star at `right: 2px` over a 24px icon in a 68px item, which clears it by 2px
+ * — an 18px star where ours is a word.
  *
  * So this number and that width are one decision with two halves: at 24 the floor under the
- * tile width is 110, not the 102 the labels ask for. Growing either without re-measuring the
+ * tile width is 92, not the 80 the labels ask for. Growing either without re-measuring the
  * other puts the badge on top of the icon, which is what `badge.iconGap` in the browser
  * harness exists to catch.
  *
@@ -149,11 +150,11 @@ export class DexAddGallery extends LitElement {
          right-hand edge — the remainder that used to be shared out is now dead space at the end
          of each row — and that is the price of a stable target to click.
 
-         112 is what the BADGE allows, and that is the whole answer to why it is not smaller. The
-         maintainer asked for the narrowest width that still works for all the labels, and the
-         labels turn out never to have been the constraint: a line gets this width less 10px of
-         padding and border, and the widest word in the catalog ("Connection") inks 65px, so on
-         the labels alone a tile of 80 would do.
+         96 is what the BADGE allows with 3px to spare, and the badge is still the whole answer to
+         why it is not smaller. The maintainer asked for the narrowest width that still works for
+         all the labels, and the labels turn out never to have been the constraint: a line gets
+         this width less 10px of padding and border, and the widest word in the catalog
+         ("Connection") inks 65px, so on the labels alone a tile of 80 would do.
 
          The badge in the top-right corner is what stops it. It is right-anchored 3px in from the
          tile's edge and the icon is centred, so the icon approaches it at half the rate the tile
@@ -161,34 +162,34 @@ export class DexAddGallery extends LitElement {
 
              gap = width / 2 - ICON_SIZE / 2 - rightInset - badgeWidth
                  = width / 2 - 12 - 3 - badgeWidth
-                 = width / 2 - 55        (the widest badge, "Config", inks 40)
+                 = width / 2 - 45        (the widest badge, "Arch", inks 30)
 
-         So this width leaves 1px, measured in all four themes, and the floor is 110. It was 102
-         while the icon was 16px, and ICON_SIZE in the TS above spent 8 of those 10 spare pixels
-         on the icon the maintainer asked for — the two are one decision, and this is the half
-         with almost no slack left. 100 was measured in the browser at a 1px OVERLAP, which is
-         what set a floor here in the first place, and trimming the badge's own padding from 4px
-         to 3px is what bought the last pixel back.
+         What moved is the badge, not the arithmetic. This was 112 while the widest badge was
+         "Config" at 40px, and taking that badge off Variant Config (maintainer, F6 2026-09-29 —
+         labelStatesSection in addCatalog.ts) took 10px out of the widest corner and so 20px off
+         the floor under this number, from 110 to 92. The same maintainer's other F6 ask, "make
+         all buttons a little bit narrower", is what spends 16 of them.
 
-         Down from 124, which left a 9px gap at a 16px icon — air nobody was looking at, inside
-         tiles whose emptiness the maintainer was (F5, 2026-09-28). A 1px gap is tight on purpose
-         and it is where the reference lands too: the MATLAB toolstrip's gallery clears its corner
-         star by 2px over an icon this size, in an item 44px narrower than this tile. The
-         difference is that its corner carries an 18px star and ours carries a word, because the
-         internal app ships a SEPARATE add gallery per destination — ten toolstrip tabs build one
-         each — and so never has to say where an entry lands, where this one merges all 28 tiles
-         into a single popover and says it in the corner. A 72px tile is available to whoever is
-         willing to give that up.
+         Why 96 and not the 92 the floor allows: the 4px left over is the clearance. At 92 the gap
+         is 1px again — which is what the round before this left, and a pixel less than the
+         reference (the MATLAB toolstrip's gallery clears its corner star by 2px over an icon this
+         size). The word in our corner is drawn in the platform's own 10px font, so a font 2px
+         wider than this one's is a collision at 92 and still a 1px gap at 96. badge.iconGap in
+         the browser harness is what notices; 4px of headroom is what it is now given.
 
-         badge.iconGap in the browser harness is what notices when a platform's 10px font makes
-         that word wider than this one's does.
+         Our corner carries a word where the reference carries an 18px star because the internal
+         app ships a SEPARATE add gallery per destination — ten toolstrip tabs build one each — and
+         so never has to say where an entry lands, where this one merges all 28 tiles into a single
+         popover and says it in five corners. A 72px tile is available to whoever gives that up.
 
-         The packing is better too, which was luck rather than design: 10 columns fit a 1200px
-         editor with 2px left over, where 124 fit 9 with 10px and 116 would fit 9 with 82. The
-         cost is at the other end — a 340px pane still holds two columns, so its dead space at the
-         end of a row grows from 46px to 70. Changing this number is a harness measurement, not an
-         edit here. */
-      --dex-add-gallery-tile-width: 112px;
+         The packing is better at both ends, which is the other half of what narrowing bought. A
+         340px split pane goes from two columns with 78px of dead space at the end of each row to
+         three with 10px — the tiles are a fixed size, so a narrow pane answers narrowness with
+         fewer columns, and that remainder is the price. And the panel's own max-content cap comes
+         down with the tiles: the widest category needs 814px where it needed 942, so a wide editor
+         gets a popover that stops growing sooner. Changing this number is a harness measurement,
+         not an edit here. */
+      --dex-add-gallery-tile-width: 96px;
     }
 
     /* Sticky so the pin stays reachable after scrolling to Configurations: the pin is
@@ -299,7 +300,7 @@ export class DexAddGallery extends LitElement {
          whole tile including its 1px border. A pane too narrow for one tile scrolls sideways
          rather than squeezing it, which the grid did too — and a pane that narrow shows no
          usable table. */
-      flex: 0 0 var(--dex-add-gallery-tile-width, 112px);
+      flex: 0 0 var(--dex-add-gallery-tile-width, 96px);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -317,9 +318,10 @@ export class DexAddGallery extends LitElement {
          time. A button that reads as a button is solid, and glass is what it sits ON.
 
          This reverses the round before, where a tile painted nothing, so the reasoning that put
-         it there is worth keeping: a tile is 112x58 and there are 28 of them behind 4px gutters,
-         so the tiles are ~90% of this panel's area, and painting them leaves the effect showing
-         only in the gutters. What makes that survivable now is the sheet's lower alpha — the
+         it there is worth keeping: a tile is 96x69 as drawn and there are 28 of them behind 4px
+         gutters, so the tiles are most of this panel's area, and painting them leaves the effect
+         showing only in the gutters. Narrowing the tile did not change that share — the panel's
+         max-content cap is 8 tiles and 7 gutters, so it came down with them. What makes that survivable now is the sheet's lower alpha — the
          gutters, the run past the end of a short row, the heading bands and the sticky bar all
          read harder than they did — and what it buys is a flat surface under every label instead
          of blurred rows. The 88% wash tried two rounds ago is still wrong, for a reason neither
@@ -365,14 +367,16 @@ export class DexAddGallery extends LitElement {
       overflow-wrap: break-word;
     }
 
-    /* Only on a tile whose section differs from the rest of its category, which is 6 of
-       28 — and, now that the heading states no destination, the only thing on the face of
-       the gallery distinguishing the four Types tiles that appear twice under one heading.
-       Badging every tile would make the badge furniture instead of a warning.
+    /* Only on a tile whose section differs from the rest of its category and is not already named
+       in its own label, which is 5 of 28 — and, now that the heading states no destination, the
+       only thing on the face of the gallery distinguishing the four Types tiles that appear twice
+       under one heading. Badging every tile would make the badge furniture instead of a warning,
+       and badging Variant Config made it a warning about nothing: the word was in the corner and
+       in the label underneath it (maintainer, F6 2026-09-29; labelStatesSection in addCatalog.ts).
 
        In the corner and OUT OF THE FLOW, which is what makes every tile the same height: as
-       a flex child it added a third row to the six tiles that carry one, and a row of tiles
-       is as tall as its tallest, so those six dragged twelve neighbours up with them. The
+       a flex child it added a third row to every tile that carries one, and a row of tiles
+       is as tall as its tallest, so each of those dragged its whole row up with it. The
        corner it sits in is the tile's own, beside the centred icon — the tile-width token and
        ICON_SIZE together keep the two from touching, and since both are fixed so is the 1px gap
        they leave: it no longer widens in a wide editor. Still last in DOM order, after the
@@ -382,8 +386,9 @@ export class DexAddGallery extends LitElement {
        3px of horizontal padding rather than 4, which is 2px off the widest badge and so 1px of
        the gap above bought back. It is the cheapest px in this component: the badge is a 10px
        word on a rounded surface, and at 4px it had more air inside it than the tile has beside
-       it. That pixel is now the whole margin between a 24px icon and this badge, so this is a
-       declaration to leave alone rather than tidy. */
+       it. That pixel was the whole margin between a 24px icon and this badge at the old 112px
+       tile, and it is a third of the 3px one at 96 — either way it is spent on clearance, so
+       this is a declaration to leave alone rather than tidy. */
     .tile-badge {
       position: absolute;
       top: 2px;

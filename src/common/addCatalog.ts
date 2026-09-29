@@ -45,6 +45,21 @@ export interface GalleryTile {
    * in the extension knows.
    */
   labelLines?: readonly string[];
+  /**
+   * That this tile's own label names its destination, so a badge would only repeat it.
+   *
+   * An exception to a derived rule, not a second way to spell one: `badgeOf` badges every tile
+   * that departs from its category's majority, and this is how one of them says the departure is
+   * already on its face. The maintainer's ask (F6 2026-09-29) — a tile carrying the word `Config`
+   * in its label and again in its corner reads as a warning about nothing, and the corner is
+   * where the tile's width is spent (see `--dex-add-gallery-tile-width`).
+   *
+   * The guard test holds it to being both true and load-bearing: the label has to contain the
+   * badge this drops, and the tile has to be one that would otherwise have carried it. What does
+   * NOT depend on the badge is the screen reader, which never read this corner — every tile's
+   * accessible name states its destination whether a badge does or not.
+   */
+  labelStatesSection?: true;
 }
 
 /** One heading and the tiles under it. */
@@ -140,13 +155,17 @@ export const ADD_CATALOG: readonly GalleryCategory[] = [
       iconId: 'typeEnum',
     },
   ]),
-  // Variant Config sits here, not under Configurations, because the word you search for
-  // is "variant". Its badge tells the truth about where the row lands — and makes the
-  // shorter label safe, since the "Data" this drops is the part the badge already implies.
-  // The name was shortened from `Variant Config Data` when a tile ellipsed its label and
-  // this one read as `Variant Co…` two rows under `Variant Control`. Labels now break at
-  // their spaces instead, so nothing is clipped, but the shorter name stays: a third line
-  // for a word the badge already says would make its whole grid row taller.
+  // Variant Config sits here, not under Configurations, because the word you search for is
+  // "variant" — so it departs from the Variants heading, and `labelStatesSection` is how it says
+  // that departure needs no badge: the word a badge would put in its corner is the second word of
+  // its label (maintainer, F6 2026-09-29).
+  //
+  // The name was shortened from `Variant Config Data` when a tile ellipsed its label and this one
+  // read as `Variant Co…` two rows under `Variant Control`. Labels break at their spaces now, so
+  // nothing is clipped, and the short name stays for the other reason it was chosen: a third line
+  // makes its whole row taller, since a row is as tall as its tallest tile. What the dropped
+  // `Data` used to lean on was the badge; what carries it now is the accessible name every tile
+  // has had all along — `Add Variant Config to Configurations`.
   category('Variants', [
     { label: 'Variant Expression', className: 'Simulink.VariantExpression', section: 'design', iconId: 'wsVariant' },
     { label: 'Variant Control', className: 'Simulink.VariantControl', section: 'design', iconId: 'twoConnected_wsDefault' },
@@ -166,6 +185,7 @@ export const ADD_CATALOG: readonly GalleryCategory[] = [
     },
     {
       label: 'Variant Config',
+      labelStatesSection: true,
       className: 'Simulink.VariantConfigurationData',
       section: 'config',
       iconId: 'variantSettings',
@@ -233,11 +253,13 @@ export function labelLinesOf(tile: GalleryTile): readonly string[] {
  * The badge this tile needs under this category, or null when it needs none.
  *
  * A uniform category states its destination in the heading, so nothing is badged. In a
- * mixed one the badge goes on the tiles that depart from the majority, which keeps the
- * count of badges at the 6 that carry information rather than 14 that repeat each other.
+ * mixed one the badge goes on the tiles that depart from the majority — unless the tile's own
+ * label names that destination, which is the one exception and true of one tile. Together that
+ * keeps the count of badges at the 5 that carry information rather than the 14 that would
+ * repeat either their heading or themselves.
  */
 export function badgeOf(category: GalleryCategory, tile: GalleryTile): string | null {
-  if (category.uniformSection) {
+  if (category.uniformSection || tile.labelStatesSection) {
     return null;
   }
   return tile.section === majoritySection(category) ? null : SECTION_BADGE[tile.section];

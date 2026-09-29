@@ -212,8 +212,32 @@ describe('how the catalog states a destination', () => {
       'Alias Type (Simulink.AliasType → arch)',
       'Value Type (Simulink.ValueType → arch)',
       'Enum Type (Simulink.data.dictionary.EnumTypeDefinition → arch)',
-      'Variant Config (Simulink.VariantConfigurationData → config)',
     ]);
+  });
+
+  // The one exception to the rule above, and the maintainer's ask (F6 2026-09-29): remove the
+  // `Config` badge from `Variant Config`. The badge exists to say where a departing tile's row
+  // lands, and this tile's own label says it — so the badge was the word `Config` drawn twice on
+  // one tile, which reads as a warning about nothing.
+  //
+  // Two things keep the exception honest rather than making it a way to hide a badge. It has to
+  // be dead-weight-free: a flag on a tile that was never going to be badged says nothing and
+  // would read as a decision. And it has to be TRUE — the label must actually carry the word the
+  // badge would have — because the destination is the one fact about a tile that is not otherwise
+  // on its face, and a tile that drops the badge without saying the word loses it. (The
+  // accessible name carries it either way; that is `addGallery.test.ts`'s claim, not this one.)
+  it('drops a badge only where the label itself names the section', () => {
+    const stated: string[] = [];
+    for (const category of ADD_CATALOG) {
+      for (const tile of category.tiles) {
+        if (!tile.labelStatesSection) continue;
+        expect(tile.section).not.toBe(categorySection(category));
+        expect(tile.label).toContain(SECTION_BADGE[tile.section]);
+        expect(badgeOf(category, tile)).toBeNull();
+        stated.push(tileName(tile));
+      }
+    }
+    expect(stated).toEqual(['Variant Config (Simulink.VariantConfigurationData → config)']);
   });
 
   it('holds the six categories the design names, in order', () => {
@@ -243,18 +267,23 @@ describe('how the catalog states a destination', () => {
     // — and it showed up there once already, as `Variant Config Data` clipped to
     // `Variant Co…` two rows under `Variant Control` and indistinguishable from it.
     //
-    // The numbers come from that harness run. Every tile is 112px wide (the
+    // The numbers come from that harness run. Every tile is 96px wide (the
     // `--dex-add-gallery-tile-width` token on the gallery's `:host`) — a fixed
     // size the row wraps rather than stretches, so there is one width to fear instead of a
-    // range — which leaves a label line 102px. The widest line in the catalog (`Connection`, 10
-    // characters) inks 65 of them — 6.5px per character, so 102 holds 15, and the fence keeps a
+    // range — which leaves a label line 86px. The widest line in the catalog (`Connection`, 10
+    // characters) inks 65 of them — 6.5px per character, so 86 holds 13, and the fence keeps a
     // character back. A third line is the other failure, because a row is as tall as its tallest
     // tile, so one three-line label makes its whole row grow. Both limits are deliberately
     // crude: a `W` is wider than an `i`, and this is a fence a new tile trips over rather than
     // a layout engine. A label that cannot fit should be broken differently (see `labelLines`)
     // or shortened; widening the tile is the last resort, and it means re-measuring with the
     // harness rather than raising a constant here.
-    const LIMIT = { chars: 14, lines: 2 };
+    //
+    // 12 where it was 14, because the tile is 16px narrower than it was (maintainer, F6
+    // 2026-09-29) and this fence is derived from the tile rather than chosen: the 21px of slack
+    // between `Connection` and the room a line gets is what those two characters are. Nothing in
+    // the catalog is over 10.
+    const LIMIT = { chars: 12, lines: 2 };
     const problems: string[] = [];
     for (const tile of allTiles()) {
       const lines = labelLinesOf(tile);
