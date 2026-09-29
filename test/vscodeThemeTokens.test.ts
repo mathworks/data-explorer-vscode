@@ -102,3 +102,58 @@ describe('the selection surface has one definition', () => {
     expect(Number(mix![1])).toBeGreaterThan(10);
   });
 });
+
+// A translucent surface is translucent only where it differs from what it covers, and that is a
+// fact about a PAIR of colours which no measurement of either one can catch. The Add gallery
+// shipped as `color-mix(in srgb, var(--dex-bg-primary) 82%, transparent)` over a table painted
+// --dex-bg-primary: 0.82X + 0.18X is X, so the panel painted the exact pixels an opaque one
+// would. Everything measured correct — the computed background really carried alpha 0.82, the
+// backdrop-filter really ran — and the maintainer's F5 was "I don't see any transparent effect"
+// (2026-09-29). The bug was in neither declaration. It was between them.
+//
+// So the invariant is stated about the pair, and it is checkable in text, which is why it lives
+// in a unit test rather than only in the browser harness: the sheet is tinted AWAY from the
+// table's background before the alpha is applied.
+describe('the Add gallery sheet must differ from the table it covers', () => {
+  it('tints away from the editor background before going translucent', () => {
+    const tint = token('--dex-add-gallery-tint');
+    // Mixed off the same background the table paints, so it tracks the theme...
+    expect(tint).toContain('--dex-bg-primary');
+    // ...but is not equal to it. --vscode-foreground for the step because it self-inverts:
+    // lighter on a dark theme, darker on a light one, one declaration for both — the same
+    // reasoning as --dex-color-bg-na above, and a fixed grey would be wrong in half the themes.
+    expect(tint, `--dex-add-gallery-tint = ${tint}`).toContain('--vscode-foreground');
+    expect(tint).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    // And the step is big enough to see. Below ~5% the sheet is the table again on the dark
+    // themes, where the editor background and the foreground are furthest apart but the sheet
+    // is darkest and a small step in it is hardest to see.
+    const step = /var\(--dex-bg-primary\)\s*(\d+)%/.exec(tint);
+    expect(step, 'no editor-background percentage in the tint').not.toBeNull();
+    expect(100 - Number(step![1])).toBeGreaterThanOrEqual(5);
+  });
+
+  for (const name of ['--dex-add-gallery-bg', '--dex-add-gallery-header-bg']) {
+    it(`${name} takes its colour from the tint, not from the table`, () => {
+      const value = token(name);
+      expect(value).toContain('--dex-add-gallery-tint');
+      // The edit that would revert all of this is one word — swapping the tint back for
+      // --dex-bg-primary reads as a simplification and restores the invisible panel exactly.
+      expect(value).not.toContain('--dex-bg-primary');
+      expect(value).toContain('transparent');
+    });
+  }
+
+  it('keeps the surface more transparent than the header over it', () => {
+    // The header holds the title and the pin steady while tiles scroll under it, so it is the
+    // solider of the two. Equal, and there was no reason for two tokens; inverted, and the one
+    // strip that has to stay readable is the one you can see through.
+    const alpha = (name: string) => {
+      const m = /--dex-add-gallery-tint\)\s*(\d+)%/.exec(token(name));
+      expect(m, `${name} does not mix the tint by a percentage`).not.toBeNull();
+      return Number(m![1]);
+    };
+    expect(alpha('--dex-add-gallery-bg')).toBeLessThan(alpha('--dex-add-gallery-header-bg'));
+    // And the surface is glass rather than a film: at 90% there is nothing to see through it.
+    expect(alpha('--dex-add-gallery-bg')).toBeLessThanOrEqual(80);
+  });
+});

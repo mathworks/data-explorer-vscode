@@ -186,17 +186,27 @@ export class DexAddGallery extends LitElement {
       color: var(--dex-color-text, inherit);
       /* Glass, on purpose (the maintainer's ask, F5 2026-09-29): the table stays visible
          through the popover as blurred shapes, which says "this is over your data, and it is
-         temporary" in a way an opaque panel cannot. Same treatment the context menu carries
-         (dex-context-menu.ts) and the same numbers, so the extension has one glass and not
-         two — the difference is only that the menu's token is opaque in vscode-theme.css and
-         this one is not.
+         temporary" in a way an opaque panel cannot.
 
-         The fallback in the var() is the OLD opaque background, deliberately: a webview
-         whose theme file did not load gets a legible panel rather than a transparent one,
-         and the blur below then has nothing to show through it. */
+         Three things have to be true for that to be VISIBLE, and the first round of this got
+         two of them wrong in a way no computed style could show — it measured as translucent
+         and blurred, and the F5 came back "I don't see any transparent effect":
+           1. the tint must differ from the table. That is the token's job, and where the first
+              round failed: 82% of the editor background over a table painted the editor
+              background is the same colour. See --dex-add-gallery-tint in vscode-theme.css.
+           2. the tiles must not paint over it (see .tile below).
+           3. the blur must leave something to see. 12px, not the context menu's 20: a menu is
+              a small box over a mostly uniform background, so 20px costs it nothing, but this
+              panel covers ~600px of rows and at 20px their banding averages into a flat wash —
+              a blur strong enough to hide that anything was behind it at all. 12px still
+              smears a row's text well past reading while leaving the rows visible AS rows.
+
+         The fallback in the var() is an OPAQUE background, deliberately: a webview whose theme
+         file did not load gets a legible panel rather than a transparent one, and the blur
+         below then has nothing to show through it. */
       background: var(--dex-add-gallery-bg, var(--dex-bg-primary, #fff));
-      backdrop-filter: blur(20px) saturate(180%);
-      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(12px) saturate(180%);
+      -webkit-backdrop-filter: blur(12px) saturate(180%);
       border: 1px solid var(--dex-border-color, #d0d0d0);
       border-radius: 4px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -208,13 +218,23 @@ export class DexAddGallery extends LitElement {
        usually after they have already gone looking through the list.
 
        It carries the glass too, and its own blur. A sticky bar over a translucent panel is
-       the one place transparency can go wrong: the tiles slide UNDER this, and at 82% they
-       would show through it as legible, moving text next to the word "Add". Blurring its own
+       the one place transparency can go wrong: the tiles slide UNDER this, and translucent it
+       would show them through as legible, moving text next to the word "Add". Blurring its own
        backdrop — which is the tiles, not the table — turns that into the frosted strip the
-       pattern is supposed to be. */
+       pattern is supposed to be, and its token is the solider of the two for the same reason:
+       this strip has work to do while things move behind it.
+
+       It carries the gloss as well, which is the last word of the ask ("a glossy glass
+       effect") and belongs here rather than on the host: a sheen is a lit top EDGE, the host's
+       top edge is underneath this bar, and being sticky this one stays at the visual top while
+       the catalog scrolls past. White at 12% rather than a themed colour, because a highlight
+       is light falling on the pane and not a colour the theme chose — on a light theme it
+       lands on a pale sheet and barely shows, which is what a sheen does there too. Forced
+       colors takes it off with the same one-line background substitution as everything else,
+       since a shorthand resets the image. */
     .gallery-header {
-      backdrop-filter: blur(20px) saturate(180%);
-      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(12px) saturate(180%);
+      -webkit-backdrop-filter: blur(12px) saturate(180%);
       position: sticky;
       top: -8px;
       z-index: 1;
@@ -224,7 +244,12 @@ export class DexAddGallery extends LitElement {
       gap: 8px;
       margin: -8px -8px 6px;
       padding: 8px;
-      background: var(--dex-add-gallery-bg, var(--dex-bg-primary, #fff));
+      background: var(--dex-add-gallery-header-bg, var(--dex-bg-primary, #fff));
+      background-image: linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.12),
+        rgba(255, 255, 255, 0)
+      );
       border-bottom: 1px solid var(--dex-border-color-light, #e0e0e0);
     }
 
@@ -305,16 +330,20 @@ export class DexAddGallery extends LitElement {
       box-sizing: border-box;
       border: 1px solid var(--dex-border-color, #d0d0d0);
       border-radius: 3px;
-      /* A touch of the glass, not all of it. 28 opaque chips on a translucent surface would
-         leave the effect visible only in the 4px gutters between them — the tiles are most of
-         this panel's area, so they have to take part or the panel is not glass. But what shows
-         through a tile is the SURFACE behind it, already tinted and blurred, so this alpha is
-         doing a fraction of the work the host's is: ~2% of a blurred row reaches the label,
-         which the harness measures as no change to its contrast. Hover replaces this with the
-         theme's own list-hover colour, which is opaque in the standard themes and a 10% wash in
-         the high-contrast ones — VS Code's choice for a hovered row, left alone here, so the
-         cue is the change of surface rather than its solidity. */
-      background: var(--dex-add-gallery-tile-bg, var(--dex-bg-primary, #fff));
+      /* No surface of its own: a tile is a border and a label, and what fills it is the glass
+         behind it. This is the second of the three things :host lists, and the first round got
+         it wrong. A tile is 112x58 and there are 28 of them behind 4px gutters, so the tiles
+         are ~90% of this panel's area — paint them and the effect survives only in the gutters,
+         which is indistinguishable from no effect. A wash was tried there first (88% of the
+         same mix) and it was the worst of both: still enough chrome to hide the pane, and one
+         more number to keep in step with the surface's.
+
+         What replaces the fill as the "this is a button" cue is the hover, which is now a
+         change from nothing to a surface rather than one surface to another — a stronger cue
+         than it was. That colour is the theme's own list-hover (opaque in the standard themes,
+         a 10% wash in the high-contrast ones; VS Code's call either way). The border and the
+         focus ring are untouched, so the grid stays legible against the blurred rows. */
+      background: transparent;
       color: inherit;
       font: inherit;
       text-align: center;

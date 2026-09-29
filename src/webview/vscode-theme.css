@@ -140,16 +140,34 @@
      user opens over their own data, and the maintainer's ask (F5 2026-09-29) is that the
      table stay visible as blurred glass underneath it.
 
-     Mixed from --dex-bg-primary rather than written as an rgba() so the tint is the editor's
-     own background in every theme and only the alpha is ours. Two strengths, because the
-     panel has two layers: the surface is the glass, and a tile sits ON the glass and has to
-     read as a button with a label in it. 82% over a 20px blur leaves the table legible as
-     shapes and nothing more; the tile's 88% is over the surface, not over the table, so what
-     shows through a tile is ~2% of a blurred row — enough to keep it from looking like an
-     opaque chip pasted on glass, not enough to touch the label's contrast.
+     The sheet is TINTED before it is made translucent, and that tint is the whole of what the
+     second round of this fixed. The first version was
+     `color-mix(in srgb, var(--dex-bg-primary) 82%, transparent)`: 82% of the editor background
+     over a table painted the editor background. Alpha over the same colour is arithmetically a
+     no-op — 0.82X + 0.18X is X — so the panel painted the exact pixels an opaque panel would,
+     and all that could ever show through was 18% of the difference between a row's ink and its
+     own background, which the blur had already averaged into that background. The computed
+     style said alpha 0.82, truthfully, and the maintainer's F5 said "I don't see any
+     transparent effect", also truthfully. Both were right, which is the lesson worth keeping:
+     translucency is visible only where the two colours DIFFER. So the mix toward the theme's
+     own foreground comes first. That lightens the sheet on a dark theme and darkens it on a
+     light one, so the panel reads as a pane over the table in every variant, and the alpha
+     then has something to reveal.
 
-     Forced colors and the gallery's own stylesheet drop both (see dex-add-gallery.ts): a
+     --vscode-foreground for that step rather than a fixed grey, for the reason
+     --dex-color-bg-na above gives at length: a fraction of the theme's text colour
+     self-inverts, and the registry defines it in all four variants.
+
+     Two strengths, because the panel has two layers a user reads differently: the surface, and
+     the sticky header whose job is to hold the title and the pin legible while tiles slide
+     under it. The header is the solider of the two for that reason. There is deliberately no
+     third strength for the tiles — they used to carry 88% of this same mix, and since they are
+     ~90% of the panel's area, that chrome covered the glass it sat on. The tiles are
+     transparent now and the sheet shows through the grid; see .tile in dex-add-gallery.ts.
+
+     Forced colors and the gallery's own stylesheet drop all of it (see dex-add-gallery.ts): a
      high-contrast user asked for legibility, not decoration. */
-  --dex-add-gallery-bg: color-mix(in srgb, var(--dex-bg-primary) 82%, transparent);
-  --dex-add-gallery-tile-bg: color-mix(in srgb, var(--dex-bg-primary) 88%, transparent);
+  --dex-add-gallery-tint: color-mix(in srgb, var(--dex-bg-primary) 88%, var(--vscode-foreground));
+  --dex-add-gallery-bg: color-mix(in srgb, var(--dex-add-gallery-tint) 72%, transparent);
+  --dex-add-gallery-header-bg: color-mix(in srgb, var(--dex-add-gallery-tint) 88%, transparent);
 }

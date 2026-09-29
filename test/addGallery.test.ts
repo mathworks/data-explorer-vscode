@@ -509,24 +509,57 @@ describe('the table and the gallery together', () => {
   // Ask 3 of three (maintainer, F5 2026-09-29): "make the gallery background semi-transparent,
   // like a glossy glass effect to blur the table under it."
   //
-  // Three claims, because the effect is three declarations and two of them are the ones that go
-  // wrong. The alpha lives in vscode-theme.css so it is themed; the blur lives here; and forced
-  // colors must get neither — that mode exists to remove exactly this, and a blur is not a colour,
-  // so it survives the background substitution unless it is turned off by hand. happy-dom applies
-  // no stylesheet and composites nothing, so the pixels are the harness's (`glass.surfaceAlpha`,
-  // `glass.blurs`, and the forced-colors screenshot).
+  // The effect is four declarations across two files, and the first round of it got two of them
+  // wrong while measuring as correct — see the note in vscodeThemeTokens.test.ts, which owns the
+  // half that lives in the theme (the tint the alpha is applied to). What is pinned here is the
+  // half that is this component's: which box carries the surface, which carries the header and
+  // the sheen, that NOTHING opaque is painted on top of the glass, and that forced colors gets
+  // none of it — that mode exists to remove exactly this, and a blur is not a colour, so it
+  // survives the background substitution unless it is turned off by hand. happy-dom applies no
+  // stylesheet and composites nothing, so the pixels are the harness's (`glass.checks`,
+  // `glass.seeThrough`, and the forced-colors screenshot).
   it('draws the panel as glass, and drops it entirely under forced colors', () => {
     const css = galleryCss();
+    // By rule, not by substring: `background: transparent` would pass a contains() from
+    // anywhere in this stylesheet, and what is asked below is which box each paint landed on.
+    const rule = (selector: string) => {
+      const at = css.indexOf(`${selector} {`);
+      expect(at, `no ${selector} rule`).toBeGreaterThanOrEqual(0);
+      return css.slice(at, css.indexOf('}', at));
+    };
 
     // The surface and the sticky header both, or the header reads as an opaque strip across the
-    // top of a glass panel — and both take the alpha from the theme token, with the old opaque
-    // colour as the fallback for a webview whose theme file never loaded.
-    const glass = [...css.matchAll(/background:\s*var\(--dex-add-gallery-bg,\s*var\(--dex-bg-primary/g)];
-    expect(glass.length).toBe(2);
-    expect(css).toContain('backdrop-filter: blur(20px) saturate(180%)');
+    // top of a glass panel — each from its own token, because the header is the solider of the
+    // two, and both with an OPAQUE fallback for a webview whose theme file never loaded.
+    expect(rule(':host')).toContain('background: var(--dex-add-gallery-bg, var(--dex-bg-primary');
+    expect(rule('.gallery-header')).toContain(
+      'background: var(--dex-add-gallery-header-bg, var(--dex-bg-primary',
+    );
+    // 12px, not the context menu's 20. This panel covers ~600px of rows, and at 20px their
+    // banding averages into a flat wash that reads as an opaque panel; the regression this
+    // catches is a well-meant "make the two glasses match" edit — one effect, two very
+    // different backdrops. Measured as painted pixels in the harness (glass.seeThrough).
+    expect(css).toContain('backdrop-filter: blur(12px) saturate(180%)');
     // The prefixed copy is not optional here: it is what the context menu ships, and dropping it
     // would make this the one glass surface that is flat on an older webview.
-    expect(css).toContain('-webkit-backdrop-filter: blur(20px) saturate(180%)');
+    expect(css).toContain('-webkit-backdrop-filter: blur(12px) saturate(180%)');
+
+    // "Glossy" is the last word of the ask, and a sheen is a lit top EDGE — so it goes on the
+    // sticky bar, which is the panel's visual top at every scroll position, rather than on the
+    // host, whose own top edge sits underneath that bar.
+    expect(rule('.gallery-header')).toMatch(
+      /background-image:\s*linear-gradient\(\s*to bottom,\s*rgba\(255, 255, 255, 0\.12\)/,
+    );
+
+    // And nothing paints over the glass. The tiles are ~90% of this panel's area, so a fill on
+    // them — even the translucent one the first round shipped — leaves the effect visible only
+    // in the 4px gutters, which is indistinguishable from no effect. This is the half of "I
+    // don't see any transparent effect" that lives here; the other half, the tint the alpha is
+    // applied to, is pinned in vscodeThemeTokens.test.ts.
+    expect(rule('.tile')).toContain('background: transparent');
+    expect(css).not.toContain('--dex-add-gallery-tile-bg');
+    // The hover still paints one, or a tile has no press to it at all.
+    expect(rule('.tile:hover')).toContain('background: var(--dex-bg-hover');
 
     // And the whole effect comes off in forced colors. Both halves: an opaque Canvas AND no blur.
     const forced = css.slice(css.indexOf('@media (forced-colors: active)'));
