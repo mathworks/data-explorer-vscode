@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.28.0] — 2026-09-29
+
+The `⊞ Add` gallery is a sheet of frosted glass that lines its borders up with the filter bar's buttons, follows the tab as it resizes, and stops widening once every tile fits one row — and its tiles are narrower now, each one drawn at the toolstrip's 24px glyph with its label broken where the word ends rather than where the box ran out. It opens from the keyboard as well as the mouse, and a tile only carries a destination badge where its own label does not already say where the entry will land
+
 ## [1.27.0] — 2026-09-28
 
 An editable dictionary has an `⊞ Add` button in its filter bar: 28 tiles, grouped the way the domain names them, each one creating an entry of a named class in a named section — and the new row opens its name ready to be typed over
