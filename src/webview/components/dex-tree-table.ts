@@ -9,7 +9,6 @@ import {
   type FilterOp, type FilterTerm, type FilterToken,
 } from '../rowFilter.js';
 import './dex-add-gallery.js';
-import { ADD_GALLERY_INSET, ADD_GALLERY_WIDTH } from './dex-add-gallery.js';
 import './dex-column-filter.js';
 import './dex-filter-bar.js';
 import type { DexFilterBar } from './dex-filter-bar.js';
@@ -314,12 +313,13 @@ export class DexTreeTable extends LitElement {
         display: flex;
         align-items: center;
         gap: 6px;
-        /* The horizontal half comes from ADD_GALLERY_INSET, which is the same 8px read from
-           the other end: Add is this bar's first item and Columns its last, so this padding is
-           the line those two buttons stand on, and the gallery hanging off this box lines its
-           own edges up with them by using the same number (the maintainer's ask). Written as
-           the constant rather than as 8 so changing one cannot silently un-align the other. */
-        padding: 4px ${ADD_GALLERY_INSET}px;
+        /* The horizontal half is --dex-add-gallery-inset, the same 8px read from the other end:
+           Add is this bar's first item and Columns its last, so this padding is the line those
+           two buttons stand on, and the gallery hanging off this box lines its own edges up with
+           them by using the same token (the maintainer's ask). Declared once in vscode-theme.css
+           — a document custom property is the only value two shadow roots can share — so
+           changing it cannot silently un-align them. */
+        padding: 4px var(--dex-add-gallery-inset, 8px);
         border-bottom: 1px solid var(--dex-border-color-light, #e0e0e0);
         background: var(--dex-bg-secondary, #f8f8f8);
         flex: 0 0 auto;
@@ -341,11 +341,13 @@ export class DexTreeTable extends LitElement {
          height that changes under a narrow pane.
 
          width: the room this popover is ALLOWED, which is not the same as the width it takes.
-         The margin is ADD_GALLERY_INSET down each side — the bar's own padding, so the popover's
-         borders line up with the Add and Columns buttons above them — until the pane gets too
-         narrow to afford both, at which point the margin gives way rather than the gallery going
-         below ADD_GALLERY_WIDTH; one clamp says that, since its own lower bound is capped at
-         100% for a pane narrower than the floor. What it actually takes is the smaller of this
+         The margin is --dex-add-gallery-inset down each side — the bar's own padding, so the
+         popover's borders line up with the Add and Columns buttons above them — until the pane
+         gets too narrow to afford both, at which point the margin gives way rather than the
+         gallery going below --dex-add-gallery-min-width; one clamp says that, since its own lower
+         bound is capped at 100% for a pane narrower than the floor. calc() does the arithmetic
+         the * 2 used to be a TS multiplication for, which is the maintainer's point: a stylesheet
+         can multiply. What it actually takes is the smaller of this
          and its own max-content (see :host in dex-add-gallery.ts): past ~960px of editor the
          tiles need no more room, so the popover stops growing and this rule only decides where
          the leftover goes.
@@ -364,14 +366,14 @@ export class DexTreeTable extends LitElement {
         left: 0;
         right: 0;
         margin-inline: min(
-            ${ADD_GALLERY_INSET}px,
-            calc((100% - var(--dex-add-gallery-width, ${ADD_GALLERY_WIDTH}px)) / 2)
+            var(--dex-add-gallery-inset, 8px),
+            calc((100% - var(--dex-add-gallery-width, var(--dex-add-gallery-min-width, 300px))) / 2)
           )
           auto;
         z-index: 1001;
         --dex-add-gallery-width: clamp(
-          min(${ADD_GALLERY_WIDTH}px, 100%),
-          calc(100% - ${2 * ADD_GALLERY_INSET}px),
+          min(var(--dex-add-gallery-min-width, 300px), 100%),
+          calc(100% - var(--dex-add-gallery-inset, 8px) * 2),
           100%
         );
       }

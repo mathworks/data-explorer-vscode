@@ -149,14 +149,47 @@
      own background, which the blur had already averaged into that background. The computed
      style said alpha 0.82, truthfully, and the maintainer's F5 said "I don't see any
      transparent effect", also truthfully. Both were right, which is the lesson worth keeping:
-     translucency is visible only where the two colours DIFFER. So the mix toward the theme's
-     own foreground comes first. That lightens the sheet on a dark theme and darkens it on a
-     light one, so the panel reads as a pane over the table in every variant, and the alpha
-     then has something to reveal.
+     translucency is visible only where the two colours DIFFER. So the sheet is mixed away from the
+     table's own background first, and only then made translucent — the alpha needs something to
+     reveal before it can reveal anything.
 
-     --vscode-foreground for that step rather than a fixed grey, for the reason
-     --dex-color-bg-na above gives at length: a fraction of the theme's text colour
-     self-inverts, and the registry defines it in all four variants.
+     The step is toward WHITE, and that is the difference between a tinted pane and glass. The
+     round before this one stepped toward --vscode-foreground, which SELF-INVERTS: lighter on a
+     dark theme, darker on a light one. That is exactly right for a wash that has to stay subtle
+     in either direction — --dex-color-bg-na above does it deliberately — and it is wrong here.
+     On Light Modern it painted a grey pane over a white table, and the maintainer's F5
+     (2026-09-29) was "the gallery background looks dark in light theme. I want to see a white
+     glossy glass effect." Glass is not a tint, it is LIT, and light is white in every theme. So
+     this mix goes one direction only and the sheet is never darker than what it covers.
+
+     `white` is a literal colour in the one file whose point is that colours come from the theme,
+     and it is allowed here for the same reason dex-add-gallery.ts may write
+     rgba(255, 255, 255, 0.12) for its sheen: a highlight is light falling on the pane, not a
+     surface the theme picked. A theme chooses what its editor background is; it does not choose
+     what colour light is. Every other literal in this file is still a bug — see
+     --dex-color-bg-na and --dex-selection-bg, where a literal meant an unreadable row.
+
+     10%, and that number only does anything on the dark themes. On Light Modern and HC White the
+     editor background IS white, so the tint is white at any percentage: the sheet paints white
+     over an off-white table and reads by its blurred content, its border and its shadow rather
+     than by a colour difference, which is what white glass looks like on a white page — measured
+     at 250.5/255 through the glass against a table averaging 239.4. On Dark Modern the same 10%
+     lifts #1F1F1F to #353535, and the panel paints ~16 luminance levels above the rows it covers.
+
+     10 and not the 16 this round started at, and what set the ceiling is the INK, not the eye. The
+     gallery's muted text — the pin label and the six category headings — is --dex-color-text-muted,
+     78% of the theme's foreground, and its contrast is measured against whatever surface it lands
+     on. That surface is this sheet. At 16% the sticky header painted 65/255 on Dark Modern and the
+     pin label measured 3.74:1, the headings 4.40:1: both under WCAG AA, which is the whole of what
+     issue #26 was about. At 10% the header paints 52/255 and the same two measure 4.56:1 and
+     5.07:1 — above AA, and not by much, which is the honest description of this number. So the
+     sheet has a ceiling as well as a floor, light enough to see and dark enough to read on, and on
+     a dark theme those two are about 15 levels apart. 10% is also exactly where the canonical web
+     recipe sits: glassmorphism is rgba(255, 255, 255, 0.1) over a dark backdrop. Raising it is a
+     harness measurement (`measured.checks.allPassAA` in scenarios/add-gallery.mjs), not an edit
+     here — and if the sheet ever has to go lighter, the muted ink over it has to get solider in
+     the same change, which means the gallery declaring its own --dex-color-text-muted the way
+     dex-tree-table.ts does for a selected row.
 
      Two strengths, because the panel has two layers a user reads differently: the surface, and
      the sticky header whose job is to hold the title and the pin legible while tiles slide
@@ -167,7 +200,38 @@
 
      Forced colors and the gallery's own stylesheet drop all of it (see dex-add-gallery.ts): a
      high-contrast user asked for legibility, not decoration. */
-  --dex-add-gallery-tint: color-mix(in srgb, var(--dex-bg-primary) 88%, var(--vscode-foreground));
+  --dex-add-gallery-tint: color-mix(in srgb, var(--dex-bg-primary) 90%, white);
   --dex-add-gallery-bg: color-mix(in srgb, var(--dex-add-gallery-tint) 72%, transparent);
   --dex-add-gallery-header-bg: color-mix(in srgb, var(--dex-add-gallery-tint) 88%, transparent);
+
+  /* The Add gallery's two geometry numbers. They live here, in a colour file, for one structural
+     reason: the gallery and the table are separate custom elements with separate shadow roots,
+     both numbers have to be the SAME number in both stylesheets, and a document-level custom
+     property is the only thing that crosses a shadow boundary. They used to be TS constants
+     (`ADD_GALLERY_INSET`, `ADD_GALLERY_WIDTH`) imported into both components and interpolated
+     into their css`` templates, which did work and was the maintainer's objection, twice: styling
+     belongs in the stylesheet. Interpolation also bakes two copies at build time, where a var()
+     resolves one value at run time — so this is not only the asked-for shape, it is the stronger
+     guarantee that the two cannot drift.
+
+     --dex-add-gallery-inset is the filter bar's own horizontal padding, read from both ends. Add
+     is that bar's first item and Columns its last, so this padding IS the line those two buttons
+     stand on, and the popover hangs off the same box and uses the same number — which makes the
+     alignment the maintainer asked for a consequence rather than a coincidence. At 12 the popover
+     sat 4px inside the button that opens it, which reads as a near-miss rather than as a margin.
+     It is also the part that gives way first: below the floor the table shrinks this toward 0
+     rather than squeezing the gallery, because a margin is a nicety and a column of tiles is the
+     content. It is what makes the popover read as something floating over the table rather than a
+     panel welded to the tab: spanning the tab exactly, its border met the tab's edges and the drop
+     shadow had nowhere to fall, which is the whole of how a shadow says "above".
+
+     --dex-add-gallery-min-width is that floor — the width two tile columns need. The popover is
+     never narrower; a narrower pane gets its margins eaten instead. Above ~960px neither number
+     decides anything, because the panel stops at its own max-content (see :host in
+     dex-add-gallery.ts) and the leftover all goes to the right margin.
+
+     Both are read with a literal fallback at every use, so a webview whose theme file never
+     loaded still lays the popover out. */
+  --dex-add-gallery-inset: 8px;
+  --dex-add-gallery-min-width: 300px;
 }

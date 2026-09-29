@@ -14,12 +14,39 @@
 //   - the popover creates nothing itself — it names a class and a section and the table
 //     relays that outward, which is the split that keeps one path writing documents.
 import { describe, it, expect, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import '../src/webview/components/dex-add-gallery.js';
-import { ADD_GALLERY_INSET, ADD_GALLERY_WIDTH } from '../src/webview/components/dex-add-gallery.js';
 import type { DexAddGallery } from '../src/webview/components/dex-add-gallery.js';
 import '../src/webview/components/dex-tree-table.js';
 import type { DexTreeTable, TreeTableRow } from '../src/webview/components/dex-tree-table.js';
 import { ADD_CATALOG, allTiles } from '../src/common/addCatalog.js';
+
+// The popover's geometry used to be two exported TS constants that both components interpolated
+// into their css`` templates. It is two custom properties in vscode-theme.css now — the
+// maintainer's ask, twice: "why do you do styling calculation in TS code, it should be done
+// through CSS only" (2026-09-29), after the same objection about the responsive width. So the
+// numbers these tests reason about are READ FROM THAT STYLESHEET rather than imported, which is
+// also the only way this file can still check that the two shadow roots agree: a document custom
+// property is the one value they can share, and nothing in TS knows it any more.
+//
+// Read off the cwd rather than import.meta.url: this file runs under happy-dom, where that URL is
+// an http one and fileURLToPath throws on it (same note as treeTableCellStates.test.ts). Comments
+// go first, because that stylesheet quotes token names in its prose to explain them.
+const THEME_CSS = readFileSync(resolve('src/webview/vscode-theme.css'), 'utf8').replace(
+  /\/\*[\s\S]*?\*\//g,
+  '',
+);
+
+/** A geometry token's declared px value, as a number. */
+function px(name: string): number {
+  const m = new RegExp(`${name}\\s*:\\s*(\\d+)px\\s*;`).exec(THEME_CSS);
+  expect(m, `${name} is not declared in px in vscode-theme.css`).not.toBeNull();
+  return Number(m![1]);
+}
+
+const INSET = px('--dex-add-gallery-inset');
+const FLOOR = px('--dex-add-gallery-min-width');
 
 const $ = (el: Element, sel: string) => el.shadowRoot!.querySelector(sel) as HTMLElement;
 const $$ = (el: Element, sel: string) => [...el.shadowRoot!.querySelectorAll(sel)] as HTMLElement[];
@@ -318,11 +345,13 @@ describe('the table and the gallery together', () => {
     expect(b.textContent!.trim()).toBe('Add');
   });
 
-  const tableCss = () =>
-    [(customElements.get('dex-tree-table') as any).styles]
+  const cssOf = (tag: string) =>
+    [(customElements.get(tag) as any).styles]
       .flat()
       .map((s: any) => s.cssText)
       .join('\n');
+  const tableCss = () => cssOf('dex-tree-table');
+  const galleryCss = () => cssOf('dex-add-gallery');
 
   // The declarations of one rule, by selector. Crude on purpose — these are our own hand-written
   // stylesheets, and a real parser would only obscure the one question being asked, which is
@@ -378,7 +407,7 @@ describe('the table and the gallery together', () => {
     // over — it was `auto` on both sides, which centred the popover, and centring only looked
     // right while the popover grew with the tab. The min() is the same give-way the width has:
     // half the slack when there is less than an inset's worth of it.
-    expect(squash(gallery)).toContain(`margin-inline: min( ${ADD_GALLERY_INSET}px,`);
+    expect(squash(gallery)).toContain('margin-inline: min( var(--dex-add-gallery-inset,');
     expect(squash(gallery)).toContain(') auto;');
     expect(gallery).not.toContain('margin-inline: auto');
     expect(gallery).toContain('z-index: 1001');
@@ -391,8 +420,39 @@ describe('the table and the gallery together', () => {
   // same one in both rules or the popover misses the button by a few px, which reads worse than
   // a frank margin. The pixels themselves are the harness's job (`geometry.alignsWithButtons`).
   it('insets the popover by the bar’s own padding, so its edges meet the buttons', () => {
-    expect(ruleBody('.filter-bar')).toContain(`padding: 4px ${ADD_GALLERY_INSET}px`);
-    expect(squash(ruleBody('dex-add-gallery'))).toContain(`min( ${ADD_GALLERY_INSET}px,`);
+    // One token, read by both rules. Being the same NAME is the guarantee now, where being the
+    // same interpolated constant used to be — and it is the stronger one, since a var() resolves
+    // at run time where interpolation baked a copy of the number into each bundle.
+    expect(ruleBody('.filter-bar')).toContain('padding: 4px var(--dex-add-gallery-inset,');
+    expect(squash(ruleBody('dex-add-gallery'))).toContain('min( var(--dex-add-gallery-inset,');
+  });
+
+  // Every read of a geometry token carries a literal fallback, so a webview whose theme file never
+  // loaded still lays the popover out. A fallback that disagrees with the declaration is the worst
+  // of both: it lays out, differently, in the one case nobody looks at. Since the declaration is
+  // in a document stylesheet and the reads are inside two shadow roots, no compiler relates them —
+  // the numbers only match because something checks.
+  it('falls back to the tokens’ own numbers everywhere it reads them', () => {
+    const declared: Record<string, number> = {
+      '--dex-add-gallery-inset': INSET,
+      '--dex-add-gallery-min-width': FLOOR,
+    };
+    const sheets = { 'dex-tree-table': tableCss(), 'dex-add-gallery': galleryCss() };
+    let checked = 0;
+    for (const [where, css] of Object.entries(sheets)) {
+      for (const [name, value] of Object.entries(declared)) {
+        // The fallback runs to the next comma or paren, which is all there is: every read of
+        // these two is `var(--token, <n>px)`. Nesting happens one level out — the popover's width
+        // falls back to the min-width token — and that inner read is matched here on its own.
+        for (const read of css.matchAll(new RegExp(`var\\(\\s*${name}\\s*([,)])([^,()]*)`, 'g'))) {
+          expect(read[1], `${where} reads ${name} with no fallback`).toBe(',');
+          expect(read[2].trim(), `${where} reads ${name}`).toBe(`${value}px`);
+          checked++;
+        }
+      }
+    }
+    // A loop over nothing passes. These tokens are read five times today.
+    expect(checked).toBeGreaterThanOrEqual(5);
   });
 
   // The ROOM the popover is allowed, which since the width cap (below) is no longer the width it
@@ -400,25 +460,28 @@ describe('the table and the gallery together', () => {
   // (maintainer, from using it), so the clamp says "the tab, less a margin down each side, but
   // never below two tile columns".
   //
-  // One clamp carries the whole rule the six cases below used to be TS for, so what is checked
-  // is that it is built from the two exported constants and that those constants still produce
-  // the intended boxes. The arithmetic is evaluated here rather than resolved by a browser —
-  // happy-dom resolves no percentage — so this pins our intent against the shipped numbers;
-  // that a browser agrees is the harness's job (`narrow.width` at a 340px pane, and
-  // `followsResize` at 900/308/1200 of editor).
+  // One clamp carries the whole rule the six cases below used to be TS for, so what is checked is
+  // that it is built from the two tokens and that those tokens still produce the intended boxes.
+  // The clamp is matched WHOLE rather than by parts, because the doubling is the part that used to
+  // be TS: the rule read `calc(100% - ${2 * ADD_GALLERY_INSET}px)`, a multiplication performed by
+  // the bundler, and the maintainer's question was why ("it should be done through CSS only",
+  // 2026-09-29). `* 2` inside calc() is the answer, and it is worth an expectation that would
+  // notice it going back.
+  //
+  // The arithmetic below is evaluated here rather than resolved by a browser — happy-dom resolves
+  // no percentage — so this pins our intent against the shipped numbers; that a browser agrees is
+  // the harness's job (`narrow.width` at a 340px pane, `followsResize` at 900/308/1200 of editor).
   //
   // The margins below are what the OLD `margin-inline: auto` produced and are still what this
   // rule gives wherever the popover fills the room it is allowed — which is every width in this
   // test, since the cap only bites above ~960px of tab.
   it('takes the tab’s width less a margin down each side, and spends the margin first', () => {
-    const decl = ruleBody('dex-add-gallery');
-    const clamp = /--dex-add-gallery-width:\s*clamp\(\s*min\((\d+)px,\s*100%\),\s*calc\(100% - (\d+)px\),\s*100%\s*\)/.exec(
-      decl,
+    const decl = squash(ruleBody('dex-add-gallery'));
+    expect(decl, 'the width is not a clamp of the two tokens').toContain(
+      `--dex-add-gallery-width: clamp( min(var(--dex-add-gallery-min-width, ${FLOOR}px), 100%), ` +
+        `calc(100% - var(--dex-add-gallery-inset, ${INSET}px) * 2), 100% );`,
     );
-    expect(clamp, 'the width is not a clamp of the two constants').not.toBeNull();
-    const [floor, bothInsets] = [Number(clamp![1]), Number(clamp![2])];
-    expect(floor).toBe(ADD_GALLERY_WIDTH);
-    expect(bothInsets).toBe(2 * ADD_GALLERY_INSET);
+    const [floor, bothInsets] = [FLOOR, 2 * INSET];
 
     // clamp(MIN, VAL, MAX) is max(MIN, min(VAL, MAX)); the leftover is halved by margin-inline.
     const box = (tab: number) => {
@@ -463,11 +526,8 @@ describe('the table and the gallery together', () => {
   // Worth pinning at all because the regression is one word long and looks like a tidy-up: an
   // `auto-fill` grid with a `1fr`, or a `flex: 1`, draws a gallery that is right in every
   // screenshot of a single width and stretches the tiles at every other one.
-  it('sizes every tile from one constant and wraps the row instead of stretching them', async () => {
-    const cssText = [(customElements.get('dex-add-gallery') as any).styles]
-      .flat()
-      .map((s: any) => s.cssText)
-      .join('\n');
+  it('sizes every tile from one token and wraps the row instead of stretching them', async () => {
+    const cssText = galleryCss();
 
     // A wrapping flex row, and not a grid whose tracks would share out the remainder.
     expect(cssText).toContain('flex-wrap: wrap');
@@ -476,19 +536,23 @@ describe('the table and the gallery together', () => {
     // Rigid in both directions: `0 0` is the claim. A tile that may grow fills the row it is
     // in, and a tile that may shrink gets narrower as its row fills up — either one puts the
     // badge back on a collision course with the icon, which is what set this width.
-    expect(cssText).toMatch(/flex:\s*0 0 \d+px/);
+    //
+    // The basis is a custom property where it was an interpolated TS constant — "styling
+    // calculation" belongs in the stylesheet (maintainer, 2026-09-29). Unlike the two tokens in
+    // vscode-theme.css this one is declared on this component's own :host, because nothing
+    // outside this shadow root reads it and a document property would be scope it does not need.
+    expect(cssText).toMatch(/flex:\s*0 0 var\(--dex-add-gallery-tile-width, \d+px\)/);
 
-    // One number, not one per rule: every tile is the same width because they all read the
-    // same constant, so there is a single place to re-measure if the badge ever grows.
-    const bases = [...cssText.matchAll(/flex:\s*0 0 (\d+px)/g)].map((m) => m[1]);
-    expect(new Set(bases).size).toBe(1);
+    // One number, not one per rule: every tile is the same width because they all read the same
+    // token, declared once, so there is a single place to re-measure if the badge ever grows.
+    const declarations = [...cssText.matchAll(/--dex-add-gallery-tile-width:\s*(\d+)px/g)];
+    expect(declarations.length, 'the tile width is declared more than once').toBe(1);
+    const bases = [...cssText.matchAll(/flex:\s*0 0 var\(--dex-add-gallery-tile-width, (\d+)px\)/g)];
+    expect(bases.length).toBeGreaterThan(0);
+    // And the fallback every read carries is that same number, or a webview whose :host rule was
+    // dropped lays out tiles of a width nobody measured.
+    for (const use of bases) expect(use[1]).toBe(declarations[0][1]);
   });
-
-  const galleryCss = () =>
-    [(customElements.get('dex-add-gallery') as any).styles]
-      .flat()
-      .map((s: any) => s.cssText)
-      .join('\n');
 
   // Ask 2 of three (maintainer, F5 2026-09-29): "if the tab width is larger, the gallery should
   // not follow, just show enough width to show all buttons in one row." The width the table hands

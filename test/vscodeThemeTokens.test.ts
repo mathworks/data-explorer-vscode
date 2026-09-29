@@ -115,18 +115,31 @@ describe('the selection surface has one definition', () => {
 // in a unit test rather than only in the browser harness: the sheet is tinted AWAY from the
 // table's background before the alpha is applied.
 describe('the Add gallery sheet must differ from the table it covers', () => {
-  it('tints away from the editor background before going translucent', () => {
+  it('tints away from the editor background, toward white, before going translucent', () => {
     const tint = token('--dex-add-gallery-tint');
     // Mixed off the same background the table paints, so it tracks the theme...
     expect(tint).toContain('--dex-bg-primary');
-    // ...but is not equal to it. --vscode-foreground for the step because it self-inverts:
-    // lighter on a dark theme, darker on a light one, one declaration for both — the same
-    // reasoning as --dex-color-bg-na above, and a fixed grey would be wrong in half the themes.
-    expect(tint, `--dex-add-gallery-tint = ${tint}`).toContain('--vscode-foreground');
+    // ...but is not equal to it, and the direction is the second half of this design. The round
+    // that first made the sheet visible stepped toward --vscode-foreground, which SELF-INVERTS —
+    // lighter on a dark theme, darker on a light one. That is right for a wash that only has to
+    // stay subtle (--dex-color-bg-na above does it deliberately) and wrong for glass: it painted
+    // a grey pane over Light Modern's white table, and the F5 was "the gallery background looks
+    // dark in light theme. I want to see a white glossy glass effect" (2026-09-29). Glass is lit,
+    // and light is white in every theme, so the step goes ONE direction and the sheet is never
+    // darker than what it covers.
+    expect(tint, `--dex-add-gallery-tint = ${tint}`).toMatch(/\bwhite\b/);
+    expect(tint).not.toContain('--vscode-foreground');
+    // `white` is the one colour literal this file allows, for the same reason dex-add-gallery.ts
+    // may write rgba(255, 255, 255, 0.12) for its sheen: a highlight is light falling on the pane,
+    // not a surface the theme picked. A theme chooses its editor background; it does not choose
+    // what colour light is. Every other literal here is still the bug the tests above pin, which
+    // is why this is the keyword and not #fff — the hex fence stays meaningful.
     expect(tint).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
-    // And the step is big enough to see. Below ~5% the sheet is the table again on the dark
-    // themes, where the editor background and the foreground are furthest apart but the sheet
-    // is darkest and a small step in it is hardest to see.
+    // And the step is big enough to see. It only does anything on the dark themes: where the
+    // editor background IS white the tint is white at any percentage, and the sheet reads by its
+    // blurred content, its border and its shadow instead — which is what white glass looks like
+    // on a white page. So the floor is for the dark end, where the sheet is darkest and a small
+    // step in it is hardest to see.
     const step = /var\(--dex-bg-primary\)\s*(\d+)%/.exec(tint);
     expect(step, 'no editor-background percentage in the tint').not.toBeNull();
     expect(100 - Number(step![1])).toBeGreaterThanOrEqual(5);

@@ -243,7 +243,8 @@ describe('how the catalog states a destination', () => {
     // — and it showed up there once already, as `Variant Config Data` clipped to
     // `Variant Co…` two rows under `Variant Control` and indistinguishable from it.
     //
-    // The numbers come from that harness run. Every tile is `TILE_WIDTH` (112px) wide — a fixed
+    // The numbers come from that harness run. Every tile is 112px wide (the
+    // `--dex-add-gallery-tile-width` token on the gallery's `:host`) — a fixed
     // size the row wraps rather than stretches, so there is one width to fear instead of a
     // range — which leaves a label line 102px. The widest line in the catalog (`Connection`, 10
     // characters) inks 65 of them — 6.5px per character, so 102 holds 15, and the fence keeps a

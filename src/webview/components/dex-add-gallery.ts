@@ -22,94 +22,6 @@ import { ADD_CATALOG, SECTION_LABEL, badgeOf, labelLinesOf } from '../../common/
 import type { GalleryCategory, GalleryTile } from '../../common/addCatalog.js';
 
 /**
- * The popover's width when nobody says otherwise, in px.
- *
- * Normally somebody does: the table sets `--dex-add-gallery-width` to its own width, so the
- * gallery spans the editor tab rather than sitting in a column beside it (the maintainer's
- * call — a 300px popover in a 1400px editor read as a narrow strip of a much larger surface).
- * The column count follows from that width instead of being fixed, which is what the wrapping
- * row of fixed-size tiles gives.
- *
- * This fallback is what a `dex-add-gallery` rendered on its own gets. 300px holds two tile
- * columns of `TILE_WIDTH`, which is a legible gallery rather than a good one — it is a
- * default that keeps the component standalone-renderable, not a size anybody sees. Measured
- * with the browser harness; happy-dom lays nothing out, so no unit test here can see how wide
- * anything rendered.
- */
-export const ADD_GALLERY_WIDTH = 300;
-
-/**
- * How far in from each side of the table the popover sits, in px.
- *
- * So it reads as something floating over the table rather than a panel welded to the editor
- * tab (the maintainer's call): spanning the tab exactly, the popover's own border met the
- * tab's edges and the drop shadow had nowhere to fall, which is the whole of how a shadow
- * says "above". A strip of the table showing down each side is that cue.
- *
- * 8, because that is the filter bar's own horizontal padding, which puts this popover's left
- * border under the Add button's left border and its right border under the Columns button's
- * right border (the maintainer's ask, F5 2026-09-29). The two buttons are the first and last
- * items in that bar, so the bar's padding IS the line they stand on, and the popover hanging
- * off the same box should stand on it too — at 12 it was inset 4px further than the control
- * that opens it, which reads as a near-miss rather than as a margin. `.filter-bar` in
- * dex-tree-table.ts takes its padding from this constant so the two cannot drift.
- *
- * It is also the part that gives way first. {@link ADD_GALLERY_WIDTH} is the floor — the width
- * two tile columns need — and the table shrinks this inset toward 0 rather than squeezing the
- * gallery below it, because a margin is a nicety and a column of tiles is the content.
- */
-export const ADD_GALLERY_INSET = 8;
-
-/**
- * How wide every tile is, in px. Exactly this wide — not a minimum.
- *
- * The maintainer's call: the tiles are a fixed size and the gallery wraps them, rather than the
- * row stretching them to share out whatever the editor's width left over. Which means a tile is
- * the same size in a 1400px editor as in a 340px pane, and resizing the editor moves tiles
- * between rows instead of resizing all 28 of them. The cost is the ragged right-hand edge — the
- * remainder that used to be shared out is now dead space at the end of each row — and that is
- * the price of a stable target to click.
- *
- * 112 is what the BADGE allows, and that is the whole answer to why it is not smaller. The
- * maintainer asked for the narrowest width that still works for all the labels, and the labels
- * turn out never to have been the constraint: a line gets `TILE_WIDTH` less 10px of padding and
- * border, and the widest word in the catalog ("Connection") inks 65px, so on the labels alone a
- * tile of 80 would do.
- *
- * The badge in the top-right corner is what stops it. It is right-anchored 3px in from the tile's
- * edge and the icon is centred, so the icon approaches it at half the rate the tile narrows:
- *
- *     gap = width / 2 - ICON_SIZE / 2 - rightInset - badgeWidth
- *         = width / 2 - 12 - 3 - badgeWidth
- *         = width / 2 - 55        (the widest badge, "Config", inks 40)
- *
- * So this width leaves **1px**, measured in all four themes, and the floor is 110. It was 102
- * while the icon was 16px, and {@link ICON_SIZE} spent 8 of those 10 spare pixels on the icon
- * the maintainer asked for — the two constants are one decision, and this is the half that has
- * almost no slack left. 100 was measured in the browser at a 1px OVERLAP, which is what set a
- * floor here in the first place, and trimming the badge's own padding from 4px to 3px is what
- * bought the last pixel back.
- *
- * Down from 124, which left a 9px gap at a 16px icon — air nobody was looking at, inside tiles
- * whose emptiness the maintainer was (F5, 2026-09-28). A 1px gap is tight on purpose and it is
- * where the reference lands too: the MATLAB toolstrip's gallery clears its corner star by 2px
- * over an icon this size, in an item 44px narrower than this tile. The difference is that its
- * corner carries an 18px star and ours carries a word, because the internal app ships a
- * SEPARATE add gallery per destination — ten toolstrip tabs build one each — and so never has
- * to say where an entry lands, where this one merges all 28 tiles into a single popover and says
- * it in the corner. A 72px tile is available to whoever is willing to give that up.
- *
- * `badge.iconGap` in the browser harness is what notices when a platform's 10px font makes
- * that word wider than this one's does.
- *
- * The packing is better too, which was luck rather than design: 10 columns fit a 1200px editor
- * with 2px left over, where 124 fit 9 with 10px and 116 would fit 9 with 82. The cost is at the
- * other end — a 340px pane still holds two columns, so its dead space at the end of a row grows
- * from 46px to 70. Changing this number is a harness measurement, not an edit here.
- */
-const TILE_WIDTH = 112;
-
-/**
  * How big a tile's icon is, in px.
  *
  * 24, which is the size the MATLAB toolstrip's own gallery draws in exactly this layout — an
@@ -120,18 +32,22 @@ const TILE_WIDTH = 112;
  * 22-30px tall and an icon has to share it with text) — the wrong end of the same
  * stylesheet, and the reason a 112px tile read as mostly empty (maintainer, F5 2026-09-29).
  *
- * The badge is what caps it, on the same arithmetic {@link TILE_WIDTH} is built from: every
+ * The badge is what caps it, on the same arithmetic the tile's width is built from: every
  * 2px of icon spends 1px of the gap between the centred icon and the right-anchored badge.
  * 24 leaves 1px, measured. That is deliberately tight and it is where the reference lands
  * too: the toolstrip puts its favourites star at `right: 2px` over a 24px icon in a 68px
  * item, which clears it by 2px. We are a pixel under that in a tile 44px wider, because our
  * corner carries a WORD ("Config", 40px) where theirs carries an 18px star — see
- * {@link TILE_WIDTH} for why that word exists at all.
+ * `--dex-add-gallery-tile-width` on `:host` below for why that word exists at all.
  *
- * So this number and `TILE_WIDTH` are now one decision with two halves: at 24 the floor
- * under `TILE_WIDTH` is 110, not the 102 the labels ask for. Growing either without
- * re-measuring the other puts the badge on top of the icon, which is what `badge.iconGap`
- * in the browser harness exists to catch.
+ * So this number and that width are one decision with two halves: at 24 the floor under the
+ * tile width is 110, not the 102 the labels ask for. Growing either without re-measuring the
+ * other puts the badge on top of the icon, which is what `badge.iconGap` in the browser
+ * harness exists to catch.
+ *
+ * This one stays in TS, where the width did not, because it is not styling: it is a property
+ * binding — `.size=${ICON_SIZE}` on dex-icon, which draws an SVG at that size. There is no
+ * declaration for a stylesheet to own.
  */
 const ICON_SIZE = 24;
 
@@ -145,9 +61,13 @@ export class DexAddGallery extends LitElement {
     :host {
       display: block;
       box-sizing: border-box;
-      /* The table sets this to its own width so the gallery matches the editor tab; the
-         constant is the fallback for a gallery rendered on its own. */
-      width: var(--dex-add-gallery-width, ${ADD_GALLERY_WIDTH}px);
+      /* The table sets this to its own width so the gallery matches the editor tab (see the
+         dex-add-gallery rule in dex-tree-table.ts). The floor behind it is what a gallery
+         rendered on its OWN gets — 300px, two tile columns, a legible gallery rather than a good
+         one: a default that keeps this component standalone-renderable, not a size anybody sees.
+         Both tokens come from vscode-theme.css, which is the only stylesheet this shadow root and
+         the table's can both read; the literal is for a webview whose theme file never loaded. */
+      width: var(--dex-add-gallery-width, var(--dex-add-gallery-min-width, 300px));
       /* ...but no wider than the tiles need, which is the maintainer's ask (F5 2026-09-29):
          "if the tab width is larger, the gallery should not follow, just show enough width to
          show all buttons in one row". Above about 960px of editor the width above was buying
@@ -157,7 +77,7 @@ export class DexAddGallery extends LitElement {
          max-content, not a number. The intrinsic width of this box is the widest of its
          children, and the widest child is a .tiles row, whose own max-content is all of that
          category's tiles on ONE line (flex-wrap only wraps when it has to). So this says
-         exactly "as wide as the biggest category needs and no wider" — 8 x TILE_WIDTH + 7 gaps
+         exactly "as wide as the biggest category needs and no wider" — 8 tile widths + 7 gaps
          + this padding and border, ~942px today — and it re-derives itself if a category gains
          a tile, which a constant here would not. The width above still shrinks below it, so a
          narrow pane is unaffected: the used width is min(tab - insets, this).
@@ -211,6 +131,60 @@ export class DexAddGallery extends LitElement {
       border-radius: 4px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
       padding: 8px;
+      /* How wide every tile is. Exactly this wide — not a minimum. Declared here rather than on
+         .tile because the max-content above is 8 of these plus 7 gaps, so the panel's width and
+         the tile's are one story and belong in one rule. It was a TS constant interpolated into
+         .tile's flex basis, which is the maintainer's objection, twice: styling belongs in the
+         stylesheet. Unlike the two tokens in vscode-theme.css it has no reason to be
+         document-level — nothing outside this shadow root needs it.
+
+         The maintainer's call: the tiles are a fixed size and the gallery wraps them, rather
+         than the row stretching them to share out whatever the editor's width left over. So a
+         tile is the same size in a 1400px editor as in a 340px pane, and resizing the editor
+         moves tiles between rows instead of resizing all 28 of them. The cost is the ragged
+         right-hand edge — the remainder that used to be shared out is now dead space at the end
+         of each row — and that is the price of a stable target to click.
+
+         112 is what the BADGE allows, and that is the whole answer to why it is not smaller. The
+         maintainer asked for the narrowest width that still works for all the labels, and the
+         labels turn out never to have been the constraint: a line gets this width less 10px of
+         padding and border, and the widest word in the catalog ("Connection") inks 65px, so on
+         the labels alone a tile of 80 would do.
+
+         The badge in the top-right corner is what stops it. It is right-anchored 3px in from the
+         tile's edge and the icon is centred, so the icon approaches it at half the rate the tile
+         narrows:
+
+             gap = width / 2 - ICON_SIZE / 2 - rightInset - badgeWidth
+                 = width / 2 - 12 - 3 - badgeWidth
+                 = width / 2 - 55        (the widest badge, "Config", inks 40)
+
+         So this width leaves 1px, measured in all four themes, and the floor is 110. It was 102
+         while the icon was 16px, and ICON_SIZE in the TS above spent 8 of those 10 spare pixels
+         on the icon the maintainer asked for — the two are one decision, and this is the half
+         with almost no slack left. 100 was measured in the browser at a 1px OVERLAP, which is
+         what set a floor here in the first place, and trimming the badge's own padding from 4px
+         to 3px is what bought the last pixel back.
+
+         Down from 124, which left a 9px gap at a 16px icon — air nobody was looking at, inside
+         tiles whose emptiness the maintainer was (F5, 2026-09-28). A 1px gap is tight on purpose
+         and it is where the reference lands too: the MATLAB toolstrip's gallery clears its corner
+         star by 2px over an icon this size, in an item 44px narrower than this tile. The
+         difference is that its corner carries an 18px star and ours carries a word, because the
+         internal app ships a SEPARATE add gallery per destination — ten toolstrip tabs build one
+         each — and so never has to say where an entry lands, where this one merges all 28 tiles
+         into a single popover and says it in the corner. A 72px tile is available to whoever is
+         willing to give that up.
+
+         badge.iconGap in the browser harness is what notices when a platform's 10px font makes
+         that word wider than this one's does.
+
+         The packing is better too, which was luck rather than design: 10 columns fit a 1200px
+         editor with 2px left over, where 124 fit 9 with 10px and 116 would fit 9 with 82. The
+         cost is at the other end — a 340px pane still holds two columns, so its dead space at the
+         end of a row grows from 46px to 70. Changing this number is a harness measurement, not an
+         edit here. */
+      --dex-add-gallery-tile-width: 112px;
     }
 
     /* Sticky so the pin stays reachable after scrolling to Configurations: the pin is
@@ -317,10 +291,11 @@ export class DexAddGallery extends LitElement {
       position: relative;
       /* The fixed size, and the shorthand says all three parts of it on purpose: never grow
          into the row's remainder, never shrink out of the way of a neighbour, and take the
-         basis from the constant. With box-sizing: border-box below, that is the whole tile
-         including its 1px border. A pane too narrow for one tile scrolls sideways rather than
-         squeezing it, which the grid did too — and a pane that narrow shows no usable table. */
-      flex: 0 0 ${TILE_WIDTH}px;
+         basis from the token :host declares. With box-sizing: border-box below, that is the
+         whole tile including its 1px border. A pane too narrow for one tile scrolls sideways
+         rather than squeezing it, which the grid did too — and a pane that narrow shows no
+         usable table. */
+      flex: 0 0 var(--dex-add-gallery-tile-width, 112px);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -385,8 +360,8 @@ export class DexAddGallery extends LitElement {
        In the corner and OUT OF THE FLOW, which is what makes every tile the same height: as
        a flex child it added a third row to the six tiles that carry one, and a row of tiles
        is as tall as its tallest, so those six dragged twelve neighbours up with them. The
-       corner it sits in is the tile's own, beside the centred icon — TILE_WIDTH and ICON_SIZE
-       together are what keep the two from touching, and since both are fixed so is the 1px gap
+       corner it sits in is the tile's own, beside the centred icon — the tile-width token and
+       ICON_SIZE together keep the two from touching, and since both are fixed so is the 1px gap
        they leave: it no longer widens in a wide editor. Still last in DOM order, after the
        label; nothing about the reading order changed, and the tile's accessible name was never
        these words.
