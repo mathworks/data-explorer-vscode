@@ -46,15 +46,19 @@ export const ADD_GALLERY_WIDTH = 300;
  * tab's edges and the drop shadow had nowhere to fall, which is the whole of how a shadow
  * says "above". A strip of the table showing down each side is that cue.
  *
- * 12 rather than a larger number because it is spent twice and comes out of the tiles: 24px
- * is a fifth of a `TILE_WIDTH` column, so a wider margin starts costing a column at the
- * widths where the row is about to gain one.
+ * 8, because that is the filter bar's own horizontal padding, which puts this popover's left
+ * border under the Add button's left border and its right border under the Columns button's
+ * right border (the maintainer's ask, F5 2026-09-29). The two buttons are the first and last
+ * items in that bar, so the bar's padding IS the line they stand on, and the popover hanging
+ * off the same box should stand on it too — at 12 it was inset 4px further than the control
+ * that opens it, which reads as a near-miss rather than as a margin. `.filter-bar` in
+ * dex-tree-table.ts takes its padding from this constant so the two cannot drift.
  *
  * It is also the part that gives way first. {@link ADD_GALLERY_WIDTH} is the floor — the width
  * two tile columns need — and the table shrinks this inset toward 0 rather than squeezing the
  * gallery below it, because a margin is a nicety and a column of tiles is the content.
  */
-export const ADD_GALLERY_INSET = 12;
+export const ADD_GALLERY_INSET = 8;
 
 /**
  * How wide every tile is, in px. Exactly this wide — not a minimum.
@@ -144,6 +148,25 @@ export class DexAddGallery extends LitElement {
       /* The table sets this to its own width so the gallery matches the editor tab; the
          constant is the fallback for a gallery rendered on its own. */
       width: var(--dex-add-gallery-width, ${ADD_GALLERY_WIDTH}px);
+      /* ...but no wider than the tiles need, which is the maintainer's ask (F5 2026-09-29):
+         "if the tab width is larger, the gallery should not follow, just show enough width to
+         show all buttons in one row". Above about 960px of editor the width above was buying
+         nothing — the widest category is 8 tiles, so a tenth column was empty in every row and
+         the popover was mostly margin on the right.
+
+         max-content, not a number. The intrinsic width of this box is the widest of its
+         children, and the widest child is a .tiles row, whose own max-content is all of that
+         category's tiles on ONE line (flex-wrap only wraps when it has to). So this says
+         exactly "as wide as the biggest category needs and no wider" — 8 x TILE_WIDTH + 7 gaps
+         + this padding and border, ~942px today — and it re-derives itself if a category gains
+         a tile, which a constant here would not. The width above still shrinks below it, so a
+         narrow pane is unaffected: the used width is min(tab - insets, this).
+
+         One platform caveat, unmeasurable from macOS: where the scrollbar is classic rather
+         than overlay, Chromium adds its thickness to a scroll container's intrinsic width, so
+         the cap grows with it and the last tile stays on the row. If it ever does not, the fix
+         is scrollbar-gutter: stable here, not a wider cap. */
+      max-width: max-content;
       /* Six headings and 28 tiles do not fit a short editor. Capped against the
          viewport rather than a constant so a split pane scrolls instead of spilling
          past the bottom of the table it belongs to. 70vh also keeps it inside that
@@ -161,7 +184,19 @@ export class DexAddGallery extends LitElement {
       font-family: var(--dex-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
       font-size: 12px;
       color: var(--dex-color-text, inherit);
-      background: var(--dex-bg-primary, #fff);
+      /* Glass, on purpose (the maintainer's ask, F5 2026-09-29): the table stays visible
+         through the popover as blurred shapes, which says "this is over your data, and it is
+         temporary" in a way an opaque panel cannot. Same treatment the context menu carries
+         (dex-context-menu.ts) and the same numbers, so the extension has one glass and not
+         two — the difference is only that the menu's token is opaque in vscode-theme.css and
+         this one is not.
+
+         The fallback in the var() is the OLD opaque background, deliberately: a webview
+         whose theme file did not load gets a legible panel rather than a transparent one,
+         and the blur below then has nothing to show through it. */
+      background: var(--dex-add-gallery-bg, var(--dex-bg-primary, #fff));
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
       border: 1px solid var(--dex-border-color, #d0d0d0);
       border-radius: 4px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -170,8 +205,16 @@ export class DexAddGallery extends LitElement {
 
     /* Sticky so the pin stays reachable after scrolling to Configurations: the pin is
        what a user reaches for once they realise they want several adds, which is
-       usually after they have already gone looking through the list. */
+       usually after they have already gone looking through the list.
+
+       It carries the glass too, and its own blur. A sticky bar over a translucent panel is
+       the one place transparency can go wrong: the tiles slide UNDER this, and at 82% they
+       would show through it as legible, moving text next to the word "Add". Blurring its own
+       backdrop — which is the tiles, not the table — turns that into the frosted strip the
+       pattern is supposed to be. */
     .gallery-header {
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
       position: sticky;
       top: -8px;
       z-index: 1;
@@ -181,7 +224,7 @@ export class DexAddGallery extends LitElement {
       gap: 8px;
       margin: -8px -8px 6px;
       padding: 8px;
-      background: var(--dex-bg-primary, #fff);
+      background: var(--dex-add-gallery-bg, var(--dex-bg-primary, #fff));
       border-bottom: 1px solid var(--dex-border-color-light, #e0e0e0);
     }
 
@@ -262,7 +305,16 @@ export class DexAddGallery extends LitElement {
       box-sizing: border-box;
       border: 1px solid var(--dex-border-color, #d0d0d0);
       border-radius: 3px;
-      background: var(--dex-bg-primary, #fff);
+      /* A touch of the glass, not all of it. 28 opaque chips on a translucent surface would
+         leave the effect visible only in the 4px gutters between them — the tiles are most of
+         this panel's area, so they have to take part or the panel is not glass. But what shows
+         through a tile is the SURFACE behind it, already tinted and blurred, so this alpha is
+         doing a fraction of the work the host's is: ~2% of a blurred row reaches the label,
+         which the harness measures as no change to its contrast. Hover replaces this with the
+         theme's own list-hover colour, which is opaque in the standard themes and a 10% wash in
+         the high-contrast ones — VS Code's choice for a hovered row, left alone here, so the
+         cue is the change of surface rather than its solidity. */
+      background: var(--dex-add-gallery-tile-bg, var(--dex-bg-primary, #fff));
       color: inherit;
       font: inherit;
       text-align: center;
@@ -335,6 +387,17 @@ export class DexAddGallery extends LitElement {
       .tile,
       .tile-badge {
         border: 1px solid ButtonText !important;
+      }
+      /* And the glass goes. Forced colors already replaces the background with Canvas, but
+         the blur is not a colour and would survive it — a high-contrast user would get the
+         one thing the mode exists to remove, the table smeared under the text. Canvas is
+         named explicitly so the panel is opaque even where the system palette allows alpha,
+         because a translucent surface in this mode is a legibility bug, not a style. */
+      :host,
+      .gallery-header {
+        background: Canvas !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
       }
       .tile:focus-visible {
         outline: 2px solid Highlight !important;

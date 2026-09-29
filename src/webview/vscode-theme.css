@@ -133,4 +133,23 @@
      variables is not two chances, it is one failure. */
   --dex-context-menu-active: var(--vscode-menu-selectionBackground, var(--dex-selection-bg));
   --dex-context-menu-separator: var(--vscode-menu-separatorBackground, var(--vscode-editorWidget-border));
+
+  /* The Add gallery's surface, and the one place in this file where translucency is the
+     POINT rather than something to neutralize. The context menu above is opaque on purpose
+     — a menu should read as a native VS Code menu — but the gallery is a large panel the
+     user opens over their own data, and the maintainer's ask (F5 2026-09-29) is that the
+     table stay visible as blurred glass underneath it.
+
+     Mixed from --dex-bg-primary rather than written as an rgba() so the tint is the editor's
+     own background in every theme and only the alpha is ours. Two strengths, because the
+     panel has two layers: the surface is the glass, and a tile sits ON the glass and has to
+     read as a button with a label in it. 82% over a 20px blur leaves the table legible as
+     shapes and nothing more; the tile's 88% is over the surface, not over the table, so what
+     shows through a tile is ~2% of a blurred row — enough to keep it from looking like an
+     opaque chip pasted on glass, not enough to touch the label's contrast.
+
+     Forced colors and the gallery's own stylesheet drop both (see dex-add-gallery.ts): a
+     high-contrast user asked for legibility, not decoration. */
+  --dex-add-gallery-bg: color-mix(in srgb, var(--dex-bg-primary) 82%, transparent);
+  --dex-add-gallery-tile-bg: color-mix(in srgb, var(--dex-bg-primary) 88%, transparent);
 }

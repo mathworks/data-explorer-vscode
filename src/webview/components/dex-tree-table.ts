@@ -314,7 +314,12 @@ export class DexTreeTable extends LitElement {
         display: flex;
         align-items: center;
         gap: 6px;
-        padding: 4px 8px;
+        /* The horizontal half comes from ADD_GALLERY_INSET, which is the same 8px read from
+           the other end: Add is this bar's first item and Columns its last, so this padding is
+           the line those two buttons stand on, and the gallery hanging off this box lines its
+           own edges up with them by using the same number (the maintainer's ask). Written as
+           the constant rather than as 8 so changing one cannot silently un-align the other. */
+        padding: 4px ${ADD_GALLERY_INSET}px;
         border-bottom: 1px solid var(--dex-border-color-light, #e0e0e0);
         background: var(--dex-bg-secondary, #f8f8f8);
         flex: 0 0 auto;
@@ -335,18 +340,34 @@ export class DexTreeTable extends LitElement {
          air. Written against the bar rather than the Add button because it is the bar's
          height that changes under a narrow pane.
 
-         width: exactly what toggleAddGallery used to measure on open. The margin is
-         ADD_GALLERY_INSET down each side until the pane gets too narrow to afford both, at which
-         point the margin gives way rather than the gallery going below ADD_GALLERY_WIDTH — one
-         clamp says that, since its own lower bound is capped at 100% for a pane narrower than
-         the floor. left/right plus margin-inline: auto then splits whatever is left over in two,
-         which is what makes the two margins equal without either of them being named here. */
+         width: the room this popover is ALLOWED, which is not the same as the width it takes.
+         The margin is ADD_GALLERY_INSET down each side — the bar's own padding, so the popover's
+         borders line up with the Add and Columns buttons above them — until the pane gets too
+         narrow to afford both, at which point the margin gives way rather than the gallery going
+         below ADD_GALLERY_WIDTH; one clamp says that, since its own lower bound is capped at
+         100% for a pane narrower than the floor. What it actually takes is the smaller of this
+         and its own max-content (see :host in dex-add-gallery.ts): past ~960px of editor the
+         tiles need no more room, so the popover stops growing and this rule only decides where
+         the leftover goes.
+
+         margin-inline: and that is what this says. It used to be auto on both sides, which split
+         the leftover in two and centred the popover — right while the popover was always as wide
+         as the tab allowed, wrong the moment it stops growing, because a centred 942px panel under
+         a 1400px editor puts its left border 200px inside the button that opened it. So: the inset
+         on the left, and auto on the right to absorb whatever the cap left over. The min() is the
+         give-way from the width rule, said again for the margin — half the slack when there is
+         less than an inset's worth, so a pane at the popover's floor keeps the two sides equal
+         and nothing hangs over the table's right edge. */
       dex-add-gallery {
         position: absolute;
         top: calc(100% + 3px);
         left: 0;
         right: 0;
-        margin-inline: auto;
+        margin-inline: min(
+            ${ADD_GALLERY_INSET}px,
+            calc((100% - var(--dex-add-gallery-width, ${ADD_GALLERY_WIDTH}px)) / 2)
+          )
+          auto;
         z-index: 1001;
         --dex-add-gallery-width: clamp(
           min(${ADD_GALLERY_WIDTH}px, 100%),

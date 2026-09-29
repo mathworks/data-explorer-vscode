@@ -327,6 +327,12 @@ describe('the table and the gallery together', () => {
   // The declarations of one rule, by selector. Crude on purpose — these are our own hand-written
   // stylesheets, and a real parser would only obscure the one question being asked, which is
   // WHICH rule a declaration landed in. `position: relative` on the wrong box anchors nothing.
+  // Whitespace inside a declaration is not a fact about the stylesheet, it is a fact about where
+  // the formatter chose to break a long line — `margin-inline: min(8px, calc(...)) auto` is
+  // serialized over five lines, so a one-line expectation misses it. Collapse runs of whitespace
+  // before matching anything whose value is longer than a line.
+  const squash = (css: string) => css.replace(/\s+/g, ' ');
+
   const ruleBody = (selector: string) => {
     const css = tableCss();
     const at = css.indexOf(`${selector} {`);
@@ -368,19 +374,42 @@ describe('the table and the gallery together', () => {
     // the two side margins equal without either being written down.
     expect(gallery).toContain('left: 0');
     expect(gallery).toContain('right: 0');
-    expect(gallery).toContain('margin-inline: auto');
+    // Left-aligned at the inset, with the right margin taking whatever the width cap left
+    // over — it was `auto` on both sides, which centred the popover, and centring only looked
+    // right while the popover grew with the tab. The min() is the same give-way the width has:
+    // half the slack when there is less than an inset's worth of it.
+    expect(squash(gallery)).toContain(`margin-inline: min( ${ADD_GALLERY_INSET}px,`);
+    expect(squash(gallery)).toContain(') auto;');
+    expect(gallery).not.toContain('margin-inline: auto');
     expect(gallery).toContain('z-index: 1001');
   });
 
-  // The width is the tab's, not a constant: a 300px popover under a 1400px editor read as a
-  // narrow strip of a much larger surface (maintainer, from using it), and the column count
-  // follows from the width, so this is also what decides how many tiles are in a row.
+  // Ask 1 of three (maintainer, F5 2026-09-29): the popover's side borders should line up with
+  // the Add button's left border and the Columns button's right border. Those two are the bar's
+  // first and last items, so the line they stand on is the bar's own horizontal padding — which
+  // makes this a single-number claim rather than a measurement, and the number has to be the
+  // same one in both rules or the popover misses the button by a few px, which reads worse than
+  // a frank margin. The pixels themselves are the harness's job (`geometry.alignsWithButtons`).
+  it('insets the popover by the bar’s own padding, so its edges meet the buttons', () => {
+    expect(ruleBody('.filter-bar')).toContain(`padding: 4px ${ADD_GALLERY_INSET}px`);
+    expect(squash(ruleBody('dex-add-gallery'))).toContain(`min( ${ADD_GALLERY_INSET}px,`);
+  });
+
+  // The ROOM the popover is allowed, which since the width cap (below) is no longer the width it
+  // takes: a 300px popover under a 1400px editor read as a narrow strip of a much larger surface
+  // (maintainer, from using it), so the clamp says "the tab, less a margin down each side, but
+  // never below two tile columns".
   //
   // One clamp carries the whole rule the six cases below used to be TS for, so what is checked
   // is that it is built from the two exported constants and that those constants still produce
   // the intended boxes. The arithmetic is evaluated here rather than resolved by a browser —
   // happy-dom resolves no percentage — so this pins our intent against the shipped numbers;
-  // that a browser agrees is the harness's job (`narrow.galleryWidth` at a 340px pane).
+  // that a browser agrees is the harness's job (`narrow.width` at a 340px pane, and
+  // `followsResize` at 900/308/1200 of editor).
+  //
+  // The margins below are what the OLD `margin-inline: auto` produced and are still what this
+  // rule gives wherever the popover fills the room it is allowed — which is every width in this
+  // test, since the cap only bites above ~960px of tab.
   it('takes the tab’s width less a margin down each side, and spends the margin first', () => {
     const decl = ruleBody('dex-add-gallery');
     const clamp = /--dex-add-gallery-width:\s*clamp\(\s*min\((\d+)px,\s*100%\),\s*calc\(100% - (\d+)px\),\s*100%\s*\)/.exec(
@@ -398,15 +427,16 @@ describe('the table and the gallery together', () => {
     };
 
     // A margin each side, so it floats over the table instead of meeting its edges
-    // (maintainer's call): 12px off each end, whatever the tab is worth.
-    expect(box(1200)).toEqual([1176, 12]);
-    expect(box(600)).toEqual([576, 12]);
-    expect(box(400)).toEqual([376, 12]);
+    // (maintainer's call): 8px off each end — the bar's padding, so the edges meet the buttons —
+    // whatever the tab is worth.
+    expect(box(1200)).toEqual([1184, 8]);
+    expect(box(600)).toEqual([584, 8]);
+    expect(box(400)).toEqual([384, 8]);
 
     // The margin is the part that gives way. At exactly the popover's floor there is none left
-    // to spend — 300px of tiles beats 276px with a gap down each side — and between there and
-    // 324 the margin takes the growth so the gallery stays at two full columns.
-    expect(box(324)).toEqual([300, 12]);
+    // to spend — 300px of tiles beats 284px with a gap down each side — and between there and
+    // 316 the margin takes the growth so the gallery stays at two full columns.
+    expect(box(316)).toEqual([300, 8]);
     expect(box(310)).toEqual([300, 5]);
     expect(box(300)).toEqual([300, 0]);
 
@@ -452,6 +482,57 @@ describe('the table and the gallery together', () => {
     // same constant, so there is a single place to re-measure if the badge ever grows.
     const bases = [...cssText.matchAll(/flex:\s*0 0 (\d+px)/g)].map((m) => m[1]);
     expect(new Set(bases).size).toBe(1);
+  });
+
+  const galleryCss = () =>
+    [(customElements.get('dex-add-gallery') as any).styles]
+      .flat()
+      .map((s: any) => s.cssText)
+      .join('\n');
+
+  // Ask 2 of three (maintainer, F5 2026-09-29): "if the tab width is larger, the gallery should
+  // not follow, just show enough width to show all buttons in one row." The width the table hands
+  // over is still the tab's, so what stops it is a cap here.
+  //
+  // `max-content` rather than a computed number, and that is the point worth a test: the widest
+  // child of this box is a `.tiles` row, and the max-content size of a wrapping flex container is
+  // all of its items on one line. So the cap IS "the biggest category in one row", stated once,
+  // and a category that gains a tile widens it with no arithmetic to update. A well-meant swap to
+  // a px value is the regression this catches — it would be right on the day it was measured and
+  // wrong after the next catalog change, silently, by one wrapped row.
+  it('stops growing at the width the widest category needs', () => {
+    expect(galleryCss()).toContain('max-width: max-content');
+    // Not a second width rule: the room still comes from the table's var, and this only caps it.
+    expect(galleryCss()).toContain('width: var(--dex-add-gallery-width');
+  });
+
+  // Ask 3 of three (maintainer, F5 2026-09-29): "make the gallery background semi-transparent,
+  // like a glossy glass effect to blur the table under it."
+  //
+  // Three claims, because the effect is three declarations and two of them are the ones that go
+  // wrong. The alpha lives in vscode-theme.css so it is themed; the blur lives here; and forced
+  // colors must get neither — that mode exists to remove exactly this, and a blur is not a colour,
+  // so it survives the background substitution unless it is turned off by hand. happy-dom applies
+  // no stylesheet and composites nothing, so the pixels are the harness's (`glass.surfaceAlpha`,
+  // `glass.blurs`, and the forced-colors screenshot).
+  it('draws the panel as glass, and drops it entirely under forced colors', () => {
+    const css = galleryCss();
+
+    // The surface and the sticky header both, or the header reads as an opaque strip across the
+    // top of a glass panel — and both take the alpha from the theme token, with the old opaque
+    // colour as the fallback for a webview whose theme file never loaded.
+    const glass = [...css.matchAll(/background:\s*var\(--dex-add-gallery-bg,\s*var\(--dex-bg-primary/g)];
+    expect(glass.length).toBe(2);
+    expect(css).toContain('backdrop-filter: blur(20px) saturate(180%)');
+    // The prefixed copy is not optional here: it is what the context menu ships, and dropping it
+    // would make this the one glass surface that is flat on an older webview.
+    expect(css).toContain('-webkit-backdrop-filter: blur(20px) saturate(180%)');
+
+    // And the whole effect comes off in forced colors. Both halves: an opaque Canvas AND no blur.
+    const forced = css.slice(css.indexOf('@media (forced-colors: active)'));
+    expect(forced).toContain('background: Canvas !important');
+    expect(forced).toContain('backdrop-filter: none !important');
+    expect(forced).toContain('-webkit-backdrop-filter: none !important');
   });
 
   // The pressed look (maintainer's ask, 2026-09-28): while the popover is showing, the
