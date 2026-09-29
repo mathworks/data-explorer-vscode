@@ -173,16 +173,17 @@
      editor background IS white, so the tint is white at any percentage: the sheet paints white
      over an off-white table and reads by its blurred content, its border and its shadow rather
      than by a colour difference, which is what white glass looks like on a white page — measured
-     at 250.5/255 through the glass against a table averaging 239.4. On Dark Modern the same 10%
-     lifts #1F1F1F to #353535, and the panel paints ~16 luminance levels above the rows it covers.
+     at 248.6/255 through the glass against a table averaging 239.4, with the tiles on it flat at
+     255. On Dark Modern the same 10% lifts #1F1F1F to #353535, which is what a tile paints; the
+     sheet is 60% of that and lands 13.5 luminance levels above the rows it covers, the tiles 22.
 
      10 and not the 16 this round started at, and what set the ceiling is the INK, not the eye. The
      gallery's muted text — the pin label and the six category headings — is --dex-color-text-muted,
      78% of the theme's foreground, and its contrast is measured against whatever surface it lands
      on. That surface is this sheet. At 16% the sticky header painted 65/255 on Dark Modern and the
      pin label measured 3.74:1, the headings 4.40:1: both under WCAG AA, which is the whole of what
-     issue #26 was about. At 10% the header paints 52/255 and the same two measure 4.56:1 and
-     5.07:1 — above AA, and not by much, which is the honest description of this number. So the
+     issue #26 was about. At 10% the header paints 52/255 and the same two measure 4.59:1 and
+     5.32:1 — above AA, and not by much, which is the honest description of this number. So the
      sheet has a ceiling as well as a floor, light enough to see and dark enough to read on, and on
      a dark theme those two are about 15 levels apart. 10% is also exactly where the canonical web
      recipe sits: glassmorphism is rgba(255, 255, 255, 0.1) over a dark backdrop. Raising it is a
@@ -191,17 +192,37 @@
      the same change, which means the gallery declaring its own --dex-color-text-muted the way
      dex-tree-table.ts does for a selected row.
 
-     Two strengths, because the panel has two layers a user reads differently: the surface, and
-     the sticky header whose job is to hold the title and the pin legible while tiles slide
-     under it. The header is the solider of the two for that reason. There is deliberately no
-     third strength for the tiles — they used to carry 88% of this same mix, and since they are
-     ~90% of the panel's area, that chrome covered the glass it sat on. The tiles are
-     transparent now and the sheet shows through the grid; see .tile in dex-add-gallery.ts.
+     Three surfaces, ONE colour. The panel is this tint at three alphas: the sheet at 60%, the
+     sticky header at 88% — solider because its job is to hold the title and the pin legible while
+     tiles slide under it — and the tiles at 100%, which is to say the tint itself, the same colour
+     with the transparency taken out (see .tile in dex-add-gallery.ts). So there is still nothing
+     here to keep in step with anything else: change this one declaration and all three move.
+
+     The opaque tiles are the maintainer's ask (F5 2026-09-29, after the white glass landed): "make
+     the gallery background a little bit more transparent, but the buttons background opaque". That
+     partly reverses the round before, where the tiles painted nothing at all, and the reason it
+     works now is the other half of the same sentence. The tiles are ~90% of the panel's area, so
+     painting them leaves the glass showing only in the gutters — which is why they were stripped —
+     and dropping the sheet from 72% to 60% is what buys that back: the glass reads harder wherever
+     it is still visible, which is the 4px gutters, the strip past the end of every short row, the
+     band behind each category heading, and the header. "Solid buttons on a glass tray" rather than
+     "a tray whose glass is hidden". The tiles gain something the transparent ones could not have,
+     too: every label now sits on a flat surface instead of on blurred rows.
+
+     Lowering the sheet's alpha cannot break the ceiling above — less alpha moves the sheet TOWARD
+     the table, and the table is the surface the rest of the app's ink is already legible on. What
+     it does move is the header, because a tile scrolled under it is now opaque: there the header
+     paints this tint exactly, whatever its own alpha, where at rest it paints 88% of the tint over
+     the sheet. On Dark Modern that is 53/255 against 52, and by arithmetic it costs the pin label
+     its measured 4.59:1 → ~4.52:1. Still above AA and now with no slack at all, so the note above
+     stands with one more reason behind it: a lighter sheet needs solider ink in the same change.
 
      Forced colors and the gallery's own stylesheet drop all of it (see dex-add-gallery.ts): a
-     high-contrast user asked for legibility, not decoration. */
+     high-contrast user asked for legibility, not decoration. The tiles go back to Canvas there
+     rather than to the ButtonFace their <button> would otherwise get, so the label keeps the
+     system-guaranteed pairing it has today and the tile is told apart by its border. */
   --dex-add-gallery-tint: color-mix(in srgb, var(--dex-bg-primary) 90%, white);
-  --dex-add-gallery-bg: color-mix(in srgb, var(--dex-add-gallery-tint) 72%, transparent);
+  --dex-add-gallery-bg: color-mix(in srgb, var(--dex-add-gallery-tint) 60%, transparent);
   --dex-add-gallery-header-bg: color-mix(in srgb, var(--dex-add-gallery-tint) 88%, transparent);
 
   /* The Add gallery's two geometry numbers. They live here, in a colour file, for one structural

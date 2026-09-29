@@ -114,7 +114,11 @@ export class DexAddGallery extends LitElement {
            1. the tint must differ from the table. That is the token's job, and where the first
               round failed: 82% of the editor background over a table painted the editor
               background is the same colour. See --dex-add-gallery-tint in vscode-theme.css.
-           2. the tiles must not paint over it (see .tile below).
+           2. the glass must be visible somewhere the eye lands. The tiles are opaque again (see
+              .tile below) and they are ~90% of this panel's area, so what carries the effect is
+              the 4px gutters, the run past the end of every short row, the band behind each
+              category heading, and this bar — and the sheet's alpha came down to 60% in the same
+              change to make those places read harder.
            3. the blur must leave something to see. 12px, not the context menu's 20: a menu is
               a small box over a mostly uniform background, so 20px costs it nothing, but this
               panel covers ~600px of rows and at 20px their banding averages into a flat wash —
@@ -305,20 +309,29 @@ export class DexAddGallery extends LitElement {
       box-sizing: border-box;
       border: 1px solid var(--dex-border-color, #d0d0d0);
       border-radius: 3px;
-      /* No surface of its own: a tile is a border and a label, and what fills it is the glass
-         behind it. This is the second of the three things :host lists, and the first round got
-         it wrong. A tile is 112x58 and there are 28 of them behind 4px gutters, so the tiles
-         are ~90% of this panel's area — paint them and the effect survives only in the gutters,
-         which is indistinguishable from no effect. A wash was tried there first (88% of the
-         same mix) and it was the worst of both: still enough chrome to hide the pane, and one
-         more number to keep in step with the surface's.
+      /* OPAQUE, and the same colour the sheet is made of: this is the tint with the transparency
+         taken out, not a fill of its own. The maintainer's ask (F5 2026-09-29, after the white
+         glass landed) was "make the gallery background a little bit more transparent, but the
+         buttons background opaque", and the two halves are one change — see
+         --dex-add-gallery-tint in vscode-theme.css, where the sheet came down to 60% at the same
+         time. A button that reads as a button is solid, and glass is what it sits ON.
 
-         What replaces the fill as the "this is a button" cue is the hover, which is now a
-         change from nothing to a surface rather than one surface to another — a stronger cue
-         than it was. That colour is the theme's own list-hover (opaque in the standard themes,
-         a 10% wash in the high-contrast ones; VS Code's call either way). The border and the
-         focus ring are untouched, so the grid stays legible against the blurred rows. */
-      background: transparent;
+         This reverses the round before, where a tile painted nothing, so the reasoning that put
+         it there is worth keeping: a tile is 112x58 and there are 28 of them behind 4px gutters,
+         so the tiles are ~90% of this panel's area, and painting them leaves the effect showing
+         only in the gutters. What makes that survivable now is the sheet's lower alpha — the
+         gutters, the run past the end of a short row, the heading bands and the sticky bar all
+         read harder than they did — and what it buys is a flat surface under every label instead
+         of blurred rows. The 88% wash tried two rounds ago is still wrong, for a reason neither
+         of these is: it was translucent enough to hide the pane and solid enough to look like
+         chrome, and it was a second number to keep in step with the surface's. Full alpha on
+         this token is no number at all.
+
+         Since the tile now has a surface, its hover is a change from one surface to another
+         again. That colour stays the theme's own list-hover, which is a darkening over this lit
+         tile on the standard themes and a 10% wash of the foreground on the high-contrast ones —
+         VS Code's call for a hovered row either way, and a step of 9 levels or more in both. */
+      background: var(--dex-add-gallery-tint, var(--dex-bg-primary, #fff));
       color: inherit;
       font: inherit;
       text-align: center;
@@ -402,6 +415,15 @@ export class DexAddGallery extends LitElement {
         background: Canvas !important;
         backdrop-filter: none !important;
         -webkit-backdrop-filter: none !important;
+      }
+      /* The tiles come back to Canvas rather than keeping the tint OR taking the ButtonFace a
+         <button> is forced to. Their label inherits its colour, i.e. the CanvasText the host
+         carries, and CanvasText on ButtonFace is not one of the pairs the system palette
+         guarantees — a tile in this mode is told apart by the ButtonText border above, not by a
+         fill. This is also what a tile painted before the sheet's alpha and the tiles swapped
+         places, so high contrast looks exactly as it did. */
+      .tile {
+        background: Canvas !important;
       }
       .tile:focus-visible {
         outline: 2px solid Highlight !important;

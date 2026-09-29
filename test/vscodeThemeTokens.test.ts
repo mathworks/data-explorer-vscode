@@ -167,6 +167,26 @@ describe('the Add gallery sheet must differ from the table it covers', () => {
     };
     expect(alpha('--dex-add-gallery-bg')).toBeLessThan(alpha('--dex-add-gallery-header-bg'));
     // And the surface is glass rather than a film: at 90% there is nothing to see through it.
-    expect(alpha('--dex-add-gallery-bg')).toBeLessThanOrEqual(80);
+    //
+    // 65 rather than the 80 this started at, because the tiles went opaque (maintainer, F5
+    // 2026-09-29: "make the gallery background a little bit more transparent, but the buttons
+    // background opaque"). The tiles are ~90% of the panel's area, so the glass is now carried by
+    // the 4px gutters, the run past the end of a short row, the heading bands and the sticky bar —
+    // small places, which is exactly where a high alpha stops reading as glass at all. The two
+    // halves of that ask are one change and this is the fence that keeps them together: raising
+    // this number back toward 80 with solid tiles in front of it is the invisible panel again, in
+    // a new shape.
+    expect(alpha('--dex-add-gallery-bg')).toBeLessThanOrEqual(65);
+  });
+
+  // The panel is ONE colour at three alphas — sheet, header, tiles — so this file owns exactly one
+  // colour for it. A --dex-add-gallery-tile-bg (or -tile-surface, or -chip-bg) would be a second
+  // number to keep in step with the first, which is what the 88% tile wash two rounds ago was: the
+  // tile reads the tint itself, at full opacity, from its own stylesheet.
+  it('declares one colour for the gallery, not one per layer', () => {
+    const tileColourTokens = [...CSS.matchAll(/--dex-add-gallery-[\w-]+/g)]
+      .map((m) => m[0])
+      .filter((name) => /tile|chip|button/.test(name) && !/width/.test(name));
+    expect(tileColourTokens).toEqual([]);
   });
 });

@@ -615,15 +615,32 @@ describe('the table and the gallery together', () => {
       /background-image:\s*linear-gradient\(\s*to bottom,\s*rgba\(255, 255, 255, 0\.12\)/,
     );
 
-    // And nothing paints over the glass. The tiles are ~90% of this panel's area, so a fill on
-    // them — even the translucent one the first round shipped — leaves the effect visible only
-    // in the 4px gutters, which is indistinguishable from no effect. This is the half of "I
-    // don't see any transparent effect" that lives here; the other half, the tint the alpha is
-    // applied to, is pinned in vscodeThemeTokens.test.ts.
-    expect(rule('.tile')).toContain('background: transparent');
+    // A tile is OPAQUE, and painted the colour the sheet is made of rather than one of its own:
+    // "make the gallery background a little bit more transparent, but the buttons background
+    // opaque" (maintainer, F5 2026-09-29, after the white glass landed). Reading the tint
+    // directly is what makes the two halves one change — a tile is the sheet with the
+    // transparency removed, so the panel is one colour at three alphas and there is no second
+    // number to keep in step. A --dex-add-gallery-tile-bg would be that number, which is why its
+    // absence is asserted rather than assumed; the tile width token next to it is a length, not
+    // a colour.
+    const tileBackground = /background:([^;]*);/.exec(rule('.tile'))?.[1] ?? '';
+    expect(tileBackground).toContain('var(--dex-add-gallery-tint');
+    expect(tileBackground, 'a tile must not be translucent').not.toContain('transparent');
     expect(css).not.toContain('--dex-add-gallery-tile-bg');
-    // The hover still paints one, or a tile has no press to it at all.
+    // Which is why the sheet's own alpha is the thing that has to stay low: the tiles are ~90%
+    // of this panel's area, so the glass is now carried by the gutters, the run past the end of
+    // a short row, the heading bands and the sticky bar. That number lives in the theme file and
+    // is fenced in vscodeThemeTokens.test.ts.
+    //
+    // The hover still changes the surface, which is a tile's only "press" — one surface to
+    // another again now that a tile has one.
     expect(rule('.tile:hover')).toContain('background: var(--dex-bg-hover');
+    // And in forced colors the tile goes back to Canvas rather than keeping the tint or taking
+    // the ButtonFace a <button> is forced to: its label is `color: inherit`, and CanvasText on
+    // ButtonFace is not a pairing the system palette guarantees.
+    expect(css.slice(css.indexOf('@media (forced-colors: active)'))).toMatch(
+      /\.tile\s*\{\s*background: Canvas !important;/,
+    );
 
     // And the whole effect comes off in forced colors. Both halves: an opaque Canvas AND no blur.
     const forced = css.slice(css.indexOf('@media (forced-colors: active)'));
