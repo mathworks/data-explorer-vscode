@@ -401,6 +401,29 @@ describe('RelGraph folder/project grouping', () => {
     expect(g.children(byLabel(roots, 'LibProj'))).toEqual([]);
   });
 
+  it('puts the .prj on the project group header, and nothing on a folder header', () => {
+    // The header's uriString is what makes the row OPENABLE (SectionsTreeProvider turns it
+    // into the same `dataExplorer.openFile` a file row carries, which lands on the project
+    // page). A folder group is a directory and has no file to open — hence no uri, and the
+    // provider offers no command for one.
+    const g = new RelGraph([
+      src('project/MyProj/MyProj.prj'),
+      src('project/MyProj/top.slx'),
+      src('elsewhere/loose.sldd'),
+    ]);
+    expect(byLabel(g.roots(), 'MyProj').uriString).toBe('file:///project/MyProj/MyProj.prj');
+    expect(byLabel(g.roots(), 'elsewhere').uriString).toBeUndefined();
+  });
+
+  it('keeps the header openable for a project whose members are all unscanned', () => {
+    // The case that motivated this: a project of .m files renders as one childless row, so
+    // the page is the ONLY thing it can show.
+    const g = new RelGraph([src('project/LibProj/LibProj.prj')]);
+    const header = byLabel(g.roots(), 'LibProj');
+    expect(header.hasChildren).toBe(false);
+    expect(header.uriString).toBe('file:///project/LibProj/LibProj.prj');
+  });
+
   it('assigns a file to the longest-matching (nested) project root', () => {
     const g = new RelGraph([
       src('outer/Outer.prj'),

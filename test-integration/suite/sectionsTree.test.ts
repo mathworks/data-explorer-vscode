@@ -88,7 +88,63 @@ suite('SectionsTreeProvider', () => {
     const item = provider.getTreeItem(group);
     assert.strictEqual(item.contextValue, 'dexFolderGroup');
     assert.strictEqual(item.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
-    assert.strictEqual(item.command, undefined, 'a group header is not openable');
+    assert.strictEqual(item.command, undefined, 'a folder group is a directory: no file to open');
+  });
+
+  // A PROJECT group header is the one group row that is also a file — the `.prj` — and it
+  // opens to the project page. The fixture workspace is deliberately project-free (every
+  // other test here reads it as one folder group), so the .prj arrives for the length of
+  // this test and leaves again: a permanent one would re-shape the tree for every suite
+  // that reads this workspace.
+  test('getTreeItem for a project group: opens the .prj, which is the project page', async () => {
+    const prj = vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, 'ClickProj.prj');
+    await vscode.workspace.fs.writeFile(prj, Buffer.from('<?xml version="1.0"?>\n<Project/>\n'));
+    try {
+      // `findFiles` runs a fresh search, but this file is milliseconds old: poll on a fresh
+      // provider instead of asserting the first answer, so a slow search service reads as
+      // slow rather than as a missing feature.
+      let fresh = new SectionsTreeProvider(extensionUri());
+      let group = (await fresh.getChildren()).find((r) => r.groupKind === 'project');
+      const deadline = Date.now() + 20000;
+      while (!group) {
+        assert.ok(Date.now() < deadline, 'timed out waiting for ClickProj.prj to reach the tree');
+        await new Promise((r) => setTimeout(r, 100));
+        fresh = new SectionsTreeProvider(extensionUri());
+        group = (await fresh.getChildren()).find((r) => r.groupKind === 'project');
+      }
+
+      assert.strictEqual(group.label, 'ClickProj', 'labelled by project name, not file name');
+      const item = fresh.getTreeItem(group);
+      assert.strictEqual(item.contextValue, 'dexProjectGroup');
+      assert.ok(item.command, 'the project header carries an open command');
+      assert.strictEqual(item.command!.command, 'dataExplorer.openFile');
+      assert.strictEqual(
+        (item.command!.arguments![0] as vscode.Uri).toString(),
+        prj.toString(),
+        'and opens the .prj itself',
+      );
+      assert.ok(item.tooltip, 'and says what clicking it does');
+      // Still a container: the members are reachable and the page is reachable.
+      assert.strictEqual(item.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
+    } finally {
+      await vscode.workspace.fs.delete(prj, { useTrash: false });
+    }
+  });
+
+  test('a project header left over from an earlier graph offers no open', async () => {
+    await provider.getChildren(); // prime the uri map from the real folder
+    const item = provider.getTreeItem({
+      kind: 'group',
+      groupKind: 'project',
+      groupKey: '/gone',
+      uriString: 'file:///gone/Old.prj',
+      label: 'Old',
+      ancestors: new Set<string>(),
+      cycle: false,
+      hasChildren: false,
+    });
+    assert.strictEqual(item.contextValue, 'dexProjectGroup');
+    assert.strictEqual(item.command, undefined, 'no open for a .prj that is not in the folder');
   });
 
   test('getTreeItem for a missing reference: warning icon, no open command', async () => {

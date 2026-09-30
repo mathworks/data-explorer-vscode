@@ -64,7 +64,8 @@ export class SectionsTreeProvider implements vscode.TreeDataProvider<SlddTreeNod
 
     if (el.kind === 'group') {
       // Synthetic containers: External Data (link icon), and the top-level
-      // project/folder groups. All are expandable, not openable.
+      // project/folder groups. Expandable; and a PROJECT group is ALSO openable —
+      // see the `case 'project'` arm.
       const collapsible = el.hasChildren
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None;
@@ -72,10 +73,30 @@ export class SectionsTreeProvider implements vscode.TreeDataProvider<SlddTreeNod
       let icon: string;
       let contextValue: string;
       switch (el.groupKind) {
-        case 'project':
+        case 'project': {
           icon = 'simulink_project';
           contextValue = 'dexProjectGroup';
+          // A project group header IS a file — the `.prj`, whose uri graphModel puts on the
+          // node — so it opens like any other row: to the project page. It used to open
+          // nothing, which made the one row that names the project the only unclickable
+          // thing in the tree. Resolved through `this.uris` exactly like a file row, so a
+          // header left over from an earlier graph (its `.prj` since gone from the folder)
+          // offers no open rather than an open of a file that is not there.
+          //
+          // The row keeps its twisty: VS Code runs the command AND toggles expansion for a
+          // collapsible item that has one, which is the behaviour wanted here — the members
+          // and the page are two views of the same project, not a choice between them.
+          const prj = el.uriString ? this.uris.get(el.uriString) : undefined;
+          if (prj) {
+            item.command = {
+              command: 'dataExplorer.openFile',
+              title: 'Open in Data Explorer',
+              arguments: [prj],
+            };
+            item.tooltip = `Open the project page for "${el.label}".`;
+          }
           break;
+        }
         case 'folder':
           icon = 'simulink_folder';
           contextValue = 'dexFolderGroup';
