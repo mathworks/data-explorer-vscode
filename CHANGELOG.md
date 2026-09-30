@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.28.4] — 2026-09-30
+
+Opening a data dictionary no longer warns that the System Composer interface dictionary part "holds nothing readable" when that part is simply empty, which is what MATLAB writes into any dictionary System Composer has touched; the file is complete, and the entry kinds shown without a catalog were measured to be the ones MATLAB reports without it too
+
 ## [1.28.3] — 2026-09-30
 
 Every GitHub Release now carries a `SHA256SUMS` file beside the `.vsix`, so a download can be checked with `sha256sum -c SHA256SUMS` before it is installed
