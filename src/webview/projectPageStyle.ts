@@ -148,6 +148,40 @@ body {
   opacity: .55; font-variant-numeric: tabular-nums;
 }
 
+/* The Managed Simulink Project card (PROOF OF CONCEPT). Same card treatment as .runs,
+   because it says the same KIND of thing: a handful of facts that are about the project
+   rather than a list of its contents. */
+.dex-page .msp {
+  padding: 8px 10px; border-radius: 4px;
+  background: var(--vscode-editorWidget-background);
+  border: 1px solid var(--vscode-editorWidget-border, var(--vscode-panel-border));
+}
+.dex-page .msp .row { padding: 2px 0; }
+.dex-page .msp .row .name { min-width: 92px; }
+/* Indented past the badge column AND the row gap (92 + 14), so the sentence starts under
+   the path it is about rather than between the two columns. */
+.dex-page .msp .note {
+  margin: 1px 0 8px 106px; font-size: 11px; line-height: 1.45; max-width: 62ch;
+  color: var(--dex-muted);
+}
+.dex-page .msp .note:last-child { margin-bottom: 0; }
+
+/* The badge that carries a new concept's NAME -- 'interface', 'private', 'component'.
+   A WORD and not an icon: media/icons/ ships simulink_component.svg and
+   serviceInterfaces.svg, but every icon there paints itself through var(--mw-icon-*)
+   tokens this extension never defines, so all of them render at their light-theme
+   fallback (white fill, grey stroke) in every theme -- and an <img> gets no
+   forced-colours treatment at all. badge-background/foreground is a themed PAIR, so its
+   contrast is the theme author's guarantee rather than our mix. */
+.dex-page .badge {
+  display: inline-flex; align-items: center;
+  padding: 0 7px; border-radius: 3px;
+  font-size: 11px; font-weight: 600; letter-spacing: .02em;
+  border: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-badge-background, var(--vscode-editorWidget-background));
+  color: var(--vscode-badge-foreground, var(--vscode-foreground));
+}
+
 .dex-page .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 3px 7px; }
 .dex-page .chip {
   display: inline-flex; align-items: center; gap: 6px;
@@ -169,6 +203,9 @@ body {
    it keeps. */
 @media (forced-colors: active) {
   .dex-page .chip { border-color: CanvasText; }
+  /* The badge's themed background is replaced by the OS, so the border is what is left
+     to say "this is a label on the row" -- same treatment as the chip. */
+  .dex-page .badge { border-color: CanvasText; }
   .dex-page .chip.unused { opacity: 1; color: GrayText; }
   .dex-page .chip.custom { border-style: dashed; }
   .dex-page a.link { color: LinkText; }

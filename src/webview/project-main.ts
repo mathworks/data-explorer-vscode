@@ -12,7 +12,7 @@
 import { renderProjectPage, newSectionState } from './projectPage.js';
 import type { PageState, ProjectPagePayload } from './projectPage.js';
 import { PROJECT_PAGE_CSS } from './projectPageStyle.js';
-import type { HostToProjectMessage } from '../common/protocol.js';
+import type { HostToProjectMessage, OpenFileMessage } from '../common/protocol.js';
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -67,7 +67,7 @@ window.addEventListener('message', (event: MessageEvent) => {
       state = {};
     }
     shownRoot = msg.root;
-    payload = { page: msg.page, root: msg.root, warnings: msg.warnings };
+    payload = { page: msg.page, root: msg.root, warnings: msg.warnings, msp: msg.msp };
     error.style.display = 'none';
     repaint();
   } else if (msg.type === 'error') {
@@ -104,6 +104,21 @@ page.addEventListener('input', (event: Event) => {
   }
 });
 
+/**
+ * What a click on a link asks the host for.
+ *
+ * `preferProject` is present only where the markup asked for it (a component row), and
+ * absent — not `false` — everywhere else, so every link that existed before this posts
+ * byte-identically to what it posted before.
+ */
+function openMessage(el: HTMLElement): OpenFileMessage {
+  const msg: OpenFileMessage = { type: 'openFile', path: el.dataset.open as string };
+  if (el.dataset.prj !== undefined) {
+    msg.preferProject = true;
+  }
+  return msg;
+}
+
 page.addEventListener('click', (event: Event) => {
   const target = event.target as HTMLElement | null;
   // `closest`, not the target itself: a link's text is wrapped in <mark> spans as
@@ -111,7 +126,7 @@ page.addEventListener('click', (event: Event) => {
   // of a path has that <mark> as its target.
   const open = target?.closest?.('[data-open]') as HTMLElement | null;
   if (open) {
-    vscode.postMessage({ type: 'openFile', path: open.dataset.open });
+    vscode.postMessage(openMessage(open));
     return;
   }
   const expand = (target?.closest?.('[data-expand]') as HTMLElement | null)?.dataset.expand;
@@ -136,7 +151,7 @@ page.addEventListener('keydown', (event: KeyboardEvent) => {
   // Space scrolls the page by default, which is exactly what a user pressing it on a
   // focused control does not mean.
   event.preventDefault();
-  vscode.postMessage({ type: 'openFile', path: open.dataset.open });
+  vscode.postMessage(openMessage(open));
 });
 
 vscode.postMessage({ type: 'ready' });

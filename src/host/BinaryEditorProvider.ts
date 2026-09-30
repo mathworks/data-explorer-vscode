@@ -13,6 +13,7 @@ import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { basename, projectPathSegments } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import { seededRead } from './seededRead.js';
+import { detectMsp, MSP_CONFIG } from './mspProject.js';
 import {
   buildProjectPage,
   isMatFile,
@@ -52,7 +53,11 @@ function projectRootOf(prjUri: vscode.Uri): vscode.Uri {
  * outlive the folder itself — so it is reported as a message naming the path rather
  * than swallowed or thrown.
  */
-async function openProjectPath(rootUri: vscode.Uri, relPath: string): Promise<void> {
+async function openProjectPath(
+  rootUri: vscode.Uri,
+  relPath: string,
+  preferProject = false,
+): Promise<void> {
   const target = vscode.Uri.joinPath(rootUri, ...projectPathSegments(relPath));
   let type: vscode.FileType;
   try {
@@ -66,6 +71,18 @@ async function openProjectPath(rootUri: vscode.Uri, relPath: string): Promise<vo
   // A bitmask, not an enum value: a symlinked folder is Directory|SymbolicLink, and
   // an equality check reads it as a file and then fails to open it.
   if (type & vscode.FileType.Directory) {
+    // A referenced project is recorded as its FOLDER, so the row that says "this is a
+    // component of mine" would answer a click by revealing a folder — one click short of
+    // the page that says what that component publishes. Only when the row asked for it,
+    // and only when the folder holds exactly one project: two is ambiguous and zero is
+    // not a project at all, and both fall through to the reveal below.
+    if (preferProject) {
+      const prj = await soleProjectFile(target);
+      if (prj) {
+        await vscode.commands.executeCommand('vscode.open', prj);
+        return;
+      }
+    }
     // `revealInExplorer` only reveals what the Explorer is showing, so a project
     // opened as a lone file — outside every workspace folder — would answer the
     // click with nothing at all. Hand those to the OS file manager instead, which is
@@ -75,6 +92,36 @@ async function openProjectPath(rootUri: vscode.Uri, relPath: string): Promise<vo
     return;
   }
   await vscode.commands.executeCommand('vscode.open', target);
+}
+
+/** The one `.prj` in a folder, or undefined when there is not exactly one. */
+async function soleProjectFile(folder: vscode.Uri): Promise<vscode.Uri | undefined> {
+  let entries: Array<[string, vscode.FileType]>;
+  try {
+    entries = await vscode.workspace.fs.readDirectory(folder);
+  } catch {
+    return undefined;
+  }
+  const prjs = entries.filter(([n, t]) => !(t & vscode.FileType.Directory) && isProjectFile(n));
+  return prjs.length === 1 ? vscode.Uri.joinPath(folder, prjs[0][0]) : undefined;
+}
+
+/**
+ * A text file beside the `.prj`, or undefined when it is not there.
+ *
+ * Absence is the normal answer — only a Managed Simulink Project has an
+ * `msp_config.json` — so it is not reported, logged or retried.
+ */
+async function readTextIfPresent(
+  rootUri: vscode.Uri,
+  relPath: string,
+): Promise<string | undefined> {
+  try {
+    const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(rootUri, relPath));
+    return new TextDecoder().decode(bytes);
+  } catch {
+    return undefined;
+  }
 }
 
 // Custom document. Read-only for all binary formats (.slx, .mat, .prj, zipped
@@ -258,10 +305,14 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           // coverage), and a tree of rows is a shape none of that survives.
           const files = await readProjectStore(document.uri);
           const parsed = parseProject(files, projectNameOf(name));
+          const root = projectRootOf(document.uri);
           webview.postMessage({
             type: 'setProject',
             page: buildProjectPage(parsed),
-            root: projectRootOf(document.uri).fsPath,
+            root: root.fsPath,
+            // Undefined for every project that is not a Managed Simulink Project, which
+            // leaves the page byte-identical to what it rendered before this existed.
+            msp: detectMsp(parsed, await readTextIfPresent(root, MSP_CONFIG)),
             // A project is the format this matters most for: its store is read by
             // convention with no schema, so a document that did not survive its trip
             // costs whatever entity it described and leaves a page that looks whole.
@@ -341,7 +392,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
         // Only the project page sends this, and only the host can answer it: the path
         // is project-root-relative, and the page has no idea where that root is.
         if (typeof msg.path === 'string' && msg.path.length > 0) {
-          void openProjectPath(projectRootOf(document.uri), msg.path);
+          void openProjectPath(projectRootOf(document.uri), msg.path, msg.preferProject === true);
         }
       } else if (msg?.type === 'select') {
         // Relay the selection to the Property Inspector via the wired callback.

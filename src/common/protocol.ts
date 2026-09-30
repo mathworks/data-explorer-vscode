@@ -17,6 +17,7 @@
 // contravariant-callback errors rather than catch real bugs.
 
 import type { ProjectPage } from 'data-explorer-core';
+import type { MspProject } from './msp.js';
 import type { SectionRule } from '../host/sectionRules.js';
 import type { DragDescriptor } from '../host/dragState.js';
 import type { ClipboardMode } from '../host/clipboard.js';
@@ -243,6 +244,13 @@ export interface SetProjectMessage {
   page: ProjectPage;
   /** The project folder's filesystem path, for display. */
   root: string;
+  /**
+   * What a Managed Simulink Project adds — absent for every project that is not one,
+   * which is every project this extension has ever opened until now. See common/msp.ts:
+   * the page's MSP markup hangs entirely off this key being present, so a non-MSP
+   * project's page is unchanged by its existence.
+   */
+  msp?: MspProject;
   /** What the parse could not read — absent for a clean read. */
   warnings?: WarningBanner;
 }
@@ -414,6 +422,13 @@ export type TableToHostMessage =
 export interface OpenFileMessage {
   type: 'openFile';
   path: string;
+  /**
+   * The path names a project FOLDER, and what the user asked for is the project in it.
+   * Sent only by a component row, where the store records `Ref="../plant"` — a folder,
+   * which would otherwise be revealed in the Explorer, one click short of the page that
+   * answers the question. Absent everywhere else, so no existing row changes behaviour.
+   */
+  preferProject?: boolean;
 }
 
 /** Every message the host receives from the project page. */

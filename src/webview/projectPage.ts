@@ -12,6 +12,8 @@
 // much of it they cover. See core's ProjectPage.ts.
 
 import type { ProjectPage } from 'data-explorer-core';
+import type { MspDictionary, MspProject } from '../common/msp.js';
+import { MSP_ROLE_LABEL } from '../common/msp.js';
 import type { WarningBanner } from '../host/parseWarnings.js';
 
 /** A filter box appears above this many items. */
@@ -122,16 +124,27 @@ interface Item {
  * a real href would navigate the webview away from itself, and there is nothing to
  * navigate to, since opening the file is a host action.
  */
-function link(path: string, terms: string[], title: string): string {
+function link(path: string, terms: string[], title: string, opts?: LinkOpts): string {
   return (
     '<a class="link" role="button" tabindex="0" data-open="' +
     esc(path) +
-    '" title="' +
+    '"' +
+    (opts?.project ? ' data-prj=""' : '') +
+    ' title="' +
     esc(title) +
     '">' +
-    highlight(path, terms) +
+    highlight(opts?.text ?? path, terms) +
     '</a>'
   );
+}
+
+/**
+ * `project`: this path names a project folder and the click means "open the project in
+ * it" — see `preferProject` in protocol.ts. `text`: show something other than the path.
+ */
+interface LinkOpts {
+  project?: boolean;
+  text?: string;
 }
 
 /**
@@ -142,9 +155,15 @@ function link(path: string, terms: string[], title: string): string {
  * one element), so every link would render in the muted body colour — clickable rows
  * that do not look clickable.
  */
-function nameTargetRow(name: string, target: string, terms: string[], title: string): string {
+function nameTargetRow(
+  name: string,
+  target: string,
+  terms: string[],
+  title: string,
+  opts?: LinkOpts,
+): string {
   const cell = target
-    ? '<span class="target">' + link(target, terms, title) + '</span>'
+    ? '<span class="target">' + link(target, terms, title, opts) + '</span>'
     : '<span class="target muted">—</span>';
   return '<div class="row"><span class="name">' + highlight(name, terms) + '</span>' + cell + '</div>';
 }
@@ -319,6 +338,92 @@ function labelsSection(page: ProjectPage): string {
 }
 
 /**
+ * What each half of the pair is for, in one line each.
+ *
+ * The sentences are the point of the whole block. A badge reading "interface" teaches
+ * nothing to a user meeting the word for the first time, and this page is where they
+ * meet it — the concept lives in a toolkit's API, not in anything MATLAB shows them.
+ */
+const MSP_DICTIONARY_NOTE: Record<MspDictionary['kind'], string> = {
+  interface:
+    'The types this project publishes — buses, alias and numeric types, enumerations. ' +
+    'Every project that references this one chains this dictionary, so what is in here ' +
+    'is what the rest of the composition can see.',
+  private:
+    'The values only this project sees: the design data its own models resolve against. ' +
+    'No other project chains it.',
+};
+
+/** Said instead of the note when a half is absent. */
+const MSP_NO_PRIVATE = 'A shared-interface project keeps no private values.';
+
+/**
+ * The Managed Simulink Project card — PROOF OF CONCEPT, see ../common/msp.ts.
+ *
+ * Rendered only when the payload carries `msp`, which is never for an ordinary MATLAB
+ * Project. It goes directly under the identity block, above "Runs automatically",
+ * because for a project that has one it is the most important fact on the page: which
+ * of its members is the published half and which is the private one.
+ *
+ * WHY THIS IS NOT IN THE LABELS SECTION, where the same two facts technically already
+ * appear. There they render as two counted chips — `InterfaceDictionary 1`,
+ * `PrivateDictionary 1` — which name no file, open nothing, and sit among five built-in
+ * labels that say nothing about this project. The fact is present and unusable.
+ *
+ * A BADGE, NOT AN ICON. The page has no icons at all today, and `media/icons/` ships
+ * both `simulink_component.svg` and `serviceInterfaces.svg` — but every icon there
+ * colours itself through `var(--mw-icon-*, <light fallback>)` tokens that nothing in
+ * this extension defines, so they render white-filled in every theme, and an `<img>`
+ * carries no forced-colours treatment at all. A word survives both, and reads in a
+ * screen reader. Icons can be added later ON TOP of the word; they cannot replace it.
+ */
+function mspSection(msp: MspProject): string {
+  const badge = (text: string): string => '<span class="badge">' + esc(text) + '</span>';
+
+  const half = (kind: MspDictionary['kind']): string => {
+    const dict = msp.dictionaries.find((d) => d.kind === kind);
+    const cell = dict
+      ? '<span class="target">' + link(dict.path, [], 'Opens ' + dict.path) + '</span>'
+      : '<span class="target muted">— none —</span>';
+    // Both halves are drawn even when one is missing: seeing that there ARE two halves,
+    // and that this project has one of them, is what the word "interface" means here.
+    return (
+      '<div class="row"><span class="name">' +
+      badge(kind) +
+      '</span>' +
+      cell +
+      '</div><div class="note">' +
+      esc(dict ? MSP_DICTIONARY_NOTE[kind] : MSP_NO_PRIVATE) +
+      '</div>'
+    );
+  };
+
+  let body = half('interface') + half('private');
+  if (msp.sharedConfigSetName) {
+    body +=
+      '<div class="row"><span class="name">' +
+      badge('config') +
+      '</span><span class="target">' +
+      esc(msp.sharedConfigSetName) +
+      '</span></div><div class="note">' +
+      'One configuration set, stored as an entry in the interface dictionary and shared ' +
+      'by every model in this project.' +
+      '</div>';
+  }
+
+  return (
+    '<section class="section" id="sec-msp"><header><h2>Managed Simulink Project</h2>' +
+    // Which detection route answered, verbatim. A proof of concept gets read from
+    // screenshots, and the two routes disagree in ways worth seeing.
+    '<span class="count">' +
+    esc(msp.evidence.join(' + ')) +
+    '</span></header><div class="msp">' +
+    body +
+    '</div></section>'
+  );
+}
+
+/**
  * What the parse could not read, as the page's first block.
  *
  * Not the table views' banner strip: that one is absolutely positioned and the table
@@ -354,15 +459,23 @@ export interface ProjectPagePayload {
    * the store records nothing absolute, by design, so a project stays portable.
    */
   root: string;
+  /**
+   * What a Managed Simulink Project adds, absent for every project that is not one.
+   * Every MSP-specific pixel on this page is behind a check on this key.
+   */
+  msp?: MspProject;
   /** What the parse could not read; absent after a clean read. */
   warnings?: WarningBanner;
 }
 
 /** The whole page. */
 export function renderProjectPage(payload: ProjectPagePayload, state: PageState): string {
-  const { page, root } = payload;
+  const { page, root, msp } = payload;
   const meta = [
     'MATLAB Project',
+    // Second, right after what it IS: an MSP is a MATLAB Project first, and the role is
+    // the one word that says why this page looks different from the last one.
+    ...(msp ? ['Managed Simulink Project', MSP_ROLE_LABEL[msp.role]] : []),
     page.formatLabel,
     page.memberCount + (page.memberCount === 1 ? ' member' : ' members'),
     page.pathFolders.length + (page.pathFolders.length === 1 ? ' path folder' : ' path folders'),
@@ -381,6 +494,10 @@ export function renderProjectPage(payload: ProjectPagePayload, state: PageState)
       meta.map(esc).join('<span class="dot">·</span>') +
       '</div></div>',
   );
+
+  if (msp) {
+    parts.push(mspSection(msp));
+  }
 
   parts.push(runsSection(page));
 
@@ -455,18 +572,32 @@ export function renderProjectPage(payload: ProjectPagePayload, state: PageState)
 
   parts.push(labelsSection(page));
 
+  // A referenced project IS a component, in the toolkit's own vocabulary: `msp.getStatus`
+  // reports `components` as "table of referenced MSP projects", and referencing one chains
+  // its interface dictionary into this project's. So for an MSP the section is renamed
+  // rather than duplicated — the list is already exactly right, only the word was ours.
   parts.push(
     listSection(
       'references',
-      'References',
+      msp ? 'Components' : 'References',
       page.references.map((r) => ({
         search: r.name + ' ' + r.path,
         group: '',
         html: (terms) =>
-          nameTargetRow(r.name, r.path, terms, 'Opens the referenced project'),
+          nameTargetRow(
+            r.name,
+            r.path,
+            terms,
+            msp ? "Opens the component's own project page" : 'Opens the referenced project',
+            msp ? { project: true } : undefined,
+          ),
       })),
       state,
-      { empty: 'This project references no other projects.' },
+      {
+        empty: msp
+          ? 'This project references no components.'
+          : 'This project references no other projects.',
+      },
     ),
   );
 
