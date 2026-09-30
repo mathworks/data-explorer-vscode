@@ -36,8 +36,8 @@ import type { GalleryCategory, GalleryTile } from '../../common/addCatalog.js';
  * 2px of icon spends 1px of the gap between the centred icon and the right-anchored badge.
  * 24 leaves 3px in today's 96px tile, measured — and left 1px in the 112px one, because the
  * widest badge was then `Config` at 40px rather than `Arch` at 30 (see
- * `--dex-add-gallery-tile-width` on `:host` below, and `labelStatesSection` in addCatalog.ts
- * for where the wider word went). The reference lands in the same place: the toolstrip puts
+ * `--dex-add-gallery-tile-width` on `:host` below, and `badgeOf` in addCatalog.ts for where the
+ * wider word went). The reference lands in the same place: the toolstrip puts
  * its favourites star at `right: 2px` over a 24px icon in a 68px item, which clears it by 2px
  * — an 18px star where ours is a word.
  *
@@ -166,7 +166,7 @@ export class DexAddGallery extends LitElement {
 
          What moved is the badge, not the arithmetic. This was 112 while the widest badge was
          "Config" at 40px, and taking that badge off Variant Config (maintainer, F6 2026-09-29 —
-         labelStatesSection in addCatalog.ts) took 10px out of the widest corner and so 20px off
+         badgeOf in addCatalog.ts) took 10px out of the widest corner and so 20px off
          the floor under this number, from 110 to 92. The same maintainer's other F6 ask, "make
          all buttons a little bit narrower", is what spends 16 of them.
 
@@ -367,12 +367,14 @@ export class DexAddGallery extends LitElement {
       overflow-wrap: break-word;
     }
 
-    /* Only on a tile whose section differs from the rest of its category and is not already named
-       in its own label, which is 5 of 28 — and, now that the heading states no destination, the
-       only thing on the face of the gallery distinguishing the four Types tiles that appear twice
-       under one heading. Badging every tile would make the badge furniture instead of a warning,
-       and badging Variant Config made it a warning about nothing: the word was in the corner and
-       in the label underneath it (maintainer, F6 2026-09-29; labelStatesSection in addCatalog.ts).
+    /* Only on a tile whose section differs from the rest of its category, which is 5 of 28 — and,
+       now that the heading states no destination, the only thing on the face of the gallery
+       distinguishing the four Types tiles that appear twice under one heading. Badging every tile
+       would make the badge furniture instead of a warning, and badging Variant Config made it a
+       warning about nothing: the word was in the corner and in the label underneath it
+       (maintainer, F6 2026-09-29). That tile writes into Design Data now — MATLAB refuses it
+       anywhere else — so it departs from nothing and the general rule leaves its corner empty;
+       badgeOf in addCatalog.ts carries both halves.
 
        In the corner and OUT OF THE FLOW, which is what makes every tile the same height: as
        a flex child it added a third row to every tile that carries one, and a row of tiles

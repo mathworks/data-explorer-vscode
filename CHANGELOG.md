@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.28.1] — 2026-09-30
+
+Every entry the `⊞ Add` gallery creates was compared against one MATLAB creates itself, in both dictionary formats, and four differences were closed: a variant configuration now lands in Design Data, where MATLAB keeps it and where MATLAB was refusing it before; a configuration reference is named the way MATLAB requires; and two classes whose state MATLAB stores as a single struct are written and read back intact in the compressed-binary format, so opening a dictionary and saving it no longer empties them
+
 ## [1.28.0] — 2026-09-29
 
 The `⊞ Add` gallery is a sheet of frosted glass that lines its borders up with the filter bar's buttons, follows the tab as it resizes, and stops widening once every tile fits one row — and its tiles are narrower now, each one drawn at the toolstrip's 24px glyph with its label broken where the word ends rather than where the box ran out. It opens from the keyboard as well as the mouse, and a tile only carries a destination badge where its own label does not already say where the entry will land

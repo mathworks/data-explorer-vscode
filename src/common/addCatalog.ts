@@ -45,21 +45,6 @@ export interface GalleryTile {
    * in the extension knows.
    */
   labelLines?: readonly string[];
-  /**
-   * That this tile's own label names its destination, so a badge would only repeat it.
-   *
-   * An exception to a derived rule, not a second way to spell one: `badgeOf` badges every tile
-   * that departs from its category's majority, and this is how one of them says the departure is
-   * already on its face. The maintainer's ask (F6 2026-09-29) — a tile carrying the word `Config`
-   * in its label and again in its corner reads as a warning about nothing, and the corner is
-   * where the tile's width is spent (see `--dex-add-gallery-tile-width`).
-   *
-   * The guard test holds it to being both true and load-bearing: the label has to contain the
-   * badge this drops, and the tile has to be one that would otherwise have carried it. What does
-   * NOT depend on the badge is the screen reader, which never read this corner — every tile's
-   * accessible name states its destination whether a badge does or not.
-   */
-  labelStatesSection?: true;
 }
 
 /** One heading and the tiles under it. */
@@ -156,16 +141,21 @@ export const ADD_CATALOG: readonly GalleryCategory[] = [
     },
   ]),
   // Variant Config sits here, not under Configurations, because the word you search for is
-  // "variant" — so it departs from the Variants heading, and `labelStatesSection` is how it says
-  // that departure needs no badge: the word a badge would put in its corner is the second word of
-  // its label (maintainer, F6 2026-09-29).
+  // "variant" (maintainer, F6 2026-09-29). It used to DEPART from this heading as well — it was
+  // the one tile in a design-data category that wrote into Configurations, and it carried
+  // `labelStatesSection` to say that departure needed no badge, since the word a badge would put
+  // in its corner was the second word of its own label. MATLAB has since settled where the entry
+  // goes, and it is Design Data: a `Simulink.VariantConfigurations` value in the Configurations
+  // section is refused outright, in both file formats (core's SectionNode carries the
+  // measurement). So the category is uniform now, its heading states the destination once for
+  // every tile under it, and the flag that suppressed the badge went with the badge.
   //
   // The name was shortened from `Variant Config Data` when a tile ellipsed its label and this one
   // read as `Variant Co…` two rows under `Variant Control`. Labels break at their spaces now, so
   // nothing is clipped, and the short name stays for the other reason it was chosen: a third line
   // makes its whole row taller, since a row is as tall as its tallest tile. What the dropped
   // `Data` used to lean on was the badge; what carries it now is the accessible name every tile
-  // has had all along — `Add Variant Config to Configurations`.
+  // has had all along — `Add Variant Config to Design Data`.
   category('Variants', [
     { label: 'Variant Expression', className: 'Simulink.VariantExpression', section: 'design', iconId: 'wsVariant' },
     { label: 'Variant Control', className: 'Simulink.VariantControl', section: 'design', iconId: 'twoConnected_wsDefault' },
@@ -185,9 +175,8 @@ export const ADD_CATALOG: readonly GalleryCategory[] = [
     },
     {
       label: 'Variant Config',
-      labelStatesSection: true,
       className: 'Simulink.VariantConfigurationData',
-      section: 'config',
+      section: 'design',
       iconId: 'variantSettings',
     },
   ]),
@@ -216,13 +205,14 @@ export const OMITTED: readonly { className: string; section: string; why: string
   { className: 'Simulink.VariantVariable', section: 'other', why: 'same' },
   {
     className: 'Simulink.VariantConfigurations',
-    section: 'config',
-    // NodeClassMap points this spelling and Simulink.VariantConfigurationData at one
-    // node class, whose createDefault hardcodes the latter — so the tile would create
-    // a differently-classed entry and say nothing. Fixing that needs core to thread
-    // the requested class through createDefault, and needs MATLAB to answer whether a
-    // standalone entry of this class is even valid on disk.
-    why: 'addEntry returns a Simulink.VariantConfigurationData instead',
+    section: 'design',
+    // The two spellings are one entry. NodeClassMap points both at one node class, and
+    // since MATLAB settled that what a dictionary stores is the CONTAINER, that class's
+    // createDefault now writes `Simulink.VariantConfigurations` whichever name the tile
+    // asked for — so a second tile here would offer a different word for a byte-identical
+    // entry. The container spelling is kept in core's allow-list because a file MATLAB
+    // wrote uses it, which is a read-side requirement and not an add-side one.
+    why: 'the Variant Config tile already creates exactly this entry',
   },
 ];
 
@@ -253,13 +243,17 @@ export function labelLinesOf(tile: GalleryTile): readonly string[] {
  * The badge this tile needs under this category, or null when it needs none.
  *
  * A uniform category states its destination in the heading, so nothing is badged. In a
- * mixed one the badge goes on the tiles that depart from the majority — unless the tile's own
- * label names that destination, which is the one exception and true of one tile. Together that
- * keeps the count of badges at the 5 that carry information rather than the 14 that would
- * repeat either their heading or themselves.
+ * mixed one the badge goes on the tiles that depart from the majority. That keeps the count of
+ * badges at the 5 that carry information rather than the 14 that would repeat their heading.
+ *
+ * There was a third rule here — a tile whose own LABEL named its destination suppressed its own
+ * badge, since `Variant Config` in a `Config` corner reads as a warning about nothing
+ * (maintainer, F6 2026-09-29). It is gone with the case that needed it: that tile's destination
+ * is Design Data, measured (see the Variants category), so its category is uniform and the
+ * general rule already badges nothing.
  */
 export function badgeOf(category: GalleryCategory, tile: GalleryTile): string | null {
-  if (category.uniformSection || tile.labelStatesSection) {
+  if (category.uniformSection) {
     return null;
   }
   return tile.section === majoritySection(category) ? null : SECTION_BADGE[tile.section];

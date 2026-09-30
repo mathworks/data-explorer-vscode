@@ -90,13 +90,15 @@ describe('dex-add-gallery', () => {
     const badged = $$(el, '.tile').find((t) => t.dataset.className === 'Constant')!;
     expect(unbadged.getAttribute('aria-label')).toBe('Add Simulink Parameter to Design Data');
     expect(badged.getAttribute('aria-label')).toBe('Add Constant to Architectural Data');
-    // The case this claim now carries alone: `Variant Config` departs from its heading and, since
-    // the badge came off it, states the departure nowhere on its face except inside its own label.
-    // A screen reader gets `Configurations` from here or from nothing.
-    const departsUnbadged = $$(el, '.tile').find(
+    // `Variant Config` used to be the case this claim carried alone — it departed from its
+    // heading with no badge, so a screen reader got the destination from here or from nothing.
+    // Its destination is Design Data now, measured against MATLAB (core's SectionNode), and the
+    // name is still asserted because the label does not contain it: the tile reads `Variant
+    // Config`, so `Design Data` is spoken only if this attribute says it.
+    const noBadge = $$(el, '.tile').find(
       (t) => t.dataset.className === 'Simulink.VariantConfigurationData',
     )!;
-    expect(departsUnbadged.getAttribute('aria-label')).toBe('Add Variant Config to Configurations');
+    expect(noBadge.getAttribute('aria-label')).toBe('Add Variant Config to Design Data');
   });
 
   // The break is data, not something the text box arrived at: one word per line, so a tile
@@ -145,15 +147,18 @@ describe('dex-add-gallery', () => {
     ]);
   });
 
-  // `Variant Config` departs from the Variants heading and still draws no badge (maintainer, F6
-  // 2026-09-29): its label already says `Config`, so the badge was that word twice on one tile.
-  // Pinned in the DOM as well as in the catalog because the two halves are separable — a renderer
-  // that badged every tile whose section differs from the heading's, ignoring the catalog's
-  // opt-out, would pass `addCatalog.test.ts` and draw the word twice anyway.
-  it('draws no badge on the tile whose label already names its section', async () => {
+  // `Variant Config` draws no badge, and now for the ordinary reason: its destination is Design
+  // Data, the same as every other tile under the Variants heading, so the heading states it once.
+  // It reached the same place by a route that is gone — it used to write into Configurations and
+  // carry a catalog opt-out from the badge, because its label already said `Config` (maintainer,
+  // F6 2026-09-29) — and MATLAB then refused that destination outright in both file formats
+  // (core's SectionNode carries the measurement). Kept as a DOM claim because the section it
+  // lands in is what the tile hands the host, and this is the only place that attribute is read
+  // back off the rendered tile.
+  it('draws no badge on a Variants tile, which all land in Design Data', async () => {
     const el = await gallery();
     const tile = $$(el, '.tile').find((t) => t.dataset.className === 'Simulink.VariantConfigurationData')!;
-    expect(tile.dataset.section).toBe('config');
+    expect(tile.dataset.section).toBe('design');
     expect(tile.querySelector('.tile-badge')).toBeNull();
   });
 

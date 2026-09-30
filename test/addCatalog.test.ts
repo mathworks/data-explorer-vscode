@@ -95,6 +95,22 @@ const MODEL_CLASS_OF: Record<string, string> = {
   Constant: 'ConstantNode',
 };
 
+/**
+ * The one tile whose entry comes back under a DIFFERENT MATLAB class than the tile names,
+ * and why that is right rather than the bug check 2 exists to catch.
+ *
+ * `Simulink.VariantConfigurationData` is the name of the data; what a dictionary stores is the
+ * CONTAINER, `Simulink.VariantConfigurations`, which is also what MATLAB's own constructor hands
+ * back for the former name. Measured off a dictionary MATLAB wrote, both formats. The tile keeps
+ * the data spelling because that is the word the tree, the schema and the Property Inspector use;
+ * core's node reads its class from the value it just built, so the row says what the file says.
+ *
+ * A map rather than a skip, so the expected class is asserted rather than excused.
+ */
+const STORED_CLASS_OF: Record<string, string> = {
+  'Simulink.VariantConfigurationData': 'Simulink.VariantConfigurations',
+};
+
 describe('the Add gallery catalog agrees with core', () => {
   for (const tile of allTiles()) {
     describe(tileName(tile), () => {
@@ -112,7 +128,7 @@ describe('the Add gallery catalog agrees with core', () => {
         const node: any = sectionFor(tile.section).addEntry(tile.className);
         expect(node).not.toBeNull();
         if (isMatlabClass(tile.className)) {
-          expect(node.className).toBe(tile.className);
+          expect(node.className).toBe(STORED_CLASS_OF[tile.className] ?? tile.className);
         } else {
           expect(node.constructor.name).toBe(MODEL_CLASS_OF[tile.className]);
         }
@@ -215,29 +231,29 @@ describe('how the catalog states a destination', () => {
     ]);
   });
 
-  // The one exception to the rule above, and the maintainer's ask (F6 2026-09-29): remove the
-  // `Config` badge from `Variant Config`. The badge exists to say where a departing tile's row
-  // lands, and this tile's own label says it — so the badge was the word `Config` drawn twice on
-  // one tile, which reads as a warning about nothing.
+  // There used to be an exception to the rule above, for the maintainer's ask (F6 2026-09-29):
+  // `Variant Config` was the one tile in a design-data category that wrote into Configurations, so
+  // it was badged `Config` — the same word its label already carried, which reads as a warning
+  // about nothing. A `labelStatesSection` flag dropped that badge, and this test held the flag to
+  // being both true and load-bearing.
   //
-  // Two things keep the exception honest rather than making it a way to hide a badge. It has to
-  // be dead-weight-free: a flag on a tile that was never going to be badged says nothing and
-  // would read as a decision. And it has to be TRUE — the label must actually carry the word the
-  // badge would have — because the destination is the one fact about a tile that is not otherwise
-  // on its face, and a tile that drops the badge without saying the word loses it. (The
-  // accessible name carries it either way; that is `addGallery.test.ts`'s claim, not this one.)
-  it('drops a badge only where the label itself names the section', () => {
-    const stated: string[] = [];
+  // MATLAB then answered where the entry actually goes, and it is Design Data: a
+  // `Simulink.VariantConfigurations` in the Configurations section is refused in both file formats
+  // (core's SectionNode carries the measurement). So the tile does not depart from its category at
+  // all any more, the Variants category is uniform, and the general rule badges it for free. The
+  // flag and its exception are gone rather than left true-but-unused. What remains to pin is that
+  // NOTHING departs from a uniform category, which is where the rule can only be got wrong now.
+  it('badges nothing in a uniform category, Variants included', () => {
     for (const category of ADD_CATALOG) {
+      if (!category.uniformSection) continue;
       for (const tile of category.tiles) {
-        if (!tile.labelStatesSection) continue;
-        expect(tile.section).not.toBe(categorySection(category));
-        expect(tile.label).toContain(SECTION_BADGE[tile.section]);
-        expect(badgeOf(category, tile)).toBeNull();
-        stated.push(tileName(tile));
+        expect(tile.section, tileName(tile)).toBe(categorySection(category));
+        expect(badgeOf(category, tile), tileName(tile)).toBeNull();
       }
     }
-    expect(stated).toEqual(['Variant Config (Simulink.VariantConfigurationData → config)']);
+    const variants = ADD_CATALOG.find((c) => c.title === 'Variants');
+    expect(variants?.uniformSection).toBe('design');
+    expect(variants?.tiles.map((t) => t.section)).toEqual(['design', 'design', 'design', 'design', 'design', 'design']);
   });
 
   it('holds the six categories the design names, in order', () => {

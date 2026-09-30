@@ -18,6 +18,7 @@ import {
   findEntryElementSpan,
   findEntriesArrayInsertion,
   detectIndent,
+  indentBefore,
 } from './entrySplice.js';
 import {
   applyTextPatch,
@@ -202,12 +203,17 @@ export function buildClipboardSnapshot(
   });
 }
 
-// Reserialize one entry to text, indented to its array depth (5 levels), the
-// same way applyEdit does. The first line stays un-indented (the splice target
-// begins mid-line at the element's `{`); continuation lines get the full indent.
-export function reserializeEntry(entry: any, indent: string): string {
+// Reserialize one entry to text, lined up behind the element's own `{`, the same way
+// applyEdit does. The first line stays un-indented (the splice target begins mid-line at
+// that `{`); continuation lines get `elementIndent`.
+//
+// `elementIndent` is read from the text by the callers rather than assumed here. It used to
+// be `indent.repeat(5)` — true of every dictionary MATLAB writes, since `entries` sits five
+// levels down in all of them, but it made the element's first line and its remaining lines
+// two separate accounts of one depth, and only one of them was derived from the file.
+export function reserializeEntry(entry: any, indent: string, elementIndent = indent.repeat(5)): string {
   const lines = JSON.stringify(entry.serialize(), null, indent).split('\n');
-  return lines.map((line, i) => (i === 0 ? line : indent.repeat(5) + line)).join('\n');
+  return lines.map((line, i) => (i === 0 ? line : elementIndent + line)).join('\n');
 }
 
 // Replace the owning entry's text in-place with its reserialized form — the
@@ -216,9 +222,9 @@ export function reserializeEntry(entry: any, indent: string): string {
 // and its XML counterpart is xmlStructuralEdit.spliceEntry, which the two XML
 // callers already share.
 function spliceEntry(text: string, entry: any, selectId: string | null): StructuralResult {
-  const entryText = reserializeEntry(entry, detectIndent(text));
   const span = findEntrySpan(text, entrySelectorOf(entry));
   if (!span) throw new Error(`Could not locate entry "${entry.name}" text.`);
+  const entryText = reserializeEntry(entry, detectIndent(text), indentBefore(text, span.offset));
   return patchResult(text, { offset: span.offset, length: span.length, text: entryText }, selectId);
 }
 
@@ -557,13 +563,16 @@ export function createEntry(section: any, className: string): any {
  * under the user on the next full repaint.
  */
 function insertNewEntry(text: string, newNode: any): StructuralResult {
-  const indent = detectIndent(text);
-  const entryText = reserializeEntry(newNode, indent);
   const insertion = findEntriesArrayInsertion(text);
   if (!insertion) throw new Error('Could not locate the entries array.');
+  const entryText = reserializeEntry(newNode, detectIndent(text), insertion.elementIndent);
 
-  const prefix = insertion.needsLeadingComma ? ',\n' + insertion.elementIndent : insertion.elementIndent;
-  const inserted = prefix + entryText;
+  // The line break is unconditional: an element always starts its own line, whether it
+  // follows a sibling or opens an empty array. Omitting it in the empty case left the first
+  // element sitting on the `[` line, which is not what MATLAB writes AND made the next
+  // insert read `"entries": [` as that element's indentation.
+  const prefix = (insertion.needsLeadingComma ? ',' : '') + '\n' + insertion.elementIndent;
+  const inserted = prefix + entryText + insertion.trailingBreak;
   return patchResult(text, { offset: insertion.offset, length: 0, text: inserted }, newNode.id);
 }
 

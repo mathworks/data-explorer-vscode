@@ -164,6 +164,49 @@ describe('an add creates the entry core says it creates', () => {
     expect(sectionNames(getModel(uri, 'arch.sldd', working), 'design')).toEqual(sectionNames(fresh, 'design'));
   });
 
+  it('adds twice into an EMPTY entries array without corrupting the file', () => {
+    // The regression, and it took two adds to see: the first insert into `"entries": []`
+    // left the new element on the `[` line, which is not what MATLAB writes — and worse,
+    // it made the SECOND insert read `"entries": [` as that element's indentation and copy
+    // it into the document verbatim, so the file stopped being JSON.
+    //
+    // One add looked fine, which is why nothing caught it. `empty_text.sldd` is a
+    // MATLAB-authored dictionary with the entries removed, i.e. the state a customer is in
+    // the first time they use the gallery on a dictionary they just emptied.
+    const uri = 'test://add-into-empty.sldd';
+    const emptyText = readFileSync(fixture('empty_text.sldd'), 'utf8');
+    expect(emptyText, 'fixture must actually hold an empty entries array').toMatch(
+      /"entries":\s*\[\s*\]/,
+    );
+    const { model } = openJson(uri, emptyText, 'empty_text.sldd');
+    const design = sectionByName(model, 'design');
+
+    let working = emptyText;
+    for (let i = 0; i < 2; i++) {
+      working = addNewEntry(working, design, 'Simulink.Parameter').newText;
+      // Parsed after EVERY add, not just at the end — the corruption was introduced by the
+      // second one and a single check at the end cannot say which add broke it.
+      expect(() => JSON.parse(working), `after add ${i + 1}`).not.toThrow();
+    }
+
+    invalidate(uri);
+    const reread = getModel(uri, 'empty_text.sldd', working);
+    expect(sectionNames(reread, 'design')).toEqual(
+      (design.children as any[]).map((e) => e.name),
+    );
+    expect(sectionNames(reread, 'design')).toHaveLength(2);
+    // And the layout is MATLAB's: `[` ends its line, each element opens one of its own, and
+    // the element is indented one level in from the line the array itself sits on — which is
+    // what the second add reads to indent ITS element. `[ \t]` rather than `\s` on purpose:
+    // `\s` spans the newline, so `/\[\s*\{/` matches correct output too and asserts nothing.
+    const open = /(\t*)"entries": \[[ \t]*\n(\t*)\{/.exec(working);
+    expect(open, 'the `[` must end its line and the first element must open the next').toBeTruthy();
+    const [, arrayIndent, elementIndent] = open!;
+    expect(elementIndent).toBe(arrayIndent + '\t');
+    // …and `]` comes back out to the array's own indent, on a line of its own.
+    expect(working).toContain(`\n${arrayIndent}],`);
+  });
+
   it('refuses a class the section does not allow, and says which section refused', () => {
     // Architectural Data stopped allowing a Signal in core v1.26.0 — the change this
     // gallery's catalog was built against. The gallery offers no such tile; reaching this

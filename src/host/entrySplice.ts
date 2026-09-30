@@ -103,31 +103,67 @@ export function findEntryElementSpan(
 }
 
 /**
+ * The whitespace immediately before `offset` — for normally formatted text, the indent of
+ * the line `offset` sits on.
+ *
+ * Deliberately NOT "everything between the line start and `offset`". An entries element is
+ * not guaranteed to begin its line: a minified dictionary puts every element on one line,
+ * and our own insert into an EMPTY array used to leave the first element on the `[` line.
+ * Slicing the whole line prefix then treated `"entries": [` as indentation and copied it
+ * into the file verbatim, producing a document that no longer parsed as JSON — so the
+ * second add to a freshly emptied dictionary corrupted it. Taking only the whitespace run
+ * degrades to `''` on a minified file instead, which is the right answer there.
+ */
+export function indentBefore(text: string, offset: number): string {
+  let i = offset;
+  while (i > 0 && (text[i - 1] === ' ' || text[i - 1] === '\t')) i--;
+  return text.slice(i, offset);
+}
+
+/**
  * Compute where to INSERT a new element in the entries array and how the array
- * is indented, so paste can append a uniquely-named entry. Returns:
+ * is indented, so paste and add can append a uniquely-named entry. Returns:
  *  - `offset`: text offset to insert at (just after the last element, or just
  *    inside `[` for an empty array),
  *  - `needsLeadingComma`: whether a `,` must precede the inserted element,
- *  - `elementIndent`: the leading whitespace of existing elements (for lining
- *    the new element up), or a best-effort default for an empty array.
+ *  - `elementIndent`: the whitespace the new element's `{` should sit behind,
+ *  - `trailingBreak`: text that must follow the element — the line break and array
+ *    indent that put the closing `]` back on its own line when the array was empty,
+ *    and `''` when an existing element already established that layout.
  * Returns null if the entries array can't be found.
  */
-export function findEntriesArrayInsertion(
-  text: string,
-): { offset: number; needsLeadingComma: boolean; elementIndent: string } | null {
+export function findEntriesArrayInsertion(text: string): {
+  offset: number;
+  needsLeadingComma: boolean;
+  elementIndent: string;
+  trailingBreak: string;
+} | null {
   const index = indexEntries(text);
   if (!index) return null;
   const elements = index.elements;
   if (elements.length > 0) {
     const last = elements[elements.length - 1];
-    // Indent = whitespace on the line where the last element begins.
-    const lineStart = text.lastIndexOf('\n', last.offset - 1) + 1;
-    const elementIndent = text.slice(lineStart, last.offset);
-    return { offset: last.offset + last.length, needsLeadingComma: true, elementIndent };
+    return {
+      offset: last.offset + last.length,
+      needsLeadingComma: true,
+      elementIndent: indentBefore(text, last.offset),
+      trailingBreak: '',
+    };
   }
   // Empty array `[]` or `[ ]`: insert just after the `[`, which is where the scan anchored.
-  const baseIndent = detectIndent(text);
-  return { offset: index.arrayStart + 1, needsLeadingComma: false, elementIndent: baseIndent.repeat(5) };
+  //
+  // The depth is DERIVED from the array's own line rather than assumed: `entries` sits five
+  // levels deep in every dictionary MATLAB writes, but hardcoding that made the one case
+  // with nothing to copy from the only case that could be wrong, and it is the case a brand
+  // new dictionary hits first.
+  const arrayLineStart = text.lastIndexOf('\n', index.arrayStart) + 1;
+  const arrayIndent = /^[ \t]*/.exec(text.slice(arrayLineStart, index.arrayStart))![0];
+  return {
+    offset: index.arrayStart + 1,
+    needsLeadingComma: false,
+    elementIndent: arrayIndent + detectIndent(text),
+    trailingBreak: '\n' + arrayIndent,
+  };
 }
 
 /**
