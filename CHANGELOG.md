@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.30.0] — 2026-09-30
+
+A Managed Simulink Project's page now says what kind of project it is and names the two dictionaries the type keeps apart: `interface` for the types the project publishes to everything that references it, `private` for the values only it sees, each one a link to the dictionary it is and each with a sentence saying what it is for. A project that keeps no private values draws that half as absent rather than hiding it, the shared configuration set is named where there is one, and the projects it references are called components and open their own project page instead of revealing a folder. Clicking a project in the Simulink Data Explorer tree now opens its page too — the group header is the `.prj`, and it used to be the one row in the tree that did nothing when clicked
+
 ## [1.29.0] — 2026-09-30
 
 A MATLAB Project opens as a page about the project instead of a table of four sections: what runs when it opens and closes, numbered in the order MATLAB runs them; its shortcuts under the groups it files them in; the MATLAB path; the folders it designates for simulation cache and generated code; its label catalog with how many members carry each label; and the projects it references. Every file it names is a hyperlink that opens that file — or reveals the folder, where the project named a folder — and a section long enough to need one has a search box
