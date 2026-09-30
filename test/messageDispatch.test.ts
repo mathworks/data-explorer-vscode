@@ -11,6 +11,11 @@
 //   BinarySlddEditorProvider  a compressed-binary `.sldd`, editable, no text at all
 //   BinaryEditorProvider      `.slx` / `.mdl` / `.mat` / `.prj`, read-only
 //
+// BinaryEditorProvider serves TWO webviews, because `.prj` shows a main page instead of a
+// table (see core's ProjectPage.ts): one dispatch chain, two vocabularies. So a provider's
+// branches are checked against the union of the protocols it actually serves, and which
+// ones those are is read off the shell builder it calls rather than listed here.
+//
 // The first two are the SAME dictionary in two on-disk formats, which is exactly the
 // shape of the recurring defect in this codebase: one rule, two paths, and the copies
 // drift. A chain that omits a branch does not fail, warn, or log — the message arrives
@@ -58,6 +63,7 @@ function discriminantsOf(unionName: string): string[] {
 }
 
 const VOCABULARY = discriminantsOf('TableToHostMessage');
+const PAGE_VOCABULARY = discriminantsOf('ProjectToHostMessage');
 
 // ── the tiers ─────────────────────────────────────────────────────────────────────
 // Every message a provider may legitimately skip is skippable for a REASON, and the
@@ -93,11 +99,19 @@ const EDITING = [
 // jump into. A binary editor that answered this would have to invent a location.
 const TEXT_BACKED_ONLY = ['locateInText'];
 
+// What only the project PAGE can say. Derived rather than listed, so a message added to
+// `ProjectToHostMessage` lands here automatically and the per-provider test below starts
+// demanding it of whoever renders the page. `ready` is in both protocols and stays in
+// ALWAYS: it is the same handshake either way.
+const PAGE_ONLY = PAGE_VOCABULARY.filter((t) => !VOCABULARY.includes(t));
+
 // ── the providers ─────────────────────────────────────────────────────────────────
 interface Provider {
   file: string;
   /** vscode interface it declares, which is what puts it in a tier. */
   contract: string;
+  /** Whether it serves the non-table project page, and so speaks its protocol too. */
+  rendersPage: boolean;
   handled: Set<string>;
 }
 
@@ -112,6 +126,9 @@ const PROVIDERS: Provider[] = [
   return {
     file: file.replace('src/host/', ''),
     contract: contract![1],
+    // Read off the shell it builds, not listed: a provider that stopped rendering the page
+    // would stop being asked for the page's messages, in one edit.
+    rendersPage: /renderProjectWebview\(/.test(source),
     handled: new Set([...source.matchAll(/msg\??\.type\s*===\s*'([^']+)'/g)].map((m) => m[1])),
   };
 });
@@ -151,6 +168,15 @@ describe('every message belongs to exactly one capability tier', () => {
     expect([...tiered].sort()).toEqual([...VOCABULARY].sort());
     expect(new Set(tiered).size, 'and no message is in two tiers').toBe(tiered.length);
   });
+
+  it('partitions the project page\'s protocol too', () => {
+    // The same forcing function for the second webview. A message the page can send that
+    // is neither shared with the table nor page-only is a message nobody decided about.
+    expect([...PAGE_VOCABULARY].sort()).toEqual(
+      [...ALWAYS.filter((t) => PAGE_VOCABULARY.includes(t)), ...PAGE_ONLY].sort(),
+    );
+    expect(PAGE_ONLY.length, 'and the page says something of its own').toBeGreaterThan(0);
+  });
 });
 
 describe('each editor answers everything its contract makes meaningful', () => {
@@ -181,11 +207,22 @@ describe('each editor answers everything its contract makes meaningful', () => {
       expect(provider.handled.has('locateInText')).toBe(isTextBacked(provider));
     });
 
+    it(`${provider.file} answers the page's own messages only if it renders the page`, () => {
+      // Both directions. A provider that renders the page and ignores `openFile` ships
+      // links that do nothing when clicked — the page's whole point. One that answers it
+      // without rendering a page has a branch no webview can ever reach.
+      const missing = PAGE_ONLY.filter((t) => !provider.handled.has(t));
+      expect(missing.length === 0, `${provider.file} ignores ${missing.join(', ')}`).toBe(
+        provider.rendersPage,
+      );
+    });
+
     it(`${provider.file} answers nothing outside the protocol`, () => {
       // A stale or mistyped branch is unreachable code that reads as a working feature.
       // tsc catches most of these on the union's discriminant, but only where the value
       // is actually typed as `TableToHostMessage` at the comparison.
-      const unknown = [...provider.handled].filter((t) => !VOCABULARY.includes(t));
+      const spoken = provider.rendersPage ? [...VOCABULARY, ...PAGE_VOCABULARY] : VOCABULARY;
+      const unknown = [...provider.handled].filter((t) => !spoken.includes(t));
       expect(unknown).toEqual([]);
     });
   }
@@ -195,7 +232,7 @@ describe('every setRows says which document it is describing', () => {
   // The webview answers a link into its own document itself (webview/linkRoute.ts), which
   // it can only do if it knows which document that is. `webview.postMessage` takes `any`,
   // so omitting the field at one of these call sites is not a type error, and the symptom
-  // is silent: that one view's local links take the host round-trip instead. Four posts
+  // is silent: that one view's local links take the host round-trip instead. Three posts
   // across three providers is exactly the shape this file exists for.
   const posts = PROVIDERS.map((p) => ({
     file: p.file,
@@ -204,15 +241,38 @@ describe('every setRows says which document it is describing', () => {
     ),
   }));
 
-  it('finds all four posts, so none of them is missed below', () => {
+  it('finds all three posts, so none of them is missed below', () => {
     // A regex that matched nothing would make the loop vacuous.
-    expect(posts.reduce((n, p) => n + p.bodies.length, 0)).toBe(4);
+    expect(posts.reduce((n, p) => n + p.bodies.length, 0)).toBe(3);
   });
 
   for (const { file, bodies } of posts) {
     it(`${file} sets docUri on each of its ${bodies.length} setRows posts`, () => {
       expect(bodies.length).toBeGreaterThan(0);
       for (const body of bodies) expect(body).toContain('docUri');
+    });
+  }
+});
+
+describe('every setProject says where the project is', () => {
+  // The same hole, on the page's payload. `root` is the project folder's path, and the page
+  // cannot derive it: a project store records nothing absolute, by design. Omit it and the
+  // page renders `undefined` under the project's name, which no type will catch because
+  // `webview.postMessage` takes `any`.
+  const bodies = PROVIDERS.flatMap((p) =>
+    [...read(`src/host/${p.file}`).matchAll(/postMessage\(\{\s*type: 'setProject'([\s\S]*?)\}\)/g)].map(
+      (m) => ({ file: p.file, body: m[1] }),
+    ),
+  );
+
+  it('finds the post, so the assertion below is not vacuous', () => {
+    expect(bodies.length).toBeGreaterThan(0);
+  });
+
+  for (const { file, body } of bodies) {
+    it(`${file} sets page and root on its setProject post`, () => {
+      expect(body).toContain('page:');
+      expect(body).toContain('root:');
     });
   }
 });

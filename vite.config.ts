@@ -36,6 +36,7 @@ export default defineConfig({
       input: {
         table: resolve(__dirname, 'src/webview/table.html'),
         pi: resolve(__dirname, 'src/webview/pi.html'),
+        project: resolve(__dirname, 'src/webview/project.html'),
       },
       output: {
         entryFileNames: '[name].js',

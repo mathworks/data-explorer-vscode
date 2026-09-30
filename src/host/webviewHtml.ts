@@ -86,3 +86,19 @@ ${BANNERS_HTML}
     <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>`,
   });
 }
+
+// WHAT A PROJECT'S DOCUMENT IS: nothing. The page container, the error banner and
+// the page's own <style> are all created by project-main.ts, so this shell and
+// vite's dev shell (src/webview/project.html) are the same empty body — unlike the
+// table's, there is no markup here for that static file to hand-copy and get wrong.
+//
+// A `.prj` shows a PAGE rather than a table for the reason core's ProjectPage.ts
+// records: MATLAB opens no document tab for a project, and the folder tree a table
+// would show is already in VS Code's Explorer.
+export function renderProjectWebview(webview: vscode.Webview, distRoot: vscode.Uri): string {
+  return renderWebviewHtml(webview, distRoot, {
+    scriptFile: 'project.js',
+    title: 'MATLAB Project',
+    body: '',
+  });
+}

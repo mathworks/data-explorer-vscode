@@ -16,6 +16,7 @@
 // mapped with narrower callbacks, so a stricter element type would introduce new
 // contravariant-callback errors rather than catch real bugs.
 
+import type { ProjectPage } from 'data-explorer-core';
 import type { SectionRule } from '../host/sectionRules.js';
 import type { DragDescriptor } from '../host/dragState.js';
 import type { ClipboardMode } from '../host/clipboard.js';
@@ -223,6 +224,32 @@ export interface EmptyMessage {
   type: 'empty';
 }
 
+// --- Host -> Webview (project main page: project-main.ts) ---------------------
+
+/**
+ * Render a project's main page.
+ *
+ * One message and one repaint: unlike the table there is no entry-scoped update to
+ * make, because a `.prj` is never edited here and the only thing that changes the
+ * page is the store changing on disk — at which point every figure on it is stale.
+ *
+ * `root` is the one thing the page cannot derive. The store records nothing absolute
+ * (that is what keeps a project portable), so the folder path shown under the
+ * project's name comes from the document URI, which only the host has.
+ */
+export interface SetProjectMessage {
+  type: 'setProject';
+  /** core's `buildProjectPage` output — every figure on the page is derived there. */
+  page: ProjectPage;
+  /** The project folder's filesystem path, for display. */
+  root: string;
+  /** What the parse could not read — absent for a clean read. */
+  warnings?: WarningBanner;
+}
+
+/** Every message the project page can receive from the host. */
+export type HostToProjectMessage = SetProjectMessage | ErrorMessage;
+
 /** Every message the table webview can receive from the host. */
 export type HostToTableMessage =
   | SetRowsMessage
@@ -369,6 +396,28 @@ export type TableToHostMessage =
   | DragStartMessage
   | DragEndMessage
   | DropMessage;
+
+/**
+ * A link on the project page was activated: open what it names.
+ *
+ * Carries a PROJECT-ROOT-RELATIVE path, which is how core's parse spells every path
+ * in the store, and resolving it is the host's job because only the host knows where
+ * the project root is. Deliberately not `NavigateMessage`, which names a row inside
+ * an already-open document (`name@srcId`); this names a file on disk that may not be
+ * open at all.
+ *
+ * What to DO with it is decided by the host after it stats the target, not stated
+ * here: a folder cannot be opened as an editor, and the store does not say which of
+ * the two a path is — a shortcut can target a folder, and a designated location
+ * usually does.
+ */
+export interface OpenFileMessage {
+  type: 'openFile';
+  path: string;
+}
+
+/** Every message the host receives from the project page. */
+export type ProjectToHostMessage = ReadyMessage | OpenFileMessage;
 
 /** Every message the host receives from the property-inspector webview. */
 // `NavigateMessage` is reused rather than reinvented: a clicked cross-reference means the

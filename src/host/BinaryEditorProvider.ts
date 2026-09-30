@@ -1,32 +1,81 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
-import { renderTableWebview } from './webviewHtml.js';
-import { getModelForBinaryTab, getProjectModel, invalidate } from './SlddModel.js';
+import { renderProjectWebview, renderTableWebview } from './webviewHtml.js';
+import { getModelForBinaryTab, invalidate } from './SlddModel.js';
 import { forgetChangedSource, parsedModelForTab } from './sourceReads.js';
-import {
-  buildRows,
-  COLUMNS,
-  COLUMN_LABELS,
-  COLUMN_GROUPS,
-  PROJECT_COLUMNS,
-  PROJECT_COLUMN_LABELS,
-} from './rowBuilder.js';
+import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS } from './rowBuilder.js';
 import { buildMatRows } from './matRowBuilder.js';
 import { readProjectStore } from './projectStore.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, exceedsStringDecodeLimit, isZipBytes } from './slddFormat.js';
 import { annotateDataRows, annotateModelRows } from './usageGraph.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
-import { basename } from '../common/pathUtil.js';
+import { basename, projectPathSegments } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import { seededRead } from './seededRead.js';
-import { isMatFile, isModelFile, isProjectFile, isSlddFile } from 'data-explorer-core';
-import type { TableToHostMessage } from '../common/protocol.js';
+import {
+  buildProjectPage,
+  isMatFile,
+  isModelFile,
+  isProjectFile,
+  isSlddFile,
+  parseProject,
+  projectNameOf,
+} from 'data-explorer-core';
+import type { ProjectToHostMessage, TableToHostMessage } from '../common/protocol.js';
 
 // viewType of the editable text-backed table (SlddTextEditorProvider). Declared
 // here as a constant to avoid importing the provider (which would be circular).
 const TABLE_VIEW_TYPE = 'dataExplorer.tableView';
 const BINARY_SLDD_VIEW_TYPE = 'dataExplorer.binarySlddView';
+
+/**
+ * The folder a project's paths are relative to: the one holding the `.prj`.
+ *
+ * Every path in a project store is spelled relative to this and nothing else — that
+ * is what lets a project be moved or cloned — so it is the only base a link on the
+ * page can be resolved against.
+ */
+function projectRootOf(prjUri: vscode.Uri): vscode.Uri {
+  return vscode.Uri.joinPath(prjUri, '..');
+}
+
+/**
+ * Answer a link on the project page: open the file, or reveal the folder.
+ *
+ * Which of the two is decided HERE, from the filesystem, and not by the page: the
+ * store does not record it (a shortcut can target a folder, and a designated
+ * location usually does), and a folder cannot be opened as an editor at all.
+ *
+ * A target that does not exist is a normal outcome, not an error — a project names
+ * its Simulink cache folder long before a build creates it, and a path folder can
+ * outlive the folder itself — so it is reported as a message naming the path rather
+ * than swallowed or thrown.
+ */
+async function openProjectPath(rootUri: vscode.Uri, relPath: string): Promise<void> {
+  const target = vscode.Uri.joinPath(rootUri, ...projectPathSegments(relPath));
+  let type: vscode.FileType;
+  try {
+    type = (await vscode.workspace.fs.stat(target)).type;
+  } catch {
+    void vscode.window.showWarningMessage(
+      `This project refers to ${relPath}, which is not there.`,
+    );
+    return;
+  }
+  // A bitmask, not an enum value: a symlinked folder is Directory|SymbolicLink, and
+  // an equality check reads it as a file and then fails to open it.
+  if (type & vscode.FileType.Directory) {
+    // `revealInExplorer` only reveals what the Explorer is showing, so a project
+    // opened as a lone file — outside every workspace folder — would answer the
+    // click with nothing at all. Hand those to the OS file manager instead, which is
+    // the only view of such a folder there is.
+    const inWorkspace = vscode.workspace.getWorkspaceFolder(target) !== undefined;
+    await vscode.commands.executeCommand(inWorkspace ? 'revealInExplorer' : 'revealFileInOS', target);
+    return;
+  }
+  await vscode.commands.executeCommand('vscode.open', target);
+}
 
 // Custom document. Read-only for all binary formats (.slx, .mat, .prj, zipped
 // .sldd). There is NO in-memory working-copy string: the file on disk is the
@@ -202,22 +251,22 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           // The .prj is an empty marker; the project structure lives in the
           // sibling resources/project/** store, read into a project-root-
           // relative POSIX relpath map for the parser.
+          //
+          // A PAGE, not a table — see core's ProjectPage.ts. Straight from
+          // `parseProject` rather than through the node tree the other formats build:
+          // what the page shows is the parse itself (run order, groups, label
+          // coverage), and a tree of rows is a shape none of that survives.
           const files = await readProjectStore(document.uri);
-          const node = getProjectModel(uriString, name, files);
-          const rows = buildRows(node);
+          const parsed = parseProject(files, projectNameOf(name));
           webview.postMessage({
-            type: 'setRows',
-            docUri: uriString,
-            rows,
-            columns: PROJECT_COLUMNS,
-            columnLabels: PROJECT_COLUMN_LABELS,
-            editable: false,
+            type: 'setProject',
+            page: buildProjectPage(parsed),
+            root: projectRootOf(document.uri).fsPath,
             // A project is the format this matters most for: its store is read by
             // convention with no schema, so a document that did not survive its trip
-            // costs whatever entity it described and leaves a table that looks whole.
-            warnings: warningBanner(sourceWarnings(node)),
+            // costs whatever entity it described and leaves a page that looks whole.
+            warnings: warningBanner(parsed.warnings),
           });
-          drainNavigateSelect(webview, uriString);
           return;
         }
 
@@ -285,9 +334,15 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
 
     // Register listeners BEFORE assigning webview.html, so a fast-booting
     // webview cannot post 'ready' before we are subscribed to receive it.
-    const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
+    const sub = webview.onDidReceiveMessage((msg: TableToHostMessage | ProjectToHostMessage) => {
       if (msg?.type === 'ready') {
         void post();
+      } else if (msg?.type === 'openFile') {
+        // Only the project page sends this, and only the host can answer it: the path
+        // is project-root-relative, and the page has no idea where that root is.
+        if (typeof msg.path === 'string' && msg.path.length > 0) {
+          void openProjectPath(projectRootOf(document.uri), msg.path);
+        }
       } else if (msg?.type === 'select') {
         // Relay the selection to the Property Inspector via the wired callback.
         this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
@@ -329,7 +384,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     const changeSub = watcher.onDidChange(onDiskChange);
     const createSub = watcher.onDidCreate(onDiskChange);
 
-    webview.html = this.getHtml(webview, distRoot);
+    webview.html = this.getHtml(webview, distRoot, name);
     webviewPanel.onDidDispose(() => {
       sub.dispose();
       watcher.dispose();
@@ -354,7 +409,14 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     return tab?.isPreview ?? true;
   }
 
-  private getHtml(webview: vscode.Webview, distRoot: vscode.Uri): string {
-    return renderTableWebview(webview, distRoot);
+  private getHtml(webview: vscode.Webview, distRoot: vscode.Uri, name: string): string {
+    // The only format this editor owns that is not a table. Decided from the NAME
+    // rather than from a second viewType, because nothing else about the tab differs
+    // — same document, same read-only custom editor, same activation — and a
+    // viewType per body would put a `package.json` contribution and an openWith
+    // redirect in the way of a different <script src>.
+    return isProjectFile(name)
+      ? renderProjectWebview(webview, distRoot)
+      : renderTableWebview(webview, distRoot);
   }
 }
