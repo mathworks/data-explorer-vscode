@@ -166,9 +166,9 @@ export interface SelectRowsMessage {
  * Put a row's Name cell straight into inline rename.
  *
  * Sent after the `selectRows` for an entry the host has just CREATED from the Add gallery,
- * because a new entry's name is the one thing the gallery cannot supply: core names it
- * `Parameter`, `Parameter1`, `Parameter2`, and the user's next act is always to say what it
- * really is. Stated by the host rather than inferred in the webview from "a selectRows that
+ * because a new entry's name is the one thing the gallery cannot supply: core names it from the
+ * class's own stem — `Param`, `Param1`, `Param2` for a `Simulink.Parameter` — and the user's
+ * next act is always to say what it really is. Stated by the host rather than inferred in the webview from "a selectRows that
  * arrived with an insert" — a paste and a drop are exactly that too, and their names came
  * from the entries the user already had.
  *

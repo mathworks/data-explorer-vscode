@@ -170,8 +170,9 @@ function applyPendingSelection(): void {
 }
 
 // A row the host asked us to open the name editor on once it exists. Set only by an add
-// from the gallery: core names a new entry `Parameter`, `Parameter1`, … and saying what it
-// really is is the user's next act (see BeginRenameMessage). Held until the row arrives for
+// from the gallery: core names a new entry from its class's stem (`Param`, `Param1`, … for a
+// Simulink.Parameter) and saying what it really is is the user's next act (see
+// BeginRenameMessage). Held until the row arrives for
 // the same reason pendingSelectIds is — the request travels beside the repaint that carries
 // the row, and nothing here may assume which lands first.
 let pendingRenameId: string | null = null;
