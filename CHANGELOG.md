@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.28.3] — 2026-09-30
+
+Every GitHub Release now carries a `SHA256SUMS` file beside the `.vsix`, so a download can be checked with `sha256sum -c SHA256SUMS` before it is installed
+
 ## [1.28.2] — 2026-09-30
 
 Getting Started installs the extension from the Visual Studio Code Marketplace, in the Extensions view or from the command line; installing a downloaded `.vsix` by hand is still documented, as the optional path below it

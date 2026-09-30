@@ -49,10 +49,20 @@ jobs:
           fi
           npx vsce package --out "simulink-data-explorer-${VERSION}.vsix"
 
+      # Attach a checksum so a download can be checked with
+      # `sha256sum -c SHA256SUMS`. This catches a corrupted or truncated
+      # download; it is not a signature and proves nothing about who built the
+      # .vsix (that would need build provenance attestation).
+      - name: Checksum VSIX
+        run: |
+          sha256sum simulink-data-explorer-*.vsix | tee SHA256SUMS
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          files: simulink-data-explorer-*.vsix
+          files: |
+            simulink-data-explorer-*.vsix
+            SHA256SUMS
           generate_release_notes: true
 
       # Publishing to the VS Code Marketplace is done manually: download the
