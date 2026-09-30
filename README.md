@@ -41,21 +41,32 @@ It adds a native experience for Simulink file types — a **Simulink Data Explor
 
 ## Getting Started
 
-1. Install the extension. Download the latest `.vsix` from the
-   [Releases page](https://github.com/mathworks/data-explorer-vscode/releases),
-   then install it either from the command line:
+1. Install **Simulink Data Explorer** from the
+   [Visual Studio Code Marketplace](https://marketplace.visualstudio.com/items?itemName=mathworks.simulink-data-explorer):
+   open the Extensions view (<kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd>),
+   search for *Simulink Data Explorer*, and click **Install**. Or, from the command line:
 
    ```sh
-   code --install-extension simulink-data-explorer-<version>.vsix
+   code --install-extension mathworks.simulink-data-explorer
    ```
-
-   or from within VS Code via the Extensions view → **⋯** menu →
-   **Install from VSIX…**.
 2. Open a folder or workspace that contains Simulink files.
 3. Click the **Simulink Data Explorer** icon in the activity bar to see the relationship tree.
 4. Open any supported file (`.slx`, `.mdl`, `.sldd`, `.mat`, `.prj`) — it opens in the Data Explorer table by default. Select a row to inspect it in the Properties panel.
 
 For a textual `.sldd`, you can switch to the raw JSON via **View: Reopen Editor With… → Text Editor** (or right-click the editor tab → **Reopen Editor With…**).
+
+### Optional: install from a `.vsix`
+
+If you'd rather install a specific build by hand — for an air-gapped machine, or to
+pick up a release before it reaches the Marketplace — download the `.vsix` from the
+[Releases page](https://github.com/mathworks/data-explorer-vscode/releases) and
+install it either from the command line:
+
+```sh
+code --install-extension simulink-data-explorer-<version>.vsix
+```
+
+or from within VS Code via the Extensions view → **⋯** menu → **Install from VSIX…**.
 
 ## Supported Files
 

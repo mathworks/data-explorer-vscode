@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.28.2] — 2026-09-30
+
+Getting Started installs the extension from the Visual Studio Code Marketplace, in the Extensions view or from the command line; installing a downloaded `.vsix` by hand is still documented, as the optional path below it
+
 ## [1.28.1] — 2026-09-30
 
 Every entry the `⊞ Add` gallery creates was compared against one MATLAB creates itself, in both dictionary formats, and four differences were closed: a variant configuration now lands in Design Data, where MATLAB keeps it and where MATLAB was refusing it before; a configuration reference is named the way MATLAB requires; and two classes whose state MATLAB stores as a single struct are written and read back intact in the compressed-binary format, so opening a dictionary and saving it no longer empties them
