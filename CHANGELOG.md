@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.29.0] — 2026-09-30
+
+A MATLAB Project opens as a page about the project instead of a table of four sections: what runs when it opens and closes, numbered in the order MATLAB runs them; its shortcuts under the groups it files them in; the MATLAB path; the folders it designates for simulation cache and generated code; its label catalog with how many members carry each label; and the projects it references. Every file it names is a hyperlink that opens that file — or reveals the folder, where the project named a folder — and a section long enough to need one has a search box
+
 ## [1.28.4] — 2026-09-30
 
 Opening a data dictionary no longer warns that the System Composer interface dictionary part "holds nothing readable" when that part is simply empty, which is what MATLAB writes into any dictionary System Composer has touched; the file is complete, and the entry kinds shown without a catalog were measured to be the ones MATLAB reports without it too
