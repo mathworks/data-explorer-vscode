@@ -344,3 +344,37 @@ describe('Name.element coloring is structural and format-independent', () => {
     }
   });
 });
+
+describe('an entry with more rows than the engine takes call arguments', () => {
+  // `rows.push(...buildEntryRows(entry, ...))` spread ONE entry's rows as call
+  // arguments, and V8 takes somewhere between 100,000 and 125,000 of them before it
+  // throws `RangeError: Maximum call stack size exceeded`. A 1000x1000 double is what
+  // found it — one entry, 1,000,001 rows — and the throw surfaced to the customer as
+  // `Failed to parse <file>: Maximum call stack size exceeded`, naming the parse,
+  // which had succeeded in a second.
+  //
+  // Core now caps element expansion, so no single ARRAY reaches that count. This is
+  // still reachable and still a bug: the limit is per entry, not per array, and a
+  // struct of a dozen capped arrays clears it — on a dictionary this host has already
+  // measured at 128,111 rows. nameIndex.ts avoids the same trap with the same comment.
+  //
+  // Duck-typed nodes on purpose: the defect is in how buildRows APPENDS what
+  // buildEntryRows returns, so the test needs one entry returning a great many rows,
+  // not a 125,000-row fixture file.
+  const wideEntry = (count: number) => {
+    const nodes = Array.from({ length: count }, (_, i) => ({
+      id: 'n' + i,
+      toRow: () => ({ ID: 'n' + i, parent: null, Name: { label: 'n' + i }, Value: '' }),
+    }));
+    const entry = { id: 'n0', name: 'wide', flatten: () => nodes };
+    return { children: [{ name: 'design', displayName: 'Design Data', children: [entry] }] };
+  };
+
+  it('builds every row instead of overflowing the argument limit', () => {
+    const count = 200000;
+    const rows = buildRows(wideEntry(count));
+    // +1 for the section's own row.
+    expect(rows.length).toBe(count + 1);
+    expect(rows[rows.length - 1].ID).toBe('n' + (count - 1));
+  });
+});

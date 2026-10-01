@@ -104,8 +104,19 @@ export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: Cli
     // PRECONDITION (untested) for `|| []`: a parsed section always has a children
     // array (empty when the section holds nothing), so the fallback never fires.
     // Kept because a missing array here would blank the WHOLE table, not one row.
+    // NB: append with a loop, not `rows.push(...entryRows)`. ONE entry can flatten to
+    // more rows than the engine takes call arguments — V8 throws `Maximum call stack
+    // size exceeded` somewhere between 100,000 and 125,000 — and a 1000x1000 double
+    // produced 1,000,001 rows from a single entry. The customer saw it as
+    // `Failed to parse <file>: Maximum call stack size exceeded`, which named the
+    // parse, the one stage that had worked. Core now caps element expansion, so no
+    // single array reaches that count, but the limit is per ENTRY: a struct of a dozen
+    // capped arrays still clears it on a dictionary the size this pool was measured
+    // against. nameIndex.ts avoids the same trap the same way.
     for (const entry of (section.children || []) as any[]) {
-      rows.push(...buildEntryRows(entry, section.name, modifiedNames, clipMark, pool));
+      for (const row of buildEntryRows(entry, section.name, modifiedNames, clipMark, pool)) {
+        rows.push(row);
+      }
     }
   }
   return rows;
