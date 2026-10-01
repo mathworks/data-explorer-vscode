@@ -34,9 +34,14 @@ async function readDirInto(
   for (const [name, type] of entries) {
     const childUri = vscode.Uri.joinPath(dirUri, name);
     const childRel = `${relDir}/${name}`;
-    if (type === vscode.FileType.Directory) {
+    // A bitmask, not an enum value — the same reason `openProjectPath` masks in
+    // BinaryEditorProvider: a symlinked entry is Directory|SymbolicLink or
+    // File|SymbolicLink, so an equality test matches neither and the store
+    // document is skipped in silence, leaving the project looking as though that
+    // part of it were never written.
+    if (type & vscode.FileType.Directory) {
       await readDirInto(childUri, childRel, out);
-    } else if (type === vscode.FileType.File && /\.xml$/i.test(name)) {
+    } else if (type & vscode.FileType.File && /\.xml$/i.test(name)) {
       // Case-insensitive for the same reason as the extensions in common/fileTypes:
       // these names come off a case-insensitive filesystem, so an `.XML` store
       // document would be silently skipped and cost whatever entity it described.
