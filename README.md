@@ -1,42 +1,29 @@
 # Simulink Data Explorer Extension for Visual Studio Code
 
-**Explore Simulink&reg; models, data dictionaries, and projects directly in Visual Studio Code — no MATLAB&reg; or Simulink installation required.** Simulink Data Explorer reads `.slx`, `.mdl`, `.sldd`, `.mat`, and `.prj` files directly, so you can browse their contents and relationships anywhere VS Code runs.
-
-It adds a native experience for Simulink file types — a **Simulink Data Explorer sidebar** that maps how your models, dictionaries, and projects relate, a **table editor** to browse the contents of each file, and a **Properties panel** to inspect the selected entry — without leaving your editor. `.sldd` data dictionaries are **editable** directly in the table; other formats open read-only.
+**Explore Simulink&reg; models, data dictionaries, and projects directly in Visual Studio Code — no MATLAB&reg; or Simulink installation required.** Simulink Data Explorer reads `.slx`, `.mdl`, `.sldd`, `.mat`, and `.prj` files itself, so it works anywhere VS Code runs, including machines and CI agents with no MATLAB install. It adds a **relationship tree** that maps how your files reference each other, a **table editor** for browsing and editing their contents, and a **Properties panel** for the selected entry.
 
 ![Simulink Data Explorer in action: the relationship-tree sidebar and the table editor browsing a model, data dictionary, and MAT-file](media/screenshots/demo.gif)
-
-## Why Simulink Data Explorer?
-
-- **Read Simulink files without MATLAB or Simulink** — inspect `.slx`, `.mdl`, `.sldd`, `.mat`, and `.prj` files anywhere VS Code runs, including on machines and CI agents with no MATLAB install.
-- **See how your project fits together** — a relationship tree maps every model, dictionary, and MAT-file and how they reference each other, with at-a-glance health badges for cycles, orphans, and missing references.
-- **Click through references like hyperlinks** — jump from a model to the models, dictionaries, and MAT-files it depends on in one click.
-- **Edit data dictionaries in place** — change values, add elements, and cut/copy/paste entries in a spreadsheet-style table, with undo/redo and save. Works for both textual (JSON) and compressed-binary `.sldd`.
 
 ## Features
 
 ### Navigate & understand your models
 
 - **Relationship tree** — a dedicated activity-bar view that scans the workspace and renders how files relate: models referencing other models, models linked to data dictionaries (`.sldd`) and MAT-files (`.mat`), and dictionaries referencing other dictionaries. Entries expand lazily as you drill in.
-- **Jump-to-reference links** — a model's Model References and External Data render as clickable links; selecting one opens the referenced model, dictionary, or MAT-file, resolved from your workspace.
+- **Jump-to-reference links** — a model's Model References and External Data render as clickable links; selecting one opens the referenced model, dictionary, or MAT-file, resolved from your workspace. A reference to a file your workspace doesn't contain shows as unresolved.
 - **Project & folder grouping** — the tree groups top-level entries by MATLAB Project (`.prj`) or by containing folder, so files with the same name in different folders stay distinct. References resolve within a group first.
 - **Health decorations** — tree rows are badged for at-a-glance status: circular references, orphaned dictionaries/MAT-files (nothing links to them), unsaved modifications, and unresolved (missing) references.
 
 ### Browse & edit file contents
 
 - **Table editor** — open a model, dictionary, MAT-file, or project in a spreadsheet-style, tree-structured table. Sections are always shown (e.g. a dictionary's Design Data, Architectural Data, Configurations, Other Data), even when empty.
-- **Editing for `.sldd`** — edit a data dictionary directly in the table: change entry values and names, add child elements, and cut/copy/paste/delete entries via the right-click context menu, with **undo/redo, a dirty indicator, and save**. Both textual (JSON) and compressed-binary `.sldd` are editable; `.slx`, `.mdl`, `.mat`, and `.prj` open read-only.
-- **Live two-way sync (textual `.sldd`)** — because a textual (JSON) `.sldd` is backed by its JSON text document, edits in the table and edits in the JSON text editor update each other instantly, and there is a single shared undo history across both views.
+- **Editing for `.sldd`** — edit a data dictionary directly in the table: change entry values and names, add child elements, and cut/copy/paste/delete entries via the right-click context menu, with **undo/redo, a dirty indicator, and save**.
+- **Live two-way sync with the JSON editor (textual `.sldd`)** — a textual `.sldd` is backed by its JSON text document, so you can switch to Visual Studio Code's built-in text editor at any time via **Reopen Editor With…**. Edits in the table and edits in the JSON update each other instantly, and there is a single shared undo history across both views.
 - **Properties panel** — a selection-following webview that shows the full properties of the entry selected in the table. It lives in its own view container in the secondary sidebar, and can be dragged anywhere else — activity bar or panel — like any other view.
 - **Variable Editor for matrix values** — a value with two or more dimensions stays a short descriptor in its cell (`<2x3x2 double>`) with a grid glyph beside it; clicking the glyph opens the whole array in a floating spreadsheet-style grid, laid out the way MATLAB displays it. Anything above rank 2 gets a `(:,:,k)` page selector to step through its trailing dimensions. Available from both the table and the Properties panel; view-only.
-- **Search** — filter entries with the table's built-in filter bar. Type a word and press <kbd>Enter</kbd>; each condition becomes a chip you can remove with its `×`, and the `×` at the right end of the box clears the whole search. Scope a condition to one column by naming that column's header exactly as the header spells it — `Name:gain`, `Data Type=double`, `Value>10` — or right-click any column header to build the same thing from a popup, which shows you the text it writes. The operators are `:` (contains), `=`, `!=` (also `~=`), `>`, `<`, `>=` and `<=`, and spaces around one are ignored, so `Data Type: double` and `Value > 5` each read as a single condition. Quote a *value* that contains a space (`Name:"my var"`); a header's own space needs no quoting. Or search across every data source in the workspace with **Data Explorer: Search Data Source Entries** (<kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd>), which lists each match with the file it comes from. A model's blocks are listed one hit per block, qualified by the subsystem the block sits in — so the several blocks named `Gain` a model may hold stay distinguishable, and the subsystem name is searchable too.
-  > Quoting now only groups words: `value:"5"` matches any value *containing* 5. To ask for exactly 5, use `Value=5`.
+- **Search** — the table's filter bar turns each condition you type and commit with <kbd>Enter</kbd> into a chip you can remove with its `×`; the `×` at the right end of the box clears the whole search. Scope a condition to one column by naming that column's header exactly as the header spells it — `Name:gain`, `Data Type=double`, `Value>10` — or right-click any column header to build the same thing from a popup, which shows you the text it writes. The operators are `:` (contains), `=`, `!=` (also `~=`), `>`, `<`, `>=` and `<=`, and spaces around one are ignored, so `Data Type: double` and `Value > 5` each read as a single condition. Quote a *value* that contains a space (`Name:"my var"`); a header's own space needs no quoting. Quoting only groups words, so `value:"5"` matches any value *containing* 5 — to ask for exactly 5, use `Value=5`.
+- **Workspace-wide search** — **Data Explorer: Search Data Source Entries** (<kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd>) searches every data source at once and lists each match with the file it comes from. A model's blocks are listed one hit per block, qualified by the subsystem the block sits in — so the several blocks named `Gain` a model may hold stay distinguishable, and the subsystem name is searchable too.
 - **Usage column, both directions** — a dictionary entry, MAT variable, or model-workspace variable lists the blocks that read it, qualified by the model they are in; a block's row shows which of its parameters resolved where (`Gain=Kp (params.sldd)`). Either link navigates to the other side. Resolution follows MATLAB: the mask parameters of the masked subsystems a block sits inside come first, then the model workspace, then the linked data dictionary and any dictionary it references, then linked MAT-files — so a `Gain = g1` inside a mask reads as the mask's own `g1` (`Gain=g1 (MulAdd)`), and the value that mask parameter was given is credited to the masked block.
 - **Block paths in the table** — where a model's blocks share a name, each row's Name shows the subsystem it lives in (`Gain (Controller)`), and hovering a block in the Usage column shows that block's full path.
-
-### Fits your editor
-
-- **Dual view for textual `.sldd`** — because a textual `.sldd` is JSON, you can switch to Visual Studio Code's built-in JSON text editor at any time via **Reopen Editor With…**.
 - **Theme-aware** — every pane follows your active Visual Studio Code color theme (light, dark, or high-contrast).
 
 ## Getting Started
@@ -51,9 +38,7 @@ It adds a native experience for Simulink file types — a **Simulink Data Explor
    ```
 2. Open a folder or workspace that contains Simulink files.
 3. Click the **Simulink Data Explorer** icon in the activity bar to see the relationship tree.
-4. Open any supported file (`.slx`, `.mdl`, `.sldd`, `.mat`, `.prj`) — it opens in the Data Explorer table by default. Select a row to inspect it in the Properties panel.
-
-For a textual `.sldd`, you can switch to the raw JSON via **View: Reopen Editor With… → Text Editor** (or right-click the editor tab → **Reopen Editor With…**).
+4. Open any supported file — it opens in the Data Explorer table by default. Select a row to inspect it in the Properties panel.
 
 ### Optional: install from a `.vsix`
 
@@ -70,59 +55,28 @@ or from within VS Code via the Extensions view → **⋯** menu → **Install fr
 
 ## Supported Files
 
-**Editable in the table:**
-
-- **Simulink Data Dictionaries** — `.sldd` (both textual/JSON and compressed-binary): edit values and names, add children, and cut/copy/paste/delete entries, with undo/redo and save.
-
-**Viewing (read-only):**
-
-- **Simulink models** — `.slx` and `.mdl` (both the modern text format and the classic pre-R2012 format)
-- **MAT-files** — `.mat` (Level 5, i.e. `-v6`/`-v7`; see Known Limitations for `-v7.3`)
-- **MATLAB Projects** — `.prj`
+| Files | Formats | In the table |
+| --- | --- | --- |
+| Simulink data dictionaries | `.sldd` — textual (JSON) and compressed-binary | **Editable** |
+| Simulink models | `.slx`, `.mdl` — the modern text format and the classic pre-R2012 format | Read-only |
+| MAT-files | `.mat` — Level 5, i.e. `-v6`/`-v7` | Read-only |
+| MATLAB Projects | `.prj` | Read-only |
 
 ## Requirements
 
-- Visual Studio Code 1.106.0 or later.
-
-No MATLAB&reg; or Simulink installation is required to view or edit files — Simulink Data Explorer reads and writes the files directly.
+Visual Studio Code 1.106.0 or later. Nothing else — Simulink Data Explorer reads and writes these files directly.
 
 ## Known Limitations
 
-- Editing is supported for **`.sldd`** data dictionaries. `.slx`, `.mdl`, `.mat`, and `.prj` are read-only.
-- `.mat` support covers the Level 5 format (`-v6`, `-v7`). **`-v7.3`** files, which are HDF5 and are what MATLAB requires for variables above 2 GB, are reported as unsupported rather than opened.
+- `.mat` support covers the Level 5 format only. **`-v7.3`** files, which are HDF5 and are what MATLAB requires for variables above 2 GB, are reported as unsupported rather than opened.
 - Large textual (JSON) `.sldd` files are limited by size. Above **50 MB**, the file opens as a **read-only** table (VS Code cannot mirror a document that large for editing). Above **512 MB**, it cannot be rendered as a table at all and opens in VS Code's built-in **text editor** instead.
 - Paste creates a new top-level entry in the target section; pasting as a child of a struct/bus is not yet supported.
 - Reference resolution matches files by name (basename), preferring the referrer's own project or folder. Two `.prj` files in the same directory are not supported.
 - `.m` files are not scanned, so a project whose members are only `.m` files appears as an empty group.
 
-## Questions & Answers
+## Feedback
 
-**Do I need MATLAB or Simulink installed?**
-No. Simulink Data Explorer reads (and, for `.sldd`, writes) the files directly, so it works anywhere VS Code runs — including machines and CI agents with no MATLAB or Simulink installation.
-
-**Which file types can I open?**
-`.slx` and `.mdl` (Simulink models), `.sldd` (data dictionaries), `.mat` (MAT-files), and `.prj` (MATLAB Projects). `.sldd` files are editable; the rest open read-only.
-
-**Can I edit files, or is this view-only?**
-You can edit **`.sldd`** dictionaries directly in the table — values, names, child elements, and cut/copy/paste/delete — with undo/redo and save. This works for both textual (JSON) and compressed-binary `.sldd`. `.slx`, `.mdl`, `.mat`, and `.prj` are read-only.
-
-**A reference link doesn't open anything — why?**
-Links resolve by file name against your open workspace. Make sure the referenced file is inside the folder or workspace you have open in VS Code; a reference to a file that isn't present shows as unresolved (and is badged in the relationship tree).
-
-**How are references matched across folders?**
-By basename, preferring the referrer's own MATLAB Project or containing folder first. If two files share a name in different folders, the one in the referrer's group wins.
-
-**Why did my large `.sldd` open read-only, or as plain text?**
-Above **50 MB**, a textual `.sldd` opens as a **read-only** table (VS Code cannot mirror a document that large for editing). Above **512 MB**, it opens in VS Code's built-in **text editor** instead of a table.
-
-**Does editing in the table stay in sync with the JSON text editor?**
-Yes. A textual `.sldd` is backed by its JSON document, so table edits and text-editor edits update each other instantly and share one undo history. You can switch views anytime via **Reopen Editor With…**.
-
-**Is my theme respected?**
-Yes — every pane follows your active VS Code color theme (light, dark, or high-contrast).
-
-**How do I report a bug or request a feature?**
-Please open an issue on the [GitHub repository](https://github.com/mathworks/data-explorer-vscode). If the extension is useful to you, a rating or review on the Marketplace helps others find it.
+Please open an issue on the [GitHub repository](https://github.com/mathworks/data-explorer-vscode) to report a bug or request a feature. If the extension is useful to you, a rating or review on the Marketplace helps others find it.
 
 ## License
 
