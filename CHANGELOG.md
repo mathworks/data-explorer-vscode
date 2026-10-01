@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.30.3] — 2026-10-01
+
+A project page now escapes the counts it prints by the same rule as the names beside them. Three counts — a label's members, how many members carry a label at all, and the project's own member count — reached the markup by bare concatenation, looking exempt because each is typed `number`; but that type is a claim the parser makes, and the page reads it on the far side of a `postMessage` boundary where the payload is JSON and nothing re-checks the declaration. `memberCount` showed the split directly, escaped where the page writes its identity and raw in the Labels header: one field under two rules. Nothing renders differently for a real project, whose counts are computed by counting, and the page's content-security policy admits no inline script, so injected markup could not have run — what this closes is the gap in the escaping itself. The README is rewritten alongside it to say each thing about the extension once, having grown four layers that repeated one another: "no MATLAB or Simulink installation required" appeared five times and which files can be edited seven
+
 ## [1.30.2] — 2026-10-01
 
 Searching a table now searches its entries and not the names of the sections they are filed under, so typing `data` in a dictionary lists the entries that hold the word rather than everything under Design Data and Architectural Data. A section heading had been an ordinary row to the search box, and because a match keeps everything beneath it, one hit on a heading's own name brought its whole section back and the search appeared to do nothing — worst for a search for an empty cell, since a heading's cells are all empty and `Unit=` therefore matched every heading and so the entire file. Headings still appear above the entries that matched, now without the highlight that claimed the heading itself was one of them
