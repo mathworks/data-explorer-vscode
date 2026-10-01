@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.30.2] — 2026-10-01
+
+Searching a table now searches its entries and not the names of the sections they are filed under, so typing `data` in a dictionary lists the entries that hold the word rather than everything under Design Data and Architectural Data. A section heading had been an ordinary row to the search box, and because a match keeps everything beneath it, one hit on a heading's own name brought its whole section back and the search appeared to do nothing — worst for a search for an empty cell, since a heading's cells are all empty and `Unit=` therefore matched every heading and so the entire file. Headings still appear above the entries that matched, now without the highlight that claimed the heading itself was one of them
+
 ## [1.30.1] — 2026-10-01
 
 A MATLAB or Simulink Project whose `resources/project` store keeps part of itself behind a symlink — a folder or a single document linked in from elsewhere, which is how a project shared across a team or assembled by a build often reaches disk — now opens complete. Before, everything behind such a link was skipped without a word: the page offered no warning and no empty section, just a smaller project that looked whole, and where the lost part was the label catalog the page went further and stated the opposite of the truth, filing a label the project does define under "Not in the label catalog". On a four-member test project with one store folder linked in, 15 of its 32 store documents were going unread
