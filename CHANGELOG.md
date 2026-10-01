@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [1.30.1] — 2026-10-01
+
+A MATLAB or Simulink Project whose `resources/project` store keeps part of itself behind a symlink — a folder or a single document linked in from elsewhere, which is how a project shared across a team or assembled by a build often reaches disk — now opens complete. Before, everything behind such a link was skipped without a word: the page offered no warning and no empty section, just a smaller project that looked whole, and where the lost part was the label catalog the page went further and stated the opposite of the truth, filing a label the project does define under "Not in the label catalog". On a four-member test project with one store folder linked in, 15 of its 32 store documents were going unread
+
 ## [1.30.0] — 2026-09-30
 
 A Managed Simulink Project's page now says what kind of project it is and names the two dictionaries the type keeps apart: `interface` for the types the project publishes to everything that references it, `private` for the values only it sees, each one a link to the dictionary it is and each with a sentence saying what it is for. A project that keeps no private values draws that half as absent rather than hiding it, the shared configuration set is named where there is one, and the projects it references are called components and open their own project page instead of revealing a folder. Clicking a project in the Simulink Data Explorer tree now opens its page too — the group header is the `.prj`, and it used to be the one row in the tree that did nothing when clicked
