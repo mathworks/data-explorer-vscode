@@ -8,6 +8,14 @@ on:
   pull_request:
     branches: [main]
 
+# Checking out is the only thing the token is for here: this workflow writes
+# nothing back — no comment, no commit, no release. Spelled out rather than left
+# to the repository default, which a settings change could widen without anyone
+# touching a workflow file. Mirrors release.yml, which asks for `contents: write`
+# because it genuinely uploads a Release asset.
+permissions:
+  contents: read
+
 jobs:
   build-test:
     runs-on: ubuntu-latest
