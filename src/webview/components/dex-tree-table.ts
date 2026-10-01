@@ -416,19 +416,21 @@ export class DexTreeTable extends LitElement {
          is worth more than "the pointer is here" when both are true.
 
          The ink is switched WITH the surface, for the reason spelled out at
-         tr.data-row.selected below: --dex-bg-active is list.activeSelectionBackground, a
-         saturated blue VS Code pairs with white, and leaving the label at the editor
-         foreground measured 1.8:1 there the last time this file made that mistake. The
-         fallback chain ends at --vscode-foreground because activeSelectionForeground is
-         registered NULL on both high-contrast themes, where the background is a wash of the
-         foreground rather than a blue — so on those themes both halves stay as they were.
+         tr.data-row.selected below: --dex-bg-active is the selection surface, which on some
+         themes is a saturated blue VS Code pairs with white, and leaving the label at the
+         editor foreground measured 1.8:1 there the last time this file made that mistake.
+         Both halves come from vscode-theme.css's --dex-selection-bg/--dex-selection-fg pair,
+         which is switched in one place, so this rule cannot take one of the two from a theme
+         and the other from somewhere else.
 
-         The border is what carries the state in LIGHT themes, and it is the reason this rule
-         is not a background alone. Light Modern's list.activeSelectionBackground is #E8E8E8
-         and its list.hoverBackground is #F2F2F2: measured side by side those are four percent
-         apart, so a pointer resting on the open button erased the only cue it had.
-         inputOption.activeBorder is VS Code's own "this toggle is on" colour — #005FB8 light,
-         #2488DB dark, contrastBorder on both HC themes, i.e. never invisible.
+         The border is what carries the state when the surface is faint, and it is the reason
+         this rule is not a background alone. Light Modern's list.activeSelectionBackground is
+         #E8E8E8 and its list.hoverBackground is #F2F2F2: measured side by side those are four
+         percent apart, so a pointer resting on the open button erased the only cue it had.
+         (That surface is now the theme's editor-selection blue, which is a cue of its own —
+         the border stays because the faint case is a theme away, not because it was the
+         fashion.) inputOption.activeBorder is VS Code's own "this toggle is on" colour —
+         #005FB8 light, #2488DB dark, contrastBorder on both HC themes, i.e. never invisible.
 
          Only the BORDER comes from that group, deliberately. inputOption.activeBackground is
          registered fully transparent on the HC themes, and a registered value satisfies var()
@@ -437,7 +439,7 @@ export class DexTreeTable extends LitElement {
       .columns-button[aria-expanded='true'],
       .add-button[aria-expanded='true'] {
         background: var(--dex-bg-active, #e0e0e0);
-        color: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground, inherit));
+        color: var(--dex-selection-fg, var(--vscode-foreground, inherit));
         border-color: var(--vscode-inputOption-activeBorder, var(--dex-color-accent, #0078d4));
       }
 
@@ -818,11 +820,16 @@ export class DexTreeTable extends LitElement {
          theme. That is the issue #26 failure again, on the one surface issue #26 did not
          look at.
 
-         --dex-row-ink exists so the colour is named once and read twice; the fallback is
-         --vscode-foreground, i.e. exactly the behaviour this replaces, which matters
-         because list.activeSelectionForeground is registered
-         {dark:#FFFFFF, light:#FFFFFF, hcDark:NULL, hcLight:NULL} — on both high-contrast
-         themes the fallback is the normal path, not an edge case.
+         --dex-row-ink exists so the colour is named once and read twice. It reads
+         --dex-selection-fg, which vscode-theme.css declares BESIDE the surface and switches
+         in the same block: on light and dark themes the surface is the theme's
+         editor.selectionBackground (a blue) and the ink its editor.selectionForeground, which
+         is registered null and therefore lands on the ordinary foreground; on the two
+         high-contrast themes both come from list.activeSelection*. Reading
+         list.activeSelectionForeground directly from here is what this replaces, and it was
+         the pair held apart in two files: that colour's registry default is WHITE, so the
+         first change to the surface would have painted white ink onto a pale blue row. The
+         fallback stays --vscode-foreground, i.e. the behaviour before either change.
 
          The muted token is REDECLARED here rather than left to inherit, and that is the
          whole point of the change: read-only ink has to be dim relative to the ink the ROW
@@ -836,7 +843,7 @@ export class DexTreeTable extends LitElement {
          The 78% is therefore written in two places (here and vscode-theme.css) and the two
          must agree; treeTableCellStates.test.ts pins that they do. */
       tr.data-row.selected {
-        --dex-row-ink: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
+        --dex-row-ink: var(--dex-selection-fg, var(--vscode-foreground));
         background: var(--dex-color-accent-bg, #cde4f7);
         color: var(--dex-row-ink);
         --dex-color-text-muted: color-mix(in srgb, var(--dex-row-ink) 78%, transparent);

@@ -286,10 +286,16 @@ describe('the stylesheet spends each channel on one job', () => {
     const body = css.slice(at, css.indexOf('}', at)).replace(/\s+/g, ' ');
     expect(body).toMatch(/background:/);
     expect(body).toMatch(/(^|[;{]\s*)color\s*:/);
-    // Through a fallback, and the fallback is the ink this replaces. The colour is
-    // registered {dark:#FFFFFF, light:#FFFFFF, hcDark:NULL, hcLight:NULL}, so on both
-    // high-contrast themes an unfallbacked read is the normal path into a broken one.
-    expect(body).toContain('var(--vscode-list-activeSelectionForeground, var(--vscode-foreground))');
+    // Through the token vscode-theme.css declares BESIDE the surface, and through a fallback.
+    // Beside the surface because that is the only place the two can be switched together: a
+    // light or dark theme now takes editor.selectionBackground (a blue) with
+    // editor.selectionForeground, the high-contrast themes list.activeSelection*, and a rule
+    // that read list.activeSelectionForeground from here would have taken that colour's
+    // registry default — WHITE — onto the pale blue surface. The fallback is the ink this all
+    // replaces, and it is not optional: both selection foregrounds are registered NULL in some
+    // variant (hcDark/hcLight for the list one, light/dark for the editor one), so an
+    // unfallbacked read is the normal path into a broken one.
+    expect(body).toContain('var(--dex-selection-fg, var(--vscode-foreground))');
     // The INK declarations only. The surface keeps a literal fallback on purpose — that is
     // --dex-color-accent-bg's business, and the theme trap behind it is pinned on
     // --dex-selection-bg in vscodeThemeTokens.test.ts.

@@ -41,7 +41,13 @@
   --dex-color-text-disabled: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
   --dex-color-accent: var(--vscode-focusBorder);
   --dex-color-accent-hover: var(--vscode-focusBorder);
-  /* The selected row's surface. `list.activeSelectionBackground` is registered
+  /* The selected row's SURFACE and the INK that goes on it. VS Code chooses those two
+     together, so this file declares them together — and overrides them together, for every
+     ordinary light or dark theme, in the `body.vscode-light, body.vscode-dark` block at the
+     end of this file. What is left here is the high-contrast pair and the fallback that keeps
+     the declaration valid at all.
+
+     `list.activeSelectionBackground` is registered
      `{dark:"#04395E", light:"#0060C0", hcDark:NULL, hcLight:"#0F4A85" at .1}` — so on HC
      Black the variable does not exist, this declaration would be invalid at
      computed-value time, and every consumer would fall back to its own literal. The
@@ -56,12 +62,21 @@
      selection stays distinguishable from hover instead of collapsing into it. Read-only
      text over it measures 6.94:1 on HC Black.
 
+     The ink falls back to --vscode-foreground because `list.activeSelectionForeground` is
+     registered `{dark:#FFFFFF, light:#FFFFFF, hcDark:NULL, hcLight:NULL}`: on the two
+     high-contrast themes this pair is now for, the fallback IS the path rather than an edge
+     case. Read through --dex-selection-fg rather than directly by the rules that need it
+     (dex-tree-table.ts: the selected row, the pressed Add/Columns button) so that the surface
+     and the ink cannot be switched one without the other — which is the bug this whole pair
+     exists to prevent.
+
      One token, aliased twice: both public names map to this same VS Code colour here, and
      writing the color-mix out twice is how the two drift apart later. */
   --dex-selection-bg: var(
     --vscode-list-activeSelectionBackground,
     color-mix(in srgb, var(--vscode-foreground) 25%, transparent)
   );
+  --dex-selection-fg: var(--vscode-list-activeSelectionForeground, var(--vscode-foreground));
   --dex-color-accent-bg: var(--dex-selection-bg);
   --dex-color-error: var(--vscode-errorForeground);
   --dex-color-warning: var(--vscode-editorWarning-foreground, var(--vscode-errorForeground));
@@ -255,4 +270,104 @@
      loaded still lays the popover out. */
   --dex-add-gallery-inset: 8px;
   --dex-add-gallery-min-width: 300px;
+}
+
+/* A selected row is BLUE on every ordinary light or dark theme — the maintainer's ask
+   (2026-10-01: "for a general vscode user, if they select light theme, we want the selected
+   row to be blue, not grey"), and the fix for the report behind it.
+
+   VS Code's new default themes made `list.activeSelectionBackground` a NEUTRAL WASH.
+   "Light 2026" specifies `#00000025` — black at 14.5% — and "Dark 2026" `#FFFFFF22`, where
+   Light Modern had an opaque grey and a theme that specifies nothing at all still gets the
+   registry default `#0060C0`, the saturated blue this table shipped with. Measured on the
+   shipped bundle under Light 2026 with real rows: an ordinary cell 250/255, the same cell on a
+   selected row 213, and the issue #26 not-applicable wash a further 9 below whichever row it
+   is on. So selection was a grey 37 levels deep, the wash a grey 9 — and a NORMAL cell on a
+   selected row (213) came out darker than a WASHED cell on an unselected one (239). That is
+   both halves of the report at once: "the table selected row background color changed from
+   blue to gray", and "the disabled cell is not differentiable from normal cell when the row is
+   selected". Three meanings on one channel, and the strongest of them had taken the meaning of
+   the other two. The wash never lost its step — 9/255 on a selected row against 11 on a plain
+   one — it lost its MEANING, so a stronger wash was never the fix.
+
+   The surface therefore moves to a channel the wash does not use: HUE.
+   `editor.selectionBackground` is what the theme uses to say "selected" in the editor itself —
+   registered `{light:#ADD6FF, dark:#264F78}` and specified as a blue by both 2026 themes
+   (`#0069CC40`, `#276782dd`). Its ink is the theme's ordinary foreground, because
+   `editor.selectionForeground` is registered NULL on light and dark, and here that null is
+   load-bearing rather than a trap: what the fallback reaches is the ink the row already had. A
+   theme that picks its own editor selection colour gets a row in that colour, which is the
+   point — this follows the theme rather than overriding it with a literal of ours.
+
+   At HALF strength, and that number is set by the ink, not by the eye. A selection colour on a
+   dark theme has to be a mid-tone — the editor's text is light — and a mid-tone is exactly
+   where our read-only ink has least room: it is 78% of the row ink (see --dex-color-text-muted
+   above), so it sits between the surface and the text. Measured on the shipped bundle at full
+   strength, read-only ink on a selected row fell to 3.03:1 on Dark 2026 and 3.89:1 on Dark
+   Modern, and on Dark 2026 even the EDITABLE text measured 3.95:1 — the issue #26 failure
+   again, on the surface issue #26 tuned last. Halving the colour moves the row back toward its
+   own background, which is a lightening on a light theme and a darkening on a dark one, so it
+   buys contrast in both directions at once: 4.6–7.0 for read-only and 6.4–13.1 for editable
+   across the four default light/dark themes, against baselines of 6.3–7.9 and 10.0–17.1. The
+   binding number is Dark 2026's read-only at 4.6:1, and it is what a bigger percentage spends
+   first.
+
+   Half is also a strength VS Code has a name for: the registry defines
+   `editor.inactiveSelectionBackground` as exactly `transparent(editor.selectionBackground, .5)`.
+   That colour is NOT what this reads, because Light Modern and Dark Modern both override it
+   with a neutral (`#E5EBF1`, `#3A3D41`) — which is the grey this change exists to get away
+   from. The strength is borrowed; the hue has to come from the colour that still has one.
+
+   The halving is written as a mix of its own token rather than inline, so the var() chain keeps
+   its shape: `--dex-selection-tint` goes guaranteed-invalid when a page supplies no
+   editor.selectionBackground at all, and a var() reading a guaranteed-invalid property takes
+   its FALLBACK — which is the same 25%-foreground wash :root uses, written identically and
+   pinned identical by vscodeThemeTokens.test.ts. That path is unreachable in VS Code, where
+   the colour has a registry default in all four variants, and it is not hypothetical anywhere
+   else: the maintenance harness omitted that registry row and measured this fix as a GREY
+   selected row on Light Modern, which is the shape of the bug this safety net is for.
+
+   Not a selection FRAME, which is how VS Code can afford a wash of its own:
+   `.monaco-list-row.focused` draws `outline: 1px solid var(--vscode-list-focusOutline)`.
+   Our first column is `position: sticky`, and Blink paints a `<tr>`'s outline BELOW its
+   positioned descendants — a frame probed in the browser hit 35/35 samples past the frozen
+   column and 0/14 over it, so it would need the same `td:first-child` mirror the four other
+   row-level rings already carry. It is also not what was asked to change.
+
+   Scoped by the webview's own theme class, which VS Code sets to exactly ONE of
+   `vscode-light` / `vscode-dark` / `vscode-high-contrast` / `vscode-high-contrast-light`
+   (WebviewThemeDataProvider.fromTheme). Only the first two are listed, so both high-contrast
+   themes keep the pair declared at :root: on HC Black `editor.selectionBackground` is
+   `#FFFFFF`, a white row whose not-applicable wash — 5% of a white foreground — could not be
+   seen at all, and HC Light's is the opaque navy `#0F4A85` under near-black text. A page
+   carrying none of the four classes keeps the :root pair too, which is the safe direction.
+
+   The fallback is the same `--vscode-foreground` mix as at :root, deliberately identical and
+   pinned equal by vscodeThemeTokens.test.ts. It is unreachable in VS Code —
+   editor.selectionBackground has a registry default in all four variants — and exists so that
+   a theme-less page cannot make this declaration invalid and ship dex-tree-table.ts's
+   `#cde4f7` literal instead. Two copies of one expression, so the test compares them rather
+   than trusting them.
+
+   The two aliases are RE-DECLARED here rather than inherited, and that is not redundancy: a
+   var() inside a custom property is substituted where the property is DECLARED, so the aliases
+   at :root already hold the list colour by the time this block changes what they read. Same
+   rule as --dex-color-text-muted, which dex-tree-table.ts redeclares on a selected row for
+   exactly this reason. --dex-bg-active comes along on purpose — it is the pressed Add/Columns
+   button, whose surface IS the selection surface, and Light Modern's `#E8E8E8` sat four
+   percent from that button's own hover colour. A pale blue is the cue the grey never was. */
+body.vscode-light,
+body.vscode-dark {
+  --dex-selection-tint: color-mix(
+    in srgb,
+    var(--vscode-editor-selectionBackground) 50%,
+    transparent
+  );
+  --dex-selection-bg: var(
+    --dex-selection-tint,
+    color-mix(in srgb, var(--vscode-foreground) 25%, transparent)
+  );
+  --dex-selection-fg: var(--vscode-editor-selectionForeground, var(--vscode-foreground));
+  --dex-color-accent-bg: var(--dex-selection-bg);
+  --dex-bg-active: var(--dex-selection-bg);
 }
