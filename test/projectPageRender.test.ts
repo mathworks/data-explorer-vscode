@@ -434,6 +434,41 @@ describe('a store written by someone else cannot inject markup', () => {
     expect(html).not.toContain('<img');
     expect(html).toContain('&lt;img src=x&gt;');
   });
+
+  // The counts are the page's only non-string fields, and that is exactly why they got
+  // missed: `number` reads as self-evidently safe, so all three went into the markup by
+  // bare concatenation while every string beside them was escaped. But the type is a
+  // claim core's parser makes, not a check this page performs — the payload arrives over
+  // postMessage as JSON, where nothing enforces the declaration. One rule for the whole
+  // payload, not one rule per field type. (Found by CodeQL js/xss, 2026-10-01: these
+  // three were the only unsanitized flows it could reach from the message handler.)
+  const HOSTILE = '<img src=x>' as unknown as number;
+
+  it('escapes a label count', () => {
+    const html = render({
+      categories: [{ name: 'c', labels: [{ id: 'i', name: 'l', count: HOSTILE, custom: false }] }],
+    });
+    expect(html).not.toContain('<img');
+    expect(html).toContain('&lt;img src=x&gt;');
+  });
+
+  it('escapes the labelled-of-members count', () => {
+    const html = render({
+      labelledCount: HOSTILE,
+      categories: [{ name: 'c', labels: [{ id: 'i', name: 'l', count: 1, custom: false }] }],
+    });
+    expect(html).not.toContain('<img');
+    expect(html).toContain('&lt;img src=x&gt;');
+  });
+
+  it('escapes the member count', () => {
+    const html = render({
+      memberCount: HOSTILE,
+      categories: [{ name: 'c', labels: [{ id: 'i', name: 'l', count: 1, custom: false }] }],
+    });
+    expect(html).not.toContain('<img');
+    expect(html).toContain('&lt;img src=x&gt;');
+  });
 });
 
 describe('esc', () => {

@@ -38,7 +38,22 @@ export function newSectionState(): SectionState {
   return { query: '', expanded: false };
 }
 
-export function esc(s: string): string {
+/**
+ * Everything that reaches the markup, escaped — the page's single rule.
+ *
+ * Numbers are accepted, not just strings, so a count is escaped by the same call as
+ * the name beside it. Counts look exempt — `memberCount` is typed `number`, and a
+ * number cannot carry a `<` — but that type is a claim core's parser makes, and this
+ * page sits on the far side of a postMessage boundary, where the payload is JSON and
+ * nothing re-checks the declaration. While this took `string` only, a count could not
+ * use it and was concatenated bare instead; `memberCount` then rendered escaped in the
+ * identity block and raw in the Labels header, one field under two rules, and the
+ * second was the wrong one (CodeQL js/xss, 2026-10-01).
+ *
+ * `'` is deliberately absent: every attribute written here is double-quoted, and the
+ * test that pins that is the reminder to keep it so.
+ */
+export function esc(s: string | number): string {
   return String(s).replace(
     /[&<>"]/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] as string,
@@ -314,7 +329,7 @@ function labelsSection(page: ProjectPage): string {
               (l.custom ? ' title="Added by this project"' : '') +
               '>' +
               esc(l.name) +
-              (l.count ? '<span class="n">' + l.count + '</span>' : '') +
+              (l.count ? '<span class="n">' + esc(l.count) + '</span>' : '') +
               '</span>',
           )
           .join('') +
@@ -326,9 +341,9 @@ function labelsSection(page: ProjectPage): string {
     '<section class="section"><header><h2>Labels</h2>' +
     (total
       ? '<span class="count">' +
-        page.labelledCount +
+        esc(page.labelledCount) +
         ' of ' +
-        page.memberCount +
+        esc(page.memberCount) +
         ' members labelled</span>'
       : '') +
     '</header>' +
