@@ -28,7 +28,16 @@ export interface MatrixPayload {
   cells: string[];
 }
 
-/** 64x64. One page is then at most 4,096 DOM cells, which needs no virtualization. */
+/**
+ * 64x64. One page is then at most 4,096 DOM cells, which needs no virtualization.
+ *
+ * Must stay BELOW core's MAX_EXPANDED_ELEMENTS (10,000), which is the count past
+ * which an array gets no element children at all. The grid is drawn from those
+ * children — isGriddable below requires one per element — so if this cap ever rose
+ * above core's, the matrices between the two numbers would be griddable by this
+ * test and have nothing to grid. Core's constant carries the same note from its
+ * side; raising either one is a change to both.
+ */
 export const MAX_MATRIX_ELEMENTS = 4096;
 
 // An ALLOW-list, deliberately, not a deny-list. Core v1.0.0 gave ObjectNode and
