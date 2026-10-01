@@ -242,6 +242,45 @@ describe('filterRows', () => {
     const rows = [row('a', null, { Name: 'gain' }), row('b', null, { Name: 'other' })];
     expect(ids(rows, 'gain', new Set())).toEqual(['a']);
   });
+
+  // A section header is the table's own chrome — the user searches the entries under
+  // it, not the heading. Letting it match is not merely a stray row: a match keeps its
+  // whole subtree, so one hit on a heading re-admits every entry below it and the
+  // search appears to have done nothing at all.
+  describe('a section header is not one of the rows being searched', () => {
+    const SECTIONED = [
+      row('section:design', null, { Name: 'Design Data' }),
+      row('p1', 'section:design', { Name: 'gain', Value: '5' }),
+      row('p2', 'section:design', { Name: 'offset', Value: '' }),
+      row('section:other', null, { Name: 'Other Data' }),
+      row('o1', 'section:other', { Name: 'dataRate', Value: '7' }),
+    ];
+
+    it('a term in the heading matches only the entries that hold it too', () => {
+      // `data` is in BOTH headings. Reported as: searching it listed every entry of
+      // Design Data, because the heading matched and dragged its subtree along.
+      expect(ids(SECTIONED, 'data')).toEqual(['section:other', 'o1']);
+    });
+
+    it('the heading of a section that did match is still kept, as an ancestor', () => {
+      expect(ids(SECTIONED, 'gain')).toEqual(['section:design', 'p1']);
+    });
+
+    it('a column prefix does not reach the heading either', () => {
+      expect(ids(SECTIONED, 'name:data')).toEqual(['section:other', 'o1']);
+    });
+
+    it('a condition every empty cell satisfies does not re-admit whole sections', () => {
+      // The worse half of the same bug: a heading's cells are ALL empty, so `Value=`
+      // ("which entries have no value?") matched every heading and the table came
+      // back whole.
+      expect(ids(SECTIONED, 'Value=')).toEqual(['section:design', 'p2']);
+    });
+
+    it('a negated condition does not match the heading by vacuous truth', () => {
+      expect(ids(SECTIONED, 'Name!=gain')).toEqual(['section:design', 'p2', 'section:other', 'o1']);
+    });
+  });
 });
 
 describe('the operator scanner', () => {

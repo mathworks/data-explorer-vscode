@@ -24,6 +24,13 @@
 //     state, not part of the grammar.
 // Keeping these as parameters is what makes this module have no `this` and no
 // DOM, so it is coverage-measured and unit-testable directly.
+//
+// The one thing it does import is the `section:` row-id convention, which is NOT in
+// that list: it is not the component's state but a shape both sides of the protocol
+// agree on (src/common/sectionRowId.ts, stamped by the host's rowBuilder), so a
+// caller cannot hold a different opinion about it and there is nothing to inject.
+
+import { isSectionRowId } from '../common/sectionRowId.js';
 
 /** The subset of a table row this module needs in order to walk the tree. */
 export interface FilterableRow {
@@ -443,6 +450,15 @@ export function filterRows<T extends FilterableRow>(
 
   const hitSet = new Set<string>();
   for (const row of rows) {
+    // A SECTION HEADING is never a match. It is the table's own chrome — the user is
+    // searching the entries, not the headings the file is split into — and letting it
+    // match does not merely add a row: a match keeps its whole subtree, so one hit on
+    // a heading re-admits every entry under it and the search appears to have done
+    // nothing. `data` matched `Design Data` and listed the entire section. Worse with
+    // a condition an empty cell satisfies — a heading's cells are ALL empty, so
+    // `Unit=` ("which entries have no unit?") matched every heading and so the whole
+    // table. Headings still appear, as the ancestors of the rows that did match.
+    if (isSectionRowId(row.ID)) continue;
     if (predicates.every((pred) => pred(row))) {
       hitSet.add(row.ID);
     }

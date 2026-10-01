@@ -62,6 +62,12 @@ async function search(table: DexTreeTable, text: string): Promise<string[]> {
   return (table as any)._getVisibleRows().map((r: TreeTableRow) => r.ID);
 }
 
+/** The text of every <mark> in one cell, i.e. what the table claims matched there. */
+const marks = (table: DexTreeTable, rowId: string, col: string): string[] => {
+  const cell = table.shadowRoot!.querySelector(`tr[data-row-id="${rowId}"] td.col-${col}`) as HTMLElement;
+  return Array.from(cell.querySelectorAll('mark')).map((m) => m.textContent || '');
+};
+
 const CATALOG = [
   makeRow('p1', null, 'gainValue', { Value: '5', DataType: 'double', Status: 'Modified', Kind: 'Parameter' as any, Class: 'Simulink.Parameter' as any }),
   makeRow('p2', null, 'offset', { Value: '12', DataType: 'single', Status: '', Kind: 'Parameter' as any, Class: 'Simulink.Parameter' as any }),
@@ -358,6 +364,54 @@ describe('a filtered view stays a usable tree', () => {
   });
 });
 
+// The headings a dictionary is split into — `Design Data`, `Other Data` — arrive as
+// rows like any other, and that is how searching a word that appears in a HEADING came
+// to list every entry underneath it: the heading matched, and a match keeps its whole
+// subtree. They are the table's own chrome, so they are never matched; they appear only
+// as the ancestor of something that did.
+describe('section headings are chrome, not rows the user is searching', () => {
+  const SECTIONS = [
+    makeRow('section:design', null, 'Design Data'),
+    makeRow('d1', 'section:design', 'gainValue'),
+    makeRow('d2', 'section:design', 'offset'),
+    makeRow('section:other', null, 'Other Data'),
+    makeRow('o1', 'section:other', 'dataRate'),
+  ];
+  const EXPANDED = ['section:design', 'section:other'];
+
+  it('a word from a heading narrows to the entries holding it, not to whole sections', async () => {
+    const table = await mount(SECTIONS, EXPANDED);
+    expect(await search(table, 'data')).toEqual(['section:other', 'o1']);
+    table.remove();
+  });
+
+  it('the heading above a real match is still kept, so the match keeps its context', async () => {
+    const table = await mount(SECTIONS, EXPANDED);
+    expect(await search(table, 'gain')).toEqual(['section:design', 'd1']);
+    table.remove();
+  });
+
+  it('a heading kept as an ancestor is not marked as though it had matched', async () => {
+    // `Other Data` is on screen because `dataRate` matched, not because it reads
+    // `Data`. A <mark> there shows the user a match the filter refused to make.
+    const table = await mount(SECTIONS, EXPANDED);
+    await search(table, 'data');
+    expect(marks(table, 'o1', 'Name')).toEqual(['data']);
+    expect(marks(table, 'section:other', 'Name')).toEqual([]);
+    table.remove();
+  });
+
+  it('and still prints its own name and entry count, which a search does not narrow', async () => {
+    // The cheap way to unmark a heading is to stop rendering its label through the
+    // highlighter at all; this is what stops that from also dropping the text.
+    const table = await mount(SECTIONS, EXPANDED);
+    await search(table, 'gain');
+    const cell = table.shadowRoot!.querySelector('tr[data-row-id="section:design"] td.col-Name') as HTMLElement;
+    expect(cell.textContent).toContain('Design Data (2)');
+    table.remove();
+  });
+});
+
 describe('the search box itself', () => {
   it('Escape clears a pending tail first, then the filter', async () => {
     const table = await mount(CATALOG);
@@ -515,11 +569,6 @@ describe('feedback when a search matches nothing', () => {
 });
 
 describe('matched text is highlighted', () => {
-  const marks = (table: DexTreeTable, rowId: string, col: string): string[] => {
-    const cell = table.shadowRoot!.querySelector(`tr[data-row-id="${rowId}"] td.col-${col}`) as HTMLElement;
-    return Array.from(cell.querySelectorAll('mark')).map((m) => m.textContent || '');
-  };
-
   it('the matching run is wrapped in a mark so the user can see why a row matched', async () => {
     const table = await mount(CATALOG);
     await search(table, 'gain');

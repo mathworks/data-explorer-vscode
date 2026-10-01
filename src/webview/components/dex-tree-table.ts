@@ -8,6 +8,7 @@ import {
   filterRows, formatToken, parseFilterExpression, removeToken,
   type FilterOp, type FilterTerm, type FilterToken,
 } from '../rowFilter.js';
+import { isSectionRowId } from '../../common/sectionRowId.js';
 import './dex-add-gallery.js';
 import './dex-column-filter.js';
 import './dex-filter-bar.js';
@@ -3275,8 +3276,12 @@ export class DexTreeTable extends LitElement {
       // search narrows the list below the header, not the size of the section.
       // `(0)` is rendered rather than suppressed: an empty section is exactly what a
       // reader wants the number for.
-      const sectionCount =
-        row.ID.indexOf('section:') === 0 ? (this._childCounts.get(row.ID) ?? 0) : null;
+      // A heading is also the one row the search never matches (see filterRows): it is
+      // on screen as the ancestor of the entries that did match. So its label is NOT
+      // run through the highlighter — a <mark> on `Design Data` while the rows below it
+      // are narrowed to a few shows the user a match the filter deliberately refused.
+      const isSection = isSectionRowId(row.ID);
+      const sectionCount = isSection ? (this._childCounts.get(row.ID) ?? 0) : null;
       // The systems enclosing a block row, shown after its label as `Gain (Controller)`.
       // A block NAME is unique only inside its own system, so a model view can list four
       // rows reading `Gain` — separate rows with separate parameters and separate links,
@@ -3311,7 +3316,7 @@ export class DexTreeTable extends LitElement {
           ${iconId ? html`<dex-icon class="name-icon" .iconId=${iconId} .size=${16}></dex-icon>` : ''}
           <span class="name-text"
             ><span class="label ${isElement ? 'readonly' : ''}"
-              >${this._highlight(label, columnId)}${sectionCount === null ? '' : ` (${sectionCount})`}</span
+              >${isSection ? `${label} (${sectionCount})` : this._highlight(label, columnId)}</span
             >${qualifier
               ? html`<span class="name-qualifier" title=${row._blockPath || nothing}
                   >${'(' + qualifier + ')'}</span
