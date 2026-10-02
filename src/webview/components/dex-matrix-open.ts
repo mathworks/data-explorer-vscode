@@ -45,10 +45,15 @@ export class DexMatrixOpen extends LitElement {
       color: inherit;
     }
 
-    a:hover { opacity: 1; background: var(--dex-hover-bg, rgba(0, 0, 0, 0.06)); }
+    /* The declared tokens, not the invented --dex-hover-bg / --dex-focus-ring pair this
+       shipped with: nothing declares the first, so the glyph's hover was a 6% black that
+       could not be seen on a dark row, and the second is a box-shadow rather than a
+       colour, which made the whole outline declaration invalid and left the glyph with no
+       focus ring. See test/variableEditorTheme.test.ts. */
+    a:hover { opacity: 1; background: var(--dex-bg-hover, #e8e8e8); }
 
     a:focus-visible {
-      outline: 2px solid var(--dex-focus-ring, #0078d4);
+      outline: 2px solid var(--dex-color-accent, #0078d4);
       outline-offset: 1px;
       opacity: 1;
     }

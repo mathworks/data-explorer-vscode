@@ -40,15 +40,30 @@ export class DexVariableEditor extends LitElement {
       display: block;
     }
 
+    /* --dex-bg-tertiary is --vscode-editorWidget-background: the colour VS Code paints a
+       thing that floats over the editor, which is exactly what this is. It replaces an
+       rgba(252, 252, 252, 0.98) literal under a #1f1f1f one — copied from dex-context-menu
+       together with its shape, but under invented token names (--dex-popover-bg,
+       --dex-fg) that nothing declares, so the literals were what shipped. In a dark theme
+       that was a near-white panel of near-black text: a light-theme island in a dark
+       editor, and the reason the grid's headers inside it were a wash of black at 4%.
+       Opaque, with no backdrop-filter: this panel is a table of numbers to be read, not
+       the glass the Add gallery deliberately is.
+
+       The drop shadow keeps its literals. A shadow is light falling on the panel rather
+       than a surface the theme chose — the same argument that lets vscode-theme.css write
+       the literal white for the gallery's sheen — and VS Code's own widget.shadow is not
+       defined in
+       every theme. */
     .panel {
-      background: var(--dex-popover-bg, rgba(252, 252, 252, 0.98));
-      border: 1px solid var(--dex-popover-border, rgba(0, 0, 0, 0.08));
+      background: var(--dex-bg-tertiary, #f5f5f5);
+      border: 1px solid var(--dex-border-color, #d0d0d0);
       border-radius: 8px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.14), 0 2px 8px rgba(0, 0, 0, 0.06);
       padding: 6px 8px 8px;
       font-family: var(--dex-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
       font-size: var(--dex-font-size, 12px);
-      color: var(--dex-fg, #1f1f1f);
+      color: var(--dex-color-text, #333);
     }
 
     .bar {
@@ -77,11 +92,11 @@ export class DexVariableEditor extends LitElement {
       border-radius: 4px;
     }
 
-    .close:hover { background: var(--dex-hover-bg, rgba(0, 0, 0, 0.06)); }
+    .close:hover { background: var(--dex-bg-hover, #e8e8e8); }
 
     .status {
       padding: 6px 2px;
-      color: var(--dex-muted-fg, #6b6b6b);
+      color: var(--dex-color-text-muted, #666);
       white-space: nowrap;
     }
   `;

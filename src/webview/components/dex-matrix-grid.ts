@@ -91,7 +91,7 @@ export class DexMatrixGrid extends LitElement {
       position: relative;
       font-family: var(--dex-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
       font-size: var(--dex-font-size, 12px);
-      color: var(--dex-fg, #1f1f1f);
+      color: var(--dex-color-text, #333);
     }
 
     .scroll {
@@ -125,8 +125,12 @@ export class DexMatrixGrid extends LitElement {
       display: table-cell;
       box-sizing: border-box;
       padding: 2px 8px;
-      border-right: 1px solid var(--dex-matrix-grid-line, rgba(0, 0, 0, 0.08));
-      border-bottom: 1px solid var(--dex-matrix-grid-line, rgba(0, 0, 0, 0.08));
+      /* The same pair the main table rules its own cells with (dex-tree-table.ts), so the
+         two tables read as one product. It replaces an rgba(0, 0, 0, 0.08) literal, which
+         drew a black line whatever the theme: visible on a light panel, and on a dark one
+         a grid with no lines in it at all. */
+      border-right: 1px solid var(--dex-border-color-light, #e0e0e0);
+      border-bottom: 1px solid var(--dex-border-color-light, #e0e0e0);
       white-space: nowrap;
       font-variant-numeric: tabular-nums;
     }
@@ -161,10 +165,32 @@ export class DexMatrixGrid extends LitElement {
       display: inline-block;
     }
 
+    /* FULLY OPAQUE, and opaque whichever of these tokens resolves — which is the whole
+       point of the rule rather than a property of the colour it happens to produce. Both
+       headers are sticky, so every cell in the matrix eventually passes behind one of
+       them, and nothing is painted between a sticky cell and what it covers: a background
+       with any alpha at all lets the scrolled numbers slide visibly underneath. It
+       shipped as rgba(0, 0, 0, 0.04) and did exactly that (reported 2026-10-01, measured
+       at 208/255 over 13.8% of the header's pixels — the row behind it, read through the
+       numbers labelling the column). dex-tree-table.ts carries the same note on its frozen
+       first column, which hit this first.
+
+       A mix and not a borrowed background colour: a step toward the ink is DARKER on a
+       light theme and LIGHTER on a dark one, so one declaration reads as a header in
+       both. The main table heads its own columns with --dex-bg-secondary, and that is the
+       one thing not to copy here — the surround there is the table (bg-primary), while
+       this grid sits on a floating widget (bg-tertiary), which is already the darker of
+       the two on a light theme. The borrowed colour would invert the step.
+
+       Every var() carries a literal, so the mix is valid even if the token is missing or
+       went invalid at computed-value time — and because the second colour is a SURFACE
+       and never the keyword transparent, the result cannot be see-through by any path.
+       test/variableEditorTheme.test.ts pins that, and the pixels are measured by the
+       harness scenario matrix-grid-sticky-headers.mjs. */
     [role='columnheader'],
     [role='rowheader'] {
-      background: var(--dex-matrix-header-bg, rgba(0, 0, 0, 0.04));
-      color: var(--dex-matrix-header-fg, #6b6b6b);
+      background: color-mix(in srgb, var(--dex-color-text, #333) 8%, var(--dex-bg-tertiary, #f5f5f5));
+      color: var(--dex-color-text-muted, #666);
       text-align: center;
       position: sticky;
       font-weight: 600;
@@ -180,8 +206,15 @@ export class DexMatrixGrid extends LitElement {
     [role='gridcell'] { text-align: left; }
     [role='gridcell'].num { text-align: right; }
 
+    /* --dex-color-accent and NOT --dex-focus-ring, which is a whole box-shadow
+       (0 0 0 1px <colour>) and not a colour: read as an outline colour the declaration is
+       invalid at computed-value time, so the browser drops it and a focused cell got no
+       ring whatever (measured on the shipped bundle as outlineStyle: none). The keyboard
+       is the only way to reach a cell outside the window, so this ring is how a keyboard
+       user knows where the cursor went. dex-filter-bar.ts reads the accent the same way;
+       dex-context-menu.ts reads --dex-focus-ring correctly, as a box-shadow. */
     [role='gridcell']:focus {
-      outline: 2px solid var(--dex-focus-ring, #0078d4);
+      outline: 2px solid var(--dex-color-accent, #0078d4);
       outline-offset: -2px;
     }
 
@@ -198,7 +231,7 @@ export class DexMatrixGrid extends LitElement {
       padding: 2px 6px;
       cursor: pointer;
       background: transparent;
-      border: 1px solid var(--dex-matrix-grid-line, rgba(0, 0, 0, 0.16));
+      border: 1px solid var(--dex-border-color, #d0d0d0);
       border-radius: 4px;
       color: inherit;
     }
