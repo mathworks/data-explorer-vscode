@@ -9,6 +9,7 @@ import {
   type FilterOp, type FilterTerm, type FilterToken,
 } from '../rowFilter.js';
 import { isSectionRowId } from '../../common/sectionRowId.js';
+import { virtualWindow } from '../virtualWindow.js';
 import './dex-add-gallery.js';
 import './dex-column-filter.js';
 import './dex-filter-bar.js';
@@ -2376,8 +2377,17 @@ export class DexTreeTable extends LitElement {
 
     const scrollTop = this._container.scrollTop;
     const headerHeight = this._rowH;
-    const adjustedScroll = Math.max(0, scrollTop - headerHeight);
-    const newStartIdx = Math.max(0, Math.floor(adjustedScroll / this._rowH) - BUFFER_ROWS);
+    // The same window the render would compute, asked here only for its start index:
+    // if the slice has not moved there is nothing to re-render. Via the shared
+    // function rather than the arithmetic inline, because a start index that
+    // disagreed with the render's by one would skip the repaint that was needed.
+    const newStartIdx = virtualWindow({
+      items: this._getVisibleRows().length,
+      itemSize: this._rowH,
+      scroll: scrollTop - headerHeight,
+      viewport: this._viewportHeight,
+      buffer: BUFFER_ROWS,
+    }).start;
 
     if (newStartIdx === this._lastStartIdx) {
       const rowsTable = this.shadowRoot?.querySelector('.rows-table') as HTMLElement;
@@ -3676,15 +3686,21 @@ export class DexTreeTable extends LitElement {
   }
 
   private _renderTable(allVisible: TreeTableRow[], totalRows: number, visibleCols: string[]) {
-    const totalHeight = totalRows * this._rowH;
-
+    // The header sits above the rows inside the same scroll box, so the rows' own
+    // axis starts one row-height in: that offset is added back to the spacer and to
+    // the slice's position, and taken off the scroll before the window is computed.
     const headerHeight = this._rowH;
-    const scrollTop = Math.max(0, this._scrollTop - headerHeight);
-    const startIdx = Math.max(0, Math.floor(scrollTop / this._rowH) - BUFFER_ROWS);
-    const visibleCount = Math.ceil(this._viewportHeight / this._rowH) + BUFFER_ROWS * 2;
-    const endIdx = Math.min(totalRows, startIdx + visibleCount);
-    const sliceRows = allVisible.slice(startIdx, endIdx);
-    const offsetTop = startIdx * this._rowH + headerHeight;
+    const win = virtualWindow({
+      items: totalRows,
+      itemSize: this._rowH,
+      scroll: this._scrollTop - headerHeight,
+      viewport: this._viewportHeight,
+      buffer: BUFFER_ROWS,
+    });
+    const totalHeight = win.span;
+    const startIdx = win.start;
+    const sliceRows = allVisible.slice(startIdx, startIdx + win.count);
+    const offsetTop = win.before + headerHeight;
     this._lastStartIdx = startIdx;
 
     return html`
