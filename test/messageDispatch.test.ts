@@ -73,7 +73,13 @@ const PAGE_VOCABULARY = discriminantsOf('ProjectToHostMessage');
 // True of any editor at all. A table you cannot select a row in, or navigate a link out
 // of, is broken however read-only the file is — and `ready` is the handshake, without
 // which the webview never receives its rows and the panel stays blank.
-const ALWAYS = ['ready', 'select', 'navigate'];
+//
+// `requestMatrix` is here and not in EDITING because the Variable Editor is READ-ONLY:
+// the .mat/.slx viewer is in fact where most matrices are looked at. It is a question,
+// not a mutation. An editor that ignores it ships a glyph on every matrix row whose
+// panel opens empty and stays empty, with nothing logged — the exact failure mode this
+// file exists for.
+const ALWAYS = ['ready', 'select', 'navigate', 'requestMatrix'];
 
 // Everything that MUTATES the document. A read-only editor never receives these because
 // the webview is told it is read-only and does not offer the gestures; an EDITABLE one

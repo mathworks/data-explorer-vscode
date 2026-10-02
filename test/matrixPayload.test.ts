@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { DataModel, effectiveDims as coreEffectiveDims } from 'data-explorer-core';
 import { getModel, getModelFromBytes, invalidate } from '../src/host/SlddModel.js';
 import {
-  matrixPayload, matrixForRow, isGriddable, effectiveDims, subsOf, canonicalIndex,
+  matrixPayload, matrixDescriptor, matrixForRow, isGriddable, effectiveDims, subsOf, canonicalIndex,
   MAX_MATRIX_ELEMENTS, GRIDDABLE_CLASSES,
 } from '../src/host/matrixPayload.js';
 
@@ -54,18 +54,30 @@ function variable(name: string, dimensions: number[], value: any[], className = 
 }
 
 // A stub node standing in for whatever core does next. Enough surface for the
-// gate and the placement rule: className, dims, displayName, children.
+// gate and the placement rule: id, className, dims, displayName, displayElements.
+//
+// `displayElements()` is the accessor the cells now come from, and `children` is
+// built from the SAME list because that is what a real node does — core returns its
+// element children where it has them and derives the identical pairs where it does
+// not (data-explorer-core test/displayElements.test.ts pins the agreement). Set
+// `expanded: false` to model the node this whole mechanism exists for: a matrix past
+// core's MAX_EXPANDED_ELEMENTS, which has every element and no children at all.
 function stub(opts: {
   name: string; className: string; dims: unknown;
   cells: [string, string][];       // [label, displayValue]
   displayValue?: string;
+  expanded?: boolean;
+  id?: string;
 }): any {
+  const children = opts.cells.map(([displayName, displayValue]) => ({ displayName, displayValue }));
   return {
+    id: opts.id ?? `stub:${opts.name}`,
     className: opts.className,
     dims: opts.dims,
     displayName: opts.name,
     displayValue: opts.displayValue ?? '',
-    children: opts.cells.map(([displayName, displayValue]) => ({ displayName, displayValue })),
+    children: opts.expanded === false ? [] : children,
+    displayElements: () => opts.cells.map(([label, value]) => ({ label, value })),
   };
 }
 
@@ -189,15 +201,42 @@ describe('the gate admits real 2-D matrices and nothing else', () => {
     }))).toBe(false);
   });
 
-  it('rejects a node whose children have not all materialized', () => {
-    // The only source of cell text is children[i].displayValue. If core ever
-    // stops materializing elements the payload disappears rather than inventing
-    // a second formatting path over node.elements.
+  it('rejects a node that cannot list its elements at all', () => {
+    // displayElements is the only source of cell text. A node without it is not a
+    // MatlabVariableNode — or is one from a core pin older than the accessor — and
+    // either way the affordance disappears rather than the host inventing a second
+    // formatting path over `node.Value`. The numeric precision, the char budget and
+    // the `<unavailable>` sentinel are core's rules; a copy of them here would be a
+    // grid cell that disagrees with the element row beside it.
+    const mute = stub({ name: 'M', className: 'double', dims: [2, 2], cells: [] });
+    delete mute.displayElements;
+    expect(isGriddable(mute)).toBe(false);
+    expect(matrixPayload(mute)).toBeNull();
+  });
+
+  it('does NOT require element children, which is the whole point', () => {
+    // The gate used to demand `children.length === elementCount`. That tied the grid
+    // to a decision made for the TABLE — core stops expanding past
+    // MAX_EXPANDED_ELEMENTS — so raising this cap above core's would have produced
+    // matrices that pass every clause and have nothing to draw. The two limits are
+    // now independent, and this is the test that says so.
+    const unexpanded = stub({
+      name: 'U', className: 'double', dims: [2, 2], expanded: false,
+      cells: [['U(1,1)', '1'], ['U(1,2)', '2'], ['U(2,1)', '3'], ['U(2,2)', '4']],
+    });
+    expect(unexpanded.children.length).toBe(0);
+    expect(isGriddable(unexpanded)).toBe(true);
+    expect(matrixPayload(unexpanded)!.cells).toEqual(['1', '2', '3', '4']);
+  });
+
+  it('still fails closed when the element list is short, however it arrived', () => {
+    // The old gate caught this by counting children. Counting is gone, so the
+    // placement loop is what has to catch it — a slot left unfilled voids the
+    // payload, exactly as a duplicate or an out-of-range subscript does.
     const short = stub({
-      name: 'S', className: 'double', dims: [2, 2],
+      name: 'S', className: 'double', dims: [2, 2], expanded: false,
       cells: [['S(1,1)', '1'], ['S(1,2)', '2'], ['S(2,1)', '3']],
     });
-    expect(isGriddable(short)).toBe(false);
     expect(matrixPayload(short)).toBeNull();
   });
 });
@@ -339,12 +378,101 @@ describe('rank >= 3 and the effectiveDims mirror', () => {
 });
 
 describe('the size cap', () => {
+  it('is the renderer’s budget now, and not core’s expansion limit', () => {
+    // Measured against the shipped dex-matrix-grid in real Chromium, one page at a
+    // time in a 640x420 scrolling popup: 4,096 cells build in 25 ms for 7 MB of
+    // renderer heap, 99,856 in 581 ms for 63 MB, 1,000,000 in ~6 s for ~594 MB — and
+    // scroll latency stays flat at 21-28 ms the whole way, which is what makes a
+    // cap this high a question of BUILD cost rather than of usability.
+    //
+    // 1,000,000 is 1000x1000, the shape that prompted this: the entry a customer
+    // dictionary actually held. The cost is paid on an explicit open and by nothing
+    // else, which is the point of fetching on open rather than stamping every row.
+    //
+    // It no longer has to stay under core's MAX_EXPANDED_ELEMENTS (10,000) — the
+    // comment that used to say so is gone along with the coupling, because the cells
+    // come from displayElements and not from element children.
+    expect(MAX_MATRIX_ELEMENTS).toBe(1000000);
+  });
+
   it('admits exactly MAX_MATRIX_ELEMENTS and refuses one more', () => {
-    const n = MAX_MATRIX_ELEMENTS;
-    const at = variable('Big', [64, 64], Array.from({ length: n }, (_, i) => i));
-    expect(matrixPayload(at)!.cells.length).toBe(n);
-    const over = variable('Over', [64, 65], Array.from({ length: 64 * 65 }, (_, i) => i));
-    expect(matrixPayload(over)).toBeNull();
+    // Duck-typed: the boundary is arithmetic over dims, and building two real
+    // million-element matrices to assert one `>` would measure core instead.
+    const fake = (count: number) => ({
+      id: 'x', className: 'double', dims: [1000, count / 1000],
+      displayName: 'X', displayValue: '', children: [],
+      displayElements: () => [],
+    });
+    expect(isGriddable(fake(MAX_MATRIX_ELEMENTS))).toBe(true);
+    expect(isGriddable(fake(MAX_MATRIX_ELEMENTS + 1000))).toBe(false);
+  });
+
+  it('grids a real matrix that core refused to expand', () => {
+    // 40,000 elements: past core's MAX_EXPANDED_ELEMENTS of 10,000, so this node has
+    // every element and no children. The end-to-end case the cap exists to admit,
+    // through the real parse rather than a stub.
+    const big = variable('Big', [200, 200], Array.from({ length: 40000 }, (_, i) => i));
+    expect(big.children.length).toBe(0);
+    const p = matrixPayload(big)!;
+    expect(p).toBeTruthy();
+    expect(p.cells.length).toBe(40000);
+    // Every slot filled, exactly once — asserted as distinctness rather than as a
+    // hand-written order, which is the property the placement rule actually owes.
+    expect(new Set(p.cells).size).toBe(40000);
+  });
+});
+
+describe('the descriptor is what a row carries', () => {
+  const m = () => stub({
+    name: 'A', className: 'double', dims: [2, 2], id: 'sldd:design/A',
+    cells: [['A(1,1)', '1'], ['A(1,2)', '2'], ['A(2,1)', '3'], ['A(2,2)', '4']],
+  });
+
+  it('says everything the glyph and the panel title need, and carries no cells', () => {
+    // The glyph's aria-label and tooltip and the panel's title line are the only
+    // things read before the panel opens, and they need the name, the class and the
+    // shape. Cells on the row would be 4 MB per million-element entry crossing a
+    // postMessage for a panel nobody opened.
+    const d = matrixDescriptor(m())!;
+    expect(d).toEqual({ name: 'A', className: 'double', dims: [2, 2], nodeId: 'sldd:design/A' });
+    expect('cells' in d).toBe(false);
+  });
+
+  it('names the node the request should repeat the resolution from', () => {
+    // The node the descriptor was computed FROM, not the matrix's owner: a property
+    // row's matrix lives on its Value child, and matrixForRow is the one rule that
+    // resolves that. Sending the row's own node id means the host re-runs that same
+    // rule instead of a second one agreeing with it.
+    invalidate('mp://desc.sldd');
+    const root = getModelFromBytes('mp://desc.sldd', 'desc.sldd', bytes('mcos/all.sldd'));
+    const p = descend(root).find((n) => n.name === 'ParamMat');
+    const d = matrixDescriptor(p)!;
+    expect(d.nodeId).toBe(p.id);
+    expect(d.name).toBe('ParamMat.Value');       // the title still names the property
+    expect(matrixForRow(p).name).toBe('Value');  // while the cells come from the child
+  });
+
+  it('answers to the same gate as the payload, so the glyph tracks the grid', () => {
+    // Everything matrixForRow refuses, both of them refuse. It is deliberately NOT a
+    // promise that the cells will lay out — a label anomaly is only discoverable by
+    // building them, which is the work the descriptor exists to skip, so the fetch
+    // is allowed to come back empty-handed and the panel says so.
+    for (const n of [null, undefined, {}, entry('structMatrix'),
+      stub({ name: 'V', className: 'double', dims: [1, 3], cells: [] }),
+      stub({ name: 'C', className: 'char', dims: [2, 2], cells: [['C(1,1)', 'a']] })]) {
+      expect(matrixDescriptor(n)).toBeNull();
+      expect(matrixPayload(n)).toBeNull();
+    }
+  });
+
+  it('is refused for a node with no id, which nothing could ever ask about', () => {
+    // The glyph's whole job is to open a panel, and the panel is filled by asking
+    // for this id. Without one the affordance would be a dead end, so both answers
+    // go away together — the payload too, which keeps the two in lockstep.
+    const anon = m();
+    delete anon.id;
+    expect(matrixDescriptor(anon)).toBeNull();
+    expect(matrixPayload(anon)).toBeNull();
   });
 });
 

@@ -332,18 +332,22 @@ describe('buildPropertyGroups tolerates a malformed property sheet', () => {
   });
 });
 
-describe('the Value property row carries the matrix payload', () => {
-  it('attaches the payload to Value and to no other property', () => {
+describe('the Value property row carries the matrix descriptor', () => {
+  it('attaches the descriptor to Value and to no other property', () => {
     const root = load('pi://all.sldd', 'mcos/all.sldd');
     const paramMat = descend(root).find((n) => n.name === 'ParamMat');
     const rows = buildPropertyGroups(paramMat).flatMap((g) => g.properties);
     const withMatrix = rows.filter((r) => r.matrix);
     expect(withMatrix.map((r) => r.name)).toEqual(['Value']);
-    // Qualified, exactly as the table row's payload is: the popover title has to
+    // Qualified, exactly as the table row's descriptor is: the popover title has to
     // say WHICH property it is showing, not just "Value".
     expect(withMatrix[0].matrix!.name).toBe('ParamMat.Value');
     expect(withMatrix[0].matrix!.dims).toEqual([2, 3]);
-    expect(withMatrix[0].matrix!.cells).toEqual(['1', '2', '3', '4', '5', '6']);
+    // The node to ask for the cells, and NOT the cells. Selecting a 1000x1000 entry
+    // would otherwise cost ~240 ms and 4 MB of postMessage per selection, for a
+    // popover that may never be opened — and the inspector repaints on every click.
+    expect(withMatrix[0].matrix!.nodeId).toBe(paramMat.id);
+    expect('cells' in withMatrix[0].matrix!).toBe(false);
   });
 
   it('leaves the Value row’s own text exactly as it was', () => {

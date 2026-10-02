@@ -19,7 +19,7 @@ const empty = document.getElementById('dex-empty');
 // entry. The inspector is the event source because the glyph is in its shadow tree.
 const variableEditor = document.createElement('dex-variable-editor');
 document.body.appendChild(variableEditor);
-const matrixOpen = installMatrixOpen(pi, variableEditor as any);
+const matrixOpen = installMatrixOpen(pi, variableEditor as any, (m) => vscode.postMessage(m));
 
 function setEmpty(show: boolean): void {
   if (empty) empty.style.display = show ? 'block' : 'none';

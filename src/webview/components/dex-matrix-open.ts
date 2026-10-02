@@ -7,15 +7,18 @@
 // differently.
 //
 // It does not open anything. It dispatches `dex-matrix-open` carrying the
-// payload and itself; matrixOpen.ts turns that into a show() on the one editor
-// instance the webview owns.
+// descriptor and itself; matrixOpen.ts turns that into a show() on the one editor
+// instance the webview owns, plus the `requestMatrix` that fetches the cells.
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import './dex-icon.js';
-import type { MatrixPayload } from './dex-matrix-grid.js';
+import type { MatrixDescriptor } from './dex-matrix-grid.js';
 
 export interface MatrixOpenDetail {
-  matrix: MatrixPayload;
+  // The descriptor, not the payload: the glyph exists once per matrix-valued row,
+  // so what it holds is what every such row costs. Its label and tooltip need the
+  // name, shape and class; its node id is what the fetch is keyed on.
+  matrix: MatrixDescriptor;
   anchorEl: HTMLElement;
   // The table supplies this so a future editing pass knows which row to write
   // back to. The Property Inspector has no rows and omits it.
@@ -51,7 +54,7 @@ export class DexMatrixOpen extends LitElement {
     }
   `;
 
-  @property({ attribute: false }) matrix: MatrixPayload | null = null;
+  @property({ attribute: false }) matrix: MatrixDescriptor | null = null;
   @property({ type: String }) rowId?: string;
 
   // The host element is not focusable, so a bare focus() would land on <body>.

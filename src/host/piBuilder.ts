@@ -1,5 +1,5 @@
 // Copyright 2026 The MathWorks, Inc.
-import { matrixPayload, type MatrixPayload } from './matrixPayload.js';
+import { matrixDescriptor, type MatrixDescriptor } from './matrixPayload.js';
 
 export interface PIPropertyRow {
   name: string;
@@ -12,10 +12,11 @@ export interface PIPropertyRow {
   // `type: 'link'` and anchors the property NAME: this row's label is the word "Data Type",
   // which is not what the click navigates to.
   valueLink?: string;
-  // Present only on a Value row whose value is a griddable matrix. Same payload
+  // Present only on a Value row whose value is a griddable matrix. Same descriptor
   // and same builder the table rows use, so the PI cannot disagree with the table
-  // about what is griddable.
-  matrix?: MatrixPayload;
+  // about what is griddable. The cells are fetched when a popover opens, not carried
+  // here — see matrixRequest.ts.
+  matrix?: MatrixDescriptor;
 }
 
 export interface PIPropertyGroup {
@@ -54,11 +55,17 @@ export function buildPropertyGroups(node: any): PIPropertyGroup[] {
       };
       // The Variable Editor affordance, on the Value property only: it is the one
       // property whose value can be a matrix. `node` is passed, NOT its Value
-      // child — matrixPayload's own matrixForRow does that resolution, and doing
+      // child — matrixDescriptor's own matrixForRow does that resolution, and doing
       // it here would title the popover `Value` where the table says
       // `ParamMat.Value`.
+      //
+      // The DESCRIPTOR, like the table's rows: name, class, shape and the node to
+      // ask. The inspector repaints on every selection change, so building the cells
+      // here cost ~240 ms and 4 MB for the 1000x1000 entry every time it was clicked,
+      // for a popover that may never be opened. PropertiesViewProvider answers the
+      // `requestMatrix` that follows one that is.
       if (propDef.name === 'Value') {
-        const matrix = matrixPayload(node);
+        const matrix = matrixDescriptor(node);
         if (matrix) {
           row.matrix = matrix;
         }

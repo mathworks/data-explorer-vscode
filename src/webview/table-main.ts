@@ -46,7 +46,7 @@ const errorDialog = overlay('dex-error-dialog');
 // The Variable Editor: a glyph in a matrix Value cell asks for a grid. The table
 // is the event source because the glyph lives inside its shadow tree.
 const variableEditor = overlay('dex-variable-editor');
-const matrixOpen = installMatrixOpen(table, variableEditor);
+const matrixOpen = installMatrixOpen(table, variableEditor, (m) => vscode.postMessage(m));
 
 // Menu state cached from host messages so the menu builds synchronously on
 // right-click (no round-trip): whether the doc is editable, and clipboard state.

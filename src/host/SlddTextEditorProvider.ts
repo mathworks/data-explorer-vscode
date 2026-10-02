@@ -74,6 +74,7 @@ import { copyEntriesToClipboard } from './clipboardAction.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
+import { answerMatrixRequest } from './matrixRequest.js';
 import { parsesAsJson } from './slddFormat.js';
 import { catalogRenameOf, scJsonRenameEdits } from './scRename.js';
 import { buildSectionRowId } from '../common/sectionRowId.js';
@@ -1895,6 +1896,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         void applyLocateInText(msg);
       } else if (msg?.type === 'navigate') {
         if (typeof msg.target === 'string') this.onNavigate?.(msg.target);
+      } else if (msg?.type === 'requestMatrix') {
+        // A Variable Editor panel is opening: send its cells. One shared answer for
+        // all four webview hosts — see matrixRequest.ts.
+        answerMatrixRequest(webview, uriString, msg.nodeId);
       } else if (msg?.type === 'undo' || msg?.type === 'redo') {
         // Single native stack: the table view is the active editor when its menu
         // is used, so this targets the shared TextDocument undo history.

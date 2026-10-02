@@ -10,6 +10,7 @@ import { isEditableJsonSlddBytes, exceedsTextSyncLimit, exceedsStringDecodeLimit
 import { annotateDataRows, annotateModelRows } from './usageGraph.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
+import { answerMatrixRequest } from './matrixRequest.js';
 import { basename, projectPathSegments } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import { seededRead } from './seededRead.js';
@@ -399,6 +400,11 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
         this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
       } else if (msg?.type === 'navigate') {
         if (typeof msg.target === 'string') this.onNavigate?.(msg.target);
+      } else if (msg?.type === 'requestMatrix') {
+        // A Variable Editor panel is opening: send its cells. One shared answer for
+        // all four webview hosts — see matrixRequest.ts. Read-only is no reason to
+        // skip it; this is the viewer where most matrices are actually looked at.
+        answerMatrixRequest(webview, uriString, msg.nodeId);
       }
     });
 

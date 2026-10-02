@@ -8,7 +8,19 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import './dex-matrix-grid.js';
-import type { DexMatrixGrid, MatrixPayload } from './dex-matrix-grid.js';
+import type { DexMatrixGrid, MatrixDescriptor, MatrixPayload } from './dex-matrix-grid.js';
+
+// The host's answer to `requestMatrix` (src/common/protocol.ts MatrixCellsMessage).
+// Exactly one of `matrix` / `message` is set.
+export interface MatrixCellsAnswer {
+  nodeId: string;
+  matrix?: MatrixPayload;
+  message?: string;
+}
+
+// Shown while the fetch is in flight. On the 1000x1000 entry this exists for a
+// perceptible moment, which is the whole reason the panel opens before its data.
+const WAITING = 'Loading…';
 
 // Gap between the glyph and the panel, and the margin kept clear of the viewport
 // edge. Same 8px margin dex-context-menu uses, so the two agree on screen.
@@ -66,10 +78,23 @@ export class DexVariableEditor extends LitElement {
     }
 
     .close:hover { background: var(--dex-hover-bg, rgba(0, 0, 0, 0.06)); }
+
+    .status {
+      padding: 6px 2px;
+      color: var(--dex-muted-fg, #6b6b6b);
+      white-space: nowrap;
+    }
   `;
 
   @state() private _open = false;
-  @state() private _matrix: MatrixPayload | null = null;
+  // What the row carried, set by show(). The panel opens, titles and positions
+  // itself on this alone.
+  @state() private _descriptor: MatrixDescriptor | null = null;
+  // What the host sent back, set by deliver(). Null while the fetch is in flight;
+  // the grid exists only once this does.
+  @state() private _payload: MatrixPayload | null = null;
+  // Why there are no cells: the wait, or the host's reason there will never be any.
+  @state() private _message: string = WAITING;
 
   // The element that opened us. Held so focus can go back where it came from,
   // and so reposition() can re-measure without the caller passing a rect.
@@ -92,8 +117,10 @@ export class DexVariableEditor extends LitElement {
     this.close();
   };
 
+  // From the DESCRIPTOR, never the payload: the title has to be right from the
+  // moment the panel appears, which is before any cells exist.
   private get _title(): string {
-    const m = this._matrix;
+    const m = this._descriptor;
     return m ? `${m.name} — ${m.dims.join('x')} ${m.className}` : '';
   }
 
@@ -101,15 +128,26 @@ export class DexVariableEditor extends LitElement {
     return this.shadowRoot?.querySelector('dex-matrix-grid') ?? null;
   }
 
-  show(anchorEl: HTMLElement, matrix: MatrixPayload): void {
+  /**
+   * Open on what the row knew: name, class, shape, node id. The cells are not here
+   * yet — matrixOpen.ts posts a `requestMatrix` for `matrix.nodeId` and hands the
+   * answer to deliver(). Until then the panel shows its title and a waiting line.
+   */
+  show(anchorEl: HTMLElement, matrix: MatrixDescriptor): void {
     this._anchor = anchorEl;
-    this._matrix = matrix;
+    this._descriptor = matrix;
+    // Reset, because one instance serves every opening: without this the second
+    // opening would show the FIRST matrix's cells under the second one's title for
+    // as long as its fetch takes.
+    this._payload = null;
+    this._message = WAITING;
     this._open = true;
     this.setAttribute('open', '');
 
-    // Position and focus after a frame, once the panel has been laid out — its
-    // measured size is what the clamping needs. Listeners go on in the same
-    // frame so the click that opened us cannot immediately dismiss us.
+    // Position after a frame, once the panel has been laid out — its measured size
+    // is what the clamping needs. Listeners go on in the same frame so the click
+    // that opened us cannot immediately dismiss us. Focus is NOT taken here: there
+    // is no grid to focus yet. deliver() does it.
     requestAnimationFrame(() => {
       if (!this._open) {
         return;
@@ -118,8 +156,40 @@ export class DexVariableEditor extends LitElement {
       document.addEventListener('mousedown', this._dismissHandler);
       document.addEventListener('keydown', this._keyHandler);
       window.addEventListener('scroll', this._scrollHandler, true);
-      this._grid?.focusActiveCell();
     });
+  }
+
+  /**
+   * The host answered a `requestMatrix`. Fills the panel in, or says why it cannot
+   * be filled in. Ignores an answer that is not about what is currently on screen:
+   * open A, change your mind, open B, and A's reply can still be in flight — taking
+   * it would put A's numbers under B's title, which is worse than a slow panel.
+   */
+  async deliver(answer: MatrixCellsAnswer | null | undefined): Promise<void> {
+    const nodeId = answer?.nodeId;
+    if (!this._open || !this._descriptor || !nodeId || nodeId !== this._descriptor.nodeId) {
+      return;
+    }
+    if (answer?.matrix) {
+      this._payload = answer.matrix;
+      this._message = '';
+    } else {
+      // No cells and no more coming. matrixCellsMessage always supplies a reason;
+      // the fallback is for a malformed message, which must still not read as a wait
+      // that never ends.
+      this._payload = null;
+      this._message = answer?.message || 'This value could not be read as a table.';
+    }
+    await this.updateComplete;
+    if (!this._open) {
+      return;
+    }
+    // The panel just went from a one-line box to up to 640x320, so the clamping has
+    // to be re-run or a panel that fitted while waiting can hang off the viewport.
+    this.reposition();
+    // Now the grid exists: a keyboard user who pressed Enter on the glyph lands on
+    // cell (1,1) without a second keystroke.
+    this._grid?.focusActiveCell();
   }
 
   close(): void {
@@ -136,7 +206,9 @@ export class DexVariableEditor extends LitElement {
     // leaving it alone.
     const anchor = this._anchor;
     this._anchor = null;
-    this._matrix = null;
+    this._descriptor = null;
+    this._payload = null;
+    this._message = WAITING;
     if (wasFocusInside) {
       anchor?.focus();
     }
@@ -167,16 +239,22 @@ export class DexVariableEditor extends LitElement {
   }
 
   override render() {
-    if (!this._open || !this._matrix) {
+    if (!this._open || !this._descriptor) {
       return nothing;
     }
+    // A grid ONLY once there are cells. Handing the grid a cell-less descriptor would
+    // lay out prod(dims) blank boxes — a million of them for the entry this was built
+    // for — and read as a matrix that is genuinely empty rather than one still loading.
+    const body = this._payload
+      ? html`<dex-matrix-grid .matrix=${this._payload}></dex-matrix-grid>`
+      : html`<div class="status" role="status">${this._message}</div>`;
     return html`
       <div class="panel" role="dialog" aria-label=${this._title}>
         <div class="bar">
           <span class="title">${this._title}</span>
           <button type="button" class="close" aria-label="Close" @click=${() => this.close()}>✕</button>
         </div>
-        <dex-matrix-grid .matrix=${this._matrix}></dex-matrix-grid>
+        ${body}
       </div>
     `;
   }

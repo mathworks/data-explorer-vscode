@@ -4,7 +4,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { live } from 'lit/directives/live.js';
 import './dex-matrix-open.js';
-import type { MatrixPayload } from './dex-matrix-grid.js';
+import type { MatrixDescriptor } from './dex-matrix-grid.js';
 
 export interface PropertyGroup {
   title: string;
@@ -22,8 +22,10 @@ export interface PropertyRow {
   // template anchors the NAME.
   valueLink?: string;
   // Set by piBuilder for a matrix-valued Value row. Opens the same popover the
-  // table's Value cell opens, via the same dex-matrix-open glyph.
-  matrix?: MatrixPayload;
+  // table's Value cell opens, via the same dex-matrix-open glyph. The cells behind it
+  // are fetched on open — the inspector repaints on every selection change, so
+  // carrying them here cost ~240 ms and 4 MB per click on a big entry.
+  matrix?: MatrixDescriptor;
 }
 
 @customElement('dex-property-inspector')

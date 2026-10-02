@@ -23,6 +23,7 @@ import type { DragDescriptor } from '../host/dragState.js';
 import type { ClipboardMode } from '../host/clipboard.js';
 import type { DropFacts } from '../host/dropFacts.js';
 import type { WarningBanner } from '../host/parseWarnings.js';
+import type { MatrixPayload } from '../host/matrixPayload.js';
 
 // --- Host -> Webview (table view: table-main.ts) ------------------------------
 
@@ -225,6 +226,33 @@ export interface EmptyMessage {
   type: 'empty';
 }
 
+// --- Host -> Webview (both table and inspector: the Variable Editor's cells) ---
+
+/**
+ * The cells for a matrix the webview asked about, or why there are none.
+ *
+ * Sent only in answer to `requestMatrix`, never unprompted. The rows themselves
+ * carry a `MatrixDescriptor` — name, class, shape, node id — which is what the
+ * glyph and the panel title need; the cells are fetched when a panel actually
+ * opens. A 1000x1000 entry is 4 MB of cell strings, and stamping that onto a row
+ * meant every griddable matrix in a file crossed this boundary whether or not
+ * anyone looked at one.
+ *
+ * `nodeId` is echoed so a late answer to a panel the user already closed, or
+ * re-opened on a different row, can be dropped instead of painted.
+ *
+ * Exactly one of `matrix` / `message` is set. `message` exists because a descriptor
+ * is not a promise: whether the cells lay out is only discoverable by laying them
+ * out, which is the work the descriptor exists to skip. So the panel has to be able
+ * to say "could not read this" rather than show an empty grid.
+ */
+export interface MatrixCellsMessage {
+  type: 'matrixCells';
+  nodeId: string;
+  matrix?: MatrixPayload;
+  message?: string;
+}
+
 // --- Host -> Webview (project main page: project-main.ts) ---------------------
 
 /**
@@ -271,10 +299,11 @@ export type HostToTableMessage =
   | BeginRenameMessage
   | OpenAddGalleryMessage
   | ErrorMessage
-  | ValidationErrorMessage;
+  | ValidationErrorMessage
+  | MatrixCellsMessage;
 
 /** Every message the property-inspector webview can receive from the host. */
-export type HostToPropsMessage = ShowPropsMessage | EmptyMessage;
+export type HostToPropsMessage = ShowPropsMessage | EmptyMessage | MatrixCellsMessage;
 
 // --- Webview -> Host (table view -> providers) --------------------------------
 
@@ -387,6 +416,24 @@ export interface DropMessage {
   mode: 'copy' | 'move';
 }
 
+/**
+ * A Variable Editor panel is opening on this node: send its cells.
+ *
+ * The one message the TABLE sends that is a question rather than a command, and the
+ * reason the row's `_matrix` carries no cells (see `MatrixCellsMessage`). `nodeId` is
+ * the ROW's node, not the matrix owner's — a property row's matrix lives on its
+ * `Value` child, and the host re-runs its own `matrixForRow` rule on this id rather
+ * than trusting the webview to have resolved it the same way.
+ *
+ * Shared with `PropsToHostMessage` rather than reinvented: the Property Inspector
+ * opens the same panel on the same kind of value, and the two would otherwise be one
+ * rule along two paths — the defect this codebase keeps relearning.
+ */
+export interface RequestMatrixMessage {
+  type: 'requestMatrix';
+  nodeId: string;
+}
+
 /** Every message the host receives from the table webview. */
 export type TableToHostMessage =
   | ReadyMessage
@@ -403,7 +450,8 @@ export type TableToHostMessage =
   | UndoRedoMessage
   | DragStartMessage
   | DragEndMessage
-  | DropMessage;
+  | DropMessage
+  | RequestMatrixMessage;
 
 /**
  * A link on the project page was activated: open what it names.
@@ -436,5 +484,7 @@ export type ProjectToHostMessage = ReadyMessage | OpenFileMessage;
 
 /** Every message the host receives from the property-inspector webview. */
 // `NavigateMessage` is reused rather than reinvented: a clicked cross-reference means the
-// same thing from either webview, and the host answers both with the same closure.
-export type PropsToHostMessage = ReadyMessage | NavigateMessage;
+// same thing from either webview, and the host answers both with the same closure. The
+// same goes for `RequestMatrixMessage`: the inspector's Value row opens the same Variable
+// Editor the table's does, and it is answered by the same function.
+export type PropsToHostMessage = ReadyMessage | NavigateMessage | RequestMatrixMessage;

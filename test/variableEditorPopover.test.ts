@@ -11,7 +11,9 @@
 // is enough to pin the ARITHMETIC — the only part this file owns.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { DexVariableEditor } from '../src/webview/components/dex-variable-editor.js';
-import type { MatrixPayload } from '../src/webview/components/dex-matrix-grid.js';
+import type { MatrixCellsAnswer } from '../src/webview/components/dex-variable-editor.js';
+import type { MatrixCellsMessage } from '../src/common/protocol.js';
+import type { MatrixDescriptor, MatrixPayload } from '../src/webview/components/dex-matrix-grid.js';
 import { DexMatrixGrid } from '../src/webview/components/dex-matrix-grid.js';
 import { DexMatrixOpen } from '../src/webview/components/dex-matrix-open.js';
 import { installMatrixOpen } from '../src/webview/matrixOpen.js';
@@ -29,8 +31,19 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+// What a ROW carries: everything needed to title the panel and to ask for the
+// rest. The cells are fetched when a panel opens — see matrixOpen.ts.
+function descriptor(over: Partial<MatrixDescriptor> = {}): MatrixDescriptor {
+  return { name: 'A', className: 'double', dims: [2, 2], nodeId: 'n1', ...over };
+}
+
 function payload(over: Partial<MatrixPayload> = {}): MatrixPayload {
-  return { name: 'A', className: 'double', dims: [2, 2], cells: ['1', '2', '3', '4'], ...over };
+  return { ...descriptor(), cells: ['1', '2', '3', '4'], ...over };
+}
+
+// The host's answer to `requestMatrix`, as the window message the webview sees.
+function cells(matrix: MatrixPayload): any {
+  return { type: 'matrixCells', nodeId: matrix.nodeId, matrix };
 }
 
 // A focusable stand-in for the glyph, so focus-return is observable.
@@ -45,12 +58,15 @@ function makeAnchor(rect?: Partial<DOMRect>): HTMLElement {
   return anchor;
 }
 
+// Open and let the cells arrive, which is what the user sees happen. The two
+// steps are separable and `fetching on open` below drives them apart.
 async function open(matrix = payload(), rect?: Partial<DOMRect>): Promise<DexVariableEditor> {
   editor = new DexVariableEditor();
   document.body.appendChild(editor);
   await editor.updateComplete;
   editor.show(makeAnchor(rect), matrix);
   await frame();
+  await editor.deliver(cells(matrix));
   await editor.updateComplete;
   return editor;
 }
@@ -184,8 +200,10 @@ describe('opening and closing', () => {
     const el = await open(payload({ name: 'First' }));
     const second = document.createElement('button');
     document.body.appendChild(second);
-    el.show(second, payload({ name: 'Second', dims: [1, 2], cells: ['9', '8'] }));
+    const next = payload({ name: 'Second', dims: [1, 2], nodeId: 'n2', cells: ['9', '8'] });
+    el.show(second, next);
     await frame();
+    await el.deliver(cells(next));
     await el.updateComplete;
     expect(el.shadowRoot!.querySelector('.title')!.textContent!.trim()).toBe('Second — 1x2 double');
     expect(grid(el).matrix!.cells).toEqual(['9', '8']);
@@ -196,8 +214,154 @@ describe('opening and closing', () => {
   });
 });
 
+describe('the cells are fetched when the panel opens, not carried by the row', () => {
+  // The reason the whole split exists: a 1000x1000 entry is 4 MB of cell strings
+  // and ~240 ms to produce. Stamped onto a row that is merely VISIBLE, that cost
+  // is paid per row — and paid again on every re-sort, re-filter and repaint, for
+  // a panel the user may never open. So a row carries the descriptor, show()
+  // opens on the descriptor alone, and deliver() fills the panel in when the host
+  // answers. Everything here is about the window in between.
+  async function showOnly(d: MatrixDescriptor = descriptor()): Promise<DexVariableEditor> {
+    editor = new DexVariableEditor();
+    document.body.appendChild(editor);
+    await editor.updateComplete;
+    editor.show(makeAnchor(), d);
+    await frame();
+    await editor.updateComplete;
+    return editor;
+  }
+
+  it('takes the host’s own envelope, mirrored not re-invented', () => {
+    // The third copy of this shape (host MatrixCellsMessage, protocol union,
+    // component MatrixCellsAnswer) and the one a component cannot import. A compile
+    // error here is the only thing that catches the host renaming a field: at
+    // runtime a `cells` that arrived under another name is just a panel that says
+    // it could not read a matrix it read perfectly well.
+    const fromHost: MatrixCellsMessage = {
+      type: 'matrixCells',
+      nodeId: 'n1',
+      matrix: { name: 'A', className: 'double', dims: [1, 2], nodeId: 'n1', cells: ['1', '2'] },
+    };
+    const asComponent: MatrixCellsAnswer = fromHost;
+    expect(asComponent.matrix!.cells).toEqual(['1', '2']);
+    const refused: MatrixCellsAnswer = { type: 'matrixCells', nodeId: 'n1', message: 'nope' } as MatrixCellsMessage;
+    expect(refused.message).toBe('nope');
+  });
+
+  it('opens titled and waiting, with no grid and no empty table', async () => {
+    // The title comes from the descriptor, so the panel names the right variable
+    // before any cells exist. What must NOT appear is a grid: an empty bordered
+    // table reads as a matrix that is genuinely empty, which is a wrong answer
+    // rather than a pending one — and on the 1000x1000 entry this feature was
+    // built for, building one from a cell-less descriptor lays out a million blank
+    // boxes. (The dims here are small on purpose: a regression should fail this
+    // assertion, not exhaust the heap and take the readable failure with it.)
+    const el = await showOnly(descriptor({ name: 'Kp', dims: [8, 5] }));
+    expect(el.hasAttribute('open')).toBe(true);
+    expect(el.shadowRoot!.querySelector('.title')!.textContent!.trim()).toBe('Kp — 8x5 double');
+    expect(el.shadowRoot!.querySelector('dex-matrix-grid')).toBeNull();
+    const status = el.shadowRoot!.querySelector('.status')!;
+    expect(status).not.toBeNull();
+    // Announced, because for a big matrix the wait is long enough to notice.
+    expect(status.getAttribute('role')).toBe('status');
+    expect(status.textContent!.trim().length).toBeGreaterThan(0);
+  });
+
+  it('shows the grid once the cells arrive, and drops the waiting line', async () => {
+    const el = await showOnly();
+    await el.deliver(cells(payload()));
+    await el.updateComplete;
+    expect(grid(el).matrix!.cells).toEqual(['1', '2', '3', '4']);
+    expect(el.shadowRoot!.querySelector('.status')).toBeNull();
+  });
+
+  it('ignores an answer about a different node, which is what a late one is', async () => {
+    // Open A, change your mind, open B: A's answer can still be in flight. Taking
+    // it would put A's numbers under B's title — a confidently wrong table, the
+    // one outcome worse than a slow one.
+    const el = await showOnly(descriptor({ name: 'B', nodeId: 'n2' }));
+    await el.deliver(cells(payload({ name: 'A', nodeId: 'n1' })));
+    await el.updateComplete;
+    expect(el.shadowRoot!.querySelector('dex-matrix-grid')).toBeNull();
+    expect(el.shadowRoot!.querySelector('.title')!.textContent!.trim()).toBe('B — 2x2 double');
+    expect(el.shadowRoot!.querySelector('.status')).not.toBeNull();
+  });
+
+  it('says why when the host could not read it, rather than waiting forever', async () => {
+    // matrixCellsMessage's other branch. The glyph answers to the same gate as the
+    // payload but cannot run it (see matrixPayload.ts), so a descriptor CAN exist
+    // for a matrix whose cells will not lay out. The panel has to say so.
+    const el = await showOnly();
+    await el.deliver({ type: 'matrixCells', nodeId: 'n1', message: 'This value could not be read as a table.' });
+    await el.updateComplete;
+    expect(el.shadowRoot!.querySelector('dex-matrix-grid')).toBeNull();
+    expect(el.shadowRoot!.querySelector('.status')!.textContent!.trim())
+      .toBe('This value could not be read as a table.');
+  });
+
+  it('does not reopen itself when an answer arrives after it was closed', async () => {
+    // setRows closes the editor whenever new rows arrive, which can easily land
+    // between the request and the answer. A panel that popped back up on its own,
+    // over data that has since been replaced, would be a ghost.
+    const el = await showOnly();
+    el.close();
+    await el.updateComplete;
+    await el.deliver(cells(payload()));
+    await el.updateComplete;
+    expect(el.hasAttribute('open')).toBe(false);
+    expect(el.shadowRoot!.querySelector('dex-matrix-grid')).toBeNull();
+  });
+
+  it('goes back to waiting when it is reopened on another matrix', async () => {
+    // One editor instance serves every opening. Without the reset, the second
+    // opening would show the FIRST matrix's cells under the second one's title for
+    // as long as the fetch takes.
+    const el = await open(payload({ name: 'First' }));
+    expect(grid(el).matrix!.cells).toEqual(['1', '2', '3', '4']);
+    el.show(makeAnchor(), descriptor({ name: 'Second', nodeId: 'n2' }));
+    await el.updateComplete;
+    expect(el.shadowRoot!.querySelector('dex-matrix-grid')).toBeNull();
+    expect(el.shadowRoot!.querySelector('.title')!.textContent!.trim()).toBe('Second — 2x2 double');
+  });
+
+  it('repositions after the cells arrive, because the panel just grew', async () => {
+    // show() clamps a one-line "loading" box into the viewport. The grid that
+    // replaces it is up to 640x320, so a panel that fitted while waiting can hang
+    // off the bottom of the window once filled unless the arithmetic is re-run.
+    const el = await showOnly();
+    const spy = vi.spyOn(el, 'reposition');
+    await el.deliver(cells(payload()));
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it('survives an answer that arrives before the opening frame', async () => {
+    // The host can answer synchronously-fast; nothing orders its reply after the
+    // frame show() queues. Both halves have to be able to run first.
+    editor = new DexVariableEditor();
+    document.body.appendChild(editor);
+    await editor.updateComplete;
+    editor.show(makeAnchor(), descriptor());
+    await editor.deliver(cells(payload()));
+    await frame();
+    await editor.updateComplete;
+    expect(editor.hasAttribute('open')).toBe(true);
+    expect(grid(editor).matrix!.cells).toEqual(['1', '2', '3', '4']);
+  });
+
+  it('never throws on a malformed answer, whatever the host sent', async () => {
+    const el = await showOnly();
+    for (const bad of [undefined, null, {}, { nodeId: 'n1' }, { nodeId: 'n1', matrix: null }]) {
+      await expect(el.deliver(bad as any)).resolves.toBeUndefined();
+    }
+    expect(el.hasAttribute('open')).toBe(true);
+  });
+});
+
 describe('focus goes into the grid so the arrow keys work immediately', () => {
-  it('focuses the first cell on open', async () => {
+  it('focuses the first cell when the cells arrive', async () => {
+    // Deliberately on DELIVERY, not on show(): at show() time there is no grid to
+    // focus, and a keyboard user who pressed Enter on the glyph must still end up
+    // on cell (1,1) without a second keystroke.
     const el = await open();
     expect(grid(el).shadowRoot!.activeElement!.textContent!.trim()).toBe('1');
   });
@@ -312,9 +476,12 @@ describe('the glyph is an affordance, not an opener', () => {
     glyph = null;
   });
 
-  async function makeGlyph(over: Partial<MatrixPayload> = {}, rowId?: string): Promise<DexMatrixOpen> {
+  // A DESCRIPTOR, not a payload: the glyph is rendered once per matrix-valued row
+  // in the table, so what it holds is what every such row costs. It needs the
+  // name, the shape and the class for its label and tooltip, and nothing else.
+  async function makeGlyph(over: Partial<MatrixDescriptor> = {}, rowId?: string): Promise<DexMatrixOpen> {
     glyph = new DexMatrixOpen();
-    glyph.matrix = payload(over);
+    glyph.matrix = descriptor(over);
     if (rowId !== undefined) {
       glyph.rowId = rowId;
     }
@@ -344,12 +511,16 @@ describe('the glyph is an affordance, not an opener', () => {
     expect(el.shadowRoot!.querySelector('dex-icon')!.iconId).toBe('wsTable');
   });
 
-  it('dispatches the payload, itself as the anchor, and the row id', async () => {
-    const el = await makeGlyph({ name: 'Mat' }, 'row-7');
+  it('dispatches the descriptor, itself as the anchor, and the row id', async () => {
+    const el = await makeGlyph({ name: 'Mat', nodeId: 'node-42' }, 'row-7');
     const seen = events(el);
     el.shadowRoot!.querySelector<HTMLAnchorElement>('a')!.click();
     expect(seen.length).toBe(1);
     expect(seen[0].matrix.name).toBe('Mat');
+    // The node id travels with it, because the event is what starts the fetch:
+    // matrixOpen.ts turns this into a `requestMatrix` for exactly this node.
+    expect(seen[0].matrix.nodeId).toBe('node-42');
+    expect('cells' in seen[0].matrix).toBe(false);
     expect(seen[0].anchorEl).toBe(el);
     expect(seen[0].rowId).toBe('row-7');
   });
@@ -403,64 +574,114 @@ describe('the glyph is an affordance, not an opener', () => {
 });
 
 describe('installMatrixOpen is the whole wiring, for both webviews', () => {
-  it('opens the editor on the event, anchored on the glyph that fired it', async () => {
-    const source = document.createElement('div');
+  // It now owns BOTH directions: the glyph's event out as a `requestMatrix`, and
+  // the host's `matrixCells` back in as a deliver(). Keeping the pair in one
+  // module is the point — a webview that asked but never listened would open a
+  // panel that waits forever, and that is exactly the kind of half-wiring this
+  // repo has shipped before when two mains each did their own.
+  let source: HTMLElement | null = null;
+  let posted: any[] = [];
+
+  afterEach(() => {
+    source?.remove();
+    source = null;
+    posted = [];
+  });
+
+  const post = (m: unknown) => { posted.push(m); };
+
+  async function wire(withEditor = true) {
+    source = document.createElement('div');
     document.body.appendChild(source);
-    editor = new DexVariableEditor();
-    document.body.appendChild(editor);
-    await editor.updateComplete;
-    const handle = installMatrixOpen(source, editor);
+    if (withEditor) {
+      editor = new DexVariableEditor();
+      document.body.appendChild(editor);
+      await editor.updateComplete;
+    }
+    return installMatrixOpen(source, withEditor ? editor : null, post);
+  }
 
-    const a = makeAnchor();
-    source.dispatchEvent(new CustomEvent('dex-matrix-open', {
-      detail: { matrix: payload({ name: 'Mat' }), anchorEl: a },
-      bubbles: true,
-      composed: true,
-    }));
+  function fire(detail: any): void {
+    source!.dispatchEvent(new CustomEvent('dex-matrix-open', { detail, bubbles: true, composed: true }));
+  }
+
+  function hostSays(data: any): void {
+    window.dispatchEvent(new MessageEvent('message', { data }));
+  }
+
+  it('opens the editor on the event, anchored on the glyph that fired it', async () => {
+    const handle = await wire();
+    fire({ matrix: descriptor({ name: 'Mat' }), anchorEl: makeAnchor() });
     await frame();
-    await editor.updateComplete;
-    expect(editor.hasAttribute('open')).toBe(true);
-    expect(editor.shadowRoot!.querySelector('.title')!.textContent!.trim()).toBe('Mat — 2x2 double');
-
+    await editor!.updateComplete;
+    expect(editor!.hasAttribute('open')).toBe(true);
+    expect(editor!.shadowRoot!.querySelector('.title')!.textContent!.trim()).toBe('Mat — 2x2 double');
     handle.dispose();
-    source.remove();
+  });
+
+  it('asks the host for the cells of exactly the node that was opened', async () => {
+    const handle = await wire();
+    fire({ matrix: descriptor({ name: 'Mat', nodeId: 'node-9' }), anchorEl: makeAnchor() });
+    expect(posted).toEqual([{ type: 'requestMatrix', nodeId: 'node-9' }]);
+    handle.dispose();
+  });
+
+  it('delivers the host’s answer into the open editor', async () => {
+    const handle = await wire();
+    fire({ matrix: descriptor({ nodeId: 'n1' }), anchorEl: makeAnchor() });
+    await frame();
+    hostSays(cells(payload({ nodeId: 'n1' })));
+    await editor!.updateComplete;
+    await editor!.updateComplete;
+    expect(grid(editor!).matrix!.cells).toEqual(['1', '2', '3', '4']);
+    handle.dispose();
+  });
+
+  it('leaves every other host message alone', async () => {
+    // The same window listener sees setRows, showProps, every message the webview
+    // gets. Reacting to one of those would hand the editor a payload-shaped thing
+    // that is not one.
+    const handle = await wire();
+    fire({ matrix: descriptor(), anchorEl: makeAnchor() });
+    await frame();
+    const spy = vi.spyOn(editor!, 'deliver');
+    for (const data of [undefined, null, 'matrixCells', { type: 'setRows', rows: [] }, { type: 'empty' }]) {
+      expect(() => hostSays(data)).not.toThrow();
+    }
+    expect(spy).not.toHaveBeenCalled();
+    handle.dispose();
   });
 
   it('exposes close(), which is what setRows/showProps call', async () => {
-    const source = document.createElement('div');
-    document.body.appendChild(source);
-    editor = new DexVariableEditor();
-    document.body.appendChild(editor);
-    await editor.updateComplete;
-    const handle = installMatrixOpen(source, editor);
-    source.dispatchEvent(new CustomEvent('dex-matrix-open', {
-      detail: { matrix: payload(), anchorEl: makeAnchor() },
-      bubbles: true, composed: true,
-    }));
+    const handle = await wire();
+    fire({ matrix: descriptor(), anchorEl: makeAnchor() });
     await frame();
     handle.close();
-    await editor.updateComplete;
-    expect(editor.hasAttribute('open')).toBe(false);
+    await editor!.updateComplete;
+    expect(editor!.hasAttribute('open')).toBe(false);
     handle.dispose();
-    source.remove();
   });
 
-  it('ignores an event with no payload rather than opening an empty editor', async () => {
-    const source = document.createElement('div');
-    document.body.appendChild(source);
-    editor = new DexVariableEditor();
-    document.body.appendChild(editor);
-    await editor.updateComplete;
-    const handle = installMatrixOpen(source, editor);
-    source.dispatchEvent(new CustomEvent('dex-matrix-open', {
-      detail: { anchorEl: makeAnchor() },
-      bubbles: true, composed: true,
-    }));
+  it('ignores an event with no descriptor, and asks for nothing', async () => {
+    const handle = await wire();
+    fire({ anchorEl: makeAnchor() });
     await frame();
-    await editor.updateComplete;
-    expect(editor.hasAttribute('open')).toBe(false);
+    await editor!.updateComplete;
+    expect(editor!.hasAttribute('open')).toBe(false);
+    expect(posted).toEqual([]);
     handle.dispose();
-    source.remove();
+  });
+
+  it('asks for nothing when the descriptor carries no node id', async () => {
+    // Nothing to fetch with. Opening a panel that can never be answered is worse
+    // than not opening one, so neither happens.
+    const handle = await wire();
+    fire({ matrix: { name: 'A', className: 'double', dims: [2, 2] }, anchorEl: makeAnchor() });
+    await frame();
+    await editor!.updateComplete;
+    expect(posted).toEqual([]);
+    expect(editor!.hasAttribute('open')).toBe(false);
+    handle.dispose();
   });
 
   // Regression: the first cut of this wiring took the editor from a tag in
@@ -469,33 +690,26 @@ describe('installMatrixOpen is the whole wiring, for both webviews', () => {
   // so the element was null, close() threw inside the setRows handler, and the
   // table came up EMPTY for every file. The handle must be inert instead: a
   // missing editor costs the glyph, never the rows.
-  it('is inert when there is no editor element, so setRows cannot throw', () => {
-    const source = document.createElement('div');
-    document.body.appendChild(source);
-    const handle = installMatrixOpen(source, null);
+  it('is inert when there is no editor element, so setRows cannot throw', async () => {
+    const handle = await wire(false);
     expect(() => handle.close()).not.toThrow();
-    expect(() => source.dispatchEvent(new CustomEvent('dex-matrix-open', {
-      detail: { matrix: payload(), anchorEl: makeAnchor() },
-      bubbles: true, composed: true,
-    }))).not.toThrow();
+    expect(() => fire({ matrix: descriptor(), anchorEl: makeAnchor() })).not.toThrow();
+    // And it does not ask for cells it has nowhere to put.
+    expect(posted).toEqual([]);
+    expect(() => hostSays(cells(payload()))).not.toThrow();
     expect(() => handle.dispose()).not.toThrow();
-    source.remove();
   });
 
-  it('stops listening after dispose', async () => {
-    const source = document.createElement('div');
-    document.body.appendChild(source);
-    editor = new DexVariableEditor();
-    document.body.appendChild(editor);
-    await editor.updateComplete;
-    installMatrixOpen(source, editor).dispose();
-    source.dispatchEvent(new CustomEvent('dex-matrix-open', {
-      detail: { matrix: payload(), anchorEl: makeAnchor() },
-      bubbles: true, composed: true,
-    }));
+  it('stops listening in both directions after dispose', async () => {
+    const handle = await wire();
+    handle.dispose();
+    fire({ matrix: descriptor(), anchorEl: makeAnchor() });
     await frame();
-    await editor.updateComplete;
-    expect(editor.hasAttribute('open')).toBe(false);
-    source.remove();
+    await editor!.updateComplete;
+    expect(editor!.hasAttribute('open')).toBe(false);
+    expect(posted).toEqual([]);
+    const spy = vi.spyOn(editor!, 'deliver');
+    hostSays(cells(payload()));
+    expect(spy).not.toHaveBeenCalled();
   });
 });

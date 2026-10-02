@@ -59,13 +59,21 @@ function expectStampedExactly(rows: any[], expectedOwners: string[]) {
   for (const row of rows) {
     if (!row._matrix) continue;
     const m = row._matrix;
-    // A payload is complete or absent; a half-filled one must never reach the webview.
+    // A descriptor is complete or absent; a half-filled one must never reach the
+    // webview, because the glyph it draws promises a grid behind it.
     expect(typeof m.name).toBe('string');
     expect(typeof m.className).toBe('string');
     expect(Array.isArray(m.dims)).toBe(true);
     expect(m.dims.length).toBeGreaterThanOrEqual(2);
-    expect(m.cells.length).toBe(m.dims.reduce((a: number, b: number) => a * b, 1));
-    expect(m.cells.every((c: unknown) => typeof c === 'string')).toBe(true);
+    // The node to ask for the cells. Without it the fetch has nothing to name and
+    // the glyph opens an empty panel.
+    expect(typeof m.nodeId).toBe('string');
+    expect(m.nodeId.length).toBeGreaterThan(0);
+    // And NO cells. Every row of the table carries this object; the 1000x1000 entry
+    // that prompted the change is 4 MB of cells for one row, so stamping them was
+    // paying the whole cost of a panel per row that might never be opened. They are
+    // fetched when the panel opens — see matrixRequest.test.ts.
+    expect('cells' in m).toBe(false);
   }
 }
 

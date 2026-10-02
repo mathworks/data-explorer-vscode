@@ -15,7 +15,7 @@ import './dex-filter-bar.js';
 import type { DexFilterBar } from './dex-filter-bar.js';
 import './dex-icon.js';
 import './dex-matrix-open.js';
-import type { MatrixPayload } from './dex-matrix-grid.js';
+import type { MatrixDescriptor } from './dex-matrix-grid.js';
 // Type-only, so nothing from core enters the webview bundle: the import is erased
 // before vite ever resolves it. See the contract below TreeTableRow.
 import type { RowData } from 'data-explorer-core';
@@ -35,7 +35,9 @@ export interface TreeTableRow {
   _descriptionEditable?: boolean;
   // Present only when this row's value is a griddable matrix (host: matrixPayload.ts).
   // Its presence IS the decision — the cell renders the glyph and asks nothing else.
-  _matrix?: MatrixPayload;
+  // A DESCRIPTOR: name, class, shape and the node to ask. The cells are fetched when
+  // a panel opens, so a row that is merely on screen costs four fields, not 4 MB.
+  _matrix?: MatrixDescriptor;
   // `prefix` is core's: the qualifier of a value like `Bus: artFsAimCmd`, split off so the
   // anchor can cover exactly the name the dictionary holds. Declared here because
   // _CoreRowContract below compares this line against core's RowData, and a field core

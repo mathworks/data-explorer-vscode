@@ -7,8 +7,11 @@
 // cell. The page arithmetic (dimension 3 varying fastest) is the part with no
 // second source of truth in the DOM, so it is pinned hardest.
 import { describe, it, expect, afterEach } from 'vitest';
-import { DexMatrixGrid, type MatrixPayload } from '../src/webview/components/dex-matrix-grid.js';
-import type { MatrixPayload as HostMatrixPayload } from '../src/host/matrixPayload.js';
+import { DexMatrixGrid, type MatrixPayload, type MatrixDescriptor } from '../src/webview/components/dex-matrix-grid.js';
+import type {
+  MatrixPayload as HostMatrixPayload,
+  MatrixDescriptor as HostMatrixDescriptor,
+} from '../src/host/matrixPayload.js';
 
 let grid: DexMatrixGrid | null = null;
 
@@ -26,7 +29,7 @@ async function makeGrid(matrix: MatrixPayload): Promise<DexMatrixGrid> {
 }
 
 function payload(dims: number[], cells: string[], over: Partial<MatrixPayload> = {}): MatrixPayload {
-  return { name: 'A', className: 'double', dims, cells, ...over };
+  return { name: 'A', className: 'double', nodeId: 'n1', dims, cells, ...over };
 }
 
 // The grid's rendered contents, page by page, as row-major text rows.
@@ -55,9 +58,24 @@ describe('the payload type is one shape, mirrored not re-invented', () => {
     // The webview does not import host modules at runtime (see dex-tree-table's
     // own TreeTableRow), so the interface is declared twice. This assignment is
     // what stops the two copies from drifting: it is a compile error if they do.
-    const fromHost: HostMatrixPayload = { name: 'A', className: 'double', dims: [1, 2], cells: ['1', '2'] };
+    const fromHost: HostMatrixPayload = {
+      name: 'A', className: 'double', dims: [1, 2], nodeId: 'n1', cells: ['1', '2'],
+    };
     const asComponent: MatrixPayload = fromHost;
     expect(asComponent.cells).toEqual(['1', '2']);
+  });
+
+  it('the host DESCRIPTOR is assignable too, because that is what a row carries', () => {
+    // The split is the whole fetch-on-open design: a row is stamped with the
+    // descriptor — name, class, shape, and the node id to ask for — and the cells
+    // arrive only when a panel opens. Both halves have to mirror, or the glyph and
+    // the grid would be describing different types of thing.
+    const fromHost: HostMatrixDescriptor = { name: 'A', className: 'double', dims: [1, 2], nodeId: 'n1' };
+    const asComponent: MatrixDescriptor = fromHost;
+    expect(asComponent.nodeId).toBe('n1');
+    // And a payload IS a descriptor, so one grid can be handed either half's title.
+    const widened: MatrixDescriptor = payload([1, 2], ['1', '2']);
+    expect(widened.name).toBe('A');
   });
 });
 

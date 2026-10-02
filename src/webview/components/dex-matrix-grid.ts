@@ -12,15 +12,25 @@
 import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
-// Mirror of the host's MatrixPayload. Declared here rather than imported because
-// webview components never import host modules — the same reason
-// dex-property-inspector declares PropertyRow beside piBuilder's PIPropertyRow.
-// test/variableEditorGrid.test.ts assigns the host type to this one, so the two
-// cannot drift without a compile error.
-export interface MatrixPayload {
+// Mirror of the host's MatrixDescriptor / MatrixPayload pair. Declared here rather
+// than imported because webview components never import host modules — the same
+// reason dex-property-inspector declares PropertyRow beside piBuilder's
+// PIPropertyRow. test/variableEditorGrid.test.ts assigns both host types to these,
+// so the two copies cannot drift without a compile error.
+//
+// The split is the fetch-on-open design. A row carries the DESCRIPTOR — enough to
+// label the glyph and title the panel — and the cells are fetched by node id when a
+// panel actually opens. A 1000x1000 entry is 4 MB of cell strings; stamped onto a
+// row it is paid for every such row on screen, re-sort and repaint, for a panel that
+// may never be opened. See src/host/matrixPayload.ts and src/webview/matrixOpen.ts.
+export interface MatrixDescriptor {
   name: string;
   className: string;
   dims: number[];        // effectiveDims: length >= 2, no trailing singletons past dim 2
+  nodeId: string;        // the ROW's node — what `requestMatrix` asks the host about
+}
+
+export interface MatrixPayload extends MatrixDescriptor {
   cells: string[];        // row-major within a page, pages in order; length = prod(dims)
 }
 

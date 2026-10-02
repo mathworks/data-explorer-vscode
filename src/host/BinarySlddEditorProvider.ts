@@ -92,6 +92,7 @@ import {
 } from './editorHub.js';
 import { basename } from '../common/pathUtil.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
+import { answerMatrixRequest } from './matrixRequest.js';
 import { binaryEditSrcId } from '../common/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 
@@ -1228,6 +1229,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       else if (msg?.type === 'drop') void applyDrop(msg);
       else if (msg?.type === 'navigate') {
         if (typeof msg.target === 'string') this.onNavigate?.(msg.target);
+      } else if (msg?.type === 'requestMatrix') {
+        // A Variable Editor panel is opening: send its cells. One shared answer for
+        // all four webview hosts — see matrixRequest.ts.
+        answerMatrixRequest(webview, uriString, msg.nodeId);
       } else if (msg?.type === 'undo' || msg?.type === 'redo') void vscode.commands.executeCommand(msg.type);
     });
 
