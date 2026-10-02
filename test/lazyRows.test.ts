@@ -295,6 +295,30 @@ describe('a planned payload and the fetch that completes it', () => {
     for (const r of answer.rows) expect((r as any).parent).toBe(parentRow.ID);
   });
 
+  it('plans the payload through the same call the fetch makes, which is the `.mat` planner’s whole claim', () => {
+    // The sectioned planner's two halves are different functions and are pinned as a
+    // pair in sectionedRowPlan.test.ts; this one's are the same function from a
+    // different node (rowPlanner.ts:51-53), and that was asserted only in a comment —
+    // every test above reached `buildMatRowsPlanned` directly or came in through
+    // `children`, so nothing ran `payload` and nothing would have noticed the two
+    // drifting apart. Which is the failure that matters here: a payload and a fetch
+    // planned by different rules is a row that opens onto the wrong thing, silently.
+    const { uri, node } = structSource();
+    const rowIds = (rows: any[]) => rows.map((r: any) => r.ID);
+    expect(rowIds(MAT_PLANNER.payload(node, 1).rows)).toEqual(rowIds(buildMatRowsPlanned(node, 1).rows));
+
+    const variable: any = node.children[0];
+    const asPayload = MAT_PLANNER.payload(variable, LAZY_ROW_BUDGET);
+    const asFetch = MAT_PLANNER.children(variable, LAZY_ROW_BUDGET);
+    // Non-vacuity: two empty arrays are equal too, and that is the shape of both halves
+    // failing rather than agreeing.
+    expect(asFetch.rows).toHaveLength(2);
+    expect(rowIds(asPayload.rows)).toEqual(rowIds(asFetch.rows));
+    expect(asPayload.plan.deferred).toBe(asFetch.plan.deferred);
+    expect(asPayload.plan.truncated).toBe(asFetch.plan.truncated);
+    DataModel.removeDataSource(uri);
+  });
+
   it('answers at all when the node is gone, because silence is a twisty that never resolves', () => {
     // `truncated: 0` and not "absent": an answer with no rows lost nothing, and the
     // table must not read a missing node as a file too large to list.
