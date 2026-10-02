@@ -34,13 +34,16 @@
 //          other two are what the reduction throws away (see `Cheap` below).
 //   .mat   the same, through one `scanMat` (1271 ms -> 4.4 ms) reduced by `summarizeMatScan`;
 //          its references are empty by definition, since a MAT-file inherits nothing.
-//   .prj   NOTHING. A project is classified (`sourceKind` answers `'prj'`, so it is never
-//          mistaken for a dictionary) and then never cached: its structure is not in the
-//          marker file's bytes at all but in a sibling `resources/project/` tree, so there
-//          is nothing here for the `mtime:size` of the versioned file to key. A store
-//          cached against the marker's version would go stale on every edit inside that
-//          tree and no `stat` of the `.prj` could notice. The one consumer that wants a
-//          project's structure fetches it per build instead (structuralIndex.ts).
+//   .prj   NOTHING. A project is classified (`sourceKind` answers `'prj'` — for either
+//          marker, a `.prj` or a `matlab.toml` — so it is never mistaken for a dictionary)
+//          and then never cached: a `.prj`'s structure is not in the marker file's bytes at
+//          all but in a sibling `resources/project/` tree, so there is nothing here for the
+//          `mtime:size` of the versioned file to key. A store cached against the marker's
+//          version would go stale on every edit inside that tree and no `stat` of the `.prj`
+//          could notice. The one consumer that wants a project's structure fetches it per
+//          build instead (structuralIndex.ts) — including the TOML format's one file, which
+//          COULD be keyed here and is not, because one rule for projects is worth more than
+//          one read saved per build.
 //
 // A model is also the only kind with a shared FULL tier, and for the same reason: its
 // `parseModel` is what everything about it costs. That parse used to happen once per consumer

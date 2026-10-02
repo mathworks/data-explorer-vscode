@@ -179,7 +179,9 @@ export class SectionsTreeProvider implements vscode.TreeDataProvider<SlddTreeNod
       projectStore: async (file) => {
         const uri = byUri.get(file.uriString);
         // A .prj is an empty marker: its structure is the sibling resources/project/** tree,
-        // read into a project-root-relative relpath map instead of bytes.
+        // read into a project-root-relative relpath map instead of bytes. A `matlab.toml` IS
+        // the structure and arrives as a one-entry map of the same shape — projectStore.ts
+        // owns that split, so the tree reads one kind of answer for all four formats.
         return uri ? readProjectStore(uri) : null;
       },
     };

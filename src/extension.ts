@@ -21,7 +21,7 @@ import {
 } from './host/nameIndex.js';
 import { isSectionRowId } from './common/sectionRowId.js';
 import { isSupportedPath, SUPPORTED_GLOB } from './common/fileTypes.js';
-import { isSlddFile } from 'data-explorer-core';
+import { isSlddFile, isTomlProjectFile } from 'data-explorer-core';
 
 function isSlddUri(uri: vscode.Uri | undefined): boolean {
   return !!uri && isSlddFile(uri.path);
@@ -30,7 +30,8 @@ function isSlddUri(uri: vscode.Uri | undefined): boolean {
 // The ONE format→editor rule: which viewType a URI belongs in, decided by its
 // CONTENT. Editable JSON .sldd → the text-backed table view (native undo/redo);
 // compressed-binary (zip/OPC) .sldd → the writable BinarySlddEditorProvider
-// (table editing + re-zip on save); everything else → the read-only
+// (table editing + re-zip on save); a `matlab.toml` → the project view, which is
+// BinaryEditorProvider under a second view type; everything else → the read-only
 // BinaryEditorProvider, which opens any bytes.
 //
 // A JSON .sldd larger than VS Code's TextDocument sync limit is NOT treated as
@@ -45,6 +46,14 @@ function isSlddUri(uri: vscode.Uri | undefined): boolean {
 // Reading the bytes once here also spares a second full read of the file, which
 // on a 47 MB dictionary is not free.
 async function bestViewType(uri: vscode.Uri): Promise<string> {
+  // The one format whose view type is decided by its NAME rather than by its bytes, and the
+  // one that is NOT the default editor for its own files: a `matlab.toml` must keep opening in
+  // the plain text editor when clicked in the Explorer (it is the project format a user hand-
+  // edits), so its `customEditors` entry is `priority: "option"` and the page is reachable only
+  // by an explicit `openWith` — this one. Same provider, same page as a `.prj`; see
+  // BinaryEditorProvider.projectViewType. Returning `viewType` here instead would be a dead
+  // open: that entry's selector does not match `matlab.toml`, so VS Code has nothing to resolve.
+  if (isTomlProjectFile(uri.path)) return BinaryEditorProvider.projectViewType;
   if (!isSlddFile(uri.path)) return BinaryEditorProvider.viewType;
   let bytes: Uint8Array;
   try {
@@ -203,6 +212,21 @@ export function activate(context: vscode.ExtensionContext): void {
       // keyed by URI and read-only, so concurrent instances are safe.
       { webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: true },
     ),
+    // The SAME instance under the project view type — not a second provider, not a second
+    // page, not a serializer. A `matlab.toml` needs its own view type for one reason and it is
+    // a manifest reason: its `customEditors` entry must be `priority: "option"` so that an
+    // Explorer click still opens the text editor, and priority is per entry, so it cannot share
+    // the default-priority `binaryView` entry with the other formats. Everything downstream of
+    // that label is identical — same document, same read-only resolve, same project page
+    // (decided from the NAME in getHtml), same selection and navigate wiring, which is exactly
+    // why it must be this instance and not a copy.
+    vscode.window.registerCustomEditorProvider(
+      BinaryEditorProvider.projectViewType,
+      binaryProvider,
+      // Multiple instances per document for the reason the binary view gives: "Split Right" on
+      // a project page should open a working copy, not an empty tab.
+      { webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: true },
+    ),
     vscode.window.registerCustomEditorProvider(
       BinarySlddEditorProvider.viewType,
       binarySlddProvider,
@@ -294,17 +318,26 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     // Tree row handler: open the file in the Data Explorer. The binary editor
     // reads raw bytes and handles all formats — .slx, .mat, and both compressed
-    // (zip) and JSON .sldd (getModelFromBytes sniffs the format) — so a single
-    // view type works for everything the tree can surface.
+    // (zip) and JSON .sldd (getModelFromBytes sniffs the format) — so ONE provider
+    // serves everything the tree can surface. Not one view type, since R2026b: a
+    // `matlab.toml` goes to the same provider under the project view type, which is
+    // what keeps the Explorer's own click on the text editor (see bestViewType).
     vscode.commands.registerCommand('dataExplorer.openFile', async (uri: vscode.Uri) => {
       if (!uri) return;
       // Route by content: editable JSON .sldd → text-backed table view (native
-      // undo/redo); binary/zip .sldd, .slx, .mat, .prj → read-only binary view.
-      // Preview mode (italic, single reused tab) like the Explorer.
+      // undo/redo); binary/zip .sldd, .slx, .mat, .prj → read-only binary view;
+      // matlab.toml → the project view. Preview mode (italic, single reused tab)
+      // like the Explorer.
       await openInBestEditor(uri, { preview: true });
     }),
-    // Editor-tab toggle: open the current .sldd in the Data Explorer table or the
-    // plain JSON text editor. NOTE: openWith to a different viewType opens a
+    // Editor-tab toggle: open the current file in the Data Explorer or in VS Code's
+    // own text editor. Two surfaces reach it, and the command is the same for both: a
+    // `.sldd` in the editable table, and a project page over a `matlab.toml` — the one
+    // project format whose definition is a text file worth reading as one. A `.prj`
+    // deliberately has no such button; it is an empty marker, and its store is an
+    // XML tree the page exists to spare you.
+    //
+    // NOTE: openWith to a different viewType opens a
     // SECOND tab for the URI rather than converting the current tab in place —
     // an editor tab's type is fixed for its lifetime, so table and text coexist
     // as separate tabs. Editor/title menu commands pass the active resource URI

@@ -1,12 +1,16 @@
 // Copyright 2026 The MathWorks, Inc.
 // Cross-format relationship graph rendered as an expansion tree. vscode-free so
-// it can be unit-tested. The top level groups files by Simulink Project (.prj)
-// or containing folder; within a group the existing relationship model applies.
+// it can be unit-tested. The top level groups files by Simulink Project (either
+// marker: a `.prj` or a `matlab.toml`) or containing folder; within a group the
+// existing relationship model applies.
 import { refBasename } from './slddRefs.js';
 import { basename, dirname } from '../common/pathUtil.js';
-// projectNameOf, not a `.prj` strip of its own: this label and the name structuralIndex
-// hands core's parseProject are the same string for the same file, and core owns it.
-import { projectNameOf } from 'data-explorer-core';
+// projectFallbackName, not a reduction of its own: this label and the name structuralIndex
+// hands core's parseProject are the same string for the same file, and core owns it. It takes
+// the PATH, not the basename, because since R2026b the reduction is no longer one rule — a
+// `matlab.toml` is named after its parent FOLDER, since that file is called `matlab.toml` in
+// every project that has one.
+import { projectFallbackName } from 'data-explorer-core';
 
 export type SourceType = 'model' | 'sldd' | 'mat' | 'project';
 export type NodeKind = SourceType | 'missing' | 'group';
@@ -63,24 +67,27 @@ export class RelGraph {
     this.computeGroups(sources);
   }
 
-  // Bucket every source into a project group (path under a .prj's directory) or
-  // a folder group (its containing directory). Membership is by path, so
+  // Bucket every source into a project group (path under a project marker's directory)
+  // or a folder group (its containing directory). Membership is by path, so
   // same-basename files in different folders never collide.
   private computeGroups(sources: GraphSource[]): void {
-    // Project roots: the directory of each .prj. Sort longest-first so a nested
+    // Project roots: the directory of each marker. Sort longest-first so a nested
     // project claims files before its ancestor project does.
     const projectRoots = sources
       .filter((s) => s.type === 'project')
       .map((s) => ({
         dir: dirname(s.path),
-        label: projectNameOf(basename(s.path)),
+        label: projectFallbackName(s.path),
         uriString: s.uriString,
       }))
       .sort((a, b) => b.dir.length - a.dir.length);
 
     // Every project gets a group, even with zero scanned members.
-    // Invariant: at most one .prj per directory. If two exist in the same dir,
-    // the first (by source order) defines the project group; the rest are ignored.
+    // Invariant: at most one marker per directory, which the formats themselves keep —
+    // MATLAB's conversion to the TOML format DELETES the `.prj` it replaces, so a root
+    // holding both is a half-finished conversion rather than two projects. If two exist in
+    // the same dir, the first (by source order) defines the project group; the rest are
+    // ignored.
     for (const pr of projectRoots) {
       if (!this.groups.has(pr.dir)) {
         this.groups.set(pr.dir, {

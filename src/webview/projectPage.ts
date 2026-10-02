@@ -11,7 +11,7 @@
 // path, where cache and generated code go, which labels the project defines and how
 // much of it they cover. See core's ProjectPage.ts.
 
-import type { ProjectPage } from 'data-explorer-core';
+import type { ProjectPage, ProjectPageLabel } from 'data-explorer-core';
 import type { MspDictionary, MspProject } from '../common/msp.js';
 import { MSP_ROLE_LABEL } from '../common/msp.js';
 import type { WarningBanner } from '../host/parseWarnings.js';
@@ -42,13 +42,20 @@ export function newSectionState(): SectionState {
  * Everything that reaches the markup, escaped — the page's single rule.
  *
  * Numbers are accepted, not just strings, so a count is escaped by the same call as
- * the name beside it. Counts look exempt — `memberCount` is typed `number`, and a
- * number cannot carry a `<` — but that type is a claim core's parser makes, and this
+ * the name beside it. Counts look exempt — a count is declared a number, and a number
+ * cannot carry a `<` — but that type is a claim core's parser makes, and this
  * page sits on the far side of a postMessage boundary, where the payload is JSON and
  * nothing re-checks the declaration. While this took `string` only, a count could not
  * use it and was concatenated bare instead; `memberCount` then rendered escaped in the
  * identity block and raw in the Labels header, one field under two rules, and the
  * second was the wrong one (CodeQL js/xss, 2026-10-01).
+ *
+ * `null` is NOT in the parameter type and must not be added. `memberCount` and friends are
+ * nullable for a format that records no member list, and this signature is what turns one
+ * of them reaching the markup into a compile error at the call site instead of the word
+ * 'null' on a customer's page — core's ProjectPage.memberCount relies on that by name.
+ * Widening here, or defaulting the argument, moves the decision out of the renderer that
+ * has to make it (see labelsSection).
  *
  * `'` is deliberately absent: every attribute written here is double-quoted, and the
  * test that pins that is the reminder to keep it so.
@@ -305,11 +312,119 @@ function runsSection(page: ProjectPage): string {
   );
 }
 
-/** The Labels section: chips per category, not a filterable list. */
+/**
+ * Why there are no member figures on this page, said on the page.
+ *
+ * BOTH halves are load-bearing. "No file list" alone leaves a user to conclude the
+ * project contains nothing — which is the same false sentence a `memberCount` of 0 would
+ * have told them, just in words. The rule is the other half: the members are real, they
+ * are simply the filesystem rather than a list in the document, so there is nothing here
+ * to count. Said rather than left to silence because numbers that were on this page for
+ * every other format and are absent for this one read as a rendering failure.
+ */
+const NO_MEMBER_LIST =
+  'matlab.toml records no file list — every file under the project root is a member.';
+
+/** Said in the header where the coverage fraction goes, when there is no fraction. */
+const NOT_COUNTED = 'declared, not counted';
+
+/**
+ * One label as a counted chip — the shape every XML layout gets.
+ *
+ * `l.count` is read as a boolean here, which is exactly why this must not be reused for a
+ * format that reports `null`: see labelDeclaredRow.
+ */
+function labelChip(l: ProjectPageLabel): string {
+  return (
+    '<span class="chip' +
+    (l.count ? '' : ' unused') +
+    (l.custom ? ' custom' : '') +
+    '"' +
+    (l.custom ? ' title="Added by this project"' : '') +
+    '>' +
+    esc(l.name) +
+    (l.count ? '<span class="n">' + esc(l.count) + '</span>' : '') +
+    '</span>'
+  );
+}
+
+/**
+ * One label as the entries it was declared against — all a page can say about a label's
+ * reach when the format records no member list.
+ *
+ * WHY NOT A CHIP WITH THE COUNT LEFT OFF, which is the smaller edit and the wrong one.
+ * A chip tests `l.count` for truthiness, and `null` is falsy, so every label here would
+ * come out carrying `.unused` — the page asserting that this project uses the label for
+ * nothing, which is the one thing a document with no member list cannot say. Nothing
+ * catches it: the `.n` badge disappears by the same falsiness and looks deliberate, and
+ * `esc(l.count)` sits in the truthy branch where it has already narrowed to `number`, so
+ * the compiler is satisfied. The two cases say different things and so are drawn by
+ * different code.
+ *
+ * `.row` > `.name` + `.target`, the same pair the Runs card uses, because this is the same
+ * shape of fact: a name on the left, what it points at on the right.
+ *
+ * The entries are PLAIN TEXT and not links. The format advertises glob patterns here
+ * (`src/**` and the like), a pattern names no file a host could open, and a link that
+ * opened nothing for half the rows is worse than text for all of them.
+ *
+ * `custom` is deliberately not drawn either. Core reports `readOnly: false` for every
+ * label this format can carry — it records no ownership, and MATLAB's own conversion into
+ * it drops the built-in read-only category outright — so the dashed border would be on
+ * every row and distinguish nothing.
+ */
+function labelDeclaredRow(l: ProjectPageLabel): string {
+  const cell = l.declaredFiles.length
+    ? // Joined on one line rather than one row per entry: a label declares a handful of
+      // paths, and the fact being read here is "which label reaches what", not an order.
+      '<span class="target">' + l.declaredFiles.map(esc).join(', ') + '</span>'
+    : // A label declaring nothing still gets a row: the project wrote it down, and that
+      // it was declared is the fact. Dropping the row would lose the only trace of it.
+      '<span class="target muted">— none —</span>';
+  return '<div class="row"><span class="name">' + esc(l.name) + '</span>' + cell + '</div>';
+}
+
+/**
+ * The coverage figure, or the phrase that stands where it would have been.
+ *
+ * Both counts are tested, not just one. Core derives them from a single
+ * `membersEnumerated`, so they are `null` together or not at all — but `esc` rejects a
+ * `null` at the call site ON PURPOSE (core's ProjectPage.memberCount records why the field
+ * is nullable rather than a -1 that would have type-checked and shipped), and proving it
+ * here is the alternative to a `!` that would start printing 'null' the day something
+ * upstream sets only one of the two.
+ *
+ * A phrase and not an empty corner, and above all not '0 of 0': there is something to say
+ * where the fraction was — that what follows are declarations and not measurements — and
+ * '0 of 0' would say instead that nothing in the project is labelled, about a project
+ * whose labels name files right below it.
+ */
+function labelCoverage(page: ProjectPage): string {
+  const { labelledCount: labelled, memberCount: members } = page;
+  return labelled === null || members === null
+    ? NOT_COUNTED
+    : esc(labelled) + ' of ' + esc(members) + ' members labelled';
+}
+
+/**
+ * The Labels section: chips per category, not a filterable list — or, for a format that
+ * records no member list, each label with the entries it declares.
+ *
+ * `page.memberCount === null` IS the test for which of the two, here and in the identity
+ * line, rather than a flag of our own on the payload. The page model already carries the
+ * fact: core sets `memberCount`, `labelledCount` and every label `count` from one
+ * `membersEnumerated`, so a second field would be a second thing to keep in step with it —
+ * i.e. a way for this section and the identity line to end up disagreeing about one
+ * project.
+ */
 function labelsSection(page: ProjectPage): string {
-  let body = '';
+  const counted = page.memberCount !== null;
+  // First, not a footnote: it answers the question the missing numbers raise, and it is
+  // also the explanation for the member count missing from the identity line above —
+  // which is why it is shown even when there are no labels to list under it.
+  let body = counted ? '' : '<div class="empty">' + esc(NO_MEMBER_LIST) + '</div>';
   if (!page.categories.length) {
-    body = '<div class="empty">This project defines no labels.</div>';
+    body += '<div class="empty">This project defines no labels.</div>';
   } else {
     for (const c of page.categories) {
       // A category with no name holds labels no catalog defines — see core's
@@ -318,34 +433,16 @@ function labelsSection(page: ProjectPage): string {
       body +=
         '<div class="group-label">' +
         esc(c.name || 'Not in the label catalog') +
-        '</div><div class="chips">' +
-        c.labels
-          .map(
-            (l) =>
-              '<span class="chip' +
-              (l.count ? '' : ' unused') +
-              (l.custom ? ' custom' : '') +
-              '"' +
-              (l.custom ? ' title="Added by this project"' : '') +
-              '>' +
-              esc(l.name) +
-              (l.count ? '<span class="n">' + esc(l.count) + '</span>' : '') +
-              '</span>',
-          )
-          .join('') +
-        '</div>';
+        '</div>' +
+        (counted
+          ? '<div class="chips">' + c.labels.map(labelChip).join('') + '</div>'
+          : c.labels.map(labelDeclaredRow).join(''));
     }
   }
   const total = page.categories.reduce((n, c) => n + c.labels.length, 0);
   return (
     '<section class="section"><header><h2>Labels</h2>' +
-    (total
-      ? '<span class="count">' +
-        esc(page.labelledCount) +
-        ' of ' +
-        esc(page.memberCount) +
-        ' members labelled</span>'
-      : '') +
+    (total ? '<span class="count">' + labelCoverage(page) + '</span>' : '') +
     '</header>' +
     body +
     '</section>'
@@ -492,7 +589,18 @@ export function renderProjectPage(payload: ProjectPagePayload, state: PageState)
     // the one word that says why this page looks different from the last one.
     ...(msp ? ['Managed Simulink Project', MSP_ROLE_LABEL[msp.role]] : []),
     page.formatLabel,
-    page.memberCount + (page.memberCount === 1 ? ' member' : ' members'),
+    // Dropped outright when the format records no member list — same test as
+    // labelsSection, for the same reason. This one has to be written deliberately because
+    // nothing else will: `null` in a `+` expression is swallowed into the string 'null'
+    // and the compiler raises nothing, so this entry rendered 'null members' until the
+    // branch existed, where the Labels header at least failed to compile. `?? 0` would
+    // type-check too and be worse than the bad string: '0 members' is a sentence, and for
+    // a format whose members are every file under the root it is a false one.
+    ...(page.memberCount === null
+      ? []
+      : [page.memberCount + (page.memberCount === 1 ? ' member' : ' members')]),
+    // The path folders ARE a list in the document in every format, so this figure is real
+    // whatever the format and stays put beside the one that vanished.
     page.pathFolders.length + (page.pathFolders.length === 1 ? ' path folder' : ' path folders'),
   ];
 

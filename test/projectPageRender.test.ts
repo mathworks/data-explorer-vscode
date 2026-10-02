@@ -57,6 +57,20 @@ function runsCard(html: string): string {
   return /<div class="runs">([\s\S]*?)<\/div><\/section>/.exec(html)![1];
 }
 
+/** The identity block's summary line — the one place the member count ever appears. */
+function metaLine(html: string): string {
+  const m = /<div class="meta">([\s\S]*?)<\/div>/.exec(html);
+  expect(m, 'no identity meta line').not.toBeNull();
+  return m![1];
+}
+
+/** The Labels card, which has no id either. */
+function labelsCard(html: string): string {
+  const m = /<section class="section"><header><h2>Labels<\/h2>([\s\S]*?)<\/section>/.exec(html);
+  expect(m, 'no Labels section').not.toBeNull();
+  return m![1];
+}
+
 const occurrences = (s: string, needle: string) => s.split(needle).length - 1;
 
 /** Every path the page offers to open, in document order. */
@@ -312,6 +326,7 @@ describe('the labels section', () => {
     name: 'Design',
     count: 3,
     custom: false,
+    declaredFiles: [],
     ...over,
   });
 
@@ -332,6 +347,17 @@ describe('the labels section', () => {
     expect(html).toContain('class="chip unused"');
   });
 
+  it('draws a counted label as a chip, and not as a row', () => {
+    // Pinned so the two label shapes cannot be collapsed back into one by someone
+    // simplifying the branch away: a chip is what a COUNT is drawn as, and a format with
+    // no counts gets rows instead (see the describe below). A chip reads `count` as a
+    // boolean, which is the whole reason it cannot serve both.
+    const card = labelsCard(render({ categories: [{ name: 'Classification', labels: [label()] }] }));
+    expect(card).toContain('<div class="chips">');
+    expect(card).toContain('class="chip"');
+    expect(card).not.toContain('class="row"');
+  });
+
   it('marks a label this project added', () => {
     const html = render({
       categories: [{ name: 'Mine', labels: [label({ custom: true })] }],
@@ -349,6 +375,133 @@ describe('the labels section', () => {
     const html = render({ categories: [] });
     expect(html).toContain('This project defines no labels.');
     expect(html).not.toContain('members labelled');
+  });
+});
+
+// A `matlab.toml` project. The format declares no member list at all — MATLAB's rule is
+// that every file under the project root is a member, which is a statement about the
+// filesystem — so core reports `memberCount`, `labelledCount` and every label `count` as
+// `null` rather than 0, and what a label was declared AGAINST is all a page can say about
+// its reach. See core's ProjectPage.ts, which carries the reasoning for the nullability.
+//
+// Two of the three hazards here are invisible to the compiler: `null` concatenates into
+// the string 'null' without complaint, and `null` is falsy, so a chip would draw a
+// declared label as `.unused` — the page asserting the one thing this document cannot say.
+describe('a project whose format records no member list', () => {
+  const noList = {
+    format: 'toml',
+    formatLabel: 'matlab.toml',
+    memberCount: null,
+    labelledCount: null,
+  } satisfies Partial<ProjectPage>;
+
+  /** Every label in this format is declared by the project, hence `custom`. */
+  const declared = (name: string, files: string[]) => ({
+    id: 'Classification/' + name,
+    name,
+    count: null,
+    custom: true,
+    declaredFiles: files,
+  });
+
+  const withLabels = (labels: ReturnType<typeof declared>[]) =>
+    render({ ...noList, categories: [{ name: 'Classification', labels }] });
+
+  it('never prints the word null, wherever a count would have gone', () => {
+    // The blunt one, and the one that would have shipped: four fields reach the markup as
+    // numbers, and a null in any `+` expression is swallowed into text silently.
+    const html = withLabels([declared('Design', ['src/**'])]);
+    expect(html).not.toContain('null');
+  });
+
+  it('drops the member count from the identity line rather than inventing one', () => {
+    // Not '0 members': 0 is a sentence, and it is false about a project holding hundreds
+    // of files that the document simply never listed.
+    const meta = metaLine(render({ ...noList, pathFolders: ['', 'src'] }));
+    expect(meta).not.toContain('member');
+    expect(meta).not.toContain('0');
+    // What IS real in this format stays: the format's own name, and the path folders,
+    // which this document does list.
+    expect(meta).toContain('MATLAB Project');
+    expect(meta).toContain('matlab.toml');
+    expect(meta).toContain('2 path folders');
+  });
+
+  it('shows no coverage fraction in the Labels header', () => {
+    const html = withLabels([declared('Design', ['src/**'])]);
+    expect(html).not.toContain('members labelled');
+    expect(html).not.toContain(' of ');
+    // Something in the corner where the fraction was, so the absence reads as meant.
+    expect(html).toContain('<span class="count">declared, not counted</span>');
+  });
+
+  it('says why there is no count, and what the rule actually is', () => {
+    // The maintainer's requirement: the reason on the page, not numbers quietly vanishing.
+    expect(withLabels([declared('Design', ['src/**'])])).toContain(
+      '<div class="empty">matlab.toml records no file list — every file under the project ' +
+        'root is a member.</div>',
+    );
+  });
+
+  it('explains itself even when the project declares no labels', () => {
+    // The sentence covers the member count missing from the identity line too, which is
+    // there to be wondered about whether or not any label follows it.
+    const html = render({ ...noList, categories: [] });
+    expect(html).toContain('matlab.toml records no file list');
+    expect(html).toContain('This project defines no labels.');
+  });
+
+  it('lists each label with the entries it declares', () => {
+    const card = labelsCard(
+      withLabels([declared('Design', ['models/**/*.slx', 'src/init.m'])]),
+    );
+    expect(card).toContain('<div class="group-label">Classification</div>');
+    expect(card).toContain(
+      '<div class="row"><span class="name">Design</span>' +
+        '<span class="target">models/**/*.slx, src/init.m</span></div>',
+    );
+  });
+
+  it('keeps a label that declares nothing, and says it declares nothing', () => {
+    // Declared against nothing is still declared by the project. Dropping the row would
+    // lose the only trace of a label the document does contain.
+    const card = labelsCard(withLabels([declared('Unreached', [])]));
+    expect(card).toContain('<span class="name">Unreached</span>');
+    expect(card).toContain('— none —');
+  });
+
+  it('draws no chip, no unused class and no count badge', () => {
+    // THE regression the compiler cannot catch. `null` is falsy, so a chip would carry
+    // `.unused` — "this project uses the label for nothing" — and drop the `.n` badge,
+    // both silently, and `esc(l.count)` inside the truthy branch narrows to `number` so
+    // nothing is even flagged.
+    const card = labelsCard(withLabels([declared('Design', ['src/**']), declared('Spare', [])]));
+    expect(card).not.toContain('class="chip');
+    expect(card).not.toContain('unused');
+    expect(card).not.toContain('class="n"');
+    expect(card).not.toContain('class="chips"');
+  });
+
+  it('offers no link for a declared entry, because a glob is not a path', () => {
+    // The format advertises patterns here; a link that opened nothing for half the rows
+    // is worse than plain text for all of them.
+    const html = withLabels([declared('Design', ['src/**'])]);
+    expect(openTargets(html)).toEqual([]);
+    expect(labelsCard(html)).not.toContain('<a');
+  });
+
+  it('escapes a declared entry, which is hand-written text in a hand-edited file', () => {
+    // This format's whole point is that a person edits it, so its strings are at least as
+    // untrusted as a store's — and these ones reach the markup through a path no XML
+    // layout ever used.
+    const card = labelsCard(
+      withLabels([declared('<b>D</b>', ['a&b.m', 'say "<i>hi</i>".m'])]),
+    );
+    for (const tag of ['<b>', '<i>']) {
+      expect(card, `unescaped ${tag}`).not.toContain(tag);
+    }
+    expect(card).toContain('a&amp;b.m');
+    expect(card).toContain('say &quot;&lt;i&gt;hi&lt;/i&gt;&quot;.m');
   });
 });
 

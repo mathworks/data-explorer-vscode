@@ -22,7 +22,7 @@ import type { GraphSource, SourceType } from './graphModel.js';
 import { mapLimited } from './mapLimited.js';
 import { type SlxStructure } from './slxStructure.js';
 import { cheapAll, sourceKind, type SourceCache, type SourceFile, type SourceReader } from './sourceCache.js';
-import { isProjectFile, parseProject, projectNameOf } from 'data-explorer-core';
+import { isProjectFile, parseProject, projectFallbackName } from 'data-explorer-core';
 import { basename } from '../common/pathUtil.js';
 
 /** A project's structure, keyed by store-relative POSIX path — see projectStore.ts. */
@@ -44,8 +44,9 @@ export type ProjectStore = Record<string, string>;
 export interface RawFile {
   uriString: string;
   path: string;
-  // For a .prj: the project's resources/project/**/*.xml text, keyed by relpath
-  // (relative to the project root). The host reads these; the parser stays pure.
+  // For a project marker: the definition text, keyed by relpath relative to the project
+  // root — a `.prj`'s resources/project/**/*.xml, or the single `matlab.toml` entry a TOML
+  // project is. The host reads these; the parser stays pure, and dispatches on the keys.
   projectFiles?: ProjectStore;
   structure?: SlxStructure;        // a model's relationships
   slddRefs?: readonly string[];    // a dictionary's references, RAW (see slddRefs.ts)
@@ -55,10 +56,11 @@ export interface RawFile {
  * How the tree reads: the shared cache's own reader, plus the one source the cache has no
  * concept of.
  *
- * A `.prj` is FETCHED, never cached (sourceCache.ts says why: the store is a directory tree
- * beside the marker file, and the marker's `mtime:size` cannot key it). So the store arrives
- * here, per build, from the consumer that wants one — the same layering `NameReader.dirtyBytes`
- * uses for the other thing the cache must not hold.
+ * A project is FETCHED, never cached (sourceCache.ts says why: for a `.prj` the store is a
+ * directory tree beside the marker file, and the marker's `mtime:size` cannot key it — a
+ * `matlab.toml` could be keyed, but one text file read per build is not worth a second rule
+ * here). So the definition arrives here, per build, from the consumer that wants one — the
+ * same layering `NameReader.dirtyBytes` uses for the other thing the cache must not hold.
  */
 export interface GraphReader extends SourceReader {
   /** A project's store, or `null` when it cannot be reached. */
@@ -145,11 +147,16 @@ export function buildGraphSource(file: RawFile): GraphSource {
       };
     }
     if (type === 'project' && file.projectFiles) {
-      // parseProject takes a project NAME, not a filename — that is what a `.prj` calls
-      // itself in its own metadata, and this argument is the fallback when the store
+      // parseProject takes a project NAME, not a filename — that is what a project calls
+      // itself in its own metadata, and this argument is the fallback when the definition
       // carries none. So the reduction is core's to make, and it is the same call
       // graphModel labels a project group with.
-      const name = projectNameOf(basename(file.path));
+      //
+      // The PATH, not the basename, and that is the whole of what R2026b changed here: a
+      // `matlab.toml` is named after its parent folder, because every project in that format
+      // spells its definition file identically. A basename reduction would hand core the
+      // string "matlab.toml" for all of them.
+      const name = projectFallbackName(file.path);
       const parsed = parseProject(file.projectFiles, name);
       // Member files (basenames) nest under the project; referenced projects too.
       const projectFiles = parsed.files.filter((f) => !f.isFolder).map((f) => basename(f.path));
@@ -206,9 +213,10 @@ export async function graphSourcesOf(
     if (entry?.kind === 'model') raw.structure = entry.structure;
     else if (entry?.kind === 'sldd') raw.slddRefs = entry.refs;
     else if (isProjectFile(file.path)) {
-      // Fetched every build, and deliberately: a `.prj` is the one source whose structure the
-      // cache cannot key (sourceCache.ts). Cheap to fetch — the marker file's bytes are not
-      // read at all, this is a walk of the sibling `resources/project/` tree.
+      // Fetched every build, and deliberately: a project is the one source whose structure the
+      // cache cannot key (sourceCache.ts). Cheap to fetch — a `.prj`'s own bytes are not read
+      // at all, this is a walk of the sibling `resources/project/` tree, and a `matlab.toml`
+      // is one small text file.
       try {
         raw.projectFiles = (await reader.projectStore(file)) ?? undefined;
       } catch {

@@ -21,8 +21,9 @@ import {
   isModelFile,
   isProjectFile,
   isSlddFile,
+  isTomlProjectFile,
   parseProject,
-  projectNameOf,
+  projectFallbackName,
 } from 'data-explorer-core';
 import type { ProjectToHostMessage, TableToHostMessage } from '../common/protocol.js';
 
@@ -32,7 +33,8 @@ const TABLE_VIEW_TYPE = 'dataExplorer.tableView';
 const BINARY_SLDD_VIEW_TYPE = 'dataExplorer.binarySlddView';
 
 /**
- * The folder a project's paths are relative to: the one holding the `.prj`.
+ * The folder a project's paths are relative to: the one holding the marker — the `.prj`, or
+ * the `matlab.toml`, which MATLAB writes at that same root.
  *
  * Every path in a project store is spelled relative to this and nothing else — that
  * is what lets a project be moved or cloned — so it is the only base a link on the
@@ -80,7 +82,7 @@ async function openProjectPath(
     if (preferProject) {
       const prj = await soleProjectFile(target);
       if (prj) {
-        await vscode.commands.executeCommand('vscode.open', prj);
+        await openProjectMarker(prj);
         return;
       }
     }
@@ -95,7 +97,37 @@ async function openProjectPath(
   await vscode.commands.executeCommand('vscode.open', target);
 }
 
-/** The one `.prj` in a folder, or undefined when there is not exactly one. */
+/**
+ * Open a project marker on its PAGE, whichever of the two markers it is.
+ *
+ * `vscode.open` is enough for a `.prj` — this webview is that extension's default editor — and
+ * is deliberately NOT enough for a `matlab.toml`, whose entry is `priority: "option"` so that
+ * an Explorer click keeps opening the text editor (see `projectViewType`). An explicit
+ * `openWith` is how that entry is reached, and it has to be reached here: the row this answers
+ * says "this project is a component of mine", and a click that landed on a page for one format
+ * and on raw TOML for another would make the component view depend on how its author chose to
+ * store it.
+ */
+async function openProjectMarker(marker: vscode.Uri): Promise<void> {
+  if (isTomlProjectFile(marker.path)) {
+    await vscode.commands.executeCommand(
+      'vscode.openWith',
+      marker,
+      BinaryEditorProvider.projectViewType,
+    );
+    return;
+  }
+  await vscode.commands.executeCommand('vscode.open', marker);
+}
+
+/**
+ * The one project marker in a folder, or undefined when there is not exactly one.
+ *
+ * Either marker counts, because `isProjectFile` is name-aware: a folder holding a `matlab.toml`
+ * is as much one project as a folder holding a `<name>.prj`. Nothing here reads the marker's
+ * BYTES — the filter is a name test and the answer is a URI — so a TOML project passing through
+ * is not a zip read of a text file waiting to happen.
+ */
 async function soleProjectFile(folder: vscode.Uri): Promise<vscode.Uri | undefined> {
   let entries: Array<[string, vscode.FileType]>;
   try {
@@ -141,6 +173,26 @@ class BinaryDocument implements vscode.CustomDocument {
 // routed here via an explicit openWith redirect in extension.ts.
 export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider<BinaryDocument> {
   public static readonly viewType = 'dataExplorer.binaryView';
+
+  /**
+   * The SAME provider under a second view type, for the project format that must not be
+   * auto-selected: `matlab.toml`.
+   *
+   * Clicking a `matlab.toml` in the Explorer has to open the plain text editor — it is the one
+   * project format a user edits by hand, and taking that away would be a regression dressed as
+   * a feature. A `customEditors` priority is per ENTRY, so the obvious edit — adding
+   * `matlab.toml` to `dataExplorer.binaryView`'s selector — is exactly the wrong one: that
+   * entry is `priority: "default"`, and the click would land on this webview. A second entry at
+   * `priority: "option"` is never auto-selected and is still reachable by an explicit
+   * `vscode.openWith`, which is how the tree row opens the page (see bestViewType).
+   *
+   * A second VIEW TYPE, not a second provider: same instance, same document class, same page,
+   * same selection/navigate wiring, registered twice in extension.ts. The view type here is a
+   * routing label VS Code needs and nothing else — what the tab renders is still decided from
+   * the NAME, in getHtml, which is why a `.prj` and a `matlab.toml` opening under two different
+   * view types draw the identical page.
+   */
+  public static readonly projectViewType = 'dataExplorer.projectView';
 
   // Relay selection to the Property Inspector (wired in extension.ts).
   public onSelect?: (uriString: string, rowIds: string[]) => void;
@@ -298,14 +350,23 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
         if (isProjectFile(name)) {
           // The .prj is an empty marker; the project structure lives in the
           // sibling resources/project/** store, read into a project-root-
-          // relative POSIX relpath map for the parser.
+          // relative POSIX relpath map for the parser. A `matlab.toml` IS the
+          // definition and arrives as a one-entry map — projectStore.ts owns that
+          // split, so nothing here reads differently for the two.
           //
           // A PAGE, not a table — see core's ProjectPage.ts. Straight from
           // `parseProject` rather than through the node tree the other formats build:
           // what the page shows is the parse itself (run order, groups, label
           // coverage), and a tree of rows is a shape none of that survives.
+          //
+          // `projectFallbackName` of the PATH, not a reduction of the name: every
+          // project in the TOML format spells its definition file identically, so
+          // stripping an extension would title all of them "matlab" (or, with
+          // `projectNameOf`, leave the page headed "matlab.toml"). The parent folder is
+          // what MATLAB calls a project it was handed the root of, and core publishes
+          // the rule so this page and the tree's project row agree on one string.
           const files = await readProjectStore(document.uri);
-          const parsed = parseProject(files, projectNameOf(name));
+          const parsed = parseProject(files, projectFallbackName(document.uri.path));
           const root = projectRootOf(document.uri);
           webview.postMessage({
             type: 'setProject',

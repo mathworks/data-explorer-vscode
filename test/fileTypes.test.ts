@@ -28,13 +28,32 @@
 // Neither half can see the other, so this is the only place that agreement is
 // checkable, and it is pinned in BOTH directions below. The scan at the bottom then
 // covers the third case: a consumer that quietly grows its own copy of either half.
+//
+// R2026b added a format identified by NAME rather than by extension — `matlab.toml`, the whole
+// definition of a project stored in the one file, with no `.prj` and no `resources/` beside it —
+// so the list is now two lists and every pin below comes in two halves. The name half carries a
+// hazard the extension half does not: `.toml` as an EXTENSION would admit every `Cargo.toml`,
+// `pyproject.toml` and `ruff.toml` in a workspace as a MATLAB project, which is a wrong answer
+// a user SEES (a tree row, an editor offer, a page that declares nothing), so the tests below
+// pin the exclusion as hard as the inclusion.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { isMatFile, isModelFile, isProjectFile, isSlddFile, projectNameOf, refModelExt } from 'data-explorer-core';
+import {
+  isMatFile,
+  isModelFile,
+  isProjectFile,
+  isSlddFile,
+  isTomlProjectFile,
+  projectFallbackName,
+  projectNameOf,
+  refModelExt,
+  TOML_PROJECT_FILE,
+} from 'data-explorer-core';
 import {
   MODEL_EXTS,
   SUPPORTED_EXTS,
+  SUPPORTED_NAMES,
   GRAPH_EXTS,
   SUPPORTED_GLOB,
   GRAPH_GLOB,
@@ -63,10 +82,27 @@ describe('the shared extension list', () => {
   });
 
   it('derives globs that name every extension in their list', () => {
-    expect(SUPPORTED_GLOB).toBe('**/*.{sldd,mat,prj,slx,mdl}');
+    // A FLAT brace union of whole patterns for the supported glob, because a bare FILENAME
+    // cannot be spelled inside a `*.{…}` suffix list — the `*.` prefix is outside the braces.
+    // The graph glob keeps the nested form: it has no named marker to carry, deliberately.
+    expect(SUPPORTED_GLOB).toBe('{**/*.sldd,**/*.mat,**/*.prj,**/*.slx,**/*.mdl,**/matlab.toml}');
     expect(GRAPH_GLOB).toBe('**/*.{sldd,mat,slx,mdl}');
-    for (const ext of SUPPORTED_EXTS) expect(SUPPORTED_GLOB).toContain(ext);
+    for (const ext of SUPPORTED_EXTS) expect(SUPPORTED_GLOB).toContain(`**/*.${ext}`);
+    for (const name of SUPPORTED_NAMES) expect(SUPPORTED_GLOB).toContain(`**/${name}`);
     for (const ext of GRAPH_EXTS) expect(GRAPH_GLOB).toContain(ext);
+  });
+
+  it('carries the named project marker, and never as an extension', () => {
+    // The hazard, pinned from both sides. In the glob by NAME, so a TOML-format project is
+    // discovered at all; absent from SUPPORTED_EXTS, so a `.toml` suffix admits nothing — the
+    // one-word edit that would make `Cargo.toml` a MATLAB project is adding it to that list.
+    expect([...SUPPORTED_NAMES]).toEqual([TOML_PROJECT_FILE]);
+    expect(SUPPORTED_EXTS as readonly string[]).not.toContain('toml');
+    expect(SUPPORTED_GLOB).not.toContain('*.toml');
+    // Not in the graph lists either: a project defines no variables and no parameter usages,
+    // in any of its four formats.
+    expect(GRAPH_EXTS as readonly string[]).not.toContain('toml');
+    expect(GRAPH_GLOB).not.toContain('toml');
   });
 });
 
@@ -124,6 +160,66 @@ describe('the list and core’s kind tests agree', () => {
   });
 });
 
+// The same seam for the half of the list identified by NAME. One row, and a table anyway, so
+// that the next marker is a line here rather than a second way of asking the question.
+const NAME_KINDS: ReadonlyArray<readonly [string, string, (p: string) => boolean]> = [
+  [TOML_PROJECT_FILE, 'project', isTomlProjectFile],
+];
+
+describe('the named markers and core’s kind tests agree', () => {
+  it('names a kind test for every supported name, and no name core alone knows', () => {
+    expect(NAME_KINDS.map(([name]) => name).sort()).toEqual([...SUPPORTED_NAMES].sort());
+  });
+
+  it('classifies a marker found by name as a project, in any case', () => {
+    for (const [name, kind, test] of NAME_KINDS) {
+      // The PATH, because a name marker is only a marker in a folder: `isTomlProjectFile`
+      // compares basenames, and every consumer here holds a path rather than a bare name.
+      expect(test(`/w/MyProj/${name}`), `${name} must be a ${kind} definition`).toBe(true);
+      expect(isProjectFile(`/w/MyProj/${name}`), `${name} must be a ${kind}`).toBe(true);
+      expect(isProjectFile(`/w/MyProj/${name.toUpperCase()}`), `${name} is case-insensitive`).toBe(true);
+      // Not any other kind, the same sweep the extension table makes: the marker reaching the
+      // dictionary or model readers would be a text file handed to a zip parser.
+      for (const other of [isSlddFile, isMatFile, isModelFile]) {
+        expect(other(`/w/MyProj/${name}`), `${name} is a ${kind} and nothing else`).toBe(false);
+      }
+    }
+  });
+
+  it('claims no other .toml in the workspace, which is why this is a NAME', () => {
+    // The wrong answer this design exists to prevent, and it is user-visible: a tree row, an
+    // "open in Data Explorer" offer, and a project page reporting that Cargo declares nothing.
+    for (const stray of ['/w/Cargo.toml', '/w/pyproject.toml', '/w/ruff.toml', '/w/matlab.toml.bak']) {
+      expect(isProjectFile(stray), `${stray} must not be a project`).toBe(false);
+      expect(isSupportedPath(stray), `${stray} must not be supported`).toBe(false);
+    }
+    // A folder NAMED matlab.toml is not one either — the test is the last segment of a path,
+    // and a directory never reaches these predicates as one.
+    expect(isProjectFile('/w/matlab.toml/readme.md')).toBe(false);
+  });
+});
+
+// The reduction a project's NAME comes from, which R2026b split in two: the stem for a `.prj`,
+// the parent FOLDER for a `matlab.toml`. Pinned here for the reason `projectNameOf` is below —
+// core is a pinned dependency, and three host paths make this call (the project page, the
+// tree's project-group label, and the name handed to `parseProject` for the tree), so a drift
+// when the pin moves shows up as one project appearing under two names.
+describe('projectFallbackName', () => {
+  it('names a TOML project after the folder holding its definition', () => {
+    expect(projectFallbackName(`/w/ABS_Model/${TOML_PROJECT_FILE}`)).toBe('ABS_Model');
+    // Not the stem of the file: `matlab.toml` is the name in EVERY project of this format, so
+    // a reduction of the filename titles all of them "matlab" (or leaves "matlab.toml" as the
+    // page heading, which is what `projectNameOf` would have done here).
+    expect(projectFallbackName(`/w/ABS_Model/${TOML_PROJECT_FILE}`)).not.toBe('matlab');
+    expect(projectFallbackName(`/w/ABS_Model/${TOML_PROJECT_FILE}`)).not.toBe(TOML_PROJECT_FILE);
+  });
+
+  it('leaves a .prj exactly as projectNameOf had it', () => {
+    expect(projectFallbackName('/w/MyProj/MyProj.prj')).toBe('MyProj');
+    expect(projectFallbackName('/w/MyProj/My.Big.Project.PRJ')).toBe('My.Big.Project');
+  });
+});
+
 describe('the host’s two routing questions', () => {
   it('supports precisely the extensions in the supported list', () => {
     for (const ext of SUPPORTED_EXTS) {
@@ -134,14 +230,33 @@ describe('the host’s two routing questions', () => {
     expect(isSupportedPath('/w/archive.zip')).toBe(false);
   });
 
+  it('supports every name in the name list, in any case', () => {
+    for (const name of SUPPORTED_NAMES) {
+      expect(isSupportedPath(`/w/MyProj/${name}`), `${name} must be supported`).toBe(true);
+      expect(
+        isSupportedPath(`/w/MyProj/${name.toUpperCase()}`),
+        `${name} must be case-insensitive`,
+      ).toBe(true);
+    }
+    // And it comes for free: `isSupportedPath` is a union of core's kind tests, and
+    // `isProjectFile` is name-aware now, so nothing in that function mentions a name. This
+    // test is what says the free answer is the RIGHT one — the consequence is that editing
+    // `matlab.toml` in a text editor re-reads its tree row and badges it modified.
+  });
+
   it('admits precisely the graph list to the usage and name graphs', () => {
     for (const ext of GRAPH_EXTS) {
       expect(isGraphPath(`/w/thing.${ext}`), `.${ext} must participate`).toBe(true);
     }
     // The one difference between the two questions, and the reason there are two: a
-    // project is opened but contributes no variables and no parameter usages.
+    // project is opened but contributes no variables and no parameter usages. True of a
+    // project in EVERY format, which is why the named marker is tested here beside the `.prj`
+    // rather than only in its own block.
     expect(isGraphPath('/w/proj.prj')).toBe(false);
     expect(isSupportedPath('/w/proj.prj')).toBe(true);
+    for (const name of SUPPORTED_NAMES) {
+      expect(isGraphPath(`/w/MyProj/${name}`), `${name} is not a graph participant`).toBe(false);
+    }
     for (const ext of SUPPORTED_EXTS) {
       if (GRAPH_EXTS.includes(ext as never)) continue;
       expect(isGraphPath(`/w/thing.${ext}`), `.${ext} is not a graph participant`).toBe(false);
@@ -219,9 +334,15 @@ describe('no consumer keeps its own copy of the list', () => {
     'src/host/SlddModel.ts',
     'src/host/BinaryEditorProvider.ts',
     // graphModel.ts classifies nothing — it is handed a `type` already decided — but it
-    // does REDUCE a name: a project group is labelled with its `.prj`'s stem. That is the
+    // does REDUCE a name: a project group is labelled with its marker's name. That is the
     // same kind of second copy, so it is held to the same scan.
     'src/host/graphModel.ts',
+    // projectStore.ts is where a name-identified marker arrives first: it decides, from the
+    // marker alone, whether there is a `resources/project/` tree to walk or a single file to
+    // read. That is a kind test and a name, so it belongs under the scan — a `endsWith('.prj')`
+    // or a bare `'matlab.toml'` here would be the fifth copy of the rule, on the one path where
+    // getting it wrong reads a project's definition from the wrong place entirely.
+    'src/host/projectStore.ts',
   ];
 
   // Comments are stripped before scanning. A comment that mentions the old literal,
@@ -255,6 +376,26 @@ describe('no consumer keeps its own copy of the list', () => {
   // a third copy from growing here, in either repo's absence of a shared test.
   const SINGLE_EXT_ANCHOR = new RegExp(`\\\\\\.(${SUPPORTED_EXTS.join('|')})\\$`, 'i');
 
+  // A marker spelled out as a string, e.g. `'matlab.toml'` — the shape every check above
+  // misses, because a NAME is not an extension and so appears in none of their forms.
+  //
+  // It is the quietest copy of all four. An extension literal at least looks like a rule; a
+  // filename in a comparison looks like a filename, and there are now five host paths that
+  // must agree about this one ('is this a project?', 'where is its definition?', 'what is it
+  // called?', 'which view type opens it?', 'which key does core dispatch on?'). The failure is
+  // not a missed file but a SPLIT: one path case-sensitive against a `MATLAB.TOML` the glob
+  // found, so the same project is a tree row and not a project page. Both spellings come from
+  // core — `TOML_PROJECT_FILE` for the string, `isTomlProjectFile` for the test — and the
+  // constant exists so that this scan can be absolute about the literal.
+  //
+  // Case-insensitive on purpose, unlike the leak check's needle scan: there is no legitimate
+  // `MATLAB.TOML` in this host's code, so the broader match costs nothing and catches the copy
+  // most likely to be written by hand.
+  const NAME_LITERAL = new RegExp(
+    `(['"\`])(${SUPPORTED_NAMES.map((n) => n.replace(/\./g, '\\.')).join('|')})\\1`,
+    'i',
+  );
+
   for (const file of CONSUMERS) {
     it(`${file} names no glob or extension test of its own`, () => {
       const src = code(file);
@@ -262,8 +403,22 @@ describe('no consumer keeps its own copy of the list', () => {
       expect(EXT_ALTERNATION.test(src), `${file} should use a shared matcher`).toBe(false);
       expect(ENDSWITH_EXT.test(src), `${file} should use one of core's kind tests`).toBe(false);
       expect(SINGLE_EXT_ANCHOR.test(src), `${file} should use a shared matcher or reducer`).toBe(false);
+      expect(NAME_LITERAL.test(src), `${file} should use core's TOML_PROJECT_FILE`).toBe(false);
     });
   }
+
+  it('the scan would catch a hand-written marker name', () => {
+    // The scan's own test, because a regex asserting that something is ABSENT passes just as
+    // well when it can match nothing at all — and this one is built at run time out of
+    // SUPPORTED_NAMES, so a typo in the escaping is invisible from the results above.
+    for (const name of SUPPORTED_NAMES) {
+      expect(NAME_LITERAL.test(`if (base === '${name}') return true;`)).toBe(true);
+      expect(NAME_LITERAL.test(`const marker = "${name.toUpperCase()}";`)).toBe(true);
+      // And the escaping holds: a dot in the name is a dot, not "any character".
+      expect(NAME_LITERAL.test(`'${name.replace('.', 'X')}'`)).toBe(false);
+    }
+    expect(NAME_LITERAL.test("const p = 'Cargo.toml';")).toBe(false);
+  });
 
   it('every consumer that discovers or routes files takes the rule from a shared module', () => {
     // Either source counts, because the rule now lives in two places on purpose: the

@@ -5,10 +5,18 @@
 // the rest of the suite. A typo'd command id or a `when` clause pointing at the
 // wrong viewType silently disables a button with no build error — these tests
 // are the guard against that.
+//
+// One of those `when` clauses is now load-bearing in a way the others are not. R2026b's
+// `matlab.toml` is a file a user also HAND-EDITS, so clicking it in the Explorer must keep
+// opening the plain text editor — and the entire mechanism for that is a priority in this
+// manifest. A one-word edit here ("option" → "default", or a `matlab.toml` pattern joining the
+// binary view's selector) takes a text file away from the text editor with nothing in the
+// TypeScript to show it, which is why the tests below pin the priority and the selector's
+// SHAPE rather than only its presence.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { SUPPORTED_EXTS } from '../src/common/fileTypes.js';
+import { SUPPORTED_EXTS, SUPPORTED_NAMES } from '../src/common/fileTypes.js';
 
 const pkg = JSON.parse(
   readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'),
@@ -19,17 +27,19 @@ const commandIds: string[] = contributes.commands.map((c: { command: string }) =
 const BINARY_VIEW = 'dataExplorer.binaryView';
 const TABLE_VIEW = 'dataExplorer.tableView';
 const BINARY_SLDD_VIEW = 'dataExplorer.binarySlddView';
+const PROJECT_VIEW = 'dataExplorer.projectView';
 
 describe('customEditors: text-backed table for JSON .sldd + byte-backed binary editor', () => {
   const editors = contributes.customEditors as Array<{
     viewType: string;
+    displayName: string;
     selector: Array<{ filenamePattern: string }>;
     priority: string;
   }>;
 
-  it('registers exactly three custom editors: table view, binary view, binary sldd view', () => {
+  it('registers exactly four custom editors: table, binary, binary sldd, project', () => {
     const viewTypes = editors.map((e) => e.viewType).sort();
-    expect(viewTypes).toEqual([BINARY_VIEW, TABLE_VIEW, BINARY_SLDD_VIEW].sort());
+    expect(viewTypes).toEqual([BINARY_VIEW, TABLE_VIEW, BINARY_SLDD_VIEW, PROJECT_VIEW].sort());
   });
 
   it('the writable binary-sldd table view owns *.sldd at priority option (reached via redirect)', () => {
@@ -72,6 +82,45 @@ describe('customEditors: text-backed table for JSON .sldd + byte-backed binary e
     // editor is the default and redirects editable JSON here.
     expect(table.priority).toBe('option');
   });
+
+  // The fourth entry, and the reason there is a fourth rather than one more pattern on the
+  // binary view's selector: `priority` is a property of the ENTRY, not of the pattern. Adding
+  // `matlab.toml` beside `*.prj` on the default-priority entry would make the Data Explorer the
+  // default editor for that file, so clicking it in the Explorer would open a project page
+  // instead of the TOML text — and that file is meant to be hand-edited. A second entry is the
+  // only way VS Code offers to give one glob a different priority from the rest.
+  it('the project page owns matlab.toml BY NAME, at priority option', () => {
+    const view = editors.find((e) => e.viewType === PROJECT_VIEW)!;
+    expect(view, 'the projectView editor must be declared').toBeTruthy();
+    // Derived from SUPPORTED_NAMES, exactly like the extension selector below is derived from
+    // SUPPORTED_EXTS: the manifest is the one consumer of those lists that no import reaches,
+    // so a name added to the host and not to this selector is a project format the host
+    // discovers, lists in the tree, and then cannot open.
+    expect(view.selector.map((s) => s.filenamePattern)).toEqual([...SUPPORTED_NAMES]);
+    expect(view.priority).toBe('option');
+    // The same displayName as the binary view, not the "(editable)" one: it draws the identical
+    // read-only project page — the same component, chosen in getHtml from the file's name — so
+    // two labels for one page would be two names for one thing in the Reopen With list.
+    expect(view.displayName).toBe(editors.find((e) => e.viewType === BINARY_VIEW)!.displayName);
+  });
+
+  it('leaves every DEFAULT-priority editor blind to the named marker', () => {
+    // The regression this file exists to catch, stated as a rule over the whole array rather
+    // than about one entry, because the edit that breaks it need not touch projectView at all:
+    // a `matlab.toml` (or a `*.toml`) pattern anywhere on a default-priority selector takes the
+    // plain text editor away from a file users edit by hand. VS Code auto-selects a default
+    // editor whose selector matches; an `option` entry is only ever reached by an explicit
+    // `vscode.openWith`, which is how the tree row and the project page get there.
+    for (const editor of editors) {
+      if (editor.priority !== 'default') continue;
+      for (const pattern of editor.selector.map((s) => s.filenamePattern)) {
+        for (const name of SUPPORTED_NAMES) {
+          expect(pattern, `${editor.viewType} must not claim ${name} by default`).not.toBe(name);
+        }
+        expect(pattern, `${editor.viewType} must not claim .toml by default`).not.toMatch(/\.toml$/i);
+      }
+    }
+  });
 });
 
 describe('configurationDefaults: redirect-only editors stay out of the editor-type picker', () => {
@@ -107,6 +156,17 @@ describe('configurationDefaults: redirect-only editors stay out of the editor-ty
     }
     expect(hidden, 'the default editor must remain pickable').not.toContain(BINARY_VIEW);
   });
+
+  it('keeps the project page pickable, option-priority though it is', () => {
+    // The converse does NOT hold, and this is the entry that shows why: `option` here means
+    // "not the default for this file", not "a redirect target that breaks when chosen". The two
+    // hidden editors are hidden because picking them by hand FAILS — tableView cannot resolve a
+    // compressed-binary .sldd as text at all (issue #24). Picking the project page over a
+    // `matlab.toml` works perfectly; it is the same view the tree row opens. Hiding it would
+    // remove the only discoverable way to get from the text of a definition to the project it
+    // describes, for a format whose whole point is that the text is editable by hand.
+    expect(hidden, 'the project page must stay in the editor-type picker').not.toContain(PROJECT_VIEW);
+  });
 });
 
 describe('editor-toggle commands', () => {
@@ -136,10 +196,39 @@ describe('menu wiring', () => {
     }
   });
 
+  // Selected by `when`, not by command: View-as-Text now has TWO entries, one per custom
+  // editor that can be left for the text editor. `find` by command alone would have silently
+  // tested the first of them twice over and said nothing about the other.
+  const textEntryFor = (viewType: string) =>
+    titleMenus.find(
+      (m) =>
+        m.command === 'dataExplorer.viewAsText' &&
+        m.when.includes(`activeCustomEditorId == ${viewType}`),
+    );
+
   it('shows View-as-Text only when the table view is the active editor', () => {
-    const entry = titleMenus.find((m) => m.command === 'dataExplorer.viewAsText');
+    const entry = textEntryFor(TABLE_VIEW);
     expect(entry).toBeTruthy();
     expect(entry!.when).toContain(`activeCustomEditorId == ${TABLE_VIEW}`);
+  });
+
+  // Two entries rather than one `||` clause, which is a real choice and the narrower one. A
+  // single `when` of `activeCustomEditorId == tableView || activeCustomEditorId == projectView`
+  // renders the identical button, but every later edit to either view's condition then has to
+  // be made without disturbing the other — and these two are not the same button in spirit: one
+  // leaves an editable table for the JSON behind it, the other leaves a read-only page for the
+  // TOML it was generated from. The mutual-exclusion test below is what keeps two entries from
+  // becoming two buttons at once.
+  it('shows View-as-Text on the project page too, which is a round trip', () => {
+    const entry = textEntryFor(PROJECT_VIEW);
+    expect(entry, 'the project page needs a way back to the TOML text').toBeTruthy();
+    // Same group as the table view's, so the button sits in the same place in the tab toolbar
+    // whichever custom editor the user is leaving.
+    expect(entry!.group).toBe(textEntryFor(TABLE_VIEW)!.group);
+    // And no extension condition: this entry is reached only from a view type that one
+    // filename can open, so `resourceExtname` would be a second, weaker spelling of the same
+    // thing — and the wrong one, since `.toml` is not this file's identity.
+    expect(entry!.when).not.toContain('resourceExtname');
   });
 
   it('shows View-as-Table only when a non-custom editor is active on a .sldd', () => {
@@ -150,14 +239,29 @@ describe('menu wiring', () => {
     expect(entry!.when).toContain('resourceExtname == .sldd');
   });
 
-  it('the two toggle buttons are mutually exclusive (never both visible)', () => {
-    const text = titleMenus.find((m) => m.command === 'dataExplorer.viewAsText')!;
+  it('the toggle buttons are mutually exclusive (never two visible at once)', () => {
     const table = titleMenus.find((m) => m.command === 'dataExplorer.viewAsTable')!;
-    // One requires the table custom editor active; the other requires no custom
-    // editor active (the plain text view).
-    const textNeedsCustom = text.when.includes(`activeCustomEditorId == ${TABLE_VIEW}`);
-    const tableNeedsNoCustom = table.when.includes('!activeCustomEditorId');
-    expect(textNeedsCustom && tableNeedsNoCustom).toBe(true);
+    // The toggles divide on whether a custom editor is active at all: every View-as-Text
+    // entry requires a NAMED one, View-as-Table requires none (the plain text view).
+    const textEntries = titleMenus.filter((m) => m.command === 'dataExplorer.viewAsText');
+    expect(textEntries.length).toBeGreaterThan(1);
+    for (const entry of textEntries) {
+      expect(entry.when, `${entry.when} must require a custom editor`).toMatch(
+        /activeCustomEditorId == dataExplorer\.\w+/,
+      );
+      expect(entry.when, `${entry.when} must not fire with no custom editor`).not.toContain(
+        '!activeCustomEditorId',
+      );
+    }
+    expect(table.when).toContain('!activeCustomEditorId');
+    // And the View-as-Text entries exclude each OTHER, which is what makes two entries safe:
+    // `activeCustomEditorId` holds one view type, so no two of these clauses are ever true
+    // together. Pinned as distinct view types rather than as distinct strings, because two
+    // entries naming the same view type would be one button drawn twice.
+    const claimed = textEntries.map(
+      (m) => /activeCustomEditorId == (dataExplorer\.\w+)/.exec(m.when)![1],
+    );
+    expect(new Set(claimed).size).toBe(claimed.length);
   });
 
   // Every palette entry has to be scoped to something it can actually act on, and there are
@@ -165,6 +269,12 @@ describe('menu wiring', () => {
   // extension. "Add an Entry" is about the VIEW: a .sldd open in the plain text editor has no
   // gallery to open, and the two editable table editors are only ever .sldd anyway — so
   // naming them is both narrower and more precise than naming the extension.
+  //
+  // Which is why the project page gets a tab BUTTON and no palette entry: a palette entry for
+  // it would have to be scoped by view type (`.toml` is not that file's identity), and this
+  // rule then reads it as a third editable view, which it is not. The button is on screen
+  // whenever the page is, so nothing is unreachable — and a palette entry that fires on one
+  // filename is a command the palette offers to a workspace that has no project at all.
   it('scopes every palette entry to a .sldd file or to an editable table view', () => {
     const EDITABLE_VIEWS = [TABLE_VIEW, BINARY_SLDD_VIEW];
     for (const entry of contributes.menus.commandPalette) {
