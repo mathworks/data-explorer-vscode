@@ -434,6 +434,44 @@ describe('RelGraph folder/project grouping', () => {
     expect(g.children(byLabel(g.roots(), 'Outer'))).toEqual([]);
   });
 
+  // R2026b's TOML format: the marker is a NAME, `matlab.toml`, and there is no `.prj` and
+  // no `resources/` beside it — MATLAB's conversion deletes both. `src()` keys off the
+  // extension, so the type is given explicitly here; that is the whole difference, and it
+  // is the point. Everything a project group is made of has to follow from the DIRECTORY
+  // rather than from the file name, because that file name is the same in every project
+  // stored this way.
+  it('makes a matlab.toml a project group named after its FOLDER', () => {
+    const g = new RelGraph([
+      src('w/ABS_Model/matlab.toml', { type: 'project' }),
+      src('w/ABS_Model/models/abs.slx'),
+    ]);
+    const roots = g.roots();
+    // Not 'matlab.toml' and not 'matlab': both are what a basename reduction produces, and
+    // either would label every TOML project in a workspace identically.
+    expect(labels(roots)).toEqual(['ABS_Model']);
+    const proj = byLabel(roots, 'ABS_Model');
+    expect(proj.groupKind).toBe('project');
+    expect(proj.groupKey).toBe('/w/ABS_Model');
+    // The header is the row that opens the page, so it carries the marker itself.
+    expect(proj.uriString).toBe('file:///w/ABS_Model/matlab.toml');
+    // A file anywhere under the marker's directory joins the project, not a folder group.
+    expect(labels(g.children(proj))).toEqual(['abs.slx']);
+    expect(labels(roots)).not.toContain('models');
+  });
+
+  it('assigns a file to the longest-matching root when the nested marker is a matlab.toml', () => {
+    // The .prj case above, with the markers in the two formats a workspace can really
+    // hold at once: a project converted to TOML inside one that has not been. The
+    // longest-first sort is format-blind, and must stay so.
+    const g = new RelGraph([
+      src('outer/Outer.prj'),
+      src('outer/inner/matlab.toml', { type: 'project' }),
+      src('outer/inner/deep.slx'),
+    ]);
+    expect(labels(g.children(byLabel(g.roots(), 'inner')))).toEqual(['deep.slx']);
+    expect(g.children(byLabel(g.roots(), 'Outer'))).toEqual([]);
+  });
+
   it('orders project groups before folder groups, alphabetical within each', () => {
     const g = new RelGraph([
       src('zzz/z.slx'),

@@ -1,0 +1,31 @@
+name = "parityProject"
+
+[folders]
+path = [
+    "utils",
+]
+
+[dependencies]
+parityLib = {path = "../parityLib"}
+
+[project]
+startup-folder = "utils"
+startup-files = [
+    "startup_one.m",
+    "startup_two.m",
+]
+shutdown-files = [
+    "shutdown_parity.m",
+]
+
+[project.shortcuts]
+main = {path = "main.m"}
+
+[project.labels.Review]
+Checked = [
+    "utils/helper.m",
+]
+
+[simulink]
+cache-folder = "cache"
+codegen-folder = "codegen"

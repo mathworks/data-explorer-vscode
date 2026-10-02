@@ -1,6 +1,6 @@
 # Simulink Data Explorer Extension for Visual Studio Code
 
-**Explore Simulink&reg; models, data dictionaries, and projects directly in Visual Studio Code — no MATLAB&reg; or Simulink installation required.** Simulink Data Explorer reads `.slx`, `.mdl`, `.sldd`, `.mat`, and `.prj` files itself, so it works anywhere VS Code runs, including machines and CI agents with no MATLAB install. It adds a **relationship tree** that maps how your files reference each other, a **table editor** for browsing and editing their contents, and a **Properties panel** for the selected entry.
+**Explore Simulink&reg; models, data dictionaries, and projects directly in Visual Studio Code — no MATLAB&reg; or Simulink installation required.** Simulink Data Explorer reads `.slx`, `.mdl`, `.sldd`, `.mat`, and project files itself, so it works anywhere VS Code runs, including machines and CI agents with no MATLAB install. It adds a **relationship tree** that maps how your files reference each other, a **table editor** for browsing and editing their contents, and a **Properties panel** for the selected entry.
 
 ![Simulink Data Explorer in action: the relationship-tree sidebar and the table editor browsing a model, data dictionary, and MAT-file](media/screenshots/demo.gif)
 
@@ -10,7 +10,7 @@
 
 - **Relationship tree** — a dedicated activity-bar view that scans the workspace and renders how files relate: models referencing other models, models linked to data dictionaries (`.sldd`) and MAT-files (`.mat`), and dictionaries referencing other dictionaries. Entries expand lazily as you drill in.
 - **Jump-to-reference links** — a model's Model References and External Data render as clickable links; selecting one opens the referenced model, dictionary, or MAT-file, resolved from your workspace. A reference to a file your workspace doesn't contain shows as unresolved.
-- **Project & folder grouping** — the tree groups top-level entries by MATLAB Project (`.prj`) or by containing folder, so files with the same name in different folders stay distinct. References resolve within a group first.
+- **Project & folder grouping** — the tree groups top-level entries by MATLAB Project or by containing folder, so files with the same name in different folders stay distinct. References resolve within a group first. A project is recognized from either marker — a `.prj` beside its `resources/project/` store, or the single `matlab.toml` an R2026b project is stored as — and its group header opens the project page.
 - **Health decorations** — tree rows are badged for at-a-glance status: circular references, orphaned dictionaries/MAT-files (nothing links to them), unsaved modifications, and unresolved (missing) references.
 
 ### Browse & edit file contents
@@ -60,7 +60,7 @@ or from within VS Code via the Extensions view → **⋯** menu → **Install fr
 | Simulink data dictionaries | `.sldd` — textual (JSON) and compressed-binary | **Editable** |
 | Simulink models | `.slx`, `.mdl` — the modern text format and the classic pre-R2012 format | Read-only |
 | MAT-files | `.mat` — Level 5, i.e. `-v6`/`-v7` | Read-only |
-| MATLAB Projects | `.prj` | Read-only |
+| MATLAB Projects | `.prj` — with its `resources/project/` store in any of the three XML layouts — or `matlab.toml`, the single file an R2026b project is stored as | Read-only |
 
 ## Requirements
 
@@ -71,8 +71,9 @@ Visual Studio Code 1.106.0 or later. Nothing else — Simulink Data Explorer rea
 - `.mat` support covers the Level 5 format only. **`-v7.3`** files, which are HDF5 and are what MATLAB requires for variables above 2 GB, are reported as unsupported rather than opened.
 - Large textual (JSON) `.sldd` files are limited by size. Above **50 MB**, the file opens as a **read-only** table (VS Code cannot mirror a document that large for editing). Above **512 MB**, it cannot be rendered as a table at all and opens in VS Code's built-in **text editor** instead.
 - Paste creates a new top-level entry in the target section; pasting as a child of a struct/bus is not yet supported.
-- Reference resolution matches files by name (basename), preferring the referrer's own project or folder. Two `.prj` files in the same directory are not supported.
-- `.m` files are not scanned, so a project whose members are only `.m` files appears as an empty group.
+- Reference resolution matches files by name (basename), preferring the referrer's own project or folder. Two project markers in the same directory are not supported.
+- `.m` files are not scanned, so a project whose members are only `.m` files appears as an empty group — which is common for a `matlab.toml` project.
+- A `matlab.toml` project page shows no member count and no label-coverage fraction: that file records no member list, so each label is shown with the entries it declares instead. Clicking `matlab.toml` in VS Code's Explorer opens it in the text editor, as it would any other text file; the project page is the tree's group header, or **Reopen Editor With… → Simulink Data Explorer**.
 
 ## Feedback
 
