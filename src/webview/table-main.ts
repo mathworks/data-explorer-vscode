@@ -6,7 +6,7 @@ import './components/dex-context-menu.js';
 import './components/dex-error-dialog.js';
 import './components/dex-variable-editor.js';
 import { installMatrixOpen } from './matrixOpen.js';
-import { renderBanners } from './banners.js';
+import { renderBanners, renderError } from './banners.js';
 import { nextExpandedIds, nextStickyIds, pendingSelectionToApply, spliceEntryRows, insertEntryRows } from './rowUpdates.js';
 import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from './menuItems.js';
 import { dropDecision, type DragMode, type DropTarget, type DragSource } from './dropDecision.js';
@@ -256,13 +256,16 @@ function hideLoading(): void {
   table.loading = false;
 }
 
+// Through banners.ts, like the notice and the warning, because the error banner is
+// in the same strip and the table is offset by the strip's TOTAL height. Painted
+// from here it was styled and stacked as if it were alone: outside the strip, in
+// normal flow ahead of a table pinned at inset:0, so the table covered it and an
+// error message reached the DOM and no screen.
 function showError(message: string): void {
-  const el = document.getElementById('dex-error');
-  if (el) { el.textContent = message; el.style.display = 'block'; }
+  renderError(table, message);
 }
 function clearError(): void {
-  const el = document.getElementById('dex-error');
-  if (el) { el.textContent = ''; el.style.display = 'none'; }
+  renderError(table, undefined);
 }
 
 // Hand a new row array to the table and re-derive everything that depends on it.

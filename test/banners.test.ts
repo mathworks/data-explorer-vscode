@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { renderBanners } from '../src/webview/banners.js';
+import { renderBanners, renderError } from '../src/webview/banners.js';
 
 // The banner strip above the table: the persistent read-only notice (#dex-notice)
 // and the parse-warning banner (#dex-warning). This drives the SHIPPING code —
@@ -115,6 +115,56 @@ describe('renderBanners', () => {
     const t = el('table');
     expect(() => renderBanners(t, { notice: 'x' }, now)).not.toThrow();
     expect(t.style.top).toBe('');
+  });
+
+  it('offsets the table for an error banner too, since it is in the same strip', () => {
+    // The banner that reaches a user only on the worst path: the host could not
+    // deliver a payload at all, and this message is the only thing that ends the
+    // table's loading spinner. It used to be painted from table-main.ts into markup
+    // OUTSIDE the strip — normal flow, ahead of a table pinned at inset:0 — so the
+    // table painted over it, measured in a real browser as a cleared spinner above
+    // the words "No data".
+    renderError(table, 'Failed to show allMidi.mat: Invalid string length', now);
+    expect(el('dex-error').style.display).toBe('block');
+    expect(el('dex-error').textContent).toContain('Invalid string length');
+    expect(table.style.top).not.toBe('');
+  });
+
+  it('clears the error and the offset when passed nothing', () => {
+    renderError(table, 'gone wrong', now);
+    renderError(table, undefined, now);
+    expect(el('dex-error').style.display).toBe('none');
+    expect(el('dex-error').textContent).toBe('');
+    expect(table.style.top).toBe('');
+  });
+
+  it('renders an error as text, never as markup', () => {
+    // The message interpolates a thrown error's text and a file name, neither of
+    // which this module chose.
+    renderError(table, '<img src=x onerror=1>', now);
+    expect(el('dex-error').children).toHaveLength(0);
+    expect(el('dex-error').textContent).toBe('<img src=x onerror=1>');
+  });
+
+  it('leaves a showing error alone when a repaint carries no banners', () => {
+    // The three banners arrive on different messages, so each paint has to decide
+    // the offset from what is SHOWING rather than from its own argument. Before
+    // that, an `updateEntryRows` with nothing to say would have dropped the table
+    // back to the top of the panel and slid it under the error still above it.
+    renderError(table, 'Failed to show allMidi.mat: Invalid string length', now);
+    renderBanners(table, {}, now);
+    expect(el('dex-error').style.display).toBe('block');
+    expect(table.style.top).not.toBe('');
+  });
+
+  it('keeps the offset when the error clears but a notice is still up', () => {
+    // The other direction of the same rule, and the common one: a read-only view
+    // whose failed save has been superseded still has a banner above the table.
+    renderBanners(table, { notice: 'Read-only.' }, now);
+    renderError(table, 'a failure', now);
+    renderError(table, undefined, now);
+    expect(el('dex-notice').style.display).toBe('block');
+    expect(table.style.top).not.toBe('');
   });
 
   it('defers the measurement to the next frame by default', () => {

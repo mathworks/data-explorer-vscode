@@ -13,10 +13,20 @@ import { SHARED_STYLESHEET } from '../common/webviewAssets.js';
 // silently found nothing — one rule over four shells, which is what
 // test/webviewOverlays.test.ts is about.
 
-// Shared banner strip for the three table views: the persistent read-only notice
-// (#dex-notice) and the parse-warning banner (#dex-warning), stacked above the
-// table in one absolutely-positioned container so table-main.ts can offset the
-// full-bleed table by ONE measured height however many banners are showing.
+// Shared banner strip for the three table views: the error banner (#dex-error), the
+// persistent read-only notice (#dex-notice) and the parse-warning banner
+// (#dex-warning), stacked above the table in one absolutely-positioned container so
+// table-main.ts can offset the full-bleed table by ONE measured height however many
+// banners are showing.
+//
+// #dex-error is in the strip because it was INVISIBLE outside it. It used to sit in
+// <body>'s normal flow ahead of this container, and <dex-tree-table> is
+// position:absolute;inset:0 — a positioned element later in the document, so it
+// painted over the error and nothing offset the error out from under it. The message
+// was in the DOM, readable only to a test: measured in a real browser against the
+// shipped bundle, `{type:'error'}` cleared the loading spinner and left the panel
+// reading "No data". That is the banner the host falls back to when a payload cannot
+// be delivered at all, so silence there is the whole bug it exists to prevent.
 //
 // Shared because the notice used to exist in the read-only provider's markup
 // alone. table-main.ts is one module running inside four shells, so an element it
@@ -31,6 +41,7 @@ import { SHARED_STYLESHEET } from '../common/webviewAssets.js';
 // report a warning per variable, and a banner taller than the table hides the very
 // rows it is describing.
 export const BANNERS_HTML = `    <div id="dex-banners" style="position:absolute;top:0;left:0;right:0;z-index:2;max-height:40%;overflow:auto;font-family:var(--vscode-font-family,sans-serif);font-size:12px;">
+      <div id="dex-error" role="alert" style="display:none;box-sizing:border-box;padding:6px 10px;color:var(--vscode-inputValidation-errorForeground,var(--vscode-errorForeground,#f14c4c));background:var(--vscode-inputValidation-errorBackground,rgba(241,76,76,0.12));border-bottom:1px solid var(--vscode-inputValidation-errorBorder,#be1100);"></div>
       <div id="dex-notice" role="status" style="display:none;box-sizing:border-box;padding:6px 10px;color:var(--vscode-inputValidation-infoForeground,var(--vscode-foreground));background:var(--vscode-inputValidation-infoBackground,rgba(100,148,237,0.12));border-bottom:1px solid var(--vscode-inputValidation-infoBorder,#4084d0);"></div>
       <div id="dex-warning" role="status" style="display:none;box-sizing:border-box;padding:6px 10px;color:var(--vscode-inputValidation-warningForeground,var(--vscode-foreground));background:var(--vscode-inputValidation-warningBackground,rgba(255,190,60,0.12));border-bottom:1px solid var(--vscode-inputValidation-warningBorder,#b89500);">
         <div id="dex-warning-headline" style="font-weight:600;"></div>
@@ -65,8 +76,8 @@ export function renderWebviewHtml(
   );
 }
 
-// WHAT THE TABLE VIEW'S DOCUMENT IS: the error banner, the shared banner strip, and
-// the tree table filling what is left.
+// WHAT THE TABLE VIEW'S DOCUMENT IS: the shared banner strip, and the tree table
+// filling what is left.
 //
 // One decision, and it used to be stated three times — the text provider, the
 // read-only binary provider and the binary .sldd provider each passed a
@@ -81,8 +92,7 @@ export function renderTableWebview(webview: vscode.Webview, distRoot: vscode.Uri
   return renderWebviewHtml(webview, distRoot, {
     scriptFile: 'table.js',
     title: 'Data Explorer',
-    body: `    <div id="dex-error" role="alert" style="display:none;color:var(--vscode-errorForeground,#f14c4c);padding:8px;font-family:var(--vscode-font-family,sans-serif);"></div>
-${BANNERS_HTML}
+    body: `${BANNERS_HTML}
     <dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>`,
   });
 }

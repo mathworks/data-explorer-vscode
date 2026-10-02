@@ -124,11 +124,17 @@ describe('the banner strip is declared by every shell, because it is layout', ()
     expect(src).not.toContain('${BANNERS_HTML}');
   });
 
-  it('table-main.ts paints the strip through that one function', () => {
-    // Not two calls (one per banner): the table is offset by the strip's TOTAL
-    // height, so whichever code sets one has to know about the other.
-    expect(read('src/webview/table-main.ts')).toContain('renderBanners(table, {');
-    expect(read('src/webview/table-main.ts')).not.toContain("getElementById('dex-notice')");
+  it('table-main.ts paints the strip through that one module', () => {
+    // Not a call per banner: the table is offset by the strip's TOTAL height, so
+    // whichever code shows one has to know about the others. #dex-error is named
+    // here because painting it from table-main.ts is exactly how it ended up
+    // outside the strip — in normal flow under a table pinned at inset:0, with the
+    // message in the DOM and on screen nowhere.
+    const src = read('src/webview/table-main.ts');
+    expect(src).toContain('renderBanners(table, {');
+    expect(src).toContain('renderError(table, ');
+    expect(src).not.toContain("getElementById('dex-notice')");
+    expect(src).not.toContain("getElementById('dex-error')");
   });
 });
 
