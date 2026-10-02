@@ -19,7 +19,10 @@
 import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
 import { renderTableWebview } from './webviewHtml.js';
-import { buildRows, buildEntryRows, clipMarkKey, splitClipMarkKey, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
+import { buildEntryRows, clipMarkKey, splitClipMarkKey, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
+import { rowPlannerFor } from './rowPlanner.js';
+import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
+import { answerChildRequest } from './childRequest.js';
 import { sectionRules } from './sectionRules.js';
 // DATA_PART_XML is core's name for the one zip member holding the entries, and the four
 // sites below are three roles of one rule: two lookups, the exclusion in
@@ -401,6 +404,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     const uriString = document.uri.toString();
     const name = document.metaPath;
 
+    // Which builder plans this file's rows AND answers a fetch for them (rowPlanner.ts).
+    // Planning an editable view is admissible for the reasons set out in
+    // SlddTextEditorProvider: the names are all delivered, each entry's rows stay one
+    // contiguous run for the splice, and an edit resolves through the model, not the rows.
+    const planner = rowPlannerFor(name);
+
     // Register `xml` as this document's source and answer the tree. Every rebuild in
     // this provider goes through here — paint, the two mid-transform rebuilds — so
     // that a source registered halfway through a cut/paste is the same shape as the
@@ -471,7 +480,8 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         }
         const modified = computeModified(uriString, node);
         const clipMark = clipMarkOfDoc();
-        const rows = buildRows(node, modified, clipMark);
+        const planned = planner.payload(node, LAZY_ROW_BUDGET, { modifiedNames: modified, clipMark });
+        const rows = planned.rows;
         // Through postOrReport, and NOT awaited: the postMessage itself (and the
         // serialization that can fail in it) still happens in this synchronous run, so
         // the paint is as prompt as it was; only the error report is deferred. Without
@@ -488,11 +498,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
             columnLabels: COLUMN_LABELS,
             columnGroups: COLUMN_GROUPS,
             editable: true,
-            // What the read of this dictionary could not read. Rebuilt with the model on
-            // every repaint rather than captured on open, because an edit rewrites
-            // chunkXml and the answer is about the chunk as it stands — a warning that
-            // outlived the part it was about would be worse than none.
-            warnings: warningBanner(sourceWarnings(node)),
+            // What the read of this dictionary could not read, and what the plan held
+            // back. Rebuilt with the model on every repaint rather than captured on open,
+            // because an edit rewrites chunkXml and the answer is about the chunk as it
+            // stands — a warning that outlived the part it was about would be worse than
+            // none.
+            warnings: lazyRowsBanner(planned.plan, warningBanner(sourceWarnings(node))),
           },
           name,
         );
@@ -517,7 +528,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       // lets it CLEAR a stale mark — see the Status comment in rowBuilder.
       const modified = new Set<string>();
       if (isEntryModified(uriString, entry)) modified.add(entry.name);
-      return buildEntryRows(entry, section.name, modified, clipMarkOfDoc());
+      // Planned to the same budget the payload used, so a repaint of one huge entry
+      // cannot post more than the RPC carries — see the note at the sibling call site in
+      // SlddTextEditorProvider.
+      return buildEntryRows(entry, section.name, modified, clipMarkOfDoc(), undefined, LAZY_ROW_BUDGET);
     };
 
     /**
@@ -1244,6 +1258,14 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // A Variable Editor panel is opening: send its cells. One shared answer for
         // all four webview hosts — see matrixRequest.ts.
         answerMatrixRequest(webview, uriString, msg.nodeId);
+      } else if (msg?.type === 'requestChildren') {
+        // A row the payload deferred is being opened: send the rows under it
+        // (childRequest.ts). The filler is a no-op because THIS view's payload fills no
+        // Usage column either — a fetched row has to match its siblings, and matching
+        // means empty here. `uriString` resolves because findNode prefers the global
+        // registry, which is keyed by the node id this provider's prefixed srcId is
+        // embedded in; that is the same lookup the Property Inspector's selection uses.
+        void answerChildRequest(webview, uriString, msg.nodeId, name, async () => false, planner);
       } else if (msg?.type === 'undo' || msg?.type === 'redo') void vscode.commands.executeCommand(msg.type);
     });
 

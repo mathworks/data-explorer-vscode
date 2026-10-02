@@ -39,6 +39,11 @@ export interface TreeTableRow {
   // A DESCRIPTOR: name, class, shape and the node to ask. The cells are fetched when
   // a panel opens, so a row that is merely on screen costs four fields, not 4 MB.
   _matrix?: MatrixDescriptor;
+  // Present only when this row's children were held back by the payload's row budget
+  // (host: lazyRows.ts). Its presence IS the decision, like `_matrix`: the row gets a
+  // twisty although no child row arrived with it, and opening it asks the host for the
+  // next level instead of revealing rows the table already holds.
+  _lazy?: boolean;
   // `prefix` is core's: the qualifier of a value like `Bus: artFsAimCmd`, split off so the
   // anchor can cover exactly the name the dictionary holds. Declared here because
   // _CoreRowContract below compares this line against core's RowData, and a field core
@@ -1227,6 +1232,14 @@ export class DexTreeTable extends LitElement {
         visibility: hidden;
       }
 
+      /* Open, with its rows still crossing the extension boundary (see _pendingChildren).
+         Dimmed rather than animated: the wait is one postMessage long on the files this
+         happens to, and a spinner that flashes for 40 ms is noise. opacity keeps the
+         glyph's own colour, which a forced-colors theme substitutes. */
+      .name-cell .toggle.loading {
+        opacity: 0.5;
+      }
+
       .name-cell .indent {
         flex-shrink: 0;
       }
@@ -1534,6 +1547,17 @@ export class DexTreeTable extends LitElement {
   // expand" (the ▶/▼ glyph, aria-expanded, the Space key); the number is what a
   // section header shows as its entry count.
   private _childCounts: Map<string, number> = new Map();
+  // Rows whose children the host has NOT sent (`_lazy`). The second half of "can this
+  // row expand": a count of 0 and a lazy mark mean the same thing to the glyph and
+  // opposite things to the toggle, which fetches instead of expanding. Derived in
+  // _buildCaches beside _childCounts so the two can only ever describe the same rows.
+  private _lazyIds: Set<string> = new Set();
+  // Lazy rows asked about and not yet answered, so the glyph can say so rather than
+  // look inert while a fetch crosses the boundary. Deliberately NOT @state(): it is
+  // maintained inside _buildCaches, which runs from render(), and a reactive property
+  // assigned during a render schedules another one. Every change to it coincides with
+  // a change that already repaints — an expand, or the rows the answer brings.
+  private _pendingChildren: Set<string> = new Set();
   private _lastRowsRef: TreeTableRow[] | null = null;
 
   override connectedCallback(): void {
@@ -2404,6 +2428,7 @@ export class DexTreeTable extends LitElement {
     this._visibleRowsCache = null;
     this._depthCache.clear();
     this._childCounts.clear();
+    this._lazyIds.clear();
   }
 
   private _buildCaches(): void {
@@ -2411,12 +2436,39 @@ export class DexTreeTable extends LitElement {
       this._lastRowsRef = this.rows;
       this._depthCache.clear();
       this._childCounts.clear();
+      this._lazyIds.clear();
 
       const rowById = new Map<string, TreeTableRow>();
       for (const r of this.rows) {
         rowById.set(r.ID, r);
         if (r.parent !== null) {
           this._childCounts.set(r.parent, (this._childCounts.get(r.parent) ?? 0) + 1);
+        }
+        if (r._lazy) this._lazyIds.add(r.ID);
+      }
+
+      // A delivery of rows ends every outstanding question, here rather than where the
+      // answer is handled: these rows either ARE the answer or supersede it, and this
+      // runs for every path that replaces them — the merge, an entry-scoped splice, a
+      // whole repaint. Kept any longer and a row whose answer never came (a repaint
+      // overtook it) would be marked as asked-about for the rest of the session, which
+      // is a twisty that can never fetch again.
+      this._pendingChildren.clear();
+
+      // A row that is marked and holds nothing cannot show anything when open, so it is
+      // not left open. This is the state a fresh planned payload puts an expanded row
+      // back into — the file changed on disk, the whole tree was re-planned, and the
+      // rows the user had opened are deferred again. Expanded-and-empty would be the
+      // tree silently refusing to open, and recoverable only by collapsing first; this
+      // makes the glyph honest, and the next click asks.
+      //
+      // The Set is mutated rather than replaced on purpose: this runs inside the update
+      // that is already painting these rows, and assigning a reactive property here
+      // would schedule a second one.
+      for (const id of this._expandedIds) {
+        if (this._lazyIds.has(id) && !this._childCounts.has(id)) {
+          this._expandedIds.delete(id);
+          this._visibleRowsCache = null;
         }
       }
 
@@ -2547,12 +2599,42 @@ export class DexTreeTable extends LitElement {
     return result;
   }
 
+  /**
+   * Whether this row has anything to show when opened.
+   *
+   * ONE rule, read by all three gestures that can open a row — the twisty's click, the
+   * Space key, and `aria-expanded` for a screen reader. They were three copies of
+   * `_childCounts.has(id)`, which is the shape of defect this repo keeps relearning:
+   * add a second way for a row to have children and two of the three silently keep the
+   * old answer, so a tree a mouse can open is a tree a keyboard cannot.
+   *
+   * The second way is a deferred row, whose children exist in the file and not in the
+   * table (host: lazyRows.ts).
+   */
+  private _canExpand(rowId: string): boolean {
+    return this._childCounts.has(rowId) || this._lazyIds.has(rowId);
+  }
+
   private _toggleExpand(rowId: string): void {
     const newSet = new Set(this._expandedIds);
     if (newSet.has(rowId)) {
       newSet.delete(rowId);
     } else {
       newSet.add(rowId);
+      // Opening a row whose children never arrived is the gesture that fetches them.
+      // Guarded on the delivered count, not on the ask: a row re-marked `_lazy` after
+      // delivering a budget's worth of children has rows under it already, and asking
+      // again would re-deliver the same first budget for ever.
+      if (this._lazyIds.has(rowId) && !this._childCounts.has(rowId) && !this._pendingChildren.has(rowId)) {
+        this._pendingChildren.add(rowId);
+        this.dispatchEvent(
+          new CustomEvent('dex-request-children', {
+            detail: { nodeId: rowId },
+            bubbles: true,
+            composed: true,
+          }),
+        );
+      }
     }
     this._expandedIds = newSet;
     this._visibleRowsCache = null;
@@ -2983,7 +3065,7 @@ export class DexTreeTable extends LitElement {
       }
       case ' ': {
         e.preventDefault();
-        if (this.selectedRowId && this._childCounts.has(this.selectedRowId)) {
+        if (this.selectedRowId && this._canExpand(this.selectedRowId)) {
           this._toggleExpand(this.selectedRowId);
         }
         break;
@@ -3279,7 +3361,12 @@ export class DexTreeTable extends LitElement {
     const isEditing = this._editingCell?.rowId === row.ID && this._editingCell?.columnId === columnId;
 
     if (columnId === 'Name') {
-      const hasChildren = this._childCounts.has(row.ID);
+      const hasChildren = this._canExpand(row.ID);
+      // A row asked about and not answered yet. It is drawn open (▼) with nothing under
+      // it, which is the truthful picture: the user's click landed, and the rows are on
+      // their way. An unchanged ▶ would read as a dead twisty and invite the clicking
+      // that made the original bug look like a hang.
+      const awaiting = this._pendingChildren.has(row.ID);
       const expanded = this._expandedIds.has(row.ID);
       const depth = this._depthCache.get(row.ID) || 0;
       // Gray ONLY positional array/cell/string elements (synthetic index names).
@@ -3324,7 +3411,8 @@ export class DexTreeTable extends LitElement {
         <div class="name-cell">
           <span class="indent" style="width: ${depth * 16}px"></span>
           <span
-            class="toggle ${hasChildren ? '' : 'empty'}"
+            class="toggle ${hasChildren ? '' : 'empty'} ${awaiting ? 'loading' : ''}"
+            title=${awaiting ? 'Loading…' : nothing}
             @click=${(e: Event) => {
               e.stopPropagation();
               if (hasChildren) this._toggleExpand(row.ID);
@@ -3776,7 +3864,7 @@ export class DexTreeTable extends LitElement {
                 // depth via indentation and ▶/▼ via a glyph, neither of which a
                 // screen reader can see, so without these a blind user cannot
                 // tell nesting level or whether a row can be expanded at all.
-                const hasChildren = this._childCounts.has(row.ID);
+                const hasChildren = this._canExpand(row.ID);
                 return html`
                   <tr
                     role="row"

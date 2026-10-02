@@ -2,11 +2,11 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { nextExpandedIds, nextStickyIds, pendingSelectionToApply, spliceEntryRows, insertEntryRows } from '../src/webview/rowUpdates.js';
+import { nextExpandedIds, nextStickyIds, pendingSelectionToApply, spliceEntryRows, insertEntryRows, mergeChildRows } from '../src/webview/rowUpdates.js';
 import { getModel } from '../src/host/SlddModel.js';
 import { buildRows, buildEntryRows } from '../src/host/rowBuilder.js';
 
-type Row = { ID: string; parent: string | null; Value?: unknown };
+type Row = { ID: string; parent: string | null; Value?: unknown; _lazy?: boolean };
 
 function fixturePath(name: string): string {
   return fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
@@ -237,6 +237,71 @@ describe('insertEntryRows — add one new entry to a section', () => {
   it('does not mutate the array it was given', () => {
     const before = rows();
     insertEntryRows(before, 'section:P', undefined, addition);
+    expect(before).toEqual(rows());
+  });
+});
+
+// The third row-level repaint, and the only one the USER triggers directly: opening a
+// row whose children the payload held back (host: lazyRows.ts). The rows arrive on their
+// own, under the id the table asked about, and go under the row that is already there.
+describe('mergeChildRows — the children of a row the payload deferred', () => {
+  const rows = (): Row[] => [
+    { ID: 'a', parent: null, _lazy: true },
+    { ID: 'b', parent: null },
+    { ID: 'b.1', parent: 'b' },
+  ];
+  const children: Row[] = [
+    { ID: 'a.1', parent: 'a' },
+    { ID: 'a.2', parent: 'a' },
+  ];
+
+  it('puts the children immediately after their parent, not at the end', () => {
+    // Every rule that reads this array linearly — the contiguous run spliceEntryRows
+    // walks, the cap's prefix — assumes a parent precedes its children. Appending would
+    // satisfy none of them for the next thing to touch these rows.
+    expect(mergeChildRows(rows(), 'a', children)!.map((r) => r.ID)).toEqual(['a', 'a.1', 'a.2', 'b', 'b.1']);
+  });
+
+  it('clears the parent’s `_lazy` by replacing the row, so it is never asked about again', () => {
+    // Lit renders from the row objects: mutating in place would leave the twisty reading
+    // `_lazy` as true with children already under it, and every later expand would
+    // re-ask the host for rows the table already holds.
+    const before = rows();
+    const merged = mergeChildRows(before, 'a', children)!;
+    expect('_lazy' in merged[0]).toBe(false);
+    expect(before[0]._lazy).toBe(true);
+  });
+
+  it('drops a child whose id is already in the table', () => {
+    // The answer can arrive twice — a second expand before the first answer, a repost
+    // racing a fetch — and a duplicate id is not a duplicate row: it is two rows the
+    // tree walk puts under one parent and the search counts twice.
+    const already: Row[] = [
+      { ID: 'a', parent: null, _lazy: true },
+      { ID: 'a.1', parent: 'a' },
+    ];
+    expect(mergeChildRows(already, 'a', children)!.map((r) => r.ID)).toEqual(['a', 'a.2', 'a.1']);
+  });
+
+  it('is a no-op that still clears the mark when the answer is empty', () => {
+    // An empty answer is how a row that cannot grow says so (the node is gone, or it has
+    // no children after all). The mark has to go either way, or the twisty keeps asking.
+    const merged = mergeChildRows(rows(), 'a', [])!;
+    expect(merged.map((r) => r.ID)).toEqual(['a', 'b', 'b.1']);
+    expect('_lazy' in merged[0]).toBe(false);
+  });
+
+  it('returns null when the parent row is absent, so a stale answer is dropped', () => {
+    // A repaint rebuilt the tree while the fetch was in flight. Nothing is out of step —
+    // the answer is simply about a row that no longer exists — so the caller ignores it
+    // rather than appending orphans or asking for a full repaint.
+    expect(mergeChildRows(rows(), 'gone', children)).toBeNull();
+    expect(mergeChildRows([], 'a', children)).toBeNull();
+  });
+
+  it('does not mutate the array it was given', () => {
+    const before = rows();
+    mergeChildRows(before, 'a', children);
     expect(before).toEqual(rows());
   });
 });

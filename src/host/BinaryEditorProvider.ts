@@ -3,16 +3,18 @@ import * as vscode from 'vscode';
 import { renderProjectWebview, renderTableWebview } from './webviewHtml.js';
 import { getModelForBinaryTab, invalidate } from './SlddModel.js';
 import { forgetChangedSource, parsedModelForTab } from './sourceReads.js';
-import { buildRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS } from './rowBuilder.js';
-import { buildMatRows } from './matRowBuilder.js';
+import { COLUMNS, COLUMN_LABELS, COLUMN_GROUPS } from './rowBuilder.js';
+import { rowPlannerFor } from './rowPlanner.js';
 import { readProjectStore } from './projectStore.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, exceedsStringDecodeLimit, isZipBytes } from './slddFormat.js';
 import { annotateDataRows, annotateModelRows } from './usageGraph.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { capRows, rowCapBanner } from './rowCap.js';
+import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
 import { postOrReport } from './postPayload.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { answerMatrixRequest } from './matrixRequest.js';
+import { answerChildRequest, type UsageFiller } from './childRequest.js';
 import { basename, projectPathSegments } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import { seededRead } from './seededRead.js';
@@ -225,6 +227,21 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     const uriString = document.uri.toString();
     const name = basename(document.uri.path) || 'document';
 
+    // Which builder plans this file's rows AND answers a fetch for them — one object, so
+    // the payload and the expansion cannot be built by different rules (rowPlanner.ts).
+    const planner = rowPlannerFor(name);
+    // Who fills the Usage column, chosen once for the same reason. A model (.slx/.mdl)
+    // resolves its blocks' params to source files and its workspace vars to the blocks
+    // that use them; a .mat/.sldd data view resolves its variables to the blocks that use
+    // them; a .prj has no Usage column at all. The payload and the fetch share this
+    // because a row the user expanded showing an empty cell where its siblings show
+    // their users is the same drift as a row built by the wrong builder, only subtler.
+    const fillUsage: UsageFiller = isModelFile(name)
+      ? annotateModelRows
+      : isMatFile(name) || isSlddFile(name)
+        ? annotateDataRows
+        : async () => false;
+
     // A read-only banner shown above the table. Set only for the surprising case:
     // a JSON .sldd that WOULD be editable but is over VS Code's TextDocument sync
     // limit (see below). Binary/zip .sldd — expected read-only — leave this unset
@@ -405,21 +422,28 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           parsed: () => parsedModelForTab(document.uri),
           bytes: byteSource.read,
         });
-        // Capped BEFORE the payload is built, and before the Usage column is filled:
-        // the rows past the cap are not going to be shown, so annotating them is work
-        // spent on nothing. The cap is what keeps the message serializable at all —
-        // see rowCap.ts for the file that proved it necessary.
-        const capped = capRows(isMatFile(name) ? buildMatRows(node) : buildRows(node));
+        // Bounded BEFORE the payload is built, and before the Usage column is filled:
+        // rows that are not going to be shown are not worth annotating, and a payload
+        // over V8's maximum string length cannot be posted at all (rowCap.ts).
+        //
+        // The payload is PLANNED to that bound rather than cut to it (lazyRows.ts):
+        // whole levels of the tree, with the rows below the last one that fits fetched on
+        // demand. That is the difference between a file showing its shape and a file
+        // showing the first branch of it — measured on the 2,016,325-node `.mat` that
+        // forced the cap, where a cut payload held the first cell's descendants and left
+        // the other ten cells unreachable by any gesture in the table.
+        //
+        // EVERY format, not just the one that provoked it. The rule is that the names are
+        // complete and the deep values may wait, and nothing about it is specific to a
+        // `.mat`: a dictionary of wide structs, a model of deep buses and a project of
+        // thousands of files all have the same shape of too much. The cap stays behind it
+        // as the thing that cannot be planned away — a top level wider than the budget —
+        // and the two bounds compose in the banner below.
+        const planned = planner.payload(node, LAZY_ROW_BUDGET);
+        const capped = capRows(planned.rows);
         const rows = capped.rows;
-        // Fill the Usage column from the shared workspace usage graph (lazy +
-        // cached). A model (.slx/.mdl) resolves its blocks' params to source files
-        // and its workspace vars to the blocks that use them; a .mat/.sldd data
-        // view resolves its variables to the blocks that use them.
-        if (isModelFile(name)) {
-          await annotateModelRows(uriString, rows).catch(() => false);
-        } else if (isMatFile(name) || isSlddFile(name)) {
-          await annotateDataRows(uriString, rows).catch(() => false);
-        }
+        // Fill the Usage column from the shared workspace usage graph (lazy + cached).
+        await fillUsage(uriString, rows).catch(() => false);
         const delivered = await postOrReport(
           webview,
           {
@@ -436,9 +460,16 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
             // read short shows both, which is why they are two fields and not one
             // string — see renderBanners in the webview.
             //
-            // Through rowCapBanner, so a table that stops short says where it stopped
-            // in the same strip that reports what the parse could not read.
-            warnings: rowCapBanner(capped, warningBanner(sourceWarnings(node))),
+            // Through both bounds, so a table that is not showing the whole file says
+            // which kind of short it is in the same strip that reports what the parse
+            // could not read: rows that load when opened (the plan), rows the plan could
+            // not fit at all (its own truncation), or rows cut from the payload (the
+            // cap). The composition is what keeps each sentence from depending on the
+            // others being impossible.
+            warnings: lazyRowsBanner(
+              planned.plan,
+              rowCapBanner(capped, warningBanner(sourceWarnings(node))),
+            ),
           },
           name,
         );
@@ -484,6 +515,14 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
         // all four webview hosts — see matrixRequest.ts. Read-only is no reason to
         // skip it; this is the viewer where most matrices are actually looked at.
         answerMatrixRequest(webview, uriString, msg.nodeId);
+      } else if (msg?.type === 'requestChildren') {
+        // A row the payload deferred is being opened: send the rows under it. The answer
+        // is a module (childRequest.ts) rather than a body here because all three
+        // providers plan their payloads and so all three can be asked. `fillUsage` is
+        // handed in rather than imported there: it is this provider that already depends
+        // on vscode, and childRequest.ts stays loadable under vitest because it does not
+        // (see its UsageFiller).
+        void answerChildRequest(webview, uriString, msg.nodeId, name, fillUsage, planner);
       }
     });
 

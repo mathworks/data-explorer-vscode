@@ -137,16 +137,28 @@ describe('clipboard affordance — stamps Name.clipboardMode on the cut/copied s
 describe('buildEntryRows capability flags (for the context menu)', () => {
   // Duck-typed nodes exercising the capability branches. capabilityFlags reads
   // isEntry, canAddChild(), and parent.canRemoveChild() defensively.
+  //
+  // `children`, not `flatten()`: the builder walks the tree itself now (host:
+  // lazyRows.ts planRows), because a budget has to decide which levels are emitted and
+  // `flatten()` answers only "all of them". Behaviour-identical on a whole tree — core's
+  // own flatten IS a pre-order walk of `children` — but the shape a mock has to present
+  // changed.
   function node(id: string, opts: { isEntry?: boolean; canAddChild?: boolean; parent?: any } = {}) {
     return {
       id,
       isEntry: !!opts.isEntry,
       parent: opts.parent,
       canAddChild: opts.canAddChild === undefined ? undefined : () => opts.canAddChild,
-      flatten() { return [this]; },
+      children: [] as any[],
       toRow() { return { ID: id, parent: null, Name: { label: id } }; },
     };
   }
+
+  /**
+   * An entry that shows nothing of itself and holds one child — core's ContainerNode,
+   * whose `toRow()` returns null — so the only row built is the NESTED one under test.
+   */
+  const holding = (child: any) => ({ id: 'holder', children: [child], toRow: () => null });
 
   it('marks a plain entry as copyable + deletable, not add-child', () => {
     const entry = node('e', { isEntry: true });
@@ -167,18 +179,9 @@ describe('buildEntryRows capability flags (for the context menu)', () => {
     const lockedParent = { canRemoveChild: () => false };
     const bareParent = {}; // no canRemoveChild method
 
-    const [removable] = buildEntryRows(
-      { flatten: () => [node('c1', { parent: removableParent })], },
-      'design',
-    );
-    const [locked] = buildEntryRows(
-      { flatten: () => [node('c2', { parent: lockedParent })] },
-      'design',
-    );
-    const [bare] = buildEntryRows(
-      { flatten: () => [node('c3', { parent: bareParent })] },
-      'design',
-    );
+    const [removable] = buildEntryRows(holding(node('c1', { parent: removableParent })), 'design');
+    const [locked] = buildEntryRows(holding(node('c2', { parent: lockedParent })), 'design');
+    const [bare] = buildEntryRows(holding(node('c3', { parent: bareParent })), 'design');
 
     expect(removable._canDelete).toBe(true);
     expect(locked._canDelete).toBe(false);
@@ -188,14 +191,12 @@ describe('buildEntryRows capability flags (for the context menu)', () => {
 
 // buildRows only needs a duck-typed shape: a container with `children` sections,
 // each section having `name`/`displayName`/`icon` and `children` entries, and
-// each entry exposing `flatten()` and `toRow()`. Build synthetic nodes to drive
+// each entry exposing `children` and `toRow()`. Build synthetic nodes to drive
 // the branches a real dictionary doesn't easily exercise.
 function entry(id: string, opts: { row?: any; throws?: boolean; nested?: any[] } = {}) {
   return {
     id,
-    flatten() {
-      return [this, ...(opts.nested ?? [])];
-    },
+    children: opts.nested ?? [],
     toRow() {
       if (opts.throws) throw new Error('bad row');
       return opts.row === undefined ? { ID: id, parent: null, Name: id } : opts.row;
@@ -258,14 +259,12 @@ describe('buildRows branch coverage', () => {
   });
 
   it('keeps nested child rows’ own parent (does not reparent non-top-level rows)', () => {
-    // A struct entry whose flatten yields the entry plus a nested field row that
-    // already declares its parent as the entry id.
+    // A struct entry holding a nested field whose row already declares its parent as the
+    // entry id.
     const nestedRow = { ID: 'e1.field', parent: 'e1', Name: 'field' };
     const structEntry = {
       id: 'e1',
-      flatten() {
-        return [this, { toRow: () => nestedRow }];
-      },
+      children: [{ toRow: () => nestedRow }],
       toRow() {
         return { ID: 'e1', parent: null, Name: 'e1' };
       },
@@ -277,10 +276,15 @@ describe('buildRows branch coverage', () => {
     expect(child.parent).toBe('e1');            // nested left as-is
   });
 
-  it('handles an entry without flatten() by treating it as a single node', () => {
+  it('handles an entry with no children array at all', () => {
+    // The `?? []` in planRows. A node that declares nothing is a leaf, not a crash —
+    // and this one also carries no `_lazy`, because a row with nothing under it must not
+    // offer a twisty that fetches nothing.
     const plain = { id: 'p', toRow: () => ({ ID: 'p', parent: null, Name: 'p' }) };
     const rows = buildRows({ children: [section('design', [plain])] });
-    expect(rows.find((r) => r.ID === 'p')).toBeDefined();
+    const row = rows.find((r) => r.ID === 'p');
+    expect(row).toBeDefined();
+    expect(row._lazy).toBeUndefined();
   });
 });
 
@@ -358,15 +362,20 @@ describe('an entry with more rows than the engine takes call arguments', () => {
   // struct of a dozen capped arrays clears it — on a dictionary this host has already
   // measured at 128,111 rows. nameIndex.ts avoids the same trap with the same comment.
   //
-  // Duck-typed nodes on purpose: the defect is in how buildRows APPENDS what
-  // buildEntryRows returns, so the test needs one entry returning a great many rows,
-  // not a 125,000-row fixture file.
+  // Duck-typed nodes on purpose: the defect is in how buildRows APPENDS the rows of one
+  // entry, so the test needs one entry with a great many of them, not a 125,000-row
+  // fixture file. `buildRows` passes no budget, so this is also the test that the
+  // unbudgeted path is still unbudgeted — a plan that quietly defaulted to a budget
+  // would make every caller of `buildRows` deliver a truncated tree with no fetch behind
+  // it (the two editable providers splice rows through the same builder).
   const wideEntry = (count: number) => {
     const nodes = Array.from({ length: count }, (_, i) => ({
       id: 'n' + i,
       toRow: () => ({ ID: 'n' + i, parent: null, Name: { label: 'n' + i }, Value: '' }),
     }));
-    const entry = { id: 'n0', name: 'wide', flatten: () => nodes };
+    // A container entry (toRow null) over the wide level, so the row count is exactly
+    // the children's — the shape a 1000x1000 double actually has.
+    const entry = { id: 'n0', name: 'wide', children: nodes, toRow: () => null };
     return { children: [{ name: 'design', displayName: 'Design Data', children: [entry] }] };
   };
 
@@ -376,5 +385,6 @@ describe('an entry with more rows than the engine takes call arguments', () => {
     // +1 for the section's own row.
     expect(rows.length).toBe(count + 1);
     expect(rows[rows.length - 1].ID).toBe('n' + (count - 1));
+    expect(rows.some((r) => r._lazy), 'and nothing is deferred without a budget').toBe(false);
   });
 });

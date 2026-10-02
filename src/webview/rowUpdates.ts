@@ -3,6 +3,8 @@
 interface RowLike {
   ID: string;
   parent: string | null;
+  /** Host-stamped: this row's children were not delivered with it (host: lazyRows.ts). */
+  _lazy?: boolean;
 }
 
 /**
@@ -167,6 +169,44 @@ export function spliceEntryRows<T extends RowLike>(
  * `beforeRowId` isn't in it), so the caller can ask for a full repaint instead of
  * dropping the new entry or filing it under the wrong section.
  */
+/**
+ * Add the fetched children of ONE deferred row, returning a new array (or null when
+ * the row they belong under isn't present).
+ *
+ * The webview half of the lazy payload (host: lazyRows.ts, childRequest.ts). A payload
+ * planned to a row budget delivers whole levels of the tree and stamps the frontier
+ * with `_lazy`; opening one of those rows asks the host for its children, and this is
+ * where the answer lands.
+ *
+ * Three rules, and each is a thing that goes wrong without it:
+ *
+ *  - The children go IMMEDIATELY AFTER their parent, not at the end. Every rule here
+ *    that reads the array linearly assumes a parent precedes its children — the
+ *    contiguous run `spliceEntryRows` walks, rowCap's prefix integrity — and appending
+ *    would satisfy none of them for the next thing that touches these rows.
+ *  - The parent's `_lazy` is CLEARED, by replacing the row rather than mutating it:
+ *    Lit renders from the row objects, and a mutation in place would leave the twisty
+ *    reading `_lazy` as true with children already under it, so every later expand
+ *    would re-ask the host for rows it already has.
+ *  - An id already in the table is DROPPED. The answer can arrive twice (a second
+ *    expand before the first answer, a repost racing a fetch), and a duplicate id is
+ *    not a duplicate row: it is two rows the tree walk would place under the same
+ *    parent and the search would count twice.
+ *
+ * Returns null when the parent row is absent, so the caller can ignore an answer to a
+ * question the table no longer has a row for instead of appending orphans.
+ */
+export function mergeChildRows<T extends RowLike>(rows: T[], nodeId: string, children: T[]): T[] | null {
+  const at = rows.findIndex((r) => r.ID === nodeId);
+  if (at < 0) return null;
+  const present = new Set(rows.map((r) => r.ID));
+  const fresh = children.filter((r) => !present.has(r.ID));
+  // Spread into a new object rather than `delete row._lazy`: see above.
+  const { _lazy: _dropped, ...rest } = rows[at] as T & { _lazy?: boolean };
+  const parent = rest as unknown as T;
+  return [...rows.slice(0, at), parent, ...fresh, ...rows.slice(at + 1)];
+}
+
 export function insertEntryRows<T extends RowLike>(
   rows: T[],
   sectionRowId: string,

@@ -105,6 +105,16 @@ const EDITING = [
 // jump into. A binary editor that answered this would have to invent a location.
 const TEXT_BACKED_ONLY = ['locateInText'];
 
+// Fetch the children of a row whose payload held them back. Only meaningful for a
+// provider that PLANS its rows to a budget (host: lazyRows.ts): one that delivered every
+// row it has would stamp no `_lazy`, no twisty would ask, and a branch here would be
+// unreachable. All three plan today — the rule is breadth over depth for every data
+// source, not for the one format that provoked it — so this currently demands the answer
+// of all three. Like `rendersPage`, membership is read off what the provider calls, so a
+// provider that starts deferring rows owes the answer in the same edit, and one that
+// stops deferring them has to drop it.
+const DEFERS_ROWS_ONLY = ['requestChildren'];
+
 // What only the project PAGE can say. Derived rather than listed, so a message added to
 // `ProjectToHostMessage` lands here automatically and the per-provider test below starts
 // demanding it of whoever renders the page. `ready` is in both protocols and stays in
@@ -118,6 +128,8 @@ interface Provider {
   contract: string;
   /** Whether it serves the non-table project page, and so speaks its protocol too. */
   rendersPage: boolean;
+  /** Whether its payload is planned to a row budget, and so can defer a row's children. */
+  defersRows: boolean;
   handled: Set<string>;
 }
 
@@ -135,6 +147,13 @@ const PROVIDERS: Provider[] = [
     // Read off the shell it builds, not listed: a provider that stopped rendering the page
     // would stop being asked for the page's messages, in one edit.
     rendersPage: /renderProjectWebview\(/.test(source),
+    // Read off the builder it calls, for the same reason: a planner is what stamps
+    // `_lazy`, so taking one IS what makes the fetch askable of this provider. The
+    // planner is also the object that OWNS both halves (rowPlanner.ts), so the thing
+    // this regex finds is the thing that guarantees the fetch is answered by the same
+    // rule the payload was built with — the branch it replaced named one builder, and
+    // was true of exactly the one format that had been planned so far.
+    defersRows: /rowPlannerFor\(/.test(source),
     handled: new Set([...source.matchAll(/msg\??\.type\s*===\s*'([^']+)'/g)].map((m) => m[1])),
   };
 });
@@ -170,7 +189,7 @@ describe('every message belongs to exactly one capability tier', () => {
     // no tier, so this fails and the question "which of the three editors should answer
     // it, and why not the others?" has to be answered before the build is green. Without
     // it, a new message wired into the JSON editor alone looks finished.
-    const tiered = [...ALWAYS, ...EDITING, ...TEXT_BACKED_ONLY];
+    const tiered = [...ALWAYS, ...EDITING, ...TEXT_BACKED_ONLY, ...DEFERS_ROWS_ONLY];
     expect([...tiered].sort()).toEqual([...VOCABULARY].sort());
     expect(new Set(tiered).size, 'and no message is in two tiers').toBe(tiered.length);
   });
@@ -211,6 +230,18 @@ describe('each editor answers everything its contract makes meaningful', () => {
 
     it(`${provider.file} answers locateInText only if it has text to locate in`, () => {
       expect(provider.handled.has('locateInText')).toBe(isTextBacked(provider));
+    });
+
+    it(`${provider.file} answers requestChildren only if its payload defers rows`, () => {
+      // Both directions, and the forward one is the failure this is really about: a
+      // payload that holds rows back while nobody answers the fetch is a tree that stops
+      // opening at a certain depth, silently, with the rest of the file unreachable —
+      // the bug the budget was introduced to fix, reintroduced one level down.
+      for (const t of DEFERS_ROWS_ONLY) {
+        expect(provider.handled.has(t), `${provider.file} ${provider.defersRows ? 'ignores' : 'answers'} ${t}`).toBe(
+          provider.defersRows,
+        );
+      }
     });
 
     it(`${provider.file} answers the page's own messages only if it renders the page`, () => {

@@ -4,7 +4,6 @@ import { renderTableWebview } from './webviewHtml.js';
 import { getModel, invalidate, findNode, peekModel } from './SlddModel.js';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
 import {
-  buildRows,
   buildEntryRows,
   clipMarkKey,
   splitClipMarkKey,
@@ -13,6 +12,9 @@ import {
   COLUMN_GROUPS,
   type ClipMark,
 } from './rowBuilder.js';
+import { rowPlannerFor } from './rowPlanner.js';
+import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
+import { answerChildRequest } from './childRequest.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
 import {
   applyEntryOps,
@@ -175,6 +177,15 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     const uriString = document.uri.toString();
     const name = basename(document.uri.path) || 'document';
 
+    // Which builder plans this file's rows AND answers a fetch for them (rowPlanner.ts).
+    // An editable view plans too, which took some arguing with the comment below about
+    // NOT capping these rows — but a plan is not a truncation. Every entry name is
+    // delivered, each entry's rows stay one contiguous run for the splice, and a
+    // structural edit resolves its target through the MODEL by node id, which is whole
+    // whatever the payload held. What a plan withholds is depth under a name, and the
+    // user can ask for it.
+    const planner = rowPlannerFor(name);
+
     // Capture the on-open baseline once PER DOCUMENT — not per tab — so per-entry
     // "Modified" marks are diffed against the content this document was opened with, and a
     // second tab does not re-baseline it to the edited text. See openDocs.
@@ -279,7 +290,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         }
         const modified = computeModified(uriString, node);
         const clipMark = clipMarkOfDoc();
-        const rows = buildRows(node, modified, clipMark);
+        const planned = planner.payload(node, LAZY_ROW_BUDGET, { modifiedNames: modified, clipMark });
+        const rows = planned.rows;
         // Every row below is built from `node`, which getModel just parsed from the live
         // text and registered as this document's source.
         modelInSync = true;
@@ -309,8 +321,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
                 hasTextView: true,
                 // Recomputed on every repaint, which for this view means on every
                 // keystroke in the plain-text editor: a dictionary the user is midway
-                // through fixing should stop warning the moment it reads whole.
-                warnings: warningBanner(sourceWarnings(node)),
+                // through fixing should stop warning the moment it reads whole. Through
+                // the plan as well, so a dictionary too large to deliver whole says so
+                // here instead of looking like one with shallow entries.
+                warnings: lazyRowsBanner(planned.plan, warningBanner(sourceWarnings(node))),
               },
               name,
             );
@@ -345,7 +359,18 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     const entryRowsOf = (entry: any): any[] => {
       const modified = new Set<string>();
       if (isEntryModified(uriString, entry)) modified.add(entry.name);
-      return buildEntryRows(entry, entry.parent?.name ?? '', modified, clipMarkOfDoc());
+      // Planned to the same budget the payload used: ONE entry can be the whole problem
+      // (a 1000x1000 double is 1,000,001 rows from a single entry), and a repaint that
+      // ignored the budget would blow past what the RPC can carry on the one path where
+      // the user is mid-edit and watching.
+      return buildEntryRows(
+        entry,
+        entry.parent?.name ?? '',
+        modified,
+        clipMarkOfDoc(),
+        undefined,
+        LAZY_ROW_BUDGET,
+      );
     };
 
     /**
@@ -1911,6 +1936,11 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // A Variable Editor panel is opening: send its cells. One shared answer for
         // all four webview hosts — see matrixRequest.ts.
         answerMatrixRequest(webview, uriString, msg.nodeId);
+      } else if (msg?.type === 'requestChildren') {
+        // A row the payload deferred is being opened: send the rows under it
+        // (childRequest.ts). `annotateDataRows` is handed in rather than imported there
+        // so that module stays loadable under vitest — see its UsageFiller.
+        void answerChildRequest(webview, uriString, msg.nodeId, name, annotateDataRows, planner);
       } else if (msg?.type === 'undo' || msg?.type === 'redo') {
         // Single native stack: the table view is the active editor when its menu
         // is used, so this targets the shared TextDocument undo history.

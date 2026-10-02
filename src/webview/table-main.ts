@@ -7,7 +7,14 @@ import './components/dex-error-dialog.js';
 import './components/dex-variable-editor.js';
 import { installMatrixOpen } from './matrixOpen.js';
 import { renderBanners, renderError } from './banners.js';
-import { nextExpandedIds, nextStickyIds, pendingSelectionToApply, spliceEntryRows, insertEntryRows } from './rowUpdates.js';
+import {
+  nextExpandedIds,
+  nextStickyIds,
+  pendingSelectionToApply,
+  spliceEntryRows,
+  insertEntryRows,
+  mergeChildRows,
+} from './rowUpdates.js';
 import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from './menuItems.js';
 import { dropDecision, type DragMode, type DropTarget, type DragSource } from './dropDecision.js';
 import { sectionRowIdOf } from './operands.js';
@@ -349,6 +356,25 @@ window.addEventListener('message', (event: MessageEvent) => {
     matrixOpen.close();
     clearError();
     installRows(inserted);
+  } else if (msg.type === 'childRows') {
+    // The children of a row the payload deferred (host: lazyRows.ts, childRequest.ts).
+    // Merged in place, NOT installed as a new payload: the rest of the table is
+    // untouched, so the banners, the columns, the selection and an open matrix grid all
+    // stay as they are — this adds rows under one row the user just opened.
+    const merged = mergeChildRows((table.rows ?? []) as any[], msg.nodeId, msg.rows ?? []);
+    // No row by that id any more, so this answers a question the table has stopped
+    // asking (a repaint rebuilt the tree while the fetch was in flight). Dropped, not
+    // escalated to a full repaint: nothing is out of step, the answer is simply stale.
+    if (merged) installRows(merged);
+    // The host could not fit all of this row's children. They have no row and no
+    // twisty, so without this the short list reads as the whole list — and the file's
+    // own banner cannot say it, because it was written before the user opened anything.
+    if (merged && msg.truncated > 0) {
+      showError(
+        `This item has more rows than one view can show: ${msg.truncated.toLocaleString('en-US')} ` +
+          'of its contents are not listed.',
+      );
+    }
   } else if (msg.type === 'setRows') {
     hideLoading();
     clearError();
@@ -578,6 +604,15 @@ table.addEventListener('dex-row-drop', (e: Event) => {
   if (!editable) return;
   const detail = (e as CustomEvent).detail;
   vscode.postMessage({ type: 'drop', rowId: detail.targetRowId, mode: detail.mode });
+});
+
+// A row whose children the payload held back was opened: ask the host for them. The
+// table has already marked the row as asked-about, so a second click does not re-ask,
+// and the answer arrives as `childRows` above. Not gated on `editable` — this is how a
+// read-only .mat view is navigated at all.
+table.addEventListener('dex-request-children', (e: Event) => {
+  const nodeId = (e as CustomEvent).detail?.nodeId;
+  if (typeof nodeId === 'string' && nodeId !== '') vscode.postMessage({ type: 'requestChildren', nodeId });
 });
 
 // Relay row selection to the host (for PI + tree sync in later phases).

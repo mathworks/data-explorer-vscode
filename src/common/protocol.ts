@@ -253,6 +253,42 @@ export interface MatrixCellsMessage {
   message?: string;
 }
 
+// --- Host -> Webview (table view: the children of one deferred row) ----------
+
+/**
+ * The rows under a row whose children were not delivered with the payload.
+ *
+ * Sent only in answer to `requestChildren`, never unprompted. The counterpart to
+ * `_lazy` on a row (host: lazyRows.ts): a payload planned to a budget stops at whole
+ * levels and marks the frontier, and this is where the next level comes from when the
+ * user opens one. Measured reason it exists: the `.mat` that forced the payload cap is
+ * 2,016,325 nodes over 7 levels, of which the first four are 238 rows — so the file's
+ * whole shape fits immediately and the rest is a click away, where a capped payload
+ * showed the first cell's descendants and left the other ten unreachable.
+ *
+ * `nodeId` is echoed for the same reason `matrixCells` echoes it: the answer is matched
+ * against the row that asked, so one arriving after a repaint replaced that row is
+ * dropped rather than spliced in next to rows it no longer belongs with.
+ *
+ * `rows` is the subtree UNDER the node, never the node's own row — the table already
+ * holds that one, with the user's selection possibly on it. Empty means the host had
+ * nothing to send (the node is gone, or every one of its rows failed to build), which
+ * the table reads as "this row has no children after all" and stops offering to fetch.
+ *
+ * `truncated` is how many of this node's own children got no row at all, which is the
+ * one loss a fetch can still inflict: core caps numeric and string expansion at 10,000
+ * but builds a CELL's children uncapped, so a single 200,000-element cell outgrows a
+ * whole delivery. Those names are absent with nothing to expand, so the table says so
+ * instead of presenting a short list as the whole list — the payload's own banner
+ * already does this for the same loss one level up.
+ */
+export interface ChildRowsMessage {
+  type: 'childRows';
+  nodeId: string;
+  rows: any[];
+  truncated: number;
+}
+
 // --- Host -> Webview (project main page: project-main.ts) ---------------------
 
 /**
@@ -300,7 +336,8 @@ export type HostToTableMessage =
   | OpenAddGalleryMessage
   | ErrorMessage
   | ValidationErrorMessage
-  | MatrixCellsMessage;
+  | MatrixCellsMessage
+  | ChildRowsMessage;
 
 /** Every message the property-inspector webview can receive from the host. */
 export type HostToPropsMessage = ShowPropsMessage | EmptyMessage | MatrixCellsMessage;
@@ -434,6 +471,26 @@ export interface RequestMatrixMessage {
   nodeId: string;
 }
 
+/**
+ * Fetch the children of a row that arrived without them.
+ *
+ * The table's second question, and the same bargain as `requestMatrix`: the payload
+ * carries a MARKER (`_lazy` on the row) and the contents are fetched when the user
+ * asks to see them. Where the matrix fetch is about one value being large, this is
+ * about the TREE being large — the host plans a payload to a row budget by whole
+ * levels, and the rows below the last level that fit are what this asks for.
+ *
+ * `nodeId` is the row's id, which IS its node's id (core's `toRow` sets `ID: this.id`),
+ * so the host resolves it through the same `findNode` the matrix fetch uses.
+ *
+ * Sent at most once per row per payload: the table clears the marker when the answer
+ * arrives, so expanding and collapsing a fetched row again costs nothing.
+ */
+export interface RequestChildrenMessage {
+  type: 'requestChildren';
+  nodeId: string;
+}
+
 /** Every message the host receives from the table webview. */
 export type TableToHostMessage =
   | ReadyMessage
@@ -451,7 +508,8 @@ export type TableToHostMessage =
   | DragStartMessage
   | DragEndMessage
   | DropMessage
-  | RequestMatrixMessage;
+  | RequestMatrixMessage
+  | RequestChildrenMessage;
 
 /**
  * A link on the project page was activated: open what it names.

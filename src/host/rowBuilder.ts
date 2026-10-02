@@ -3,6 +3,7 @@
 import { ModelBlockNode, RowCellPool, schemaColumnLabels } from 'data-explorer-core';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 import { stampMatrix } from './matrixPayload.js';
+import { planRows, stampLazy, type PlannedRow, type RowPlan } from './lazyRows.js';
 
 // Columns shown across the dictionary tree (union that fits all sections), in
 // display order: the ungrouped core columns first, then the grouped columns
@@ -79,7 +80,37 @@ export function splitClipMarkKey(key: string): { section: string; name: string }
     : { section: key.slice(0, at), name: key.slice(at + 1) };
 }
 
-export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: ClipMark): any[] {
+/** The rows for a sectioned tree, plus what the plan held back (for the banner). */
+export interface SectionedRows {
+  rows: any[];
+  plan: RowPlan;
+}
+
+/**
+ * Rows for a whole sectioned tree (dictionary, model, project), within `budget`.
+ *
+ * ONE PLAN OVER EVERY ENTRY OF EVERY SECTION, not one plan per section. That is what
+ * makes the first level of the plan "every entry name in the file" — the rule this
+ * exists to serve is that the NAMES are complete and the deep values may wait, and a
+ * per-section plan would instead spend the budget on section 1's depth and leave
+ * section 9's entries unnamed. Entries are planned as a flat root list and put back
+ * under their own section by `PlannedRow.root`.
+ *
+ * Section headers are not in the plan — they are structure, not data, and a file whose
+ * sections alone exceeded the budget would have nothing worth showing — so the plan is
+ * given `budget - sections.length` and the headers are emitted unconditionally. Without
+ * that subtraction a planned payload could still be over the payload cap, and `capRows`
+ * would truncate exactly the names this was meant to keep.
+ *
+ * `budget` of Infinity is the whole tree with nothing deferred, which is what every
+ * caller had before this existed.
+ */
+export function buildRowsPlanned(
+  sldd: any,
+  modifiedNames?: Set<string>,
+  clipMark?: ClipMark,
+  budget: number = Infinity,
+): SectionedRows {
   const rows: any[] = [];
   // One cell pool for this pass. A table's cells are overwhelmingly repetition — measured
   // over a 128,111-row customer dictionary, 1.36M cells hold ~200k distinct values — so
@@ -92,6 +123,30 @@ export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: Cli
   // for the life of the extension host, which is the opposite of the point.
   const pool = new RowCellPool();
   const sections = (sldd.children || []) as any[];
+  // PRECONDITION (untested) for `|| []`: a parsed section always has a children array
+  // (empty when the section holds nothing), so the fallback never fires. Kept because a
+  // missing array here would blank the WHOLE table, not one row.
+  const entries: any[] = [];
+  for (const section of sections) {
+    for (const entry of (section.children || []) as any[]) entries.push(entry);
+  }
+  const headroom = budget === Infinity ? Infinity : Math.max(1, budget - sections.length);
+  const plan = planRows(entries, headroom);
+
+  // The plan is pre-order over the roots IN ORDER, so its rows are contiguous and
+  // ascending by `root` — which is section order. One cursor therefore walks the whole
+  // plan once, handing each section the run that belongs to it, and a root the budget
+  // dropped simply has no run.
+  //
+  // NB: append with a loop, not `rows.push(...entryRows)`. ONE entry can flatten to more
+  // rows than the engine takes call arguments — V8 throws `Maximum call stack size
+  // exceeded` somewhere between 100,000 and 125,000 — and a 1000x1000 double produced
+  // 1,000,001 rows from a single entry. The customer saw it as `Failed to parse <file>:
+  // Maximum call stack size exceeded`, which named the parse, the one stage that had
+  // worked. A budget bounds this now, but the loop stays: `buildRows` still passes
+  // Infinity, and nameIndex.ts avoids the same trap the same way.
+  let at = 0;
+  let firstRoot = 0;
   for (const section of sections) {
     // Always emit the section's parent row, even when it has no entries.
     rows.push({
@@ -100,26 +155,52 @@ export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: Cli
       Name: { label: section.displayName || section.name, iconId: section.icon, editable: false, disabled: false, element: false },
       Value: '', Class: '', Kind: '', DataType: '', Status: '', UsedBy: '',
     });
-    // Entry rows (flatten each entry subtree so nested struct/bus children appear).
-    // PRECONDITION (untested) for `|| []`: a parsed section always has a children
-    // array (empty when the section holds nothing), so the fallback never fires.
-    // Kept because a missing array here would blank the WHOLE table, not one row.
-    // NB: append with a loop, not `rows.push(...entryRows)`. ONE entry can flatten to
-    // more rows than the engine takes call arguments — V8 throws `Maximum call stack
-    // size exceeded` somewhere between 100,000 and 125,000 — and a 1000x1000 double
-    // produced 1,000,001 rows from a single entry. The customer saw it as
-    // `Failed to parse <file>: Maximum call stack size exceeded`, which named the
-    // parse, the one stage that had worked. Core now caps element expansion, so no
-    // single array reaches that count, but the limit is per ENTRY: a struct of a dozen
-    // capped arrays still clears it on a dictionary the size this pool was measured
-    // against. nameIndex.ts avoids the same trap the same way.
-    for (const entry of (section.children || []) as any[]) {
-      for (const row of buildEntryRows(entry, section.name, modifiedNames, clipMark, pool)) {
-        rows.push(row);
-      }
+    const pastLastRoot = firstRoot + ((section.children || []) as any[]).length;
+    while (at < plan.planned.length && plan.planned[at].root < pastLastRoot) {
+      const p = plan.planned[at++];
+      const row = plannedRow(p, entries[p.root], section.name, modifiedNames, clipMark, pool);
+      if (row) rows.push(row);
     }
+    firstRoot = pastLastRoot;
   }
-  return rows;
+  return { rows, plan };
+}
+
+/** The rows alone, unplanned — the signature every caller that cannot answer a fetch uses. */
+export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: ClipMark): any[] {
+  return buildRowsPlanned(sldd, modifiedNames, clipMark).rows;
+}
+
+/**
+ * The rows under one node, within `budget` — the answer to a `requestChildren` on a
+ * sectioned source.
+ *
+ * The same walk as the payload's from a different root, which is the whole reason the
+ * per-node work lives in `plannedRow`: a fetched row that came out of a second emitter
+ * would differ from its siblings in exactly the ways nothing checks (a missing matrix
+ * stamp, an absent capability flag, a twisty that never appears). `entry` is null here
+ * because a fetch only ever returns NESTED nodes — the entry row itself was delivered
+ * with the payload — so there is no section reparent to do and no entry-only stamp to
+ * apply, and passing null says that rather than re-deciding it per row.
+ *
+ * No pool: a fetch is one node's children merged into a table that already exists, so
+ * there is almost nothing to share, and a pool that outlived the call to be reused by
+ * the next fetch would pin the whole first build's cells forever.
+ *
+ * Returns the plan as the payload does, for the one thing a fetch can also lose: a node
+ * with more direct children than a whole delivery holds (core caps numeric and string
+ * expansion at 10,000 but builds a cell's children uncapped). Those names are absent
+ * with no row to open, and the payload path already says so in its banner — a fetch that
+ * dropped them silently would be the same rule on two paths, one of them mute.
+ */
+export function buildChildRows(node: any, budget: number = Infinity): SectionedRows {
+  const rows: any[] = [];
+  const plan = planRows((node?.children ?? []) as any[], budget);
+  for (const p of plan.planned) {
+    const row = plannedRow(p, null, '', undefined, undefined, undefined);
+    if (row) rows.push(row);
+  }
+  return { rows, plan };
 }
 
 // Context-menu capability flags for a node, computed host-side so the webview
@@ -141,10 +222,14 @@ function capabilityFlags(n: any): {
   return { _canCopy: true, _canDelete: canDelete, _canAddChild: canAddChild };
 }
 
-// Build the rows for a single entry subtree (the entry plus its flattened
-// nested children), reparented under its section. Used both by buildRows for
-// the full tree and by the incremental edit write-back, which repaints only
-// the edited entry's rows instead of rebuilding the whole table.
+// Build the rows for a single entry subtree (the entry plus its nested children),
+// reparented under its section. Used by the incremental edit write-back, which repaints
+// only the edited entry's rows instead of rebuilding the whole table.
+//
+// `budget` is why a 1000x1000 double can be edited: the repaint of ONE entry is as
+// unbounded as the payload was, so a caller that can answer a `requestChildren` passes
+// the same budget here and gets the same deferred rows back. Infinity keeps the whole
+// subtree, which is what a caller that cannot answer one must ask for.
 //
 // `pool` is optional because the two callers want different things from it. buildRows
 // materializes the WHOLE table and brings one, so its rows share cells; the edit
@@ -159,22 +244,56 @@ export function buildEntryRows(
   modifiedNames?: Set<string>,
   clipMark?: ClipMark,
   pool?: RowCellPool,
+  budget: number = Infinity,
 ): any[] {
   const out: any[] = [];
-  const flat = entry.flatten ? entry.flatten() : [entry];
-  for (const n of flat) {
-    let row: any;
-    try { row = n.toRow(); } catch { continue; }
-    if (!row) continue;
-    // Block elements express their column meaning differently from data:
-    // the node puts block type in Value and param-usage in DataType. Remap so
-    // the "Usage" column (key UsedBy) carries the param-usage and "Data Type"
-    // shows the block type, matching the data-vs-block column semantics.
-    if (n instanceof ModelBlockNode) {
-      // _isBlockRow lets the async model-view annotation (usageGraph) replace
-      // this cell with cross-file-resolved param links + source labels.
-      row = { ...row, UsedBy: row.DataType, DataType: n.blockType, Value: '', _isBlockRow: true };
-    }
+  const plan = planRows([entry], budget);
+  for (const p of plan.planned) {
+    const row = plannedRow(p, entry, sectionName, modifiedNames, clipMark, pool);
+    if (row) out.push(row);
+  }
+  return out;
+}
+
+/**
+ * The row for ONE planned node — the single place a sectioned row is made.
+ *
+ * Three callers reach it (the whole payload, one entry's repaint, one row's fetch) and
+ * the rule they share is everything below: the block-row column remap, the section
+ * reparent, the entry-only stamps, the capability flags, the matrix payload and the
+ * deferred mark. This repo's recurring defect is one rule with two implementations, and
+ * a row is the shape most able to hide one — a missing stamp renders as a plausible row
+ * with a feature quietly absent.
+ *
+ * `entry` null means "this node is not under an entry row in this delivery" (a fetch),
+ * which switches off exactly the two things that are about the entry: the reparent onto
+ * the section row, and the entry-level Modified/metadata/clipboard stamps.
+ *
+ * Returns null for a node that has no row — `toRow()` threw, or answered null (a
+ * container) — which is the caller's cue to emit nothing and keep going.
+ */
+function plannedRow(
+  p: PlannedRow,
+  entry: any | null,
+  sectionName: string,
+  modifiedNames?: Set<string>,
+  clipMark?: ClipMark,
+  pool?: RowCellPool,
+): any | null {
+  const n = p.node;
+  let row: any;
+  try { row = n.toRow(); } catch { return null; }
+  if (!row) return null;
+  // Block elements express their column meaning differently from data:
+  // the node puts block type in Value and param-usage in DataType. Remap so
+  // the "Usage" column (key UsedBy) carries the param-usage and "Data Type"
+  // shows the block type, matching the data-vs-block column semantics.
+  if (n instanceof ModelBlockNode) {
+    // _isBlockRow lets the async model-view annotation (usageGraph) replace
+    // this cell with cross-file-resolved param links + source labels.
+    row = { ...row, UsedBy: row.DataType, DataType: n.blockType, Value: '', _isBlockRow: true };
+  }
+  if (entry) {
     // Reparent top-level entries under the section row; keep nested parents as-is.
     if (row.parent == null || row.ID === entry.id) {
       row = { ...row, parent: buildSectionRowId(sectionName) };
@@ -221,16 +340,17 @@ export function buildEntryRows(
         row = { ...row, Name: { ...row.Name, clipboardMode: clipMark.mode } };
       }
     }
-    // Context-menu capability flags (consumed by the webview menu builder), then
-    // the grid-view payload if this node's value is a griddable matrix. Both are
-    // stamps over the node's own row; neither rewrites the row's columns.
-    const stamped = stampMatrix({ ...row, ...capabilityFlags(n) }, n);
-    // Share the FINISHED row, rather than passing the pool to `n.toRow()` above. This row
-    // is the node's cells plus this host's own — Usage/Data Type remapped for a block row,
-    // the dictionary metadata columns, the clipboard mark — so sharing here covers all of
-    // them in ONE walk where doing both would cost two. `_matrix` is left alone: the pool
-    // declines any cell it cannot key exactly, and a matrix payload holds a number[].
-    out.push(pool ? pool.share(stamped) : stamped);
   }
-  return out;
+  // Context-menu capability flags (consumed by the webview menu builder), then the
+  // grid-view payload if this node's value is a griddable matrix, then the deferred mark
+  // if the plan held this node's children back. All three are stamps over the node's own
+  // row; none rewrites the row's columns. `_lazy` last, in the same order matRowBuilder
+  // applies it, so the two builders' rows are the same shape for the same node.
+  const stamped = stampLazy(stampMatrix({ ...row, ...capabilityFlags(n) }, n), p.deferred);
+  // Share the FINISHED row, rather than passing the pool to `n.toRow()` above. This row
+  // is the node's cells plus this host's own — Usage/Data Type remapped for a block row,
+  // the dictionary metadata columns, the clipboard mark — so sharing here covers all of
+  // them in ONE walk where doing both would cost two. `_matrix` is left alone: the pool
+  // declines any cell it cannot key exactly, and a matrix payload holds a number[].
+  return pool ? pool.share(stamped) : stamped;
 }
