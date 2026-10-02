@@ -40,6 +40,7 @@ import {
 import { readSlddParts } from './slddContent.js';
 import { isZipBytes } from './slddFormat.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
+import { postOrReport } from './postPayload.js';
 import {
   findOwningEntry,
   resolveSectionForPaste,
@@ -471,20 +472,30 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         const modified = computeModified(uriString, node);
         const clipMark = clipMarkOfDoc();
         const rows = buildRows(node, modified, clipMark);
-        webview.postMessage({
-          type: 'setRows',
-          docUri: uriString,
-          rows,
-          columns: COLUMNS,
-          columnLabels: COLUMN_LABELS,
-          columnGroups: COLUMN_GROUPS,
-          editable: true,
-          // What the read of this dictionary could not read. Rebuilt with the model on
-          // every repaint rather than captured on open, because an edit rewrites
-          // chunkXml and the answer is about the chunk as it stands — a warning that
-          // outlived the part it was about would be worse than none.
-          warnings: warningBanner(sourceWarnings(node)),
-        });
+        // Through postOrReport, and NOT awaited: the postMessage itself (and the
+        // serialization that can fail in it) still happens in this synchronous run, so
+        // the paint is as prompt as it was; only the error report is deferred. Without
+        // it, a payload too large for the webview RPC rejects where the catch below
+        // cannot see it and the table waits on its spinner for ever. Not capped, unlike
+        // the read-only view: these rows are editable — see SlddTextEditorProvider.
+        void postOrReport(
+          webview,
+          {
+            type: 'setRows',
+            docUri: uriString,
+            rows,
+            columns: COLUMNS,
+            columnLabels: COLUMN_LABELS,
+            columnGroups: COLUMN_GROUPS,
+            editable: true,
+            // What the read of this dictionary could not read. Rebuilt with the model on
+            // every repaint rather than captured on open, because an edit rewrites
+            // chunkXml and the answer is about the chunk as it stands — a warning that
+            // outlived the part it was about would be worse than none.
+            warnings: warningBanner(sourceWarnings(node)),
+          },
+          name,
+        );
         webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
         webview.postMessage({ type: 'clipboardState', ...clipboardState() });
         paintedMark = clipMarkOfDoc();

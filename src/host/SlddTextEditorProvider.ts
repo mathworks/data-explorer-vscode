@@ -73,6 +73,7 @@ import { entrySelectorOf, minimalReplacement, planDeletion, type EntrySelector }
 import { copyEntriesToClipboard } from './clipboardAction.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
+import { postOrReport } from './postPayload.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { answerMatrixRequest } from './matrixRequest.js';
 import { parsesAsJson } from './slddFormat.js';
@@ -288,21 +289,31 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         return annotateDataRows(uriString, rows)
           .catch(() => false)
           .then(() => {
-            webview.postMessage({
-              type: 'setRows',
-              docUri: uriString,
-              rows,
-              columns: COLUMNS,
-              columnLabels: COLUMN_LABELS,
-              columnGroups: COLUMN_GROUPS,
-              editable: true,
-              // Backed by a TextDocument, so "Location in Text" has a target.
-              hasTextView: true,
-              // Recomputed on every repaint, which for this view means on every
-              // keystroke in the plain-text editor: a dictionary the user is midway
-              // through fixing should stop warning the moment it reads whole.
-              warnings: warningBanner(sourceWarnings(node)),
-            });
+            // Through postOrReport: an undeliverable payload — one too large for the
+            // webview RPC to serialize — rejects asynchronously, where the catch below
+            // cannot see it, and the table would wait on its spinner for ever. NOT
+            // capped like the read-only view's: these rows are editable, and a
+            // structural edit computed against a truncated row set is a worse failure
+            // than an honest banner saying the payload could not be shown.
+            void postOrReport(
+              webview,
+              {
+                type: 'setRows',
+                docUri: uriString,
+                rows,
+                columns: COLUMNS,
+                columnLabels: COLUMN_LABELS,
+                columnGroups: COLUMN_GROUPS,
+                editable: true,
+                // Backed by a TextDocument, so "Location in Text" has a target.
+                hasTextView: true,
+                // Recomputed on every repaint, which for this view means on every
+                // keystroke in the plain-text editor: a dictionary the user is midway
+                // through fixing should stop warning the moment it reads whole.
+                warnings: warningBanner(sourceWarnings(node)),
+              },
+              name,
+            );
             // Ship this document's section drop-rules so the webview can predict
             // a drop (dropDecision) live on dragover without a host round-trip.
             webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });

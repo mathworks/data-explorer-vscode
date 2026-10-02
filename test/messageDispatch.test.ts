@@ -240,12 +240,30 @@ describe('every setRows says which document it is describing', () => {
   // so omitting the field at one of these call sites is not a type error, and the symptom
   // is silent: that one view's local links take the host round-trip instead. Three posts
   // across three providers is exactly the shape this file exists for.
-  const posts = PROVIDERS.map((p) => ({
-    file: p.file,
-    bodies: [...read(`src/host/${p.file}`).matchAll(/postMessage\(\{\s*type: 'setRows'([\s\S]*?)\}\)/g)].map(
-      (m) => m[1],
-    ),
-  }));
+  //
+  // Found by brace-matching the payload LITERAL rather than by a regex over the call, and
+  // that distinction has already earned itself: the posts now go through `postOrReport`
+  // (see postPayload.ts), which put the object one argument deeper and made a
+  // `postMessage({ type: 'setRows' …})` pattern match nothing at all — three vacuous
+  // passes dressed as three green tests, if the loop below had not also demanded that the
+  // scan find something. What this file is about is the payload's FIELDS, so it reads the
+  // literal wherever it sits and does not care who it is handed to.
+  const payloadsOf = (src: string): string[] => {
+    const out: string[] = [];
+    for (const m of src.matchAll(/type: 'setRows'/g)) {
+      const open = src.lastIndexOf('{', m.index!);
+      let depth = 0;
+      for (let i = open; i < src.length; i++) {
+        if (src[i] === '{') depth++;
+        else if (src[i] === '}' && --depth === 0) {
+          out.push(src.slice(open, i + 1));
+          break;
+        }
+      }
+    }
+    return out;
+  };
+  const posts = PROVIDERS.map((p) => ({ file: p.file, bodies: payloadsOf(read(`src/host/${p.file}`)) }));
 
   it('finds all three posts, so none of them is missed below', () => {
     // A regex that matched nothing would make the loop vacuous.

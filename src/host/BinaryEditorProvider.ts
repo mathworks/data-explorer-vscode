@@ -9,6 +9,8 @@ import { readProjectStore } from './projectStore.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, exceedsStringDecodeLimit, isZipBytes } from './slddFormat.js';
 import { annotateDataRows, annotateModelRows } from './usageGraph.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
+import { capRows, rowCapBanner } from './rowCap.js';
+import { postOrReport } from './postPayload.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { answerMatrixRequest } from './matrixRequest.js';
 import { basename, projectPathSegments } from '../common/pathUtil.js';
@@ -403,7 +405,12 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           parsed: () => parsedModelForTab(document.uri),
           bytes: byteSource.read,
         });
-        const rows = isMatFile(name) ? buildMatRows(node) : buildRows(node);
+        // Capped BEFORE the payload is built, and before the Usage column is filled:
+        // the rows past the cap are not going to be shown, so annotating them is work
+        // spent on nothing. The cap is what keeps the message serializable at all —
+        // see rowCap.ts for the file that proved it necessary.
+        const capped = capRows(isMatFile(name) ? buildMatRows(node) : buildRows(node));
+        const rows = capped.rows;
         // Fill the Usage column from the shared workspace usage graph (lazy +
         // cached). A model (.slx/.mdl) resolves its blocks' params to source files
         // and its workspace vars to the blocks that use them; a .mat/.sldd data
@@ -413,22 +420,33 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
         } else if (isMatFile(name) || isSlddFile(name)) {
           await annotateDataRows(uriString, rows).catch(() => false);
         }
-        webview.postMessage({
-          type: 'setRows',
-          docUri: uriString,
-          rows,
-          columns: COLUMNS,
-          columnLabels: COLUMN_LABELS,
-          columnGroups: COLUMN_GROUPS,
-          editable: false,
-          notice,
-          // Independent of `notice`: that one explains why this view is read-only,
-          // this one says the file is not all here. A large JSON dictionary that also
-          // read short shows both, which is why they are two fields and not one
-          // string — see renderBanners in the webview.
-          warnings: warningBanner(sourceWarnings(node)),
-        });
-        drainNavigateSelect(webview, uriString);
+        const delivered = await postOrReport(
+          webview,
+          {
+            type: 'setRows',
+            docUri: uriString,
+            rows,
+            columns: COLUMNS,
+            columnLabels: COLUMN_LABELS,
+            columnGroups: COLUMN_GROUPS,
+            editable: false,
+            notice,
+            // Independent of `notice`: that one explains why this view is read-only,
+            // this one says the file is not all here. A large JSON dictionary that also
+            // read short shows both, which is why they are two fields and not one
+            // string — see renderBanners in the webview.
+            //
+            // Through rowCapBanner, so a table that stops short says where it stopped
+            // in the same strip that reports what the parse could not read.
+            warnings: rowCapBanner(capped, warningBanner(sourceWarnings(node))),
+          },
+          name,
+        );
+        // Only when the rows it selects into actually arrived. A held selection
+        // drained against a view showing the error banner is a selection aimed at
+        // rows that are not there, and it would be dropped silently rather than wait
+        // for the retry that a repost brings.
+        if (delivered) drainNavigateSelect(webview, uriString);
       } catch (err) {
         invalidate(uriString);
         webview.postMessage({
