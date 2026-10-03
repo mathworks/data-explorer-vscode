@@ -68,9 +68,17 @@ export class DexColumnFilter extends LitElement {
     .op-button:hover {
       background: var(--dex-bg-hover, #e8e8e8);
     }
+    /* The pressed operator is the popup's state display — it is the only thing saying
+       which comparison Apply is about to write — so it is the one surface here that has
+       to track the theme. --dex-color-accent-bg is the declared token for a selected
+       surface (vscode-theme.css aliases it onto --dex-selection-bg); the name this read
+       before, --dex-bg-selected, was declared nowhere, so it painted the fallback in
+       every theme and measured 1.22:1 on Dark Modern against its own ink. The literal
+       below is the light value of the real token, which is what the invented name's
+       fallback had been a one-digit copy of. */
     .op-button[aria-pressed='true'] {
       border-color: var(--dex-color-accent, #0078d4);
-      background: var(--dex-bg-selected, #cce4f7);
+      background: var(--dex-color-accent-bg, #cde4f7);
     }
     .op-button:focus-visible {
       border-color: var(--dex-color-accent, #0078d4);
@@ -97,8 +105,13 @@ export class DexColumnFilter extends LitElement {
       font-size: 11px;
       color: var(--dex-color-text-secondary, #666);
     }
+    /* --dex-font-mono is the declared name, and it carries the user's own
+       editor.fontFamily (vscode-theme.css). --dex-font-family-mono, which this read
+       before, is declared nowhere, so the hard-coded stack below always won and the one
+       line in the popup that shows literal syntax to retype was the one line that
+       ignored the font the user types code in. */
     .writes-value {
-      font-family: var(--dex-font-family-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+      font-family: var(--dex-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
       overflow-wrap: anywhere;
     }
     .popup-actions {
