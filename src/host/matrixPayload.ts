@@ -6,9 +6,9 @@
 // matrix — one rule, three call sites.
 //
 // Node access is duck-typed (node.dims / node.children / node.displayValue /
-// node.className / node.displayName / node.displayElements()), like every other
-// host builder here: MatlabVariableNode is not on the data-explorer-core barrel
-// and must not be added to it.
+// node.className / node.displayName / node.isSparse / node.displayElements()), like
+// every other host builder here: MatlabVariableNode is not on the data-explorer-core
+// barrel and must not be added to it.
 //
 // See docs/superpowers/specs/2026-09-02-variable-editor-design.md.
 import { effectiveDims as coreEffectiveDims } from 'data-explorer-core';
@@ -151,15 +151,26 @@ export function isGriddable(node: any): boolean {
   if (dims.filter((d) => d > 1).length < 2) return false;
   const count = product(dims);
   if (count > MAX_MATRIX_ELEMENTS) return false;
+  // A sparse array has no grid. Core holds one as its non-zeros, not its elements
+  // (from data-explorer-core 1.36.3), so a grid would be the one place it is laid
+  // out densely, and its `displayElements()` answers null. Asked here rather than
+  // left to that null: the glyph is stamped without building the cells, so leaving
+  // it to buildCells puts a glyph on every 2-D sparse array that opens onto "This
+  // value could not be read as a table." `=== true` is the feature-detect: on a core
+  // older than the getter it is undefined, a sparse array still lists every element
+  // there, and its grid still opens. A Parameter's sparse Value is refused by this
+  // same line, because matrixForRow asks it of the Value child.
+  if (node.isSparse === true) return false;
   // Can it list its elements? NOT "has it been expanded into one child per
   // element" — that clause is deliberately gone. It counted children, which tied
   // this gate to core's MAX_EXPANDED_ELEMENTS and meant a matrix past that count
   // passed every other clause and had nothing to draw. The feature-detect is what
   // replaces it: a node with no `displayElements` is not a MatlabVariableNode, or
   // comes from a core pin older than the accessor, and either way the affordance
-  // disappears rather than this file growing a second element formatter. The
-  // element list being the RIGHT LENGTH is buildCells' job, which fails closed on
-  // a slot left unfilled exactly as it does on a duplicate subscript.
+  // disappears rather than this file growing a second element formatter. Having
+  // the accessor does not promise a list: it answers null for a kind with no
+  // elements. A null list, like one of the wrong length, is buildCells' job, which
+  // fails closed on either exactly as it does on a duplicate subscript.
   return typeof node.displayElements === 'function';
 }
 

@@ -14,7 +14,7 @@ import { DataModel, effectiveDims as coreEffectiveDims } from 'data-explorer-cor
 import { getModel, getModelFromBytes, invalidate } from '../src/host/SlddModel.js';
 import {
   matrixPayload, matrixDescriptor, matrixForRow, isGriddable, effectiveDims, subsOf, canonicalIndex,
-  MAX_MATRIX_ELEMENTS, GRIDDABLE_CLASSES,
+  stampMatrix, MAX_MATRIX_ELEMENTS, GRIDDABLE_CLASSES,
 } from '../src/host/matrixPayload.js';
 
 function fixturePath(name: string): string {
@@ -238,6 +238,65 @@ describe('the gate admits real 2-D matrices and nothing else', () => {
       cells: [['S(1,1)', '1'], ['S(1,2)', '2'], ['S(2,1)', '3']],
     });
     expect(matrixPayload(short)).toBeNull();
+  });
+});
+
+describe('a sparse array is offered no grid', () => {
+  // Core 1.36.3 holds a sparse array as its non-zeros, not its elements, and has no
+  // grid for one: `displayElements()` answers null and `isSparse` is true. The glyph
+  // is stamped from this gate without building the cells, so a sparse array the gate
+  // let through kept a glyph that opened onto "This value could not be read as a
+  // table." The stub here is one every OTHER clause admits — a griddable class, a 2-D
+  // shape under the cap, an element list that lays out — so the flag is the only
+  // thing left to refuse it. test/sparseNoGrid.test.ts is the same rule over core's
+  // own sparse fixtures.
+  function matrix(name: string, isSparse: unknown): any {
+    return {
+      ...stub({
+        name, className: 'double', dims: [2, 2], displayValue: '<2x2 sparse double>',
+        cells: [[`${name}(1,1)`, '1'], [`${name}(1,2)`, '0'], [`${name}(2,1)`, '0'], [`${name}(2,2)`, '4']],
+      }),
+      isSparse,
+    };
+  }
+
+  // A Parameter row: it shows its Value's literal, so matrixForRow resolves the grid
+  // to the Value child, and that child is where the flag is.
+  function parameter(isSparse: unknown): any {
+    const value = { ...matrix('Value', isSparse), name: 'Value' };
+    return {
+      id: 'stub:P', className: 'Simulink.Parameter', displayName: 'P',
+      displayValue: value.displayValue, children: [value],
+    };
+  }
+
+  it('refuses a node core marks sparse, with no descriptor, no payload and no stamp', () => {
+    const sparse = matrix('S', true);
+    expect(isGriddable(sparse)).toBe(false);
+    expect(matrixDescriptor(sparse)).toBeNull();
+    expect(matrixPayload(sparse)).toBeNull();
+    expect('_matrix' in stampMatrix({ ID: 'r' }, sparse)).toBe(false);
+    // The same node unmarked is a good matrix, so the refusal above is the flag's.
+    expect(matrixPayload(matrix('S', undefined))!.cells).toEqual(['1', '0', '0', '4']);
+    expect('_matrix' in stampMatrix({ ID: 'r' }, matrix('S', undefined))).toBe(true);
+  });
+
+  it('asks `=== true`, so a core without the getter keeps every grid it had', () => {
+    // undefined is a core older than 1.36.3, where a sparse array still lists every
+    // element and its grid still opens; false is a dense array on a core that has
+    // the getter. Neither may lose its grid to this clause.
+    expect(isGriddable(matrix('S', undefined))).toBe(true);
+    expect(isGriddable(matrix('S', false))).toBe(true);
+  });
+
+  it('refuses a property row whose Value is sparse, and the Value row itself', () => {
+    const sparse = parameter(true);
+    expect(matrixForRow(sparse)).toBeNull();
+    expect(matrixDescriptor(sparse)).toBeNull();
+    expect(matrixPayload(sparse)).toBeNull();
+    expect(matrixDescriptor(sparse.children[0])).toBeNull();
+    // The control: the same row over a dense Value resolves to it, qualified.
+    expect(matrixPayload(parameter(undefined))!.name).toBe('P.Value');
   });
 });
 
