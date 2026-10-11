@@ -1,0 +1,613 @@
+{
+	"__MW_TEXT_COREPROPERTIES__": {
+		"release": "R2027a"
+	},
+	"__MW_TEXT_PARTS__": {
+		"__MW_TEXT_PART__/data/chunk0": {
+			"__MW_TEXT_content": {
+				"entries": [
+					{
+						"name": "c",
+						"metadata": {
+							"uuid": "fa78dd84-d0d4-42ea-9155-b497f5c20a7d",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.910407",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_array_type": "Cell",
+							"_dimensions": [
+								1,
+								2
+							],
+							"_elements": [
+								{
+									"_type": "cdata",
+									"_value": "  %)30     .    6     8    (    !1    $    %    \"     $    #     0         %  0       4    0                     0    D    (            (D \u0000\u0000"
+								},
+								[
+									9,
+									10
+								]
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "dAllZero",
+						"metadata": {
+							"uuid": "a464e890-753a-422b-9c84-5d1069d09750",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.912598",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "double",
+							"_value": "Matrix(3,4)\n[[0.0, 0.0, 0.0, 0.0]; [0.0, 0.0, 0.0, 0.0]; [0.0, 0.0, 0.0, 0.0]]"
+						}
+					},
+					{
+						"name": "dCol",
+						"metadata": {
+							"uuid": "cdb279e3-e6de-49e6-adf3-22a63a15c33a",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.913099",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "double",
+							"_value": "Matrix(5,1)\n[0.0, 3.0, 0.0, 0.0, 5.0]"
+						}
+					},
+					{
+						"name": "dComplex",
+						"metadata": {
+							"uuid": "467b9d04-6aa8-4c52-874f-1ebfca03cd73",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.913417",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "cdata",
+							"_value": "  %)30     .    ^     8    (    !@@        %    \"     ,    $     0         )    8            / _                  #@/P                                                   (                   !!                       D   !@             $                                                                         (P                   T+\\                     \u0000"
+						}
+					},
+					{
+						"name": "dDiag",
+						"metadata": {
+							"uuid": "a1db5c25-c0ad-4a9a-b88b-31aa12346713",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.913709",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "double",
+							"_value": "Matrix(10,10)\n[[1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]; [0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]; [0.0, 0.0, \n3.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]; [0.0, 0.0, 0.0, 4.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]; [0.0, 0.0, 0.0, 0.0, 5.0, \n0.0, 0.0, 0.0, 0.0, 0.0]; [0.0, 0.0, 0.0, 0.0, 0.0, 6.0, 0.0, 0.0, 0.0, 0.0]; [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 7.0, 0.0, \n0.0, 0.0]; [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 8.0, 0.0, 0.0]; [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 9.0, 0.0]; \n[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 10.0]]"
+						}
+					},
+					{
+						"name": "dEmpty",
+						"metadata": {
+							"uuid": "a91dcabe-56df-4548-af3a-cdbb604de4a3",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.913959",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": []
+					},
+					{
+						"name": "dLogical",
+						"metadata": {
+							"uuid": "f0ba2608-0762-4f87-8fbb-015e3fb9cf14",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.914243",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "logical",
+							"_value": "Matrix(2,3)\n[[1, 0, 0]; [0, 0, 1]]"
+						}
+					},
+					{
+						"name": "dNonFinite",
+						"metadata": {
+							"uuid": "da50451e-7dc9-41b4-9e22-122ec384f752",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.914499",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "double",
+							"_value": "Matrix(2,2)\n[[Inf, 0.0]; [-Inf, NaN]]"
+						}
+					},
+					{
+						"name": "dRow",
+						"metadata": {
+							"uuid": "2a52d978-e1e1-477b-96ff-e9c04381fe2b",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.914752",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": [
+							0,
+							2,
+							0,
+							4,
+							0
+						]
+					},
+					{
+						"name": "dSingle",
+						"metadata": {
+							"uuid": "41d9c035-bc4f-4251-bc2d-a5ade0102cd4",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.915037",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "single",
+							"_value": "Matrix(3,2)\n[[0.0F, 1.5F]; [2.5F, 0.0F]; [0.0F, -4.0F]]"
+						}
+					},
+					{
+						"name": "fhAlias",
+						"metadata": {
+							"uuid": "9d8df02a-b048-4d6c-824e-6fa00777da64",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.915346",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_array_class": "dexsparse.FhAlias",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"BaseType": "double",
+										"DataScope": "Auto",
+										"Description": "",
+										"Fh": {
+											"_type": "function_handle",
+											"_value": "sin"
+										},
+										"HeaderFile": ""
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "numAlias",
+						"metadata": {
+							"uuid": "d705863b-4a8c-4d02-9a5f-304ee26d1ee0",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.915649",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_array_class": "dexsparse.NumAlias",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"BaseType": "double",
+										"DataScope": "Auto",
+										"Description": "",
+										"HeaderFile": ""
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "pDense",
+						"metadata": {
+							"uuid": "bbdb6d9f-f6e7-4eb9-be70-6aef9a5e2bc1",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.915949",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_array_class": "Simulink.Parameter",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"CoderInfo": {
+											"_id": "2",
+											"_object_class": "Simulink.CoderInfo",
+											"_properties": {
+												"CSCPackageName": "Simulink",
+												"CustomAttributes": {
+													"_id": "3",
+													"_object_class": "SimulinkCSC.AttribClass_Simulink_Default",
+													"_properties": {}
+												},
+												"CustomStorageClass": "Default",
+												"ParameterOrSignal": "Parameter",
+												"StorageClass": "Auto"
+											}
+										},
+										"Complexity": "real",
+										"Dimensions": [
+											3,
+											3
+										],
+										"Value": {
+											"_type": "double",
+											"_value": "Matrix(3,3)\n[[0.0, 5.0, 0.0]; [0.0, 0.0, 0.0]; [6.0, 0.0, 0.0]]"
+										}
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "pSp",
+						"metadata": {
+							"uuid": "34ba0c18-f584-47f0-9af9-bec36d1bd2c1",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.916671",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_array_class": "Simulink.Parameter",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"CoderInfo": {
+											"_id": "2",
+											"_object_class": "Simulink.CoderInfo",
+											"_properties": {
+												"CSCPackageName": "Simulink",
+												"CustomAttributes": {
+													"_id": "3",
+													"_object_class": "SimulinkCSC.AttribClass_Simulink_Default",
+													"_properties": {}
+												},
+												"CustomStorageClass": "Default",
+												"ParameterOrSignal": "Parameter",
+												"StorageClass": "Auto"
+											}
+										},
+										"Complexity": "real",
+										"Dimensions": [
+											3,
+											3
+										],
+										"Value": {
+											"_type": "cdata",
+											"_value": "  %)30     .    :     8    (    !1    (    %    \"     ,    #     0         %    \"     (         !0   !           0    (    \"    \"0   !             80        !1 \u0000"
+										}
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "pSpComplex",
+						"metadata": {
+							"uuid": "ea5c49ba-bd1e-4ce0-a804-da704990a4f8",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.919814",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_array_class": "Simulink.Parameter",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"CoderInfo": {
+											"_id": "2",
+											"_object_class": "Simulink.CoderInfo",
+											"_properties": {
+												"CSCPackageName": "Simulink",
+												"CustomAttributes": {
+													"_id": "3",
+													"_object_class": "SimulinkCSC.AttribClass_Simulink_Default",
+													"_properties": {}
+												},
+												"CustomStorageClass": "Default",
+												"ParameterOrSignal": "Parameter",
+												"StorageClass": "Auto"
+											}
+										},
+										"Complexity": "complex",
+										"Dimensions": [
+											2,
+											2
+										],
+										"Value": {
+											"_type": "cdata",
+											"_value": "  %)30     .    @     8    (    !1@   (    %    \"     (    \"     0         %    \"     $         !0    P          0    (         \"0   !              0        / _\"0   !              P        / _\u0000"
+										}
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "pSpLogical",
+						"metadata": {
+							"uuid": "6299293c-da1c-4a38-9c50-e7d96c89588e",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.920555",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_array_class": "Simulink.Parameter",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"_id": "1",
+									"_properties": {
+										"CoderInfo": {
+											"_id": "2",
+											"_object_class": "Simulink.CoderInfo",
+											"_properties": {
+												"CSCPackageName": "Simulink",
+												"CustomAttributes": {
+													"_id": "3",
+													"_object_class": "SimulinkCSC.AttribClass_Simulink_Default",
+													"_properties": {}
+												},
+												"CustomStorageClass": "Default",
+												"ParameterOrSignal": "Parameter",
+												"StorageClass": "Auto"
+											}
+										},
+										"Complexity": "real",
+										"DataType": "boolean",
+										"Dimensions": [
+											2,
+											2
+										],
+										"Value": {
+											"_type": "cdata",
+											"_value": "  %)30     .    6     8    (    !1(   (    %    \"     (    \"     0         %    \"     $         !0    P          0    (          @ \"  $!   \u0000\u0000"
+										}
+									}
+								}
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					},
+					{
+						"name": "spAllZero",
+						"metadata": {
+							"uuid": "239bddbe-946b-4aab-8f15-d1f399f46568",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.921156",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "cdata",
+							"_value": "  %)30     .    6     8    (    !1    $    %    \"     ,    $     0         %          4    4                                    \"0         \u0000\u0000"
+						}
+					},
+					{
+						"name": "spBig",
+						"metadata": {
+							"uuid": "7a5e960e-9680-45ab-9357-20d6c9376eb5",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.921295",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "cdata",
+							"_value": "  %)30     .    *!    8    (    !1    4    %    \"    .@#  #H P   0         %    %         #F P  \\P$   $   #G P        4   \"D#P        $    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    \"     @    (    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #     P    ,    #    !     4         \"0   \"@           #P/P       !!         \"$          0        !1 \u0000"
+						}
+					},
+					{
+						"name": "spCol",
+						"metadata": {
+							"uuid": "a40483a7-2e27-4c19-9d58-a61a43889353",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.921438",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "cdata",
+							"_value": "  %)30     .    8     8    (    !1    (    %    \"     4    !     0         %    \"     $    $    !0    @          @    D    0            \"$         40 \u0000\u0000\u0000"
+						}
+					},
+					{
+						"name": "spComplex",
+						"metadata": {
+							"uuid": "ae777a0f-f56b-44d1-a509-676d8859720a",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.921581",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "cdata",
+							"_value": "  %)30     .    L     8    (    !1@   0    %    \"     ,    $     0         %    $          \"     0         %    %          \"     @    ,    $          D    @            \\#\\       #@/P        \"         $$ )    (             !                    (P        -\"_\u0000"
+						}
+					},
+					{
+						"name": "spDiag",
+						"metadata": {
+							"uuid": "b9666523-021e-432f-ab66-51c9177d5b09",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.921700",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "cdata",
+							"_value": "  %)30     .    Z     8    (    !1    H    %    \"     H    *     0         %    *          !     @    ,    $    !0    8    '    \"     D    %    +          !     @    ,    $    !0    8    '    \"     D    *          D   !0            \\#\\         0         A         $$         40        !A         '$         @0        \")         )$ \u0000\u0000"
+						}
+					},
+					{
+						"name": "spEmpty",
+						"metadata": {
+							"uuid": "c37fc194-965a-4876-8cc3-3696a3e515d8",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.921830",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": []
+					},
+					{
+						"name": "spLogical",
+						"metadata": {
+							"uuid": "ebfbae0a-a66f-46d4-9821-051dfbc2104f",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.921992",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "cdata",
+							"_value": "  %)30     .    6     8    (    !1(   (    %    \"     (    #     0         %    \"          !    !0   !           0    $    \"     @ \"  $!   \u0000\u0000"
+						}
+					},
+					{
+						"name": "spNonFinite",
+						"metadata": {
+							"uuid": "66a1839b-d73b-4082-a7af-12003e4325b3",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.922119",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "cdata",
+							"_value": "  %)30     .    >     8    (    !1    ,    %    \"     (    \"     0         %    #          !     0         %    #          \"     P         )    &            /!_        \\/\\       #X_P\u0000\u0000\u0000"
+						}
+					},
+					{
+						"name": "spRow",
+						"metadata": {
+							"uuid": "7e5e993a-5cd9-44e3-ad6e-99e78a6cbc2d",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.922249",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "cdata",
+							"_value": "  %)30     .    <     8    (    !1    (    %    \"     $    %     0         %    \"               !0   !@               $    !     @    (    )    $             !         $$ \u0000\u0000"
+						}
+					},
+					{
+						"name": "spSingle",
+						"metadata": {
+							"uuid": "7406bc63-8d54-420c-9394-e169444570a7",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.922372",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "cdata",
+							"_value": "  %)30     .    <     8    (    !Q    ,    %    \"     ,    \"     0         %    #     $          @         %    #          !     P         '    #       ($   , _  \" P      \u0000\u0000"
+						}
+					},
+					{
+						"name": "spTall",
+						"metadata": {
+							"uuid": "53d37cc0-5744-4b99-82c1-fc019c966c21",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.922479",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_type": "cdata",
+							"_value": "  %)30     .    :     8    (    !1    (    %    \"    (\"6F  \"     0         %    \"         !^EI@ !0    P          0    (         \"0   !             <0        \"! \u0000"
+						}
+					},
+					{
+						"name": "st",
+						"metadata": {
+							"uuid": "00b50f51-c714-45ad-87b2-7f02a332b1b8",
+							"namespace": "dacaf35e-55a5-454d-a7c1-93db038a210e",
+							"lastmod": "20261009T205019.922623",
+							"modifiedby": "fixture",
+							"isderived": "0"
+						},
+						"value": {
+							"_array_type": "Struct",
+							"_dimensions": [
+								1,
+								1
+							],
+							"_elements": [
+								{
+									"d": [
+										7,
+										8
+									],
+									"sp": {
+										"_type": "cdata",
+										"_value": "  %)30     .    :     8    (    !1    (    %    \"     (    \"     0         %    \"     $         !0    P          0    (         \"0   !             @0        !Q \u0000"
+									}
+								}
+							],
+							"_fields": [
+								"sp",
+								"d"
+							],
+							"_mw_element_type": "MATLABArray"
+						}
+					}
+				],
+				"Dictionary References": [],
+				"AllowAccessBWS": false
+			}
+		}
+	}
+}

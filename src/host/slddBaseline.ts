@@ -28,10 +28,15 @@ function entryJson(entry: any): string {
   try {
     return JSON.stringify(entry.serialize());
   } catch {
-    // PRECONDITION (untested): every node type's serialize() returns a plain
-    // JSON-safe tree, so neither the call nor the stringify throws for a
-    // parsed model. Reaching this needs a cyclic or BigInt-bearing value the
-    // parser cannot produce — hence the sentinel rather than a mocked test.
+    // Reachable: data-explorer-core throws a MatWriteError from serialize() for a
+    // value that would write more than its write budget allows (only a malformed
+    // or extreme hand-made value does), and that throw lands here. A cyclic or
+    // BigInt-bearing value would too, though the parser produces neither.
+    //
+    // The sentinel then means "this entry cannot be written as it stands", and it
+    // is compared like any other string: an entry that fails on one side only
+    // reads as Modified, and one that fails at the baseline AND now reads as
+    // unmodified, because two equal sentinels say nothing about two values.
     return SERIALIZE_ERROR;
   }
 }

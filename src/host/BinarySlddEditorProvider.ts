@@ -1135,9 +1135,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         if (snap.items.length === 0) clearDrag();
         else setDrag(uriString, snap.sourceSection, snap.sourceSectionLabel, snap.sourceIsDerived, snap.items);
         broadcastDragState();
-      } catch {
+      } catch (err) {
         clearDrag();
         broadcastDragState();
+        // Said, as a failed copy is — see SlddTextEditorProvider's applyDragStart.
+        webview.postMessage({ type: 'error', message: `Failed to drag: ${(err as Error).message}` });
       }
     };
 
@@ -1228,14 +1230,15 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         if (isMove && !sameDoc) {
           await deleteFromSource(drag.sourceDocUri, sourceTargets);
         }
-
-        clearDrag();
-        broadcastDragState();
       } catch (err) {
         // Same as applyPaste: the fold attaches nodes as it goes, so a failure part-way
         // can leave the model ahead of chunkXml. Rebuild from the text.
         document.repaintAll();
         webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+      } finally {
+        // A drop ends the drag whatever became of it — see SlddTextEditorProvider's applyDrop.
+        clearDrag();
+        broadcastDragState();
       }
     };
 

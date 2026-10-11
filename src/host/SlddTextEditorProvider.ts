@@ -1133,6 +1133,23 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     };
 
     /**
+     * A paste or drop refused before it painted: put the model back, and say why.
+     *
+     * Nothing was painted and nothing was written, so the rows on screen still say what the text
+     * says. The MODEL may not: prepareEntryForPaste attaches each new entry to its section before
+     * the entry is serialized, and a same-document move has already taken its sources out
+     * (moveRemovals). So a refusal after that point — a derived section's Constant rule, or a
+     * value core will not write (a MatWriteError) — leaves a tree the text never said. Held as it
+     * is, the next paste names its copy past an entry the file never got (`Bus2` where `Bus1` was
+     * owed), and an edit of a cut entry cannot find it. The text is the truth in this format, so
+     * the tree is re-read from it; the rows need nothing.
+     */
+    const refusedStructural = (message: string): void => {
+      rebuildModel();
+      webview.postMessage({ type: 'error', message });
+    };
+
+    /**
      * The prologue every structural edit shares: the mid-edit JSON gate, a tree that matches the
      * text, and the node the row names — resolved ONCE, because which shape a delete takes
      * depends on what the row turned out to be.
@@ -1616,7 +1633,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // Rows for entries that arrived or left cannot be put back one run at a time — the wide
         // repaint is the repair, and it is only ever reached by an edit that did not happen.
         if (painted) resyncWide(message);
-        else webview.postMessage({ type: 'error', message });
+        else refusedStructural(message);
       }
     };
 
@@ -1737,9 +1754,14 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           setDrag(uriString, snap.sourceSection, snap.sourceSectionLabel, snap.sourceIsDerived, snap.items);
         }
         broadcastDragState();
-      } catch {
+      } catch (err) {
         clearDrag();
         broadcastDragState();
+        // Said, as a failed copy is (clipboardAction.ts). Silent, the drag looked like it had
+        // started, and the drop that ended it reported only "Nothing to drop." — the snapshot that
+        // failed is the serialize of every dragged entry, so this is where a value core will not
+        // write (a MatWriteError) says so.
+        webview.postMessage({ type: 'error', message: `Failed to drag: ${(err as Error).message}` });
       }
     };
 
@@ -1851,14 +1873,17 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         if (isMove && !sameDoc) {
           await deleteFromSource(drag.sourceDocUri, sourceTargets);
         }
-
-        clearDrag();
-        broadcastDragState();
       } catch (err) {
         paintedWrite = null;
         const message = `Failed to apply edit: ${(err as Error).message}`;
         if (painted) resyncWide(message);
-        else webview.postMessage({ type: 'error', message });
+        else refusedStructural(message);
+      } finally {
+        // A drop ends the drag whatever became of it. Cleared only on success, a refused drop
+        // left every table predicting a drop that had already been tried and failed, until
+        // the source view's dragEnd came round to clear it.
+        clearDrag();
+        broadcastDragState();
       }
     };
 
