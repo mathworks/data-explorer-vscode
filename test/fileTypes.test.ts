@@ -360,12 +360,18 @@ describe('no consumer keeps its own copy of the list', () => {
   // extensions ORed together and anchored at the end.
   const EXT_ALTERNATION = /\\\.\([a-z|]+\)\$/;
 
+  // Three of the scans below are built at run time out of the shared lists, so each entry is
+  // spliced into a pattern and has to arrive there as a literal — every metacharacter
+  // escaped, not only the `.` in today's `matlab.toml`. SUPPORTED_NAMES is core's string, not
+  // this repo's, so which characters it carries is not this file's to assume.
+  const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
   // A hand-rolled kind test, e.g. `path.endsWith('.sldd')`. This is the copy that got
   // written eight times, and the one whose failure is quietest: it is case-SENSITIVE,
   // so it disagrees with every glob above about a file MATLAB or Windows named
   // `Params.SLDD` — the file is discovered, opened, indexed, and then classified as
   // nothing. Ask core: isSlddFile/isMatFile/isProjectFile/isModelFile.
-  const ENDSWITH_EXT = new RegExp(`endsWith\\((['"])\\.(${SUPPORTED_EXTS.join('|')})\\1\\)`, 'i');
+  const ENDSWITH_EXT = new RegExp(`endsWith\\((['"])\\.(${SUPPORTED_EXTS.map(escapeRe).join('|')})\\1\\)`, 'i');
 
   // A single extension anchored at the end, e.g. `/\.prj$/i` — the shape the alternation
   // above does not catch, because one extension is not an alternation. It is how the same
@@ -374,7 +380,7 @@ describe('no consumer keeps its own copy of the list', () => {
   // `basename(p).replace(/\.prj$/i, '')`, and a label a user reads has to agree with the
   // name the parser is told. Both now call core's `projectNameOf` — and this is what stops
   // a third copy from growing here, in either repo's absence of a shared test.
-  const SINGLE_EXT_ANCHOR = new RegExp(`\\\\\\.(${SUPPORTED_EXTS.join('|')})\\$`, 'i');
+  const SINGLE_EXT_ANCHOR = new RegExp(`\\\\\\.(${SUPPORTED_EXTS.map(escapeRe).join('|')})\\$`, 'i');
 
   // A marker spelled out as a string, e.g. `'matlab.toml'` — the shape every check above
   // misses, because a NAME is not an extension and so appears in none of their forms.
@@ -392,7 +398,7 @@ describe('no consumer keeps its own copy of the list', () => {
   // `MATLAB.TOML` in this host's code, so the broader match costs nothing and catches the copy
   // most likely to be written by hand.
   const NAME_LITERAL = new RegExp(
-    `(['"\`])(${SUPPORTED_NAMES.map((n) => n.replace(/\./g, '\\.')).join('|')})\\1`,
+    `(['"\`])(${SUPPORTED_NAMES.map(escapeRe).join('|')})\\1`,
     'i',
   );
 
