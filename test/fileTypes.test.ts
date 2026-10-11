@@ -360,12 +360,27 @@ describe('no consumer keeps its own copy of the list', () => {
   // extensions ORed together and anchored at the end.
   const EXT_ALTERNATION = /\\\.\([a-z|]+\)\$/;
 
+  // Three of the scans below are built at run time out of the shared lists, so each entry is
+  // spliced into a pattern. Every metacharacter in it is escaped, not only the `.` in today's
+  // `matlab.toml`, so that the pattern matches the entry's own characters and no entry becomes
+  // syntax. SUPPORTED_NAMES is core's string, not this repo's, so which characters it carries
+  // is not this file's to assume.
+  //
+  // For ENDSWITH_EXT and NAME_LITERAL that is the whole job. They scan for a quoted string,
+  // and a copy of an entry inside one is spelled as the entry itself, save the few characters
+  // a string literal must escape. SINGLE_EXT_ANCHOR is the exception: it scans the source of
+  // a regex, where a hand-written copy escapes a metacharacter itself (`/\.c\+\+$/`). For such
+  // an entry the escape only keeps this scan from throwing or over-matching, and the copy
+  // would still be missed. Nothing more is needed while every SUPPORTED_EXTS entry is letters
+  // and digits, which the scan's own test below asserts.
+  const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
   // A hand-rolled kind test, e.g. `path.endsWith('.sldd')`. This is the copy that got
   // written eight times, and the one whose failure is quietest: it is case-SENSITIVE,
   // so it disagrees with every glob above about a file MATLAB or Windows named
   // `Params.SLDD` — the file is discovered, opened, indexed, and then classified as
   // nothing. Ask core: isSlddFile/isMatFile/isProjectFile/isModelFile.
-  const ENDSWITH_EXT = new RegExp(`endsWith\\((['"])\\.(${SUPPORTED_EXTS.join('|')})\\1\\)`, 'i');
+  const ENDSWITH_EXT = new RegExp(`endsWith\\((['"])\\.(${SUPPORTED_EXTS.map(escapeRe).join('|')})\\1\\)`, 'i');
 
   // A single extension anchored at the end, e.g. `/\.prj$/i` — the shape the alternation
   // above does not catch, because one extension is not an alternation. It is how the same
@@ -374,7 +389,7 @@ describe('no consumer keeps its own copy of the list', () => {
   // `basename(p).replace(/\.prj$/i, '')`, and a label a user reads has to agree with the
   // name the parser is told. Both now call core's `projectNameOf` — and this is what stops
   // a third copy from growing here, in either repo's absence of a shared test.
-  const SINGLE_EXT_ANCHOR = new RegExp(`\\\\\\.(${SUPPORTED_EXTS.join('|')})\\$`, 'i');
+  const SINGLE_EXT_ANCHOR = new RegExp(`\\\\\\.(${SUPPORTED_EXTS.map(escapeRe).join('|')})\\$`, 'i');
 
   // A marker spelled out as a string, e.g. `'matlab.toml'` — the shape every check above
   // misses, because a NAME is not an extension and so appears in none of their forms.
@@ -392,7 +407,7 @@ describe('no consumer keeps its own copy of the list', () => {
   // `MATLAB.TOML` in this host's code, so the broader match costs nothing and catches the copy
   // most likely to be written by hand.
   const NAME_LITERAL = new RegExp(
-    `(['"\`])(${SUPPORTED_NAMES.map((n) => n.replace(/\./g, '\\.')).join('|')})\\1`,
+    `(['"\`])(${SUPPORTED_NAMES.map(escapeRe).join('|')})\\1`,
     'i',
   );
 
@@ -418,6 +433,34 @@ describe('no consumer keeps its own copy of the list', () => {
       expect(NAME_LITERAL.test(`'${name.replace('.', 'X')}'`)).toBe(false);
     }
     expect(NAME_LITERAL.test("const p = 'Cargo.toml';")).toBe(false);
+  });
+
+  it('the scan would catch a hand-written endsWith kind test', () => {
+    // The marker name's guard, for ENDSWITH_EXT: it too is only ever asserted absent above,
+    // and it too is built at run time, out of SUPPORTED_EXTS.
+    for (const ext of SUPPORTED_EXTS) {
+      expect(ENDSWITH_EXT.test(`if (path.endsWith('.${ext}')) return true;`)).toBe(true);
+      expect(ENDSWITH_EXT.test(`return name.endsWith(".${ext.toUpperCase()}");`)).toBe(true);
+      // A near-miss is not a copy: a longer extension that starts with this one, and the
+      // extension with no dot in front of it.
+      expect(ENDSWITH_EXT.test(`path.endsWith('.${ext}x')`)).toBe(false);
+      expect(ENDSWITH_EXT.test(`path.endsWith('_${ext}')`)).toBe(false);
+    }
+  });
+
+  it('the scan would catch a hand-written single-extension anchor', () => {
+    // The same guard for SINGLE_EXT_ANCHOR. The lines below spell each extension as itself,
+    // which is how a regex spells it only while it has no metacharacter (see escapeRe), so
+    // that is asserted first: an extension that breaks it fails here rather than going
+    // unscanned.
+    for (const ext of SUPPORTED_EXTS) {
+      expect(ext, `${ext} would be spelled escaped in a regex`).toMatch(/^[a-z0-9]+$/);
+      expect(SINGLE_EXT_ANCHOR.test(String.raw`const stem = basename(p).replace(/\.${ext}$/i, '');`)).toBe(true);
+      expect(SINGLE_EXT_ANCHOR.test(String.raw`if (/\.${ext.toUpperCase()}$/.test(p)) return;`)).toBe(true);
+      // A near-miss: a longer extension, and a word character where the dot should be.
+      expect(SINGLE_EXT_ANCHOR.test(String.raw`/\.${ext}x$/i`)).toBe(false);
+      expect(SINGLE_EXT_ANCHOR.test(String.raw`/\w${ext}$/i`)).toBe(false);
+    }
   });
 
   it('every consumer that discovers or routes files takes the rule from a shared module', () => {
