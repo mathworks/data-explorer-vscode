@@ -22,7 +22,12 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
+      # This job's token can write (it creates the Release), so checkout does
+      # not leave it on disk for npm ci's install scripts and the build to read.
+      # The release action below is handed the token as an input instead.
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v7
         with:
@@ -58,7 +63,9 @@ jobs:
           sha256sum simulink-data-explorer-*.vsix | tee SHA256SUMS
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        # A third-party action that holds the write token, pinned to the commit
+        # its v3.0.3 tag points at, so a moved tag cannot change what runs here.
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           files: |
             simulink-data-explorer-*.vsix
