@@ -80,7 +80,10 @@ function fromLabels(parsed: ParsedProject): MspDictionary[] {
     if (label.category !== MSP_CATEGORY) {
       continue;
     }
-    const kind = LABEL_KIND[label.name];
+    // An OWN key only. The name is the store's text, and on a plain object `toString`,
+    // `valueOf` and the rest of Object.prototype answer for themselves: a label of such a
+    // name was taken for a half, and one sharing a Location with a real half replaced it.
+    const kind = Object.hasOwn(LABEL_KIND, label.name) ? LABEL_KIND[label.name] : undefined;
     if (kind) {
       kindById.set(label.id, kind);
     }
