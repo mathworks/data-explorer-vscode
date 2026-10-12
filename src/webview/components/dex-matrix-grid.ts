@@ -54,7 +54,14 @@ export interface MatrixPayload extends MatrixDescriptor {
 // one non-numeric entry keeps the whole column block left-aligned rather than
 // producing a ragged mix. Inf/NaN count: they are numeric results, and MATLAB
 // right-aligns them too.
-const NUMERIC = /^[+-]?(\d+\.?\d*([eE][+-]?\d+)?|\.\d+([eE][+-]?\d+)?|Inf|NaN)$/;
+//
+// The decimal is `\d+(?:\.\d*)?`, never `\d+\.?\d*`. They match the same strings, but with
+// no dot the second is `\d+\d*`, which a backtracking engine splits every way it can
+// before it gives up, and the cells are a file's own text: each element of a binary
+// dictionary's complex value reaches here as the file spells it, less MATLAB's `.0`.
+// 100,000 digits and a non-digit took 21 s, and take 0.4 ms now. The group is
+// non-capturing, so the numbering is what it was.
+const NUMERIC = /^[+-]?(\d+(?:\.\d*)?([eE][+-]?\d+)?|\.\d+([eE][+-]?\d+)?|Inf|NaN)$/;
 
 // Rows and columns rendered either side of the view, so a scroll of a few pixels can
 // paint without building anything first. Four each way is about 500 cells for a
