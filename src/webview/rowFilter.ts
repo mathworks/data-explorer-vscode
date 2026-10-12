@@ -537,9 +537,15 @@ export function formatToken(columnLabel: string, op: FilterOp, value: string): s
  * `text` with one token spliced out, closing the gap it leaves. Splices by SPAN
  * rather than re-serializing the survivors, so a value's own spacing and quoting
  * come through untouched.
+ *
+ * `trimEnd()`, not `.replace(/\s+$/, '')`, which removes the same characters but is
+ * anchored at the end only: from each character of a run of whitespace that is not at
+ * the end, the engine takes the rest of the run, fails on what follows, and gives it back
+ * a character at a time, so 100,000 spaces anywhere before the chip took over 8 s. The
+ * start needs no such change: `^\s+` is tried at one position only.
  */
 export function removeToken(text: string, token: FilterToken): string {
-  const before = text.slice(0, token.start).replace(/\s+$/, '');
+  const before = text.slice(0, token.start).trimEnd();
   const after = text.slice(token.end).replace(/^\s+/, '');
   return before && after ? `${before} ${after}` : before || after;
 }
