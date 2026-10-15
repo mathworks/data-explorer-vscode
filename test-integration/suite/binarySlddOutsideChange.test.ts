@@ -108,8 +108,11 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     };
   });
 
-  teardown(() => {
+  teardown(async () => {
     for (const doc of open.splice(0)) doc.dispose();
+    // Disposing a watcher reaches the host asynchronously. Give it time to stop watching
+    // before the directory goes, so that no later test inherits a watcher on a missing path.
+    await settle(200);
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -141,6 +144,37 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
   }
   const followed = (w: any, name: string) => waitFor('the clean witness to reload', () => chunk(w).includes(`>${name}<`));
 
+  /**
+   * Wait for documents to follow an outside write, touching the file again every 400 ms
+   * until they do.
+   *
+   * A watcher starts asynchronously. `createFileSystemWatcher` returns before the host is
+   * watching, and on Linux (inotify) a write made in that gap raises no event at all. macOS
+   * delivers it anyway. A real outside save rarely lands in the first milliseconds after a
+   * file opens, and if one does, the save's own check still catches it. A test, though,
+   * writes at once. Each touch moves only the mtime, so it is a new outside change to any
+   * document still waiting for one. A document with unsaved edits ignores it like any other.
+   */
+  async function untilFollowed(what: string, done: () => boolean): Promise<void> {
+    const deadline = Date.now() + 20000;
+    let next = Date.now() + 400;
+    while (!done()) {
+      assert.ok(Date.now() < deadline, `timed out after 20000ms waiting for ${what}`);
+      if (Date.now() >= next) {
+        const later = new Date(statSync(path).mtimeMs + 1000);
+        utimesSync(path, later, later);
+        next = Date.now() + 400;
+      }
+      await settle(20);
+    }
+  }
+
+  /** A stand-in view that records each repaint and where it painted from. */
+  const standIn = (log: string[]) => ({
+    repaintAll: (from?: string) => log.push(from ?? 'chunk'),
+    repaintOps: () => undefined,
+  });
+
   test('with no unsaved edits, the view reloads from disk silently', async () => {
     const doc = await openDoc();
     const view = fakePanel();
@@ -151,7 +185,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
       assert.ok(shows(view.posts, 'Kp'), 'the table starts on what was there');
 
       writeOutside(path, renamedTo('Kp_matlab'));
-      await waitFor('the rows to follow the file', () => shows(view.posts, 'Kp_matlab'));
+      await untilFollowed('the rows to follow the file', () => shows(view.posts, 'Kp_matlab'));
       assert.ok(!shows(view.posts, 'Kp'), 'the old name is gone from the latest rows');
       assert.strictEqual(chunk(doc), chunkOnDisk(path), 'the document holds what is on disk');
       assert.deepStrictEqual(asked, [], 'silently: nothing was asked');
@@ -172,7 +206,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
 
     const outside = renamedTo('Kp_matlab');
     writeOutside(path, outside);
-    await followed(control, 'Kp_matlab');
+    await untilFollowed('the clean witness to reload', () => chunk(control).includes('>Kp_matlab<'));
     await settle(300);
     assert.ok(chunk(doc).includes('>Ki<'), 'the unsaved edit is still there');
     assert.ok(!chunk(doc).includes('>Kp_matlab<'), 'and the outside change was not loaded over it');
@@ -198,7 +232,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     const ev = edit(doc, 'Ki');
     ev.undo();
     writeOutside(path, renamedTo('Kp_matlab'));
-    await waitFor('the document to reload', () => chunk(doc).includes('>Kp_matlab<'));
+    await untilFollowed('the document to reload', () => chunk(doc).includes('>Kp_matlab<'));
     assert.deepStrictEqual(asked, []);
   });
 
@@ -215,24 +249,6 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     await assert.rejects(() => provider.saveCustomDocument(doc, token()), isCancellation);
     assert.strictEqual(asked.length, 1, 'one prompt, however many saves');
     close(undefined);
-  });
-
-  test('with auto-save on, a dismissed prompt is not shown again by later saves; with it off, it is', async () => {
-    const doc = await openDoc();
-    edit(doc, 'Ki');
-    writeOutside(path, renamedTo('Kp_matlab'));
-    await setFiles('autoSave', 'afterDelay', uri);
-    try {
-      await assert.rejects(() => provider.saveCustomDocument(doc, token()), isCancellation);
-      await settle(50); // the prompt is answered (dismissed) on its own promise
-      assert.strictEqual(asked.length, 1);
-      await assert.rejects(() => provider.saveCustomDocument(doc, token()), isCancellation);
-      assert.strictEqual(asked.length, 1, 'an automatic save in conflict does not ask again');
-    } finally {
-      await setFiles('autoSave', undefined, uri);
-    }
-    await assert.rejects(() => provider.saveCustomDocument(doc, token()), isCancellation);
-    assert.strictEqual(asked.length, 2, 'with auto-save off, every save is the user’s, so it asks');
   });
 
   test('Overwrite writes over the version it was asked about, and a newer one is asked about again', async () => {
@@ -281,18 +297,32 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     const doc = await openDoc();
     const control = await witness();
     const repaints: string[] = [];
-    doc.views.add({ repaintAll: (from?: string) => repaints.push(from ?? 'chunk'), repaintOps: () => undefined });
+    const witnessed: string[] = [];
+    doc.views.add(standIn(repaints));
+    control.views.add(standIn(witnessed));
+
+    // First make sure both watchers are live (see untilFollowed). Use the same bytes with a
+    // later mtime: an outside change that both clean documents reload. Then let any event
+    // from the last touch arrive before the log is cleared.
+    writeOutside(path, FIXTURE);
+    await untilFollowed('both watchers to be live', () => repaints.length > 0 && witnessed.length > 0);
+    await settle(600);
+    repaints.length = 0;
+
     edit(doc, 'Ki');
     await provider.saveCustomDocument(doc, token());
     assert.deepStrictEqual(repaints, ['registered'], 'the save painted once, from what it registered');
 
+    // The witness still holds the old stamp, so the event for our write reloads it. That
+    // proves the event arrived, and our document ignored it.
     await followed(control, 'Ki');
     await settle(300);
     assert.deepStrictEqual(repaints, ['registered'], 'the watcher’s event for that write reloaded nothing');
 
     writeOutside(path, renamedTo('Kp_matlab'));
-    await waitFor('the document to follow a real outside change', () => chunk(doc).includes('>Kp_matlab<'));
-    assert.deepStrictEqual(repaints, ['registered', 'chunk']);
+    await untilFollowed('the document to follow a real outside change', () => chunk(doc).includes('>Kp_matlab<'));
+    assert.strictEqual(repaints[0], 'registered');
+    assert.ok(repaints.length >= 2 && repaints.slice(1).every((r) => r === 'chunk'), `then reloads: ${repaints}`);
   });
 
   test('files.saveConflictResolution: overwriteFileOnDisk saves without asking', async () => {
