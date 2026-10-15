@@ -28,14 +28,18 @@ function setEmpty(show: boolean): void {
 
 window.addEventListener('message', (event: MessageEvent) => {
   const msg = event.data as HostToPropsMessage;
-  // Either message replaces every row an open grid was anchored to, so it closes
-  // first. Same rule as the table's setRows.
-  matrixOpen.close();
+  // `showProps` and `empty` each replace every row an open grid was anchored to, so
+  // each closes it first. Same rule as the table's setRows, and per branch for the
+  // same reason: `matrixCells` reaches this listener too, as the answer to the open
+  // panel's own request, and a close ahead of the branches closed the panel it was
+  // sent to fill. That message is installMatrixOpen's, so it has no branch here.
   if (msg.type === 'showProps') {
+    matrixOpen.close();
     const groups = msg.groups ?? [];
     pi.groups = groups;
     setEmpty(groups.length === 0);
   } else if (msg.type === 'empty') {
+    matrixOpen.close();
     setEmpty(true);
   }
 });
