@@ -13,6 +13,7 @@ import { invalidateUsageGraph } from './host/usageGraph.js';
 import { clearUsageSources } from './host/usageSources.js';
 import { searchDataSources } from './host/searchSources.js';
 import { openAddGalleryInActiveView } from './host/editorHub.js';
+import { followContentChanges } from './host/workspaceChange.js';
 import {
   listEntries,
   reindexFile,
@@ -256,11 +257,9 @@ export function activate(context: vscode.ExtensionContext): void {
     // A file's contents changed: drop its cached model (table) and rebuild the
     // reference index (tree), since edits may add or remove references. Also
     // reindex its entry names (no-op until the index is first built).
-    watcher.onDidChange((uri) => {
-      invalidate(uri.toString());
-      void reindexFile(uri);
-      refreshAll();
-    }),
+    // First, forget the shared source cache's entries if the write left the file's mtime and
+    // size where they were — see workspaceChange.ts.
+    followContentChanges(watcher, refreshAll),
     // Live edits in an open editor: invalidate the cached model and re-badge. Nothing
     // built from DISK is dropped here — see refreshBadges.
     vscode.workspace.onDidChangeTextDocument((e) => {

@@ -70,7 +70,8 @@ export async function readForScan(uri: vscode.Uri): Promise<Uint8Array | null> {
  * and size is invisible to this token, and a file-system watcher does report it. VS Code's
  * watcher is fed by the OS's own change events rather than by polling a `stat`, so its event
  * carries information no token computed from a `stat` can. That is why the shared cache has
- * exactly one invalidation hook (`sourceCache.forgetSource`, called from the tab's watcher) and
+ * exactly one invalidation hook (`sourceCache.forgetSource`, called from two watchers: a read-only
+ * tab's on each event, and the workspace's when this token did not move across one) and
  * why it is a hook rather than a finer key — a finer key means hashing, which means reading.
  * forgetOnDiskChange.test.ts restores an mtime with `utimesSync` and asserts that this token
  * does not move across the write.

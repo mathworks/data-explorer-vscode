@@ -572,8 +572,9 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       // repost below would re-derive the table from the parse of the OLD bytes, leaving the
       // user with a file that changed, an editor that visibly refreshed, and every row stale
       // for the life of the window. A watcher event is evidence of a change no `stat` carries,
-      // so it is the one place allowed to spend a re-read (see sourceCache.forgetSource, and
-      // note that putting this inside `invalidate` would apply it to every repost too).
+      // so a watcher is the one kind of caller allowed to spend a re-read (see
+      // sourceCache.forgetSource, and note that putting this inside `invalidate` would apply it
+      // to every repost too).
       forgetChangedSource(document.uri);
       invalidate(uriString);
       void post();

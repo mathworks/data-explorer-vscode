@@ -17,6 +17,7 @@ import { readForScan, scanVersion } from './scanRead.js';
 import {
   clearSourceCache,
   forgetSource,
+  forgetUnseenWrite,
   newSourceCache,
   parsedModelForOpenTab,
   type SourceCache,
@@ -61,6 +62,24 @@ export function clearSources(): void {
  */
 export function forgetChangedSource(uri: vscode.Uri): void {
   forgetSource(sourceCache, uri.toString());
+}
+
+/**
+ * Drop what the window holds for a file the WORKSPACE watcher has reported changing, but only if
+ * its version did not move.
+ *
+ * The workspace watcher fires for every save of every supported file, and for every file of a
+ * branch switch. Almost all of those move `mtime:size`, and the version key already re-reads them.
+ * Forgetting them as well would bump the cache-wide generation each time, discarding the stores
+ * of every folder pass in flight. So this forgets only what the key cannot see: a write after which
+ * the file's version is one the cache already holds. The reasoning, and why what is held is read
+ * before the `stat`, is on `sourceCache.forgetUnseenWrite`.
+ *
+ * A read-only tab on the file has its own watcher, which forgets on every event
+ * (`forgetChangedSource`): the tab is about to re-read the file anyway.
+ */
+export function forgetUnseenChange(uri: vscode.Uri): Promise<boolean> {
+  return forgetUnseenWrite(sourceCache, uri.toString(), () => scanVersion(uri));
 }
 
 /** The uris a pass was given, as the cache names files. */
