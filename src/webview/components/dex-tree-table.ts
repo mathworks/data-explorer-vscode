@@ -3201,6 +3201,24 @@ export class DexTreeTable extends LitElement {
     }
   };
 
+  // A repaint (any assignment of `rows` or `columns`: a save, an undo, a text-view
+  // edit) can arrive while an editor is open. If the cell it edits is still there the
+  // editor is kept, with what the user typed: a background repaint must not throw
+  // typing away. If its row or column is gone the editor is closed as Escape closes
+  // it, writing nothing, because while `_editingCell` is set `_onTableKeyDown` ignores
+  // every key, and with the edited cell gone nothing would ever clear it. Runs in
+  // willUpdate, so the state write joins this update and the input is still in the
+  // DOM to say whether it held focus.
+  private _closeEditorIfCellGone(): void {
+    const cell = this._editingCell;
+    if (!cell) return;
+    const rowThere = (this.rows ?? []).some((r) => r.ID === cell.rowId);
+    if (rowThere && this._availableColumns.includes(cell.columnId)) return;
+    const active = this.shadowRoot?.activeElement;
+    this._editingCell = null;
+    if (active instanceof HTMLElement && active.classList.contains('edit-input')) this._focusTable();
+  }
+
   private _focusTable(): void {
     this.updateComplete.then(() => {
       this._container?.focus();
@@ -3640,6 +3658,9 @@ export class DexTreeTable extends LitElement {
     if (changedProps.has('rows')) {
       this._invalidateCache();
       this._buildCaches();
+    }
+    if (changedProps.has('rows') || changedProps.has('columns')) {
+      this._closeEditorIfCellGone();
     }
     if (changedProps.has('_expandedIds') || changedProps.has('_filterText') || changedProps.has('_sortState')) {
       this._visibleRowsCache = null;

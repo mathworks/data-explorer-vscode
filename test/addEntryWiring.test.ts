@@ -60,8 +60,8 @@ describe('the Add gallery, wired through the webview entry point', () => {
       }),
     );
     // One table serves the whole file (the module body wires window listeners once), so an
-    // editor left open by the previous case would read as this case's answer. A setRows does
-    // not close it in production either — see the Observations note in the spec.
+    // editor left open by the previous case would read as this case's answer. A setRows closes
+    // it only when its row or column is gone (ruling V-037), and these rows are the same ones.
     table._editingCell = null;
     await table.updateComplete;
     posted.length = 0;
@@ -212,6 +212,40 @@ describe('the Add gallery, wired through the webview entry point', () => {
       send({ type: 'setRows', docUri: 'file:///fx/d.sldd', rows: rowsOf(), columns: ['Name', 'Value'], editable: true });
       await table.updateComplete;
       expect(editingCell()).toBeNull();
+    });
+
+    it('a whole repaint that drops the renamed row closes its editor; one that keeps it does not', async () => {
+      // Ruling V-037 (b), through the shipped setRows handler. The entry being renamed is
+      // undone, or deleted from the text view, and the repaint no longer carries it: the
+      // editor closes rather than stay open over a row that is not there, which left the
+      // table deaf to the keyboard.
+      await paint(true);
+      send({ type: 'beginRename', rowId: 'doc/design/gain' });
+      await table.updateComplete;
+      expect(editingCell()).toMatchObject({ rowId: 'doc/design/gain', columnId: 'Name' });
+
+      const withoutGain = rowsOf().filter((r) => r.ID !== 'doc/design/gain');
+      send({
+        type: 'setRows',
+        docUri: 'file:///fx/d.sldd',
+        rows: withoutGain,
+        columns: ['Name', 'Value'],
+        editable: true,
+      });
+      await table.updateComplete;
+      expect(editingCell()).toBeNull();
+      expect(editorInput()).toBeNull();
+
+      // The background repaint (a save) carries the row again: the editor stays open.
+      await paint(true);
+      send({ type: 'beginRename', rowId: 'doc/design/gain' });
+      await table.updateComplete;
+      const input = editorInput()!;
+      input.value = 'gainTyped';
+      send({ type: 'setRows', docUri: 'file:///fx/d.sldd', rows: rowsOf(), columns: ['Name', 'Value'], editable: true });
+      await table.updateComplete;
+      expect(editingCell()).toMatchObject({ rowId: 'doc/design/gain', columnId: 'Name' });
+      expect(editorInput()?.value).toBe('gainTyped');
     });
 
     it('opens nothing for a row the table does not hold a renameable name for', async () => {
