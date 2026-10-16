@@ -79,7 +79,7 @@ import { postOrReport } from './postPayload.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { answerMatrixRequest } from './matrixRequest.js';
 import { parsesAsJson } from './slddFormat.js';
-import { catalogRenameOf, scJsonRenameEdits } from './scRename.js';
+import { catalogFunctionRenameOf, catalogRenameOf, scJsonFunctionRenameEdits, scJsonRenameEdits } from './scRename.js';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 import { basename } from '../common/pathUtil.js';
 import type { TableToHostMessage } from '../common/protocol.js';
@@ -965,6 +965,11 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // before-the-mutation reason: the catalog names the entry as the document still
         // does. Null for all but a rename of a catalogued architectural entry.
         const catalogRename = catalogRenameOf(msg.columnId, msg.newValue, node, entry);
+        // And a service interface's function, which the catalog keeps a copy of: read here for
+        // the same reason, since the catalog spells the function as the document still does.
+        // Never non-null together with catalogRename (that one is the entry, this one a row
+        // under it).
+        const functionRename = catalogFunctionRenameOf(msg.columnId, msg.newValue, node, entry);
 
         // Mutated through entryOps so the session's node index follows a rename: an id is a
         // PATH, so renaming an entry rekeys it and everything under it. The wide re-parse used
@@ -1016,9 +1021,13 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // saying two different things: the entry is no longer classified (a struct type
         // re-reads as a plain data interface) and the catalog defines an interface no entry
         // backs. Empty for every rename no definition carries, which is nearly all of them.
+        // A function of a service interface is spelled in the catalog too (its `p_Name`, and
+        // the `p_FunctionPrototype` that declares it), so its rename carries the same way.
         const scEdits = catalogRename
           ? scJsonRenameEdits(currentText, catalogRename.oldName, catalogRename.newName)
-          : [];
+          : functionRename
+            ? scJsonFunctionRenameEdits(currentText, functionRename)
+            : [];
 
         // Byte-scoped range replace: only the edited entry's span changes, so
         // sibling entries stay byte-identical. Native undo groups this edit.
