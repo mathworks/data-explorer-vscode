@@ -32,6 +32,8 @@ export default defineConfig({
         // The reading half of the shared source cache; the cache itself is sourceCache.ts.
         'src/host/sourceReads.ts',
         'src/host/usageGraph.ts',
+        // The watcher half of the Usage repost; the bus and its timing are usageRepost.ts.
+        'src/host/usageRepostWatch.ts',
         // The Usage question over that cache; which files it needs is usagePlan.ts.
         'src/host/usageSources.ts',
         'src/host/navigate.ts',

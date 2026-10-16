@@ -74,6 +74,7 @@ import {
 import { entrySelectorOf, minimalReplacement, planDeletion, type EntrySelector } from 'data-explorer-core';
 import { copyEntriesToClipboard } from './clipboardAction.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
+import { subscribeUsageRepost } from './usageRepostWatch.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { postOrReport } from './postPayload.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
@@ -2036,6 +2037,16 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       }
     });
 
+    // A model created or deleted in the workspace can add or remove a block that uses one of these
+    // entries, and nothing about this document changes when it does (usageRepostWatch.ts). Held
+    // back while a write this view painted ahead of is in flight: the repost re-reads the text,
+    // which until the write lands is the text from BEFORE the edit on screen, and the write's own
+    // change event is then skipped as an echo — leaving the table showing the edit undone.
+    const usageSub = subscribeUsageRepost(
+      () => void post(),
+      () => paintedWrite !== null || hostEdit !== null,
+    );
+
     // The editor/title "View as Text" toggle is gated on the built-in
     // `activeCustomEditorId == dataExplorer.tableView` context key (set
     // automatically by VS Code), so no custom context key is needed here.
@@ -2053,6 +2064,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       sub.dispose();
       changeSub.dispose();
       saveSub.dispose();
+      usageSub.dispose();
       navSub.dispose();
       // Only once the LAST tab of this document closes. Both of these are keyed by URI,
       // i.e. document-scoped, so tearing them down when ANY tab closed left a surviving

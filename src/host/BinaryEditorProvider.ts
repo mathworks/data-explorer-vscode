@@ -8,6 +8,7 @@ import { rowPlannerFor } from './rowPlanner.js';
 import { readProjectStore } from './projectStore.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, exceedsStringDecodeLimit, isZipBytes } from './slddFormat.js';
 import { annotateDataRows, annotateModelRows } from './usageGraph.js';
+import { subscribeUsageRepost } from './usageRepostWatch.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { capRows, rowCapBanner } from './rowCap.js';
 import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
@@ -558,6 +559,11 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     };
     const changeSub = watcher.onDidChange(onDiskChange);
     const createSub = watcher.onDidCreate(onDiskChange);
+    // A model created or deleted elsewhere in the workspace can add or remove a block that uses
+    // one of THIS file's variables, which its own watcher above never hears of — so a data view
+    // reposts for that too (usageRepostWatch.ts). A model's own tab and a project page cannot be
+    // changed by another model, and do not subscribe.
+    const usageSub = fillUsage === annotateDataRows ? subscribeUsageRepost(() => void post()) : undefined;
 
     webview.html = this.getHtml(webview, distRoot, name);
     webviewPanel.onDidDispose(() => {
@@ -565,6 +571,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       watcher.dispose();
       changeSub.dispose();
       createSub.dispose();
+      usageSub?.dispose();
       navSub.dispose();
     });
   }
