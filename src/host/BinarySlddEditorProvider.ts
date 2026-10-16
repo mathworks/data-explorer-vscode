@@ -1357,7 +1357,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         liveModel();
         const snap = buildDragSnapshot(msg.rowIds, findNode);
         if (snap.items.length === 0) clearDrag();
-        else setDrag(uriString, snap.sourceSection, snap.sourceSectionLabel, snap.sourceIsDerived, snap.items);
+        else setDrag(uriString, snap.items);
         broadcastDragState();
       } catch (err) {
         clearDrag();

@@ -159,28 +159,15 @@ function owningEntriesOf(rowIds: unknown, findNode: (rowId: string) => any): any
  * which entries — the dedupe by owning entry, and the rows that contribute nothing — is
  * `owningEntriesOf`, shared with the clipboard so the two registers cannot disagree.
  *
- * The section facts come from the LAST contributing row, matching how a
- * multi-select drag is only ever within one section.
+ * Each item keeps its OWN source section, as a clipboard item does: a multi-row drag can
+ * span sections, and whether a move is a no-op depends on every item's section.
  */
-export function buildDragSnapshot(
-  rowIds: unknown,
-  findNode: (rowId: string) => any,
-): { items: DragRegisterItem[]; sourceSection: string; sourceSectionLabel: string; sourceIsDerived: boolean } {
-  const items: DragRegisterItem[] = [];
-  let sourceSection = '';
-  let sourceSectionLabel = '';
-  let sourceIsDerived = false;
-  for (const entry of owningEntriesOf(rowIds, findNode)) {
+export function buildDragSnapshot(rowIds: unknown, findNode: (rowId: string) => any): { items: DragRegisterItem[] } {
+  const items = owningEntriesOf(rowIds, findNode).map((entry): DragRegisterItem => {
     const payload = entry.serialize() as Record<string, unknown>;
-    items.push({ payload, ...dropFactsOf(entry, payload) });
-    const section = entry.parent;
-    if (section) {
-      sourceSection = section.name ?? '';
-      sourceSectionLabel = section.displayName ?? section.name ?? '';
-      sourceIsDerived = !!entry.isDerived;
-    }
-  }
-  return { items, sourceSection, sourceSectionLabel, sourceIsDerived };
+    return { payload, sourceSection: entry.parent?.name ?? '', ...dropFactsOf(entry, payload) };
+  });
+  return { items };
 }
 
 /**
@@ -190,8 +177,8 @@ export function buildDragSnapshot(
  * register is the only difference, which is what makes `dropDecision.ts`'s invariant
  * ("if you can cut/copy you can drag") true by construction rather than by comment.
  *
- * Unlike the drag descriptor, each item keeps its OWN source section: a cut is lazy, so
- * the source deletion at paste time must find each entry where it actually lives.
+ * Each item keeps its OWN source section, as a dragged one does: a cut is lazy, so the
+ * source deletion at paste time must find each entry where it actually lives.
  */
 export function buildClipboardSnapshot(
   rowIds: unknown,
