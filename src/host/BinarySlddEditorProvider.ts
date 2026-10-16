@@ -63,7 +63,13 @@ import {
   deleteEntriesByNameXml,
   type StructuralResult,
 } from './xmlStructuralEdit.js';
-import { catalogRenameOf, scXmlRenamePatch, type ScPartPatch } from './scRename.js';
+import {
+  catalogFunctionRenameOf,
+  catalogRenameOf,
+  scXmlFunctionRenamePatch,
+  scXmlRenamePatch,
+  type ScPartPatch,
+} from './scRename.js';
 import {
   applyEntryOps,
   entryRecord,
@@ -1105,6 +1111,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // catalog, which names the entry as the file still does. Null for all but a rename of
         // a catalogued architectural entry.
         const catalogRename = catalogRenameOf(msg.columnId, msg.newValue, node, entry);
+        // And a service interface's function, which the catalog keeps a copy of under the
+        // interface's definition. Never non-null together with catalogRename.
+        const functionRename = catalogFunctionRenameOf(msg.columnId, msg.newValue, node, entry);
         // The undo half of the patch has to be snapshotted here: this is the only moment
         // the pre-edit state exists. (Through attempt, so an entry that will not
         // serialize costs this edit its fast undo and not the edit itself.)
@@ -1147,10 +1156,13 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // The catalog is a zip member this document only passes through, so carrying the
         // rename into it is a member swap rather than a text edit — computed here, after the
         // validation gate, so a rejected edit does not pay for reading the part. Null unless
-        // a definition actually carries the name.
+        // the catalog spells what was renamed: a definition carrying the entry's name, or the
+        // function listed under its interface.
         const scPart = catalogRename
           ? scXmlRenamePatch(document.zipMeta, catalogRename.oldName, catalogRename.newName)
-          : null;
+          : functionRename
+            ? scXmlFunctionRenamePatch(document.zipMeta, functionRename)
+            : null;
         document.pushEdit('Edit ' + msg.columnId, before, after, patch, scPart ?? undefined);
         document.repaintOps([{ kind: 'replace', entryRowId, entry }]);
         if (msg.columnId === 'Name') webview.postMessage({ type: 'selectRows', rowIds: [node.id] });

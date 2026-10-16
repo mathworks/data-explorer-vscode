@@ -572,6 +572,75 @@ writeFileSync(
   }),
 );
 
+// --- arch_service_binary.sldd: a SERVICE INTERFACE in the compressed-binary format ---
+//
+// The fixture a FUNCTION rename's carry needs, which `arch_binary.sldd` cannot be: it has no
+// service interface, and other suites count its entries. The catalog keeps its own copy of
+// each function of a service interface (`p_Name` and `p_FunctionPrototype` under the
+// interface's definition), so renaming a function has to patch that member too.
+//
+// The same shape as core's functionElementRename.test.ts, which is the corpus's one binary
+// dictionary with a service interface (example/dd1.sldd), trimmed: `ServiceInterface` holds
+// `f: y = f(u)` and `g: [a,b] = g(g)`. It carries two traps, because the host patches text:
+// a DATA interface that is also named `f`, and `g`'s first argument, which is named `g`. A
+// rename of either function that took either of those would corrupt something else.
+const svcArg = (argName) =>
+  `<Element Class="Simulink.BusElement"><P Name="DimensionsMode" Class="char">Fixed</P><P Name="Name" Class="char">${argName}</P><P Name="DataType_internal" Class="char">double</P><P Name="Complexity" Class="char">real</P><P Name="Dimensions" Class="double">1.0</P></Element>`;
+const svcFn = (fnName, prototype, args) =>
+  `<Element Class="Simulink.FunctionElement"><P Name="Prototype" Class="char">${prototype}</P><P Name="Name" Class="char">${fnName}</P><P Name="Asynchronous" Class="logical">0</P><P Name="Arguments" Dimension="${args.length}*1">${args.map(svcArg).join('')}</P></Element>`;
+const svcChunkXml =
+  `<?xml version="1.0" encoding="UTF-8"?>\n` +
+  `<DataSource FormatVersion="1" MinRelease="R2014a" Arch="maca64">\n` +
+  `    <Object Class="DD.ENTRY">\n` +
+  `        <P Name="Name" Class="char">ServiceInterface</P>\n` +
+  `        <P Name="UUID" Class="char">1c399950-c59b-404a-91e9-0cd02c0527ce</P>\n` +
+  `        <P Name="Namespace" Class="char">${ARCH_NS}</P>\n` +
+  `        <P Name="LastMod" Class="char">20260306T201108.832214</P>\n` +
+  `        <P Name="LastModBy" Class="char">user</P>\n` +
+  `        <P Name="IsDerived" Class="char">1</P>\n` +
+  `        <P Name="Value"><Element Class="Simulink.ServiceBus"><P Name="Description" Class="char"/><P Name="Elements_internal" Dimension="2*1">${svcFn('f', 'y = f(u)', ['u', 'y'])}${svcFn('g', '[a,b] = g(g)', ['g', 'a', 'b'])}</P></Element></P>\n` +
+  `    </Object>\n` +
+  `</DataSource>\n`;
+const svcFnXml = (fnName, prototype, args) =>
+  `\n        <p_FunctionElements type="systemcomposer.architecture.model.swarch.FunctionElement" uuid="fe-${fnName}">` +
+  args
+    .map(
+      (a) =>
+        `\n          <p_FunctionArguments type="systemcomposer.architecture.model.swarch.FunctionArgument" uuid="fa-${fnName}-${a}">` +
+        `\n            <p_Name>${a}</p_Name>` +
+        `\n          </p_FunctionArguments>`,
+    )
+    .join('') +
+  `\n          <p_FunctionPrototype>${prototype}</p_FunctionPrototype>` +
+  `\n          <p_Index>1</p_Index>` +
+  `\n          <p_Name>${fnName}</p_Name>` +
+  `\n        </p_FunctionElements>`;
+const svcScXml =
+  `<?xml version="1.0"?>\n` +
+  `<MF0 packageUris="http://schema.mathworks.com/mf0/systemcomposer_architecture_model/3.21">\n` +
+  `  <systemcomposer.architecture.model.SystemComposerModel type="systemcomposer.architecture.model.SystemComposerModel" uuid="m">\n` +
+  `    <p_Name>svc</p_Name>\n` +
+  `    <p_PortInterfaceCatalog type="systemcomposer.architecture.model.interface.InterfaceCatalog" uuid="c">\n` +
+  `      <p_Interfaces type="systemcomposer.architecture.model.interface.CompositeDataInterface" uuid="d">\n` +
+  `        <p_Name>f</p_Name>\n` +
+  `      </p_Interfaces>\n` +
+  `      <p_Interfaces type="systemcomposer.architecture.model.swarch.ServiceInterface" uuid="s">` +
+  svcFnXml('f', 'y = f(u)', ['u', 'y']) +
+  svcFnXml('g', '[a,b] = g(g)', ['g', 'a', 'b']) +
+  `\n        <p_Name>ServiceInterface</p_Name>\n` +
+  `      </p_Interfaces>\n` +
+  `    </p_PortInterfaceCatalog>\n` +
+  `  </systemcomposer.architecture.model.SystemComposerModel>\n` +
+  `</MF0>\n`;
+writeFileSync(
+  here('arch_service_binary.sldd'),
+  zipSync({
+    'data/chunk0.xml': strToU8(svcChunkXml),
+    'simulink/systemcomposer/interfaceDictionary.xml': strToU8(svcScXml),
+    'metadata/mwcoreProperties.xml': strToU8(`<x><matlabRelease>R2027a</matlabRelease></x>`),
+  }),
+);
+
 // --- chain_*: a model whose dictionary chain runs THROUGH A COMPRESSED dictionary ---
 //
 // The set that pins the cheap tier's one real hazard. Scoping a Usage answer to "the models
@@ -680,6 +749,6 @@ writeFileSync(
 console.log(
   'wrote model_with_refs.slx, model_with_refs.mdl, legacy_ctrl.mdl, compressed.sldd, ' +
     'object_array_binary.sldd, nd_numeric.mat, params.sldd, shared_gain.slx, shadow_ws.slx, ' +
-    'sid_blocks.slx, arch_binary.sldd, chain_top.sldd, chain_leaf.sldd, chain_model.slx, ' +
+    'sid_blocks.slx, arch_binary.sldd, arch_service_binary.sldd, chain_top.sldd, chain_leaf.sldd, chain_model.slx, ' +
     'shadow_first.sldd, shadow_second.sldd, shadow_pair.slx',
 );
