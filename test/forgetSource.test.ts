@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 //
-// The one write this cache cannot see, and the one caller allowed to tell it.
+// The one write this cache cannot see, and the two watchers allowed to tell it.
 //
 // Every entry here is keyed by `mtime:size`, which is why nothing else needs an invalidation
 // protocol: a file whose bytes moved is re-read on the next pass and one that did not is not. The
@@ -21,7 +21,12 @@
 // the scenario reachable at all in a unit test — a real `stat` cannot be asked to repeat itself. The
 // byte-for-byte version of it, on a real disk with `utimesSync` and an assertion that the stat
 // really did not move, is in the integration suite (forgetOnDiskChange.test.ts), which is also the
-// only place the WIRING can be pinned: `BinaryEditorProvider` imports `vscode`.
+// only place the WIRING can be pinned: `BinaryEditorProvider` and the workspace watcher's handler
+// (workspaceChange.ts) import `vscode`.
+//
+// The two watchers do not forget alike. A read-only tab's watcher forgets on every event; the
+// workspace watcher forgets only when the file's new version is one the cache already holds
+// (`forgetUnseenWrite`), so an ordinary save, which the version key already sees, costs nothing.
 //
 // Over real fixture bytes, like every other test of this cache: the artifacts are core's parsers'
 // output, and a stub would let this agree with the cache about a shape core does not produce.
@@ -32,7 +37,10 @@ import {
   cheapAll,
   clearSourceCache,
   fillModelSummaries,
+  forgetIfVersionUnmoved,
   forgetSource,
+  forgetUnseenWrite,
+  heldVersionsOf,
   newSourceCache,
   parsedBudgetedBytes,
   parsedModelForOpenTab,
@@ -309,5 +317,162 @@ describe('bytes that changed under a stat that did not', () => {
     await inFlight;
 
     expect(cache.parsed.get(RESTORED.uriString)?.parsed?.dataDictionary).toBe('chain_top.sldd');
+  });
+});
+
+describe('the workspace watcher forgets only the write the version key cannot see', () => {
+  const versionOf = (f: SourceFile): string | null => stamp.get(f.path) ?? null;
+  /** The `stat` the workspace watcher's handler takes after the event: the file's version now. */
+  const statOf = (f: SourceFile) => async (): Promise<string | null> => versionOf(f);
+
+  /** Every tier filled for `f` from what is on disk now, through the cache's own entry points. */
+  async function fillAllTiers(cache: SourceCache, f: SourceFile): Promise<void> {
+    const wanted = new Set([f.uriString]);
+    await fillModelSummaries(cache, reader, [f], wanted, await cheapAll(cache, reader, [f]));
+    await parsedModelOf(cache, f, versionOf(f), () => reader.bytes(f));
+  }
+
+  it('forgets every tier when the new version is one the cache already holds', async () => {
+    const cache = newSourceCache();
+    await fillAllTiers(cache, RESTORED);
+    await fillAllTiers(cache, OTHER);
+    expect(labels(await openTab(cache, RESTORED))).toContain('ChainGain');
+
+    // The write the key cannot see: new bytes, same version. No read-only tab's watcher says so.
+    onDisk.set(RESTORED.path, NEW);
+    const generation = cache.generation;
+    const forgot = await forgetUnseenWrite(cache, RESTORED.uriString, statOf(RESTORED));
+
+    // What the user sees first: the table, the tree's edge and the Usage summary follow the file.
+    reads = [];
+    expect(labels(await openTab(cache, RESTORED))).toContain('PlantGain');
+    await fillAllTiers(cache, RESTORED);
+    expect(linkedDict(cache, RESTORED)).toBe('Params.SLDD');
+    expect(summaryBlocks(cache, RESTORED)).toContain('PlantGain');
+    expect(summaryBlocks(cache, RESTORED)).not.toContain('ChainGain');
+    expect(reads).toContain(RESTORED.path);
+
+    // One forget, of this file only.
+    expect(forgot).toBe(true);
+    expect(cache.generation).toBe(generation + 1);
+    expect(cache.parsed.has(OTHER.uriString)).toBe(true);
+    expect(cache.cheap.has(OTHER.uriString)).toBe(true);
+    expect(cache.models.has(OTHER.uriString)).toBe(true);
+  });
+
+  it('forgets nothing for an ordinary save, so a derivation in flight elsewhere still stores', async () => {
+    // Why the ruling took this option over forgetting on every event. An ordinary save moves the
+    // version, and the version key already re-reads the file. A forget would also bump the
+    // cache-wide generation, which discards the store of every derivation in flight: over a branch
+    // switch, every file in the folder pass.
+    const cache = newSourceCache();
+    await fillAllTiers(cache, RESTORED);
+    const { reader: gated, started, release } = gatedReader();
+    const elsewhere = cheapAll(cache, gated, [OTHER]);
+    await started;
+
+    onDisk.set(RESTORED.path, NEW);
+    stamp.set(RESTORED.path, 'v2:saved');
+    const generation = cache.generation;
+    expect(await forgetUnseenWrite(cache, RESTORED.uriString, statOf(RESTORED))).toBe(false);
+    expect(cache.generation).toBe(generation);
+    expect(cache.parsed.get(RESTORED.uriString)?.version).toBe(`v1:${RESTORED.path}`);
+
+    release();
+    await elsewhere;
+    expect(cache.cheap.has(OTHER.uriString)).toBe(true);
+
+    // And the save is still seen, by the key: the next read is the file as it is now.
+    reads = [];
+    expect(labels(await openTab(cache, RESTORED))).toContain('PlantGain');
+    expect(reads).toEqual([RESTORED.path]);
+  });
+
+  it('forgets and stats nothing for a file nothing holds, and forgets nothing at no version', async () => {
+    const cache = newSourceCache();
+    await fillAllTiers(cache, OTHER);
+
+    // A file no consumer has read has nothing stale in it, so its event costs no `stat`.
+    let stats = 0;
+    const counted = async (): Promise<string | null> => {
+      stats += 1;
+      return versionOf(RESTORED);
+    };
+    expect(heldVersionsOf(cache, RESTORED.uriString).size).toBe(0);
+    expect(await forgetUnseenWrite(cache, RESTORED.uriString, counted)).toBe(false);
+    expect(stats).toBe(0);
+
+    // A file that stopped answering a `stat` after its event (deleted, or grown past the scan cap):
+    // nothing is stored under `null`, so nothing held can be the version it has now.
+    await fillAllTiers(cache, RESTORED);
+    const held = heldVersionsOf(cache, RESTORED.uriString);
+    expect(forgetIfVersionUnmoved(cache, RESTORED.uriString, held, null)).toBe(false);
+    expect(cache.parsed.has(RESTORED.uriString)).toBe(true);
+    expect(cache.generation).toBe(0);
+  });
+
+  it('counts a parse still in flight as held, because it read the bytes from before the write', async () => {
+    const cache = newSourceCache();
+    const { reader: gated, started, release } = gatedReader();
+    const version = versionOf(RESTORED);
+
+    // In flight on the old bytes, and nothing finished is held yet.
+    const inFlight = parsedModelOf(cache, RESTORED, version, () => gated.bytes(RESTORED));
+    await started;
+    expect(cache.parsed.has(RESTORED.uriString)).toBe(false);
+    onDisk.set(RESTORED.path, NEW);
+    const forgot = await forgetUnseenWrite(cache, RESTORED.uriString, statOf(RESTORED));
+
+    // Its own caller still gets what it read; nobody after it does.
+    release();
+    expect((await inFlight)?.dataDictionary).toBe('chain_top.sldd');
+    const after = await parsedModelOf(cache, RESTORED, version, () => reader.bytes(RESTORED));
+    expect(after?.dataDictionary).toBe('Params.SLDD');
+    expect(forgot).toBe(true);
+  });
+
+  it('counts a cheap read still in flight as held, for the same reason', async () => {
+    const cache = newSourceCache();
+    const { reader: gated, started, release } = gatedReader();
+
+    const pass = cheapAll(cache, gated, [RESTORED]);
+    await started;
+    onDisk.set(RESTORED.path, NEW);
+    const forgot = await forgetUnseenWrite(cache, RESTORED.uriString, statOf(RESTORED));
+    release();
+    await pass;
+
+    await cheapAll(cache, reader, [RESTORED]);
+    expect(linkedDict(cache, RESTORED)).toBe('Params.SLDD');
+    expect(forgot).toBe(true);
+  });
+
+  it('reads what is held before the stat, so a tab that already forgot and re-parsed is left alone', async () => {
+    // A read-only tab on the file has its own watcher, and it forgets on every event. When its event
+    // is handled first, the tab's re-parse has started, at the same version, by the time the
+    // workspace handler's `stat` comes back. The handler must not count that re-parse as stale.
+    const cache = newSourceCache();
+    expect(labels(await openTab(cache, RESTORED))).toContain('ChainGain');
+    const version = versionOf(RESTORED);
+    onDisk.set(RESTORED.path, NEW);
+
+    // The tab's watcher: `forgetChangedSource`, then a repost.
+    forgetSource(cache, RESTORED.uriString);
+    // The workspace watcher's handler, in the same turn. Its `stat` does not come back until the
+    // tab's re-parse has stored.
+    let statBack = (): void => {};
+    const statted = new Promise<void>((r) => (statBack = r));
+    const verdict = forgetUnseenWrite(cache, RESTORED.uriString, async () => {
+      await statted;
+      return version;
+    });
+    const rows = labels(await openTab(cache, RESTORED));
+    statBack();
+
+    expect(await verdict).toBe(false);
+    expect(rows).toContain('PlantGain');
+    // The tab's new parse is still the one held, and the tab's forget was the only one.
+    expect(cache.parsed.get(RESTORED.uriString)?.parsed.dataDictionary).toBe('Params.SLDD');
+    expect(cache.generation).toBe(1);
   });
 });

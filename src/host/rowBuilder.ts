@@ -99,8 +99,9 @@ export interface SectionedRows {
  * Section headers are not in the plan — they are structure, not data, and a file whose
  * sections alone exceeded the budget would have nothing worth showing — so the plan is
  * given `budget - sections.length` and the headers are emitted unconditionally. Without
- * that subtraction a planned payload could still be over the payload cap, and `capRows`
- * would truncate exactly the names this was meant to keep.
+ * that subtraction the levels under the names could take a payload past the budget.
+ * The names themselves are never cut: a file with more entries than the budget gets a
+ * row for every one of them, with everything under them deferred (see planRows).
  *
  * `budget` of Infinity is the whole tree with nothing deferred, which is what every
  * caller had before this existed.
@@ -135,8 +136,7 @@ export function buildRowsPlanned(
 
   // The plan is pre-order over the roots IN ORDER, so its rows are contiguous and
   // ascending by `root` — which is section order. One cursor therefore walks the whole
-  // plan once, handing each section the run that belongs to it, and a root the budget
-  // dropped simply has no run.
+  // plan once, handing each section the run that belongs to it.
   //
   // NB: append with a loop, not `rows.push(...entryRows)`. ONE entry can flatten to more
   // rows than the engine takes call arguments — V8 throws `Maximum call stack size
@@ -187,11 +187,10 @@ export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: Cli
  * there is almost nothing to share, and a pool that outlived the call to be reused by
  * the next fetch would pin the whole first build's cells forever.
  *
- * Returns the plan as the payload does, for the one thing a fetch can also lose: a node
- * with more direct children than a whole delivery holds (core caps numeric and string
- * expansion at 10,000 but builds a cell's children uncapped). Those names are absent
- * with no row to open, and the payload path already says so in its banner — a fetch that
- * dropped them silently would be the same rule on two paths, one of them mute.
+ * Returns the plan as the payload does. A node with more direct children than a whole
+ * delivery holds (core caps numeric and string expansion at 10,000 but builds a cell's
+ * children uncapped) gets a row for every child, each deferring its own, by the same
+ * rule that gives a payload every name.
  */
 export function buildChildRows(node: any, budget: number = Infinity): SectionedRows {
   const rows: any[] = [];

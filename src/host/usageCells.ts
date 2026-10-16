@@ -223,14 +223,16 @@ function toParamLink(origin: ParamOrigin): ParamLink {
  * `AFR(EngineCtrl), AFRMonitor(EngineCtrl), MixTarget(EngineCtrl), AFRConst(FuelInjector),
  * AFRCheck(FuelInjector)` depended on which models the user had opened — and merely
  * CLICKING a Usage link registered the model it pointed at, degrading the very cell it
- * was clicked from, permanently (model registrations are never withdrawn). Two engines
- * answering one column is the defect; this makes the workspace graph the one that does.
+ * was clicked from for as long as that model stayed registered. Two engines answering one
+ * column is the defect; this makes the workspace graph the one that does.
  *
- * A row the graph has nothing for is LEFT ALONE rather than emptied, so the session's
- * answer still stands for the one case the graph cannot see: a model opened from outside
- * the workspace and since closed, which leaves the session but is neither found on disk
- * nor an open tab. Absence here is not a claim that a variable is unused — the same rule
- * core's `_usedByCell` applies.
+ * A row the graph has nothing for is LEFT ALONE rather than emptied: absence here is not a
+ * claim that a variable is unused — the same rule core's `_usedByCell` applies. This used to
+ * keep one more answer than the graph has: a model opened from outside the workspace and
+ * since closed, which is neither found on disk nor an open tab, but whose registration the
+ * session kept for the life of the window. A closed tab now releases its registration
+ * (SlddModel's view count), so that credit goes when the model's tab does, and what the
+ * session can still add is what an open tab registered — which the graph reads as well.
  */
 export function annotateVariableRows(
   sourceUri: string,

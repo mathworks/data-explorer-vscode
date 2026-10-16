@@ -36,7 +36,8 @@ import { MAX_TABLE_ROWS } from './rowCap.js';
 import type { WarningBanner } from './parseWarnings.js';
 
 /**
- * The rows one request may deliver.
+ * The rows one request may deliver, unless its top level alone is wider (see
+ * levelsThatFit): the names always come, and the budget decides how deep under them.
  *
  * The same number as the payload cap, deliberately: both answer "how much can cross
  * the boundary at once", and the cap is the one that was measured against V8's limit
@@ -60,8 +61,7 @@ export interface PlannedRow {
    * call — that is what makes "all the names" one level rather than one level per
    * section — and then has to put each row back under its own section header. The
    * plan is contiguous per root, so this could be re-derived by watching for the next
-   * root to come past; an index cannot be subtly wrong about a tree whose top level
-   * was truncated.
+   * root to come past; an index cannot be subtly wrong about it.
    */
   root: number;
 }
@@ -72,11 +72,12 @@ export interface RowPlan {
   /** How many of them have children still to fetch. Zero means this is the whole tree. */
   deferred: number;
   /**
-   * Roots that did not fit at all — not deferred, ABSENT, with no row to open.
+   * Roots with no row at all. Always 0: every root is planned, however many there are
+   * (see planRows).
    *
-   * Nonzero only when the top level alone exceeds the budget (see levelsThatFit), and
-   * it is the one loss a plan can still inflict, so it is counted rather than left to
-   * be noticed. The banner says it in the cap's words, because it is the cap's loss.
+   * A top level wider than the budget used to be cut at the budget, and this counted
+   * the names that got no row, for the banner and for the table's own note on a fetch
+   * (`childRows.truncated`). The field stays so that message keeps its shape.
    */
   truncated: number;
 }
@@ -85,13 +86,14 @@ export interface RowPlan {
  * How many levels of `roots` and their descendants fit in `budget` rows, counting
  * the roots themselves as level 1.
  *
- * Always at least 1: the top level is never truncated. For the initial build those
- * are the file's variables, which no real file has 100,000 of; for an expansion they
- * are one node's children, and the one shape that can exceed the budget there is an
- * uncapped cell (core caps numeric and string element expansion at 10,000, cells not
- * at all — see MatlabVariableNode._buildCellChildren). Such a node delivers its
- * first `budget` children and the rest are absent, which is the cap's loss confined
- * to one row instead of the whole file.
+ * Always at least 1: the top level is never truncated, even when it alone exceeds the
+ * budget. Then every root is delivered and everything below them is deferred. That
+ * happens on the initial build of a file with more names than the budget (the 138 MB
+ * bench dictionary has 291,564 entries), and on an expansion of an uncapped cell (core
+ * caps numeric and string element expansion at 10,000, cells not at all — see
+ * MatlabVariableNode._buildCellChildren). The names come first, so none of them is left
+ * without a row; such a payload is bounded by the file rather than by the budget, which
+ * is what BinaryEditorProvider's fallback to the cap is for.
  *
  * Counts the next level's WIDTH before materializing it, so a level that does not
  * fit is never built as a list.
@@ -142,17 +144,11 @@ export function planRows(roots: any[], budget: number = LAZY_ROW_BUDGET): RowPla
   for (let i = top.length - 1; i >= 0; i--) {
     stack.push({ node: top[i], depth: 1, root: i });
   }
-  // The top level is never truncated except by the budget itself (see levelsThatFit).
-  let emitted = 0;
-  let rootsEmitted = 0;
+  // Every root is emitted, past the budget if need be: the budget decides how deep the
+  // plan goes (levelsThatFit), never which names it has.
   while (stack.length > 0) {
     const { node, depth, root } = stack.pop()!;
-    if (depth === 1) {
-      if (emitted >= budget) break;
-      rootsEmitted++;
-    }
     planned.push({ node, deferred: false, root });
-    emitted++;
     const kids = (node?.children ?? []) as any[];
     if (kids.length === 0) continue;
     if (depth >= levels) {
@@ -164,7 +160,7 @@ export function planRows(roots: any[], budget: number = LAZY_ROW_BUDGET): RowPla
       stack.push({ node: kids[i], depth: depth + 1, root });
     }
   }
-  return { planned, deferred, truncated: top.length - rootsEmitted };
+  return { planned, deferred, truncated: 0 };
 }
 
 /**
@@ -195,48 +191,24 @@ export function stampLazy<T extends object>(row: T, deferred: boolean): T {
  *
  * Nothing deferred gives the parse's own banner back unchanged — so a file under the
  * budget shows exactly the banner it showed before this existed, or none. That is also
- * what lets this compose over `rowCapBanner` on a path where only one of the two can
- * fire: both headlines are true when both fire, and this one leads because a row the
- * user can still open is actionable where a dropped row is not.
+ * what lets `rowCapBanner` compose over this one in the read-only view's fallback
+ * (BinaryEditorProvider), where a payload too large to post is cut to the cap: there
+ * the cut leads, because rows that are not in the view at all are the bigger news.
  */
 export function lazyRowsBanner(
-  plan: Pick<RowPlan, 'deferred' | 'truncated'> | undefined,
+  plan: Pick<RowPlan, 'deferred'> | undefined,
   parse: WarningBanner | undefined,
 ): WarningBanner | undefined {
   const deferred = plan?.deferred ?? 0;
-  const truncated = plan?.truncated ?? 0;
-  if (deferred <= 0 && truncated <= 0) {
+  if (deferred <= 0) {
     return parse;
   }
   const below = parse ? [parse.headline, ...parse.details] : [];
-  // A truncated top level is the cap's loss — rows that are not in this view at all —
-  // and it LEADS when it happens, because it is the only half the user cannot act on.
-  // It takes a budget's worth of siblings under one parent to provoke, which is why
-  // the two sentences are composed rather than chosen between: both can be true of
-  // one delivery, and the deferred rows are still worth telling someone about.
-  if (truncated > 0) {
-    const absent = truncated.toLocaleString('en-US');
-    return {
-      headline:
-        `This file has more rows than one table can show: ${absent} more are not in this view.`,
-      details: [
-        ...(deferred > 0 ? [expandable(deferred)] : []),
-        'The search box and the column sort cover the rows that are loaded.',
-        ...below,
-      ],
-    };
-  }
+  const rows = deferred.toLocaleString('en-US');
   return {
-    headline: expandable(deferred),
+    headline:
+      `This file is too large to load at once: ${rows} of these rows load their contents ` +
+      'when you expand them.',
     details: ['The search box and the column sort cover the rows that are loaded.', ...below],
   };
-}
-
-/** The one sentence for "there are rows under these, and opening one loads them". */
-function expandable(deferred: number): string {
-  const rows = deferred.toLocaleString('en-US');
-  return (
-    `This file is too large to load at once: ${rows} of these rows load their contents ` +
-    'when you expand them.'
-  );
 }

@@ -45,14 +45,55 @@ export async function postOrReport(webview: PostTarget, payload: unknown, what: 
     await webview.postMessage(payload);
     return true;
   } catch (err) {
-    try {
-      await webview.postMessage({
-        type: 'error',
-        message: `Failed to show ${what}: ${(err as Error)?.message ?? String(err)}`,
-      });
-    } catch {
-      // The webview is gone; nothing to report to.
-    }
-    return false;
+    return report(webview, err, what);
   }
+}
+
+/**
+ * Post a payload; if it cannot be posted, post the smaller one `fallback` builds instead,
+ * and report only if that fails too.
+ *
+ * For the read-only table, whose payload holds every name in the file (lazyRows.ts) and so
+ * is bounded by the file rather than by the row cap. A JSON dictionary near the reader's
+ * 512 MB limit is about a million rows of about 500 bytes each, which `JSON.stringify` cannot
+ * serialize. Without this that file would show the error banner where the cap used to show
+ * its first 100,000 rows; with it, the view still shows them, under the cap's banner.
+ *
+ * `fallback` is called only on a failure, so the common case builds nothing. It answers
+ * `undefined` when there is nothing smaller to offer, and then the first failure is reported:
+ * the same payload again would fail the same way. True when either payload went out.
+ */
+export async function postOrFallback(
+  webview: PostTarget,
+  payload: unknown,
+  fallback: () => unknown,
+  what: string,
+): Promise<boolean> {
+  try {
+    await webview.postMessage(payload);
+    return true;
+  } catch (err) {
+    // A fallback that throws is one with nothing to offer: this must still end in a post.
+    let smaller: unknown;
+    try {
+      smaller = fallback();
+    } catch {
+      smaller = undefined;
+    }
+    if (smaller === undefined) return report(webview, err, what);
+    return postOrReport(webview, smaller, what);
+  }
+}
+
+/** Post the error banner for a payload that could not be posted. Always false. */
+async function report(webview: PostTarget, err: unknown, what: string): Promise<false> {
+  try {
+    await webview.postMessage({
+      type: 'error',
+      message: `Failed to show ${what}: ${(err as Error)?.message ?? String(err)}`,
+    });
+  } catch {
+    // The webview is gone; nothing to report to.
+  }
+  return false;
 }

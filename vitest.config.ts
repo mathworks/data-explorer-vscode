@@ -36,6 +36,8 @@ export default defineConfig({
         'src/host/usageRepostWatch.ts',
         // The Usage question over that cache; which files it needs is usagePlan.ts.
         'src/host/usageSources.ts',
+        // The workspace watcher's change handler; the forget decision is sourceCache.ts.
+        'src/host/workspaceChange.ts',
         'src/host/navigate.ts',
         'src/host/iconMap.ts',
         'src/host/projectStore.ts',

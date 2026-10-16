@@ -14,9 +14,10 @@
 //
 // `forgetSource` is the ONE exception, and it is here because `mtime:size` can be wrong in the
 // unsafe direction: a write that preserves both leaves every tier believing what it already
-// holds, and no later `stat` can talk it out of that. So the one caller that knows more than a
-// stat does — a disk WATCHER, which fires on the write itself — says so explicitly. See there
-// for the writes that do this and for why nothing on the repaint path may call it.
+// holds, and no later `stat` can talk it out of that. So the callers that know more than a
+// stat does — disk WATCHERS, which fire on the write itself — say so explicitly. See there
+// for the writes that do this, for why nothing on the repaint path may call it, and for the two
+// watchers that do.
 //
 // What a file's CHEAP artifact is depends on its kind, and the asymmetry is core's own:
 //
@@ -416,14 +417,19 @@ export function clearSourceCache(cache: SourceCache): void {
  * Drop everything held for ONE file, because its bytes may have changed under a version that did
  * not move.
  *
- * The one caller is a disk WATCHER — `BinaryEditorProvider`'s, through
- * `sourceReads.forgetChangedSource` — and that is the whole reason this exists: the event is
- * evidence of a change that `mtime:size` cannot carry. Such a write is not exotic. `tar -xp` and
- * `unzip -o` restore a file with its recorded mtime, and restoring the same revision preserves
- * its size too; a network or virtualised mount with 1-2 s mtime granularity cannot tell two
- * equal-size writes inside one tick apart. Every tier then believes what it already holds, and
- * nothing later corrects it: the file is fresh on disk, the editor visibly repaints, and the
- * table still shows the old content for the life of the window.
+ * The callers are disk WATCHERS, and that is the whole reason this exists: the event is evidence
+ * of a change that `mtime:size` cannot carry. There are two. A read-only tab's watcher
+ * (`BinaryEditorProvider`'s, through `sourceReads.forgetChangedSource`) forgets on every event.
+ * The workspace watcher (workspaceChange.ts, through `sourceReads.forgetUnseenChange` and
+ * `forgetUnseenWrite` below) forgets only when the file's version after the event is one this
+ * cache already holds, so an ordinary save, which moves the version, costs no forget. Without it,
+ * a file no read-only tab had open stayed stale in the tree, the name index and the Usage column.
+ *
+ * Such a write is not exotic. `tar -xp` and `unzip -o` restore a file with its recorded mtime, and
+ * restoring the same revision preserves its size too; a network or virtualised mount with 1-2 s
+ * mtime granularity cannot tell two equal-size writes inside one tick apart. Every tier then
+ * believes what it already holds, and nothing later corrects it: the file is fresh on disk, the
+ * editor visibly repaints, and the table still shows the old content for the life of the window.
  *
  * NOT to be called from anything that fires on a REPAINT. `BinaryEditorProvider.post` runs on
  * every repost and drops its own node cache (`SlddModel.invalidate`); dropping the shared parse
@@ -467,6 +473,80 @@ export function forgetSource(cache: SourceCache, uriString: string): void {
 }
 
 /**
+ * Every version this cache holds anything at for `uriString`: a finished artifact in any of the
+ * three tiers, or a derivation in flight in either of the two in-flight maps.
+ *
+ * In flight counts, because a derivation that started before a write is the likeliest holder of
+ * the old bytes. It read them before the write landed and will store them after it, under the
+ * version it was started for.
+ */
+export function heldVersionsOf(cache: SourceCache, uriString: string): ReadonlySet<string> {
+  const held = new Set<string>();
+  for (const entry of [
+    cache.cheap.get(uriString),
+    cache.parsed.get(uriString),
+    cache.models.get(uriString),
+    cache.parsing.get(uriString),
+    cache.reading.get(uriString),
+  ]) {
+    if (entry) held.add(entry.version);
+  }
+  return held;
+}
+
+/**
+ * `forgetSource`, but only when `version` is one `held` already names — the one change the
+ * version key cannot see — and `true` when it forgot.
+ *
+ * Any other version is an ordinary save, and an ordinary save needs nothing from here: every tier
+ * re-checks the version before it answers, so the next pass re-reads the file at its new version.
+ * Forgetting it as well would bump the cache-wide `generation` and discard the stores of every
+ * derivation in flight. Over a branch switch, that is every file. A `null` version (a file too
+ * large to version, or one whose `stat` failed) forgets nothing either: nothing is ever stored
+ * under `null`, and nothing held can match it.
+ */
+export function forgetIfVersionUnmoved(
+  cache: SourceCache,
+  uriString: string,
+  held: ReadonlySet<string>,
+  version: string | null,
+): boolean {
+  if (version === null || !held.has(version)) return false;
+  forgetSource(cache, uriString);
+  return true;
+}
+
+/**
+ * Forget what is held for `uriString` if a write a watcher reported left its version where it
+ * was. `version` is the file's `stat`, taken after the event.
+ *
+ * What is held is read BEFORE the `stat`, in the same turn as the event, and the order matters. A
+ * read-only tab showing the file has its own watcher, which forgets unconditionally and re-parses
+ * (`sourceReads.forgetChangedSource`). When that watcher's event is handled first, it has already
+ * dropped the old entries by the time this reads what is held, so nothing is held and nothing is
+ * forgotten twice. A read taken after the `stat` would find the tab's new parse in flight at the
+ * same version and forget that as well, which is the second re-read that forgetting on every event
+ * costs. When the workspace's event is handled first, both forget, and the cost is one extra parse
+ * of a file whose write the version key could not see.
+ *
+ * A second event for one write looks like this case too: the re-read the first event started is
+ * held at the version the second one stats, so it is forgotten once more. Measured on macOS, the
+ * workspace watcher reports an ordinary save once, so there an ordinary save still forgets nothing.
+ * A write followed by a `utimes` (a restore) can arrive as two events.
+ *
+ * Nothing held means no `stat` at all: a file no consumer has read has nothing stale to forget.
+ */
+export async function forgetUnseenWrite(
+  cache: SourceCache,
+  uriString: string,
+  version: () => Promise<string | null>,
+): Promise<boolean> {
+  const held = heldVersionsOf(cache, uriString);
+  if (held.size === 0) return false;
+  return forgetIfVersionUnmoved(cache, uriString, held, await version());
+}
+
+/**
  * Whether nothing has been forgotten since `at` — the check every store in this module makes
  * before writing an artifact it derived on the far side of an await.
  *
@@ -481,7 +561,9 @@ export function forgetSource(cache: SourceCache, uriString: string): void {
  * folder pass is in flight discards that pass's stores too, so the next pass re-reads those files.
  * That is a cost, bounded by one pass and self-correcting on the next, where a per-file epoch is
  * another map to keep, clear and bound. Both sides of the trade are re-reads; only one of them
- * could ever be a wrong answer.
+ * could ever be a wrong answer. The trade holds because a forget is rare: the workspace watcher
+ * forgets only on a write this cache's version key cannot see (`forgetUnseenWrite`), never on an
+ * ordinary save or on each file of a branch switch.
  */
 function nothingForgottenSince(cache: SourceCache, at: number): boolean {
   return cache.generation === at;

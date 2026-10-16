@@ -3,8 +3,18 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync, zipSync } from 'fflate';
-import { DataModel } from 'data-explorer-core';
-import { getModelFromBytes, getModel, getProjectModel, invalidate, findNode } from '../src/host/SlddModel.js';
+import { DataModel, parseModel } from 'data-explorer-core';
+import {
+  getModelFromBytes,
+  getModel,
+  getModelFromParsed,
+  getProjectModel,
+  invalidate,
+  findNode,
+  openSourceView,
+  releaseSourceView,
+  releaseIfUnviewed,
+} from '../src/host/SlddModel.js';
 import { sourceWarnings, warningBanner } from '../src/host/parseWarnings.js';
 
 function bytes(name: string): ArrayBuffer {
@@ -345,5 +355,121 @@ describe('a source that opened short carries its warnings to the view', () => {
     const node: any = getModelFromBytes(uri, 'clean.sldd', bytes('rt_bin.sldd'));
     expect(node.warnings).toBeUndefined();
     expect(warningBanner(sourceWarnings(node))).toBeUndefined();
+  });
+});
+
+// A tab's tree is held twice: in this module's cache, and as a source registered in core's
+// session under the tab's uri. Both used to outlive the tab for the life of the window — a
+// read-only tab's document disposed nothing, and the text editor's last view cleared only its
+// baseline — so every file opened and closed stayed parsed. Each open view now holds the
+// source, and the LAST one to close releases both halves.
+//
+// A count rather than a flag, and one count per uri shared by every provider, because both
+// read-only and editable JSON views register under the SAME srcId: a JSON .sldd over the
+// sync limit in the binary view, a "Reopen Editor With", a split panel. Whichever view closes
+// first must not take the tree from under the one still showing it.
+describe('a source no open view holds is released', () => {
+  const slx = (): ArrayBuffer => bytes('model_with_refs.slx');
+  const jsonText = readFileSync(
+    fileURLToPath(new URL('../test-integration/fixtures/workspace/data.sldd', import.meta.url)),
+    'utf8',
+  );
+
+  // Every route a tab registers by, keyed by what it is called with. All four register
+  // under the bare uri, which is the whole reason one count has to cover them.
+  const routes: [string, string, (uri: string) => any][] = [
+    ['getModelFromBytes, a model', 'm.slx', (uri) => getModelFromBytes(uri, 'm.slx', slx())],
+    ['getModelFromBytes, a compressed .sldd', 'c.sldd', (uri) => getModelFromBytes(uri, 'c.sldd', bytes('compressed.sldd'))],
+    ['getModel, a JSON .sldd', 'data.sldd', (uri) => getModel(uri, 'data.sldd', jsonText)],
+    ['getModelFromParsed, a shared parse', 'p.slx', (uri) => getModelFromParsed(uri, 'p.slx', parseModel(slx(), '/w/p.slx'))],
+  ];
+
+  // A node below the root, so `findNode` is asked about something the registry indexed
+  // rather than the root it might answer from elsewhere.
+  const someNode = (tree: any): any => tree.flatten().find((n: any) => n !== tree);
+
+  it.each(routes)('%s: the last release drops the registration and the cached tree', (_label, _name, register) => {
+    const uri = `test://release/${_name}`;
+    openSourceView(uri);
+    const before = register(uri);
+    const inner = someNode(before);
+    expect(inner).toBeTruthy();
+    expect(DataModel.hasDataSource(uri)).toBe(true);
+    expect(findNode(uri, inner.id)).toBeTruthy();
+
+    expect(releaseSourceView(uri)).toBe(true);
+
+    expect(DataModel.hasDataSource(uri)).toBe(false);
+    // Neither half answers: not the session's id index, and not this module's cache, which
+    // `findNode` falls back to when the registry has nothing.
+    expect(findNode(uri, inner.id)).toBeNull();
+    // The cache entry went too: the next read is a parse, not the tree the tab let go of.
+    const after = register(uri);
+    expect(after).not.toBe(before);
+
+    invalidate(uri);
+    DataModel.removeDataSource(uri);
+  });
+
+  it('a source two views hold stays until the second lets go', () => {
+    // The editable JSON view and a read-only view of the same dictionary, in either order.
+    const uri = 'test://release/two-views.sldd';
+    openSourceView(uri);
+    openSourceView(uri);
+    const tree = getModel(uri, 'two-views.sldd', jsonText);
+    const inner = someNode(tree);
+
+    expect(releaseSourceView(uri)).toBe(false);
+    expect(DataModel.hasDataSource(uri)).toBe(true);
+    expect(findNode(uri, inner.id)).toBe(inner);
+    // Still the cached tree, not a re-parse: the surviving view is showing this one.
+    expect(getModel(uri, 'two-views.sldd', jsonText)).toBe(tree);
+
+    expect(releaseSourceView(uri)).toBe(true);
+    expect(DataModel.hasDataSource(uri)).toBe(false);
+    expect(findNode(uri, inner.id)).toBeNull();
+  });
+
+  it('a release with no view to release changes nothing', () => {
+    // Never opened, never registered: a no-op, not a throw.
+    expect(() => releaseSourceView('test://release/never.sldd')).not.toThrow();
+    expect(releaseSourceView('test://release/never.sldd')).toBe(false);
+
+    // Registered by something that holds no view (a test, a future reader that registers
+    // what it needs): an unmatched release is a caller's bug, and the safe answer to it is to
+    // leave alone a tree it did not take.
+    const uri = 'test://release/unheld.slx';
+    const tree = getModelFromBytes(uri, 'unheld.slx', slx());
+    expect(releaseSourceView(uri)).toBe(false);
+    expect(DataModel.hasDataSource(uri)).toBe(true);
+    expect(getModelFromBytes(uri, 'unheld.slx', slx())).toBe(tree);
+
+    // And a release past the last one is the same unmatched release.
+    openSourceView(uri);
+    expect(releaseSourceView(uri)).toBe(true);
+    expect(releaseSourceView(uri)).toBe(false);
+  });
+
+  it('a read that lands after its last view closed is released, not kept', () => {
+    // The read-only tab's read is asynchronous: a large file can still be parsing when its
+    // tab closes, and the registration that read ends in would then be one no view will
+    // ever release. The provider answers a read for a closed document with this.
+    const uri = 'test://release/late.slx';
+    openSourceView(uri);
+    expect(releaseSourceView(uri)).toBe(true);
+    getModelFromBytes(uri, 'late.slx', slx()); // the read in flight lands
+    expect(DataModel.hasDataSource(uri)).toBe(true);
+
+    expect(releaseIfUnviewed(uri)).toBe(true);
+    expect(DataModel.hasDataSource(uri)).toBe(false);
+
+    // But not when the file has been opened again meanwhile: that view owns it now.
+    openSourceView(uri);
+    const tree = getModelFromBytes(uri, 'late.slx', slx());
+    expect(releaseIfUnviewed(uri)).toBe(false);
+    expect(DataModel.hasDataSource(uri)).toBe(true);
+    expect(getModelFromBytes(uri, 'late.slx', slx())).toBe(tree);
+    expect(releaseSourceView(uri)).toBe(true);
+    expect(DataModel.hasDataSource(uri)).toBe(false);
   });
 });

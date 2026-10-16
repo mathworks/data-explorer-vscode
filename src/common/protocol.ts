@@ -275,12 +275,11 @@ export interface MatrixCellsMessage {
  * nothing to send (the node is gone, or every one of its rows failed to build), which
  * the table reads as "this row has no children after all" and stops offering to fetch.
  *
- * `truncated` is how many of this node's own children got no row at all, which is the
- * one loss a fetch can still inflict: core caps numeric and string expansion at 10,000
- * but builds a CELL's children uncapped, so a single 200,000-element cell outgrows a
- * whole delivery. Those names are absent with nothing to expand, so the table says so
- * instead of presenting a short list as the whole list — the payload's own banner
- * already does this for the same loss one level up.
+ * `truncated` is how many of this node's own children got no row at all, which the
+ * table would report rather than present a short list as the whole list. The host sends
+ * 0: it plans a row for every child, even when they outnumber a whole delivery (core
+ * builds a CELL's children uncapped, so one 200,000-element cell can), and defers what
+ * is under them.
  */
 export interface ChildRowsMessage {
   type: 'childRows';
