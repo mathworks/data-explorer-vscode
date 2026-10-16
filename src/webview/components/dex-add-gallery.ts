@@ -629,7 +629,7 @@ export class DexAddGallery extends LitElement {
           <span class="gallery-title">Add</span>
           <label
             class="gallery-pin"
-            title="Stay open after each add. Entries land immediately and are not renamed; closing selects the whole run."
+            title="Stay open after each add. Entries land immediately and are not renamed."
           >
             <input
               type="checkbox"

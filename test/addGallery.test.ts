@@ -194,6 +194,22 @@ describe('dex-add-gallery', () => {
     expect(($(el, '.gallery-pin input') as HTMLInputElement).checked).toBe(true);
   });
 
+  // THE DECISION THIS PINS (ruling V-038, option (b), 2026-10-16). The design had closing a
+  // pinned gallery reveal and select every entry the run added, and the pin's tooltip
+  // promised it ("closing selects the whole run"). Nothing ever did: each add selects its one
+  // new entry, so after a run only the last one is selected. The selection was dropped rather
+  // than built. Building it needs the run's ids to flow from table-main's `selectRows` into the
+  // component, or a new gallery-close event, plus rules for an id renamed or undone mid-run.
+  // A tooltip that promises nothing is better than one that promises a missing feature. The
+  // undo half of the same design paragraph was dropped the same way (addEntryUndo.test.ts).
+  // What closing a run does select is locked in addEntryWiring.test.ts.
+  it('the pin promises only what it does', async () => {
+    const el = await gallery();
+    const title = $(el, '.gallery-pin').getAttribute('title');
+    expect(title).toBe('Stay open after each add. Entries land immediately and are not renamed.');
+    expect(title).not.toMatch(/select/i);
+  });
+
   it('Escape asks to close, and keeps the key to itself', async () => {
     const el = await gallery();
     let closed = 0;
