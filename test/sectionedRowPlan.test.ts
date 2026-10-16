@@ -112,14 +112,16 @@ describe('one plan over every entry of every section', () => {
     );
   });
 
-  it('stays within the budget, headers included', () => {
+  it('stays within the budget, headers included, whenever the names fit in it', () => {
     // The headers are not in the plan (they are structure, and a file whose sections
     // alone overflowed would have nothing worth showing), so the plan is given
-    // `budget - sections.length`. Without that subtraction a planned payload could still
-    // be over the payload cap and `capRows` would cut exactly the names this protects.
+    // `budget - sections.length`. Without that subtraction the levels under the names
+    // could take the payload past the budget.
     // 17 and 18 are also the budgets where a per-section planner with a budget EACH
     // (rather than a shared running one) overflows: 2 + 15 + 2 = 19 rows for 18.
-    for (const budget of [3, 9, 17, 18, 19, 25, 77, 80]) {
+    // Below 7 (2 headers + 5 names) the names alone exceed the budget, and they all come
+    // anyway — see 'delivers every entry name…' below.
+    for (const budget of [9, 17, 18, 19, 25, 77, 80]) {
       const { rows } = buildRowsPlanned(TWO_SECTIONS, undefined, undefined, budget);
       expect(rows.length, `budget ${budget}`).toBeLessThanOrEqual(budget);
     }
@@ -169,15 +171,25 @@ describe('the section layer survives the plan', () => {
     expect(runs).toEqual(ALL_NAMES);
   });
 
-  it('counts the entries that did not fit at all, so the banner can say so', () => {
-    // A budget of 4 leaves room for 2 entry names after the 2 headers. The other three
-    // are not deferred — they are ABSENT, with no row to open — and that is the one loss
-    // a plan can still inflict, so it is reported rather than left to be noticed.
+  it('delivers every entry name, under its own header, when the names alone exceed the budget', () => {
+    // A budget of 4 leaves room for 2 entry names after the 2 headers. All five come
+    // anyway, each under its own section, and the three with children load them on
+    // demand: no name is left without a row.
     const { rows, plan } = buildRowsPlanned(TWO_SECTIONS, undefined, undefined, 4);
-    expect(plan.truncated).toBe(3);
-    expect(rows.filter((r) => r.parent !== null).map((r) => r.ID)).toEqual(['A', 'B']);
-    // The headers still come, both of them, including the one with no entries left.
-    expect(headers(rows)).toHaveLength(2);
+    expect(plan.truncated).toBe(0);
+    expect(ids(rows)).toEqual([
+      buildSectionRowId('design'),
+      'A',
+      'B',
+      'C',
+      buildSectionRowId('references'),
+      'R1',
+      'R2',
+    ]);
+    const parentOf = (id: string) => rows.find((r) => r.ID === id)!.parent;
+    expect(['A', 'B', 'C'].map(parentOf)).toEqual(Array(3).fill(buildSectionRowId('design')));
+    expect(['R1', 'R2'].map(parentOf)).toEqual(Array(2).fill(buildSectionRowId('references')));
+    expect(rows.filter((r) => r._lazy).map((r) => r.ID)).toEqual(['A', 'B', 'C']);
   });
 });
 
@@ -224,14 +236,13 @@ describe('the fetch that completes a sectioned payload', () => {
     expect(plan.truncated).toBe(0);
   });
 
-  it('reports the children that got no row at all, which is the one loss left', () => {
-    // A node whose OWN children outnumber a whole delivery — core builds a cell's
-    // children uncapped, so one 200,000-element cell is one name. Those names have no
-    // row and no twisty, so the count comes back and the table says so; the payload's
-    // banner cannot, having been written before the user opened anything.
+  it('delivers every child of a node whose children outnumber a whole delivery', () => {
+    // Core builds a cell's children uncapped, so one 200,000-element cell is one name with
+    // more children than a delivery holds. All of them come, each deferring its own.
     const { rows: fetched, plan } = buildChildRows(TWO_SECTIONS.children[0].children[0], 3);
-    expect(ids(fetched)).toEqual(['A.k0', 'A.k1', 'A.k2']);
-    expect(plan.truncated).toBe(1);
+    expect(ids(fetched)).toEqual(['A.k0', 'A.k1', 'A.k2', 'A.k3']);
+    expect(fetched.every((r) => r._lazy)).toBe(true);
+    expect(plan.truncated).toBe(0);
   });
 });
 

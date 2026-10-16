@@ -18,6 +18,10 @@
 // the one builder that happened to overflow first — `buildRows` is as unbounded as
 // `buildMatRows`, it has just never been handed a file that proved it.
 //
+// In the read-only view it is now the FALLBACK rather than the first cut. The plan
+// delivers every name in the file (lazyRows.ts), so that view posts the whole payload
+// and cuts it to this cap only when `postMessage` refuses it (postOrFallback).
+//
 // Kept vscode-free so the rule is unit-testable; the providers own the postMessage.
 import type { WarningBanner } from './parseWarnings.js';
 

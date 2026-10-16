@@ -41,12 +41,11 @@ export type UsageFiller = (sourceUri: string, rows: any[]) => Promise<boolean>;
  * returns have to be the rows the payload would have delivered for the same node, and
  * the only way to be sure of that is for one object to own both.
  *
- * `truncated` counts the children that did not fit AT ALL — no row, nothing to open.
- * One node can be the whole problem (core builds a cell's children uncapped, so a
- * 200,000-element cell is one name), and the rule this implements puts the names first,
- * which makes "some of these names are missing" the one thing the answer must not keep
- * to itself. 0 on every other path, including the failures: an empty answer means the
- * node is gone or has no children, and neither is a loss to report.
+ * `truncated` counts the children that got no row at all, and is always 0: the plan gives
+ * every child a row, even a 200,000-element cell's (core builds a cell's children
+ * uncapped), and defers what is under them. It is still sent so the message keeps its
+ * shape (protocol.ts). 0 on the failure paths too: an empty answer means the node is gone
+ * or has no children, and neither is a loss to report.
  */
 export function childRowsMessage(
   nodeId: string,

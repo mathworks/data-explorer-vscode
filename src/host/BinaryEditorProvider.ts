@@ -11,7 +11,7 @@ import { annotateDataRows, annotateModelRows } from './usageGraph.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { capRows, rowCapBanner } from './rowCap.js';
 import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
-import { postOrReport } from './postPayload.js';
+import { postOrFallback } from './postPayload.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { answerMatrixRequest } from './matrixRequest.js';
 import { answerChildRequest, type UsageFiller } from './childRequest.js';
@@ -448,7 +448,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
         // rows that are not going to be shown are not worth annotating, and a payload
         // over V8's maximum string length cannot be posted at all (rowCap.ts).
         //
-        // The payload is PLANNED to that bound rather than cut to it (lazyRows.ts):
+        // The payload is PLANNED to the row budget rather than cut to it (lazyRows.ts):
         // whole levels of the tree, with the rows below the last one that fits fetched on
         // demand. That is the difference between a file showing its shape and a file
         // showing the first branch of it — measured on the 2,016,325-node `.mat` that
@@ -458,43 +458,50 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
         // EVERY format, not just the one that provoked it. The rule is that the names are
         // complete and the deep values may wait, and nothing about it is specific to a
         // `.mat`: a dictionary of wide structs, a model of deep buses and a project of
-        // thousands of files all have the same shape of too much. The cap stays behind it
-        // as the thing that cannot be planned away — a top level wider than the budget —
-        // and the two bounds compose in the banner below.
+        // thousands of files all have the same shape of too much.
+        //
+        // NOT CAPPED: a top level wider than the budget is delivered whole (lazyRows.ts), and
+        // cutting it here would drop exactly the names the plan keeps. The 138 MB bench
+        // dictionary is 291,568 rows and 140.8 MiB of JSON that way. The cap is the fallback
+        // instead, for a payload `postMessage` refuses (see postOrFallback).
         const planned = planner.payload(node, LAZY_ROW_BUDGET);
-        const capped = capRows(planned.rows);
-        const rows = capped.rows;
+        const rows = planned.rows;
+        const parseBanner = warningBanner(sourceWarnings(node));
         // Fill the Usage column from the shared workspace usage graph (lazy + cached).
         await fillUsage(uriString, rows).catch(() => false);
-        const delivered = await postOrReport(
-          webview,
-          {
-            type: 'setRows',
-            docUri: uriString,
-            rows,
-            columns: COLUMNS,
-            columnLabels: COLUMN_LABELS,
-            columnGroups: COLUMN_GROUPS,
-            editable: false,
-            notice,
-            // Independent of `notice`: that one explains why this view is read-only,
-            // this one says the file is not all here. A large JSON dictionary that also
-            // read short shows both, which is why they are two fields and not one
-            // string — see renderBanners in the webview.
-            //
-            // Through both bounds, so a table that is not showing the whole file says
-            // which kind of short it is in the same strip that reports what the parse
-            // could not read: rows that load when opened (the plan), rows the plan could
-            // not fit at all (its own truncation), or rows cut from the payload (the
-            // cap). The composition is what keeps each sentence from depending on the
-            // others being impossible.
-            warnings: lazyRowsBanner(
-              planned.plan,
-              rowCapBanner(capped, warningBanner(sourceWarnings(node))),
-            ),
-          },
-          name,
-        );
+        const payload = {
+          type: 'setRows',
+          docUri: uriString,
+          rows,
+          columns: COLUMNS,
+          columnLabels: COLUMN_LABELS,
+          columnGroups: COLUMN_GROUPS,
+          editable: false,
+          notice,
+          // Independent of `notice`: that one explains why this view is read-only,
+          // this one says the file is not all here. A large JSON dictionary that also
+          // read short shows both, which is why they are two fields and not one
+          // string — see renderBanners in the webview.
+          //
+          // In the same strip that reports what the parse could not read, so a table
+          // that is not showing the whole file says so: rows that load when opened.
+          warnings: lazyRowsBanner(planned.plan, parseBanner),
+        };
+        // The first MAX_TABLE_ROWS rows, a prefix so every row's parent is in it, and the
+        // cap's banner leading: rows that are not in the view at all are the bigger news.
+        // Its count of rows to expand is of the rows it shows. Nothing smaller to offer
+        // when nothing would be cut.
+        const fallback = () => {
+          const capped = capRows(rows);
+          if (capped.rows.length === capped.total) return undefined;
+          const deferred = capped.rows.filter((r: any) => r?._lazy).length;
+          return {
+            ...payload,
+            rows: capped.rows,
+            warnings: rowCapBanner(capped, lazyRowsBanner({ deferred }, parseBanner)),
+          };
+        };
+        const delivered = await postOrFallback(webview, payload, fallback, name);
         // Only when the rows it selects into actually arrived. A held selection
         // drained against a view showing the error banner is a selection aimed at
         // rows that are not there, and it would be dropped silently rather than wait

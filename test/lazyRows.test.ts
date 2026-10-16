@@ -118,19 +118,15 @@ describe('planRows — which nodes a delivery carries, and which of them can sti
     }
   });
 
-  it('truncates the top level when even that exceeds the budget, and says so', () => {
-    // The one lossy corner left, and it is one node's worth: core caps numeric and
-    // string element expansion at 10,000 but builds a cell's children uncapped, so a
-    // single huge cell can outgrow a whole request. Its first `budget` children arrive
-    // and the rest are absent — the cap's old behaviour, confined to one row instead of
-    // deciding the whole file.
+  it('delivers the whole top level even when that alone exceeds the budget', () => {
+    // The names come first, all of them: a top level wider than the budget is delivered
+    // whole and everything under it is deferred, rather than cut at the budget with the
+    // rest absent. Core builds a cell's children uncapped, so this is one huge cell's
+    // fetch as much as a dictionary of too many entries.
     const plan = planRows(fanOut([300, 2]), 10);
-    expect(plan.planned).toHaveLength(10);
-    expect(plan.deferred).toBe(10);
-    // Counted, not left to be noticed: these 290 are the only rows a plan can lose, so
-    // the banner can say so in the cap's words instead of claiming everything is
-    // reachable by expanding something.
-    expect(plan.truncated).toBe(290);
+    expect(plan.planned).toHaveLength(300);
+    expect(plan.deferred).toBe(300);
+    expect(plan.truncated).toBe(0);
   });
 
   it('reports nothing truncated whenever the top level fits, which is the normal case', () => {
@@ -153,7 +149,7 @@ describe('planRows — which nodes a delivery carries, and which of them can sti
       const roots = plan.planned.map((p) => p.root);
       // Non-decreasing: a run per root, never interleaved, never revisited.
       expect([...roots].sort((a, b) => a - b), `budget ${budget}`).toEqual(roots);
-      expect(new Set(roots).size + plan.truncated, `budget ${budget}`).toBe(3);
+      expect(new Set(roots).size, `budget ${budget}`).toBe(3);
     }
   });
 
@@ -205,25 +201,6 @@ describe('lazyRowsBanner — what the user is told about a file that is not all 
     expect(banner.headline).toContain('expand');
     expect(banner.details).toContain('Parse trouble');
     expect(banner.details).toContain('detail');
-  });
-
-  it('leads with the rows that are not in this view at all, when the top level was cut', () => {
-    // The one loss a plan can still inflict: a level wider than the budget, so some roots
-    // have no row and no gesture to reach them. That LEADS, because it is the half the
-    // user cannot act on — and the deferred rows are still said, because both are true of
-    // one delivery and the expandable ones are worth knowing about.
-    const banner = lazyRowsBanner(held(40, 1200), undefined)!;
-    expect(banner.headline).toContain('1,200');
-    expect(banner.headline).not.toContain('expand');
-    expect(banner.details[0]).toContain('40');
-    expect(banner.details[0]).toContain('expand');
-    expect(banner.details.join(' ')).toContain('search');
-  });
-
-  it('says the truncation alone when the cut level deferred nothing', () => {
-    const banner = lazyRowsBanner(held(0, 7), undefined)!;
-    expect(banner.headline).toContain('7');
-    expect(banner.details.some((d) => d.includes('expand'))).toBe(false);
   });
 
   it('takes a missing plan as a plan that held nothing back', () => {
