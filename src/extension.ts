@@ -96,15 +96,16 @@ export function activate(context: vscode.ExtensionContext): void {
       return;
     }
     const node = findNode(uriString, first);
-    if (node) piProvider.showNode(node);
+    if (node) piProvider.showNode(node, uriString);
     else piProvider.clear();
   };
 
   // Usage-column link click: open the referenced file (opened non-preview so the
   // navigated-to tab persists) and select the target row there. Shared by both
-  // providers so navigation works from any table.
-  const navigate = (target: string): void => {
-    void handleNavigate(target, (uri) => openInBestEditor(uri));
+  // providers so navigation works from any table. `from` is the document the link was
+  // clicked in: a bare file name opens the copy the tree shows under it.
+  const navigate = (target: string, from?: string): void => {
+    void handleNavigate(target, (uri) => openInBestEditor(uri), from, (ref, r) => provider.resolveReference(ref, r));
   };
 
   // The inspector navigates through the same closure as the tables.

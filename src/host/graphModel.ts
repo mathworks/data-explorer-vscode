@@ -118,12 +118,14 @@ export class RelGraph {
 
   // Resolve a reference preferring targets in the referrer's own group; fall back
   // to the global basename match when the group has none.
-  private resolveScoped(ref: string, referrer: string | undefined): string[] {
+  //
+  // Public so a link click resolves a bare name by the same rule the tree draws with
+  // (navTarget.resolveNavSource). The tree's own calls always pass a GraphSource's
+  // uriString; a click can pass anything, including no referrer or a document the graph
+  // never read (outside the folder, untitled). Both get the global match, which is the
+  // only answer that has no scope to prefer.
+  resolveFor(ref: string, referrer: string | undefined): string[] {
     const all = this.resolve(ref);
-    // PRECONDITION (untested): every call site passes a GraphSource's uriString,
-    // which the interface makes required, so `referrer` is never absent in
-    // practice. The optional parameter keeps the signature usable for a future
-    // referrer-less lookup, where global resolution is the right answer.
     if (!referrer) return all;
     // A .prj IS reachable here and is deliberately absent from groupOf (it is a
     // group header, not a member), so scoping must fall back to the global match.
@@ -149,7 +151,7 @@ export class RelGraph {
     const referenced = new Set<string>();
     for (const s of this.sources.values()) {
       for (const ref of this.outgoingRefs(s)) {
-        for (const t of this.resolveScoped(ref, s.uriString)) referenced.add(t);
+        for (const t of this.resolveFor(ref, s.uriString)) referenced.add(t);
       }
     }
     return referenced;
@@ -189,7 +191,7 @@ export class RelGraph {
     for (const uri of g.members) {
       const s = this.sources.get(uri)!;
       for (const ref of this.outgoingRefs(s)) {
-        for (const t of this.resolveScoped(ref, uri)) {
+        for (const t of this.resolveFor(ref, uri)) {
           if (this.groupOf.get(t) === g.key) referenced.add(t);
         }
       }
@@ -289,7 +291,7 @@ export class RelGraph {
 
   // Resolve a reference name to real node(s) or a single missing node.
   private refToNodes(ref: string, ancestors: ReadonlySet<string>, referrer: string | undefined): GraphNode[] {
-    const targets = this.resolveScoped(ref, referrer);
+    const targets = this.resolveFor(ref, referrer);
     if (targets.length === 0) {
       return [{ kind: 'missing', label: ref, ancestors, cycle: false, hasChildren: false }];
     }

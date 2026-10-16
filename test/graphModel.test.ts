@@ -293,6 +293,46 @@ describe('RelGraph.resolve', () => {
   });
 });
 
+// The tree's own group-first rule, reachable from outside so a link click resolves a bare
+// name to the same file the tree shows under the referrer (navTarget.resolveNavSource).
+describe('RelGraph.resolveFor', () => {
+  it('prefers the copy in the referrer\'s own folder over a same-named one elsewhere', () => {
+    const g = new RelGraph([src('a/dup.sldd'), src('b/dup.sldd'), src('b/m.slx')]);
+    expect(g.resolveFor('dup.sldd', 'file:///b/m.slx')).toEqual(['file:///b/dup.sldd']);
+  });
+
+  it('a project claims its subfolders, so its own copy wins over a closer-looking stranger', () => {
+    // A folder rule would see no dup.sldd in proj/models and give up; the referrer's group
+    // is the project, which holds proj/data/dup.sldd.
+    const g = new RelGraph([
+      src('proj/P.prj'),
+      src('proj/models/m.slx'),
+      src('proj/data/dup.sldd'),
+      src('other/dup.sldd'),
+    ]);
+    expect(g.resolveFor('dup.sldd', 'file:///proj/models/m.slx')).toEqual(['file:///proj/data/dup.sldd']);
+  });
+
+  it('falls back to every match when the referrer\'s group holds none', () => {
+    const g = new RelGraph([src('a/dup.sldd'), src('b/dup.sldd'), src('c/m.slx')]);
+    expect(g.resolveFor('dup.sldd', 'file:///c/m.slx').sort()).toEqual(['file:///a/dup.sldd', 'file:///b/dup.sldd']);
+  });
+
+  it('a referrer the graph does not know (outside the folder, unsaved) gets every match', () => {
+    const g = new RelGraph([src('a/dup.sldd'), src('b/dup.sldd')]);
+    expect(g.resolveFor('dup.sldd', 'file:///elsewhere/m.slx').sort()).toEqual([
+      'file:///a/dup.sldd',
+      'file:///b/dup.sldd',
+    ]);
+    expect(g.resolveFor('dup.sldd', undefined).sort()).toEqual(['file:///a/dup.sldd', 'file:///b/dup.sldd']);
+  });
+
+  it('an unknown name is [] whoever asks', () => {
+    const g = new RelGraph([src('b/m.slx')]);
+    expect(g.resolveFor('missing.sldd', 'file:///b/m.slx')).toEqual([]);
+  });
+});
+
 describe('RelGraph project relationships', () => {
   it('groups project member files under a project group', () => {
     const g = new RelGraph([

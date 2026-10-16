@@ -10,8 +10,14 @@
 //
 // Unlike SlddTextEditorProvider (backed by a native TextDocument), this is a
 // CustomEditorProvider: it owns its own edit stack via onDidChangeCustomDocument,
-// and re-zips on save. The save gate re-parses chunkXml before writing, so a
-// serializer bug becomes a failed save, never a corrupted file.
+// and re-zips on save. The save gate (writeTo) re-reads chunkXml before writing and
+// refuses the save if the chunk does not read back, so a serializer bug that breaks
+// the markup, or a chunk core would read as an empty dictionary, becomes a failed
+// save and leaves the file on disk untouched. It checks that the chunk can be read,
+// not what it says: a well-formed chunk carrying a wrong value saves silently, and a
+// loss the reader and writer share (a value the reader drops or mis-decodes and the
+// writer writes back as misread) re-reads as unchanged, so no re-read can catch it.
+// Keeping values right is core's serializer's job, not this gate's.
 //
 // The model is registered in the global DataModel singleton under a srcId that
 // PREFIXES the URI, so it never collides with the read-only BinaryEditorProvider's
@@ -477,7 +483,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   // Relay selection to the Property Inspector (wired in extension.ts).
   public onSelect?: (uriString: string, rowIds: string[]) => void;
   // Handle a Usage-column link click (wired in extension.ts).
-  public onNavigate?: (target: string) => void;
+  public onNavigate?: (target: string, referrer?: string) => void;
 
   private readonly _onDidChangeCustomDocument =
     new vscode.EventEmitter<vscode.CustomDocumentEditEvent<BinarySlddDocument>>();
@@ -1480,7 +1486,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       else if (msg?.type === 'dragEnd') applyDragEnd();
       else if (msg?.type === 'drop') void applyDrop(msg);
       else if (msg?.type === 'navigate') {
-        if (typeof msg.target === 'string') this.onNavigate?.(msg.target);
+        if (typeof msg.target === 'string') this.onNavigate?.(msg.target, uriString);
       } else if (msg?.type === 'requestMatrix') {
         // A Variable Editor panel is opening: send its cells. One shared answer for
         // all four webview hosts — see matrixRequest.ts.
@@ -1741,8 +1747,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   //    error, and the on-disk file is never touched. This is the call site the
   //    reads-as-empty rule in readSlddParts matters most for: a chunk the reader cannot
   //    read yields a dictionary with no entries, and zipping that over the file on disk
-  //    would take every entry with it, silently. It also compresses properly, because
-  //    the result is what the user keeps.
+  //    would take every entry with it, silently. The gate checks that the chunk reads,
+  //    not that its values are right (see the header). It also compresses properly,
+  //    because the result is what the user keeps.
   //
   //  - 'backup' writes VS Code's hot-exit scratch copy, which is thrown away when the
   //    document goes clean or closes cleanly. It skips the gate (see

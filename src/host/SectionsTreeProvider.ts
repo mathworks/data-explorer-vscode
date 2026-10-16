@@ -141,6 +141,16 @@ export class SectionsTreeProvider implements vscode.TreeDataProvider<SlddTreeNod
     return el ? graph.children(el) : graph.roots();
   }
 
+  /**
+   * The file a bare name means when `referrerUri` names it, by the rule this tree draws
+   * with: the copy in the referrer's own project or folder, else the first workspace match.
+   * A link click resolves through this (navigate.ts), so the file it opens is the one shown
+   * under the referrer here.
+   */
+  async resolveReference(ref: string, referrerUri: string): Promise<string | undefined> {
+    return (await this.ensureGraph()).resolveFor(ref, referrerUri)[0];
+  }
+
   private ensureGraph(): Promise<RelGraph> {
     if (!this.graph) this.graph = this.buildGraph();
     return this.graph;

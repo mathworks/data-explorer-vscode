@@ -8,6 +8,7 @@ import { rowPlannerFor } from './rowPlanner.js';
 import { readProjectStore } from './projectStore.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, exceedsStringDecodeLimit, isZipBytes } from './slddFormat.js';
 import { annotateDataRows, annotateModelRows } from './usageGraph.js';
+import { subscribeUsageRepost } from './usageRepostWatch.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { capRows, rowCapBanner } from './rowCap.js';
 import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
@@ -203,7 +204,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
 
   // Handle a Usage-column link click: open the referenced file and select the
   // target row there (wired in extension.ts to the shared navigate handler).
-  public onNavigate?: (target: string) => void;
+  public onNavigate?: (target: string, referrer?: string) => void;
 
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -509,7 +510,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
         // Relay the selection to the Property Inspector via the wired callback.
         this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
       } else if (msg?.type === 'navigate') {
-        if (typeof msg.target === 'string') this.onNavigate?.(msg.target);
+        if (typeof msg.target === 'string') this.onNavigate?.(msg.target, uriString);
       } else if (msg?.type === 'requestMatrix') {
         // A Variable Editor panel is opening: send its cells. One shared answer for
         // all four webview hosts — see matrixRequest.ts. Read-only is no reason to
@@ -558,6 +559,11 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     };
     const changeSub = watcher.onDidChange(onDiskChange);
     const createSub = watcher.onDidCreate(onDiskChange);
+    // A model created or deleted elsewhere in the workspace can add or remove a block that uses
+    // one of THIS file's variables, which its own watcher above never hears of — so a data view
+    // reposts for that too (usageRepostWatch.ts). A model's own tab and a project page cannot be
+    // changed by another model, and do not subscribe.
+    const usageSub = fillUsage === annotateDataRows ? subscribeUsageRepost(() => void post()) : undefined;
 
     webview.html = this.getHtml(webview, distRoot, name);
     webviewPanel.onDidDispose(() => {
@@ -565,6 +571,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       watcher.dispose();
       changeSub.dispose();
       createSub.dispose();
+      usageSub?.dispose();
       navSub.dispose();
     });
   }
