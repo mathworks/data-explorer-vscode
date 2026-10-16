@@ -1,6 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
-// Pure (vscode-free) grammar for Usage-column link targets, split out from
-// navigate.ts so it can be unit-tested under vitest.
+// Pure (vscode-free) grammar for Usage-column link targets, and the rule that turns a
+// link's source into a document, split out from navigate.ts so both can be unit-tested
+// under vitest.
 //
 //   blocks:<name>@<source>     data row -> a block that uses the variable
 //   workspace:<name>@<source>  block row -> a model-workspace param
@@ -36,4 +37,40 @@ export function parseNavTarget(target: string): { name: string; source: string }
 export function parseFileTarget(target: string): string | null {
   if (!target || target.includes('@')) return null;
   return target;
+}
+
+// The two lookups a bare name can go through. `scoped` is the tree's own group-first rule
+// (SectionsTreeProvider.resolveReference): the copy in the referrer's project or folder
+// wins. `firstMatch` is a plain workspace search, for when there is no referrer to scope by
+// or the tree's graph has no answer.
+export type ScopedResolve = (ref: string, referrer: string) => Promise<string | undefined>;
+export interface NavSourceLookups {
+  scoped?: ScopedResolve;
+  firstMatch: (ref: string) => Promise<string | undefined>;
+}
+
+// The uriString of the document a link's source names, or undefined when none does.
+//
+// `source` has already been read back through srcIdToUriString (navigate.ts), so a full uri
+// — which every Usage cell the host writes carries — names its document outright. A bare
+// name (a Model Reference or External Data file as Simulink recorded it, or the dictionary
+// in core's own block -> parameter link when the Usage fill failed) is resolved as the tree
+// resolves it, preferring the referrer's own project or folder. A scoped lookup that misses
+// or fails falls back to the first workspace match, so a link that opened something before
+// still opens something.
+export async function resolveNavSource(
+  source: string,
+  referrer: string | undefined,
+  lookups: NavSourceLookups,
+): Promise<string | undefined> {
+  if (source.includes('://')) return source;
+  if (referrer && lookups.scoped) {
+    try {
+      const scoped = await lookups.scoped(source, referrer);
+      if (scoped) return scoped;
+    } catch {
+      // The tree's graph could not be built; the plain search below still answers.
+    }
+  }
+  return lookups.firstMatch(source);
 }

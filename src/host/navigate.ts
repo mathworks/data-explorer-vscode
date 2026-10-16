@@ -9,12 +9,16 @@
 //   blocks:<blockName>@<source>     data row -> a block that uses the variable
 //   workspace:<paramName>@<source>  block row -> a model-workspace param
 //   <paramName>@<source>            block row -> a dictionary/MAT variable
-// <source> is a full uriString when the emitter knows it (data->block links,
-// which carry the model uri), or a bare basename when it comes from the vendored
-// component (block->param links carry only the dictionary name); the latter is
-// resolved against the workspace.
+// <source> is a full uriString in every Usage cell, because the host writes those
+// from the workspace graph (usageCells.ts), whose sources are keyed by uri. A bare
+// basename still arrives in two places: a Model Reference or External Data link,
+// which is a file name as Simulink recorded it (see handleNavigate), and core's own
+// block -> parameter link `<param>@<dictionary name>`, which the host replaces with
+// the graph's and which survives only when that fill failed (rowBuilder.ts). A bare
+// name is resolved as the tree resolves it, preferring the referrer's own project or
+// folder (navTarget.resolveNavSource).
 import * as vscode from 'vscode';
-import { parseNavTarget, parseFileTarget } from './navTarget.js';
+import { parseNavTarget, parseFileTarget, resolveNavSource, type ScopedResolve } from './navTarget.js';
 import { srcIdToUriString } from '../common/srcId.js';
 
 export { parseNavTarget, parseFileTarget };
@@ -73,43 +77,55 @@ export function wireNavigateSelect(
   });
 }
 
-// A full uriString parses directly; a bare basename is looked up in the
-// workspace (first match wins).
+// A full uriString parses directly; a bare basename is resolved by `scoped` (the tree's
+// group-first rule) when the click names its referrer, else by the first workspace match.
 //
 // `source` is a core srcId, so it can also arrive in a provider's own spelling of one:
 // BinarySlddEditorProvider registers `binedit:file:///…`. That still contains '://' and
 // Uri.parse still accepts it — as scheme `binedit` with the whole `file:///…` as its path,
 // naming no file at all, which the caller then opens as an empty tab. srcIdToUriString is
 // what makes every provider's srcId read back as the document it names.
-async function resolveSource(srcId: string): Promise<vscode.Uri | undefined> {
-  const source = srcIdToUriString(srcId);
-  if (source.includes('://')) {
-    try {
-      return vscode.Uri.parse(source);
-    } catch {
-      return undefined;
-    }
+async function resolveSource(
+  srcId: string,
+  referrer: string | undefined,
+  scoped: ScopedResolve | undefined,
+): Promise<vscode.Uri | undefined> {
+  const uriString = await resolveNavSource(srcIdToUriString(srcId), referrer, {
+    scoped,
+    firstMatch: async (name) => (await vscode.workspace.findFiles('**/' + name, undefined, 1))[0]?.toString(),
+  });
+  if (uriString === undefined) return undefined;
+  try {
+    return vscode.Uri.parse(uriString);
+  } catch {
+    return undefined;
   }
-  const matches = await vscode.workspace.findFiles('**/' + source, undefined, 1);
-  return matches[0];
 }
 
 // Handle a link click. Two grammars land here:
 //  - Usage-cell links carry `name@source`: open the source file (via `open`, the
 //    host's content-aware editor router) and select the referenced row there.
 //  - Model Reference / External Data links carry a bare filename: just open that
-//    file, resolved by basename against the workspace. There is no row to select.
-export async function handleNavigate(target: string, open: (uri: vscode.Uri) => Promise<void>): Promise<void> {
+//    file. There is no row to select.
+// `referrer` is the uriString of the document the link was clicked in; with `scoped` (the
+// tree's SectionsTreeProvider.resolveReference), it is what picks between two same-named
+// files in the workspace.
+export async function handleNavigate(
+  target: string,
+  open: (uri: vscode.Uri) => Promise<void>,
+  referrer?: string,
+  scoped?: ScopedResolve,
+): Promise<void> {
   const fileTarget = parseFileTarget(target);
   if (fileTarget) {
-    const uri = await resolveSource(fileTarget);
+    const uri = await resolveSource(fileTarget, referrer, scoped);
     if (!uri) return;
     await open(uri);
     return;
   }
   const parsed = parseNavTarget(target);
   if (!parsed) return;
-  const uri = await resolveSource(parsed.source);
+  const uri = await resolveSource(parsed.source, referrer, scoped);
   if (!uri) return;
   requestSelect(uri.toString(), parsed.name);
   await open(uri);

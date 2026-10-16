@@ -20,9 +20,12 @@ export class PropertiesViewProvider implements vscode.WebviewViewProvider {
   // anything other than what is on screen is refused, so this cannot answer about a
   // node the user is not looking at.
   private shown: any = null;
+  // The document `shown` came from, handed to onNavigate as the click's referrer: a bare
+  // file name in a link resolves to the copy in that document's own project or folder.
+  private shownFrom: string | undefined;
 
   /** A cross-reference was clicked in the inspector; resolve it as a table link. */
-  public onNavigate: ((target: string) => void) | null = null;
+  public onNavigate: ((target: string, referrer?: string) => void) | null = null;
 
   constructor(private readonly extensionUri: vscode.Uri) {}
 
@@ -40,7 +43,7 @@ export class PropertiesViewProvider implements vscode.WebviewViewProvider {
       } else if (msg?.type === 'navigate') {
         // Answered by the same closure the three table providers use, so a Data Type link
         // behaves identically whichever pane it was clicked in.
-        this.onNavigate?.(msg.target);
+        this.onNavigate?.(msg.target, this.shownFrom);
       } else if (msg?.type === 'requestMatrix') {
         this.answerMatrix(view.webview, msg.nodeId);
       }
@@ -49,13 +52,15 @@ export class PropertiesViewProvider implements vscode.WebviewViewProvider {
       this.view = null;
       this.ready = false;
       this.shown = null;
+      this.shownFrom = undefined;
     });
     view.webview.html = this.getHtml(view.webview, distRoot);
   }
 
-  showNode(node: any): void {
+  showNode(node: any, fromUri?: string): void {
     const groups = buildPropertyGroups(node);
     this.shown = node;
+    this.shownFrom = fromUri;
     if (this.view && this.ready) {
       this.view.webview.postMessage({ type: 'showProps', groups });
     } else {
@@ -65,6 +70,7 @@ export class PropertiesViewProvider implements vscode.WebviewViewProvider {
 
   clear(): void {
     this.shown = null;
+    this.shownFrom = undefined;
     if (this.view && this.ready) {
       this.view.webview.postMessage({ type: 'empty' });
     } else {

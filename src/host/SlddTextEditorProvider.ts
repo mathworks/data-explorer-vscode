@@ -155,7 +155,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
   // Handle a Usage-column link click: open the referenced file and select the
   // target row there (wired in extension.ts to the shared navigate handler).
-  public onNavigate?: (target: string) => void;
+  public onNavigate?: (target: string, referrer?: string) => void;
 
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -1966,7 +1966,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       } else if (msg?.type === 'locateInText') {
         void applyLocateInText(msg);
       } else if (msg?.type === 'navigate') {
-        if (typeof msg.target === 'string') this.onNavigate?.(msg.target);
+        if (typeof msg.target === 'string') this.onNavigate?.(msg.target, uriString);
       } else if (msg?.type === 'requestMatrix') {
         // A Variable Editor panel is opening: send its cells. One shared answer for
         // all four webview hosts — see matrixRequest.ts.

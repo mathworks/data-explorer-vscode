@@ -477,7 +477,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   // Relay selection to the Property Inspector (wired in extension.ts).
   public onSelect?: (uriString: string, rowIds: string[]) => void;
   // Handle a Usage-column link click (wired in extension.ts).
-  public onNavigate?: (target: string) => void;
+  public onNavigate?: (target: string, referrer?: string) => void;
 
   private readonly _onDidChangeCustomDocument =
     new vscode.EventEmitter<vscode.CustomDocumentEditEvent<BinarySlddDocument>>();
@@ -1480,7 +1480,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       else if (msg?.type === 'dragEnd') applyDragEnd();
       else if (msg?.type === 'drop') void applyDrop(msg);
       else if (msg?.type === 'navigate') {
-        if (typeof msg.target === 'string') this.onNavigate?.(msg.target);
+        if (typeof msg.target === 'string') this.onNavigate?.(msg.target, uriString);
       } else if (msg?.type === 'requestMatrix') {
         // A Variable Editor panel is opening: send its cells. One shared answer for
         // all four webview hosts — see matrixRequest.ts.
