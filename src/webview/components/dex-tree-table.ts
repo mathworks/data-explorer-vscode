@@ -1370,8 +1370,15 @@ export class DexTreeTable extends LitElement {
         font-size: 0.9em;
       }
 
+      /* The theme's own colour for a modified file, and the same one the sections tree's
+         Modified badge uses (DECORATIONS.modified in src/host/health.ts), so "modified" is
+         one colour on both surfaces. The literal it replaces failed AA on dark and
+         high-contrast themes (3.54:1 on Dark Modern, 4.18:1 on HC Black). The fallback is
+         reached only where the colour is unregistered: the built-in git extension
+         contributes it, so it is absent when that extension is disabled and in VS Code for
+         the Web, which does not load it. statusModifiedColour.test.ts pins both. */
       .status-modified {
-        color: #b45309;
+        color: var(--vscode-gitDecoration-modifiedResourceForeground, #b45309);
         font-weight: 500;
       }
 
