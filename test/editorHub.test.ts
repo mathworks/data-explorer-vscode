@@ -83,12 +83,12 @@ describe('editorHub — drag broadcast', () => {
     const wv = fakeWebview();
     registerWebview(wv as any, () => {});
     try {
-      setDrag('mem://a', 'design', 'Design Data', false, [
-        { payload: { name: 'X' }, className: 'Simulink.Parameter', arrayClass: '', kind: 'Parameter', isMatlabVariable: true, isScalarNumeric: true },
+      setDrag('mem://a', [
+        { payload: { name: 'X' }, sourceSection: 'design', className: 'Simulink.Parameter', arrayClass: '', kind: 'Parameter', isMatlabVariable: true, isScalarNumeric: true },
       ]);
       broadcastDragState();
       expect(wv.posted.at(-1)).toMatchObject({ type: 'dragState' });
-      expect(wv.posted.at(-1).descriptor).toMatchObject({ docUri: 'mem://a', sectionName: 'design' });
+      expect(wv.posted.at(-1).descriptor).toMatchObject({ docUri: 'mem://a', items: [{ sectionName: 'design' }] });
 
       clearDrag();
       broadcastDragState();

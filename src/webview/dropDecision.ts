@@ -34,13 +34,15 @@ export interface DragItem {
   // Constant: a MATLAB variable may only become a Constant (drop into derived/
   // Architectural Data) when its value is scalar and numeric.
   isScalarNumeric: boolean;
+  // The section the row was dragged FROM: the drag register's per-item
+  // sourceSection. Only the no-op check reads it, and an item without one is never
+  // part of a no-op (the host completes that drop as a delete and paste).
+  sectionName?: string;
 }
 
+// The section is per item, not per drag: a multi-row drag can span sections.
 export interface DragSource {
   docUri: string;
-  sectionName: string;
-  sectionLabel: string;
-  isDerived: boolean;
   items: DragItem[];
 }
 
@@ -113,10 +115,16 @@ export function dropDecision(source: DragSource, target: DropTarget, mode: DragM
   const items = source.items ?? [];
   if (items.length === 0) return reject('Nothing to drop');
 
-  // Same document + same section + move = reorder within one section, which we
-  // treat as a no-op (a move here would delete and re-add the same entry). A
-  // COPY into the same section is a genuine duplicate, so it is allowed.
-  const sameSection = source.docUri === target.docUri && source.sectionName === target.sectionName;
+  // Same document + every item already in the target section + move = reorder
+  // within one section, which we treat as a no-op (a move here would delete and
+  // re-add the same entries). This is the paste rule, asked of the same per-item
+  // sections: a cut pasted into the section every item came from does nothing. A
+  // drag whose rows span sections is NOT a no-op, even onto one of its own
+  // sections: the rows from elsewhere really do move, and the host deletes and
+  // re-adds the rest under the names they already had, as a cut and paste does.
+  // A COPY into the same section is a genuine duplicate, so it is allowed.
+  const sameSection =
+    source.docUri === target.docUri && items.every((it) => it.sectionName === target.sectionName);
   if (sameSection && mode === 'move') {
     return { canDrop: false, cursor: 'no-drop', tooltip: '', noop: true };
   }

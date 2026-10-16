@@ -64,8 +64,9 @@ describe('dropFactsOf', () => {
   it('produces exactly the facts buildDragSnapshot puts in the register', () => {
     const h = harness('test://facts-parity.sldd');
     const rowId = h.id('arch', 'DataInterface');
-    const { payload, ...facts } = buildDragSnapshot([rowId], h.find).items[0];
+    const { payload, sourceSection, ...facts } = buildDragSnapshot([rowId], h.find).items[0];
     expect(payload).toBeTruthy();
+    expect(sourceSection).toBe('arch');
     expect(facts).toEqual(dropFactsOf(h.find(rowId)));
   });
 });

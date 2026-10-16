@@ -1760,7 +1760,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         if (snap.items.length === 0) {
           clearDrag();
         } else {
-          setDrag(uriString, snap.sourceSection, snap.sourceSectionLabel, snap.sourceIsDerived, snap.items);
+          setDrag(uriString, snap.items);
         }
         broadcastDragState();
       } catch (err) {

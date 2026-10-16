@@ -42,11 +42,12 @@ const CONFIG_ALLOWED = [
   'Simulink.VariantConfigurations',
 ];
 
+// Each item carries the section it was dragged from, as the drag descriptor's do.
 function designSource(items: any[], docUri = 'a.sldd') {
-  return { docUri, sectionName: 'design', sectionLabel: 'Design Data', isDerived: false, items };
+  return { docUri, items: items.map((it) => ({ ...it, sectionName: 'design' })) };
 }
 function archSource(items: any[], docUri = 'a.sldd') {
-  return { docUri, sectionName: 'arch', sectionLabel: 'Architectural Data', isDerived: true, items };
+  return { docUri, items: items.map((it) => ({ ...it, sectionName: 'arch' })) };
 }
 function designTarget(docUri = 'a.sldd') {
   return {
@@ -290,7 +291,7 @@ describe('dropDecision — empty payload', () => {
     // where a throw would leave the cursor stuck mid-drag with no way to cancel;
     // "nothing to drop" is the answer that keeps the drag cancellable.
     const d = dropDecision(
-      { docUri: 'b.sldd', sectionName: 'design', sectionLabel: 'Design Data', isDerived: false } as any,
+      { docUri: 'b.sldd' } as any,
       archTarget('a.sldd'),
       'copy',
     );

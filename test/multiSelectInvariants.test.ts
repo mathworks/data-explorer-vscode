@@ -12,7 +12,7 @@
 // The rows are the REAL rows (rowBuilder.buildRows), so the capability flags and the
 // parent chain are the ones the table actually gets — a synthetic row is exactly where a
 // parity test stops proving anything.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
@@ -20,6 +20,7 @@ import { buildRows } from '../src/host/rowBuilder.js';
 import { sectionRules } from '../src/host/sectionRules.js';
 import { dropFactsOf } from '../src/host/dropFacts.js';
 import { buildClipboardSnapshot, buildDragSnapshot, pasteEntry } from '../src/host/structuralEdit.js';
+import { setDrag, clearDrag, dragDescriptor } from '../src/host/dragState.js';
 import { planDeletion } from 'data-explorer-core';
 import { resolveOperands } from '../src/webview/operands.js';
 import { buildContextMenuItems, type MenuRow } from '../src/webview/menuItems.js';
@@ -192,7 +193,7 @@ describe('a Paste is offered exactly where a drop would be allowed', () => {
         });
         const paste = items.find((i) => i.id === 'paste')!;
         const decision = dropDecision(
-          { docUri: 'test://elsewhere.sldd', sectionName: 'arch', sectionLabel: 'Architectural Data', isDerived: true, items: [facts] },
+          { docUri: 'test://elsewhere.sldd', items: [{ ...facts, sectionName: 'arch' }] },
           { docUri: 'test://invariants.sldd', ...rule },
           'copy',
         );
@@ -284,18 +285,96 @@ describe('the drag predictor agrees with the host it predicts, per entry and sec
 });
 
 describe('a multi-row gesture keeps each source’s own section', () => {
-  it('the clipboard records one per item; the drag register still cannot', () => {
+  it('the clipboard and the drag register both record one per item', () => {
     const sel = [D('AliasType'), E('DataInterface')];
     expect(clipKeys(sel)).toEqual(['design/AliasType', 'arch/DataInterface']);
 
-    // The gap left in place on purpose (spec §11): buildDragSnapshot keeps ONE
-    // sourceSection, taken from the last contributing row, while asserting in a comment
-    // that a multi-drag is within one section. That single value feeds dropDecision's
-    // same-section-move no-op check, so a cross-section multi-DRAG can be refused as a
-    // no-op where the same multi-CUT is not. Pinned as it stands so that whoever fixes
-    // the drag path has to come here and say so.
-    expect(buildDragSnapshot(sel, h.find).sourceSection).toBe('arch');
+    // V-002. buildDragSnapshot used to keep ONE sourceSection, taken from the last
+    // contributing row, while a comment claimed a multi-drag stays within one section.
+    // Nothing enforced that, and the single value fed dropDecision's same-section-move
+    // no-op check, so a cross-section multi-DRAG was refused as a no-op where the same
+    // multi-CUT is not. The register now carries the section per item, as the clipboard
+    // does, and the two are asserted to agree.
+    const dragSections = buildDragSnapshot(sel, h.find).items.map((i: any) => i.sourceSection);
+    expect(dragSections).toEqual(['design', 'arch']);
+    expect(dragSections).toEqual(buildClipboardSnapshot(sel, h.find).map((i) => i.sourceSection));
   });
+});
+
+// What applyDragStart does in both providers: snapshot the rows into the register. The
+// descriptor that comes back out is the one the hub broadcasts to every table.
+const URI = 'test://invariants.sldd';
+function descriptorOf(sel: string[]) {
+  setDrag(URI, buildDragSnapshot(sel, h.find).items);
+  return dragDescriptor()!;
+}
+
+describe('a drag across two sections is a move, not a no-op (V-002)', () => {
+  // The whole host-to-webview path, not the predictor alone: the rows go through the
+  // snapshot both providers take, into the register, out as the descriptor the hub
+  // broadcasts, and that descriptor is handed to dropDecision as it is — which is what
+  // table-main's predictDrop does with it.
+  const rule = (name: string) => ({ docUri: URI, ...h.rules.find((r) => r.sectionName === name)! });
+  afterEach(() => clearDrag());
+
+  it('design/AliasType + arch/DataInterface onto arch: allowed, and not refused as a no-op', () => {
+    // AliasType really does move. DataInterface is deleted and re-added under its own name,
+    // which is what the same cut and paste does (see the paste rule below).
+    const d = dropDecision(descriptorOf([D('AliasType'), E('DataInterface')]), rule('arch'), 'move');
+    expect(d.noop).toBe(false);
+    expect(d.canDrop).toBe(true);
+    expect(d.cursor).toBe('move');
+  });
+
+  it('the same pair onto design: allowed', () => {
+    const d = dropDecision(descriptorOf([D('AliasType'), E('DataInterface')]), rule('design'), 'move');
+    expect(d.noop).toBe(false);
+    expect(d.canDrop).toBe(true);
+  });
+
+  it('two rows of one section dropped back onto it are still the no-op', () => {
+    const d = dropDecision(descriptorOf([E('DataInterface'), E('StructType')]), rule('arch'), 'move');
+    expect(d.noop).toBe(true);
+    expect(d.canDrop).toBe(false);
+  });
+});
+
+describe('a drag is a no-op exactly where the same cut and paste is (V-002)', () => {
+  // The paste side's rule, as both providers spell it: a cut pasted into the section EVERY
+  // item came from does nothing. It is restated here as the oracle, so the providers are
+  // read to check that the restatement is still what they run.
+  const PASTE_RULE = 'isCut && sameDoc && clip.items.every((it) => it.sourceSection === section.name)';
+  for (const provider of ['SlddTextEditorProvider', 'BinarySlddEditorProvider']) {
+    it(`${provider} still applies that rule to a cut`, () => {
+      const text = blankCommentsAndKeepLines(
+        readFileSync(fileURLToPath(new URL(`../src/host/${provider}.ts`, import.meta.url)), 'utf8'),
+      );
+      expect(text).toContain(PASTE_RULE);
+    });
+  }
+
+  const CASES: { name: string; sel: string[] }[] = [
+    { name: 'one design entry', sel: [D('AliasType')] },
+    { name: 'one arch entry', sel: [E('DataInterface')] },
+    { name: 'two arch entries', sel: [E('DataInterface'), E('StructType')] },
+    { name: 'design then arch', sel: [D('AliasType'), E('DataInterface')] },
+    { name: 'arch then design', sel: [E('DataInterface'), D('AliasType')] },
+    { name: 'everything (Ctrl+A)', sel: h.rows.map((r) => r.ID) },
+  ];
+  afterEach(() => clearDrag());
+
+  for (const { name, sel } of CASES) {
+    for (const rule of h.rules) {
+      it(`${name} onto ${rule.sectionName}`, () => {
+        const clip = buildClipboardSnapshot(sel, h.find);
+        expect(clip.length, 'the selection names entries').toBeGreaterThan(0);
+        const pasteIsNoop = clip.every((it) => it.sourceSection === rule.sectionName);
+
+        const drop = dropDecision(descriptorOf(sel), { docUri: URI, ...rule }, 'move');
+        expect(drop.noop, `paste no-op: ${pasteIsNoop}`).toBe(pasteIsNoop);
+      });
+    }
+  }
 });
 
 describe('the keyboard cannot disagree with the menu', () => {

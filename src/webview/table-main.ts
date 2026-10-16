@@ -16,7 +16,7 @@ import {
   mergeChildRows,
 } from './rowUpdates.js';
 import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from './menuItems.js';
-import { dropDecision, type DragMode, type DropTarget, type DragSource } from './dropDecision.js';
+import { dropDecision, type DragMode, type DropTarget } from './dropDecision.js';
 import { sectionRowIdOf } from './operands.js';
 import { linkRoute } from './linkRoute.js';
 import type { ContextMenuItem } from './components/dex-context-menu.js';
@@ -142,13 +142,6 @@ function predictDrop(
   if (!dragDescriptor) return null;
   const rule = sectionRuleForRow(targetRowId);
   if (!rule) return null;
-  const source: DragSource = {
-    docUri: dragDescriptor.docUri,
-    sectionName: dragDescriptor.sectionName,
-    sectionLabel: dragDescriptor.sectionLabel,
-    isDerived: dragDescriptor.isDerived,
-    items: dragDescriptor.items,
-  };
   const target: DropTarget = {
     docUri,
     sectionName: rule.sectionName,
@@ -156,7 +149,8 @@ function predictDrop(
     isDerived: rule.isDerived,
     allowedTypes: rule.allowedTypes,
   };
-  return dropDecision(source, target, mode);
+  // The descriptor IS a DragSource (the source document, and each item's own section).
+  return dropDecision(dragDescriptor, target, mode);
 }
 
 // The rows the host asked us to select once they exist in the table. Set on a rename (the
