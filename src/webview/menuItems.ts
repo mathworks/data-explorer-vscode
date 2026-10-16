@@ -2,6 +2,7 @@
 import type { ContextMenuItem } from './components/dex-context-menu.js';
 import { rejectReason, type DragItem, type DropTarget } from './dropDecision.js';
 import { resolveOperands, type OperandRow } from './operands.js';
+import { isSectionRowId } from '../common/sectionRowId.js';
 
 // The subset of row data the menu builder needs. The host attaches the capability
 // flags in rowBuilder.buildEntryRows; section rows lack them (all falsy), and are
@@ -181,9 +182,17 @@ export function buildContextMenuItems(input: MenuInput): ContextMenuItem[] {
     if (!clipboard.canPaste || count === 0) {
       return { ...base, disabled: true, reason: 'Nothing to paste' };
     }
-    // More than one section among the operands and the target would be a guess. The
-    // anchor cannot resolve it: the ambiguity is in what the user selected.
-    if (ops.sections.length > 1) {
+    // Spec §5: every selected row must resolve to one section, or the target is a guess.
+    // A header is a row that resolves to its own section, so it counts here although it is
+    // no operand: two headers are two sections. Its id is its section row id, the same
+    // value ops.sections holds. A header id the table no longer holds is skipped, as
+    // resolveOperands skips any stale row. With one section the anchor cannot matter, so
+    // the menu and the keyboard, which anchor differently, paste into the same section.
+    const sections = new Set(ops.sections);
+    for (const id of selectedRowIds) {
+      if (typeof id === 'string' && isSectionRowId(id) && byId.has(id)) sections.add(id);
+    }
+    if (sections.size > 1) {
       return { ...base, disabled: true, reason: 'Select rows in one section to paste' };
     }
     if (!pasteTarget) return { ...base, disabled: true };

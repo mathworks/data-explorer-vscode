@@ -497,3 +497,97 @@ describe('an abandoned editor never writes to the newly opened cell', () => {
     table.remove();
   });
 });
+
+// A repaint assigns new `rows` (and, for a whole one, new `columns`) under an editor
+// the user may have open: a save, a text-view edit that cannot be synced narrowly, an
+// undo, a clip-mark change. Ruling V-037 (b): the editor is closed only when the cell
+// it edits is gone from the new rows, and kept otherwise. Closed is closed as Escape
+// closes it: nothing is written, and the keyboard goes back to the table, which while
+// an editor is open ignores every key (`_onTableKeyDown` returns at once). Kept is kept
+// with what the user typed, because a background repaint must not throw typing away.
+describe('a repaint while an editor is open', () => {
+  const press = (table: DexTreeTable, key: string): void => {
+    const e = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+    ((table as any)._container as HTMLElement).dispatchEvent(e);
+  };
+  // The editor takes focus once its render lands (`_onCellDblClick`), as it does for the
+  // user. Wait for that, so a test that asks where focus went after a repaint starts from
+  // the state the user is in: typing into the editor.
+  async function openEditor(table: DexTreeTable, rowId: string, columnId: string): Promise<HTMLInputElement> {
+    dblClickCell(table, rowId, columnId);
+    await settle(table);
+    const input = editor(table);
+    expect(table.shadowRoot!.activeElement).toBe(input);
+    return input;
+  }
+
+  it('closes the editor, writes nothing and gives the keyboard back when its row is gone', async () => {
+    const rowA = makeRow('a', 'A', { Value: { text: 'v1', editable: true } });
+    const rowB = makeRow('b', 'B', { Value: { text: 'v2', editable: true } });
+    const rowC = makeRow('c', 'C', { Value: { text: 'v3', editable: true } });
+    const table = await mount([rowA, rowB, rowC]);
+    table.selectedRowIds = ['a'];
+    await table.updateComplete;
+    const edits = recordEdits(table);
+    const input = await openEditor(table, 'b', 'Value');
+    input.value = 'half-typed';
+
+    // b is deleted elsewhere (the text view, an undo) and the repaint drops it.
+    table.rows = [rowA, rowC];
+    await settle(table);
+
+    expect((table as any)._editingCell).toBeNull();
+    expect(editor(table)).toBeNull();
+    // Not committed: b no longer exists, and the user never pressed Enter.
+    expect(edits).toEqual([]);
+    // Focus is on the table again, as after Escape, rather than on nothing.
+    expect(table.shadowRoot!.activeElement).toBe((table as any)._container);
+    // And the table answers the keyboard: a stale editor made it ignore every key.
+    press(table, 'ArrowDown');
+    expect(table.selectedRowIds).toEqual(['c']);
+    table.remove();
+  });
+
+  it('closes the editor when its column is gone from the new columns', async () => {
+    const table = await mount([makeRow('a', 'A', { Value: { text: 'v1', editable: true }, Description: 'd1' })]);
+    table.selectedRowIds = ['a'];
+    await table.updateComplete;
+    const edits = recordEdits(table);
+    const input = await openEditor(table, 'a', 'Description');
+    input.value = 'half-typed';
+
+    table.columns = ['Name', 'Value'];
+    await settle(table);
+
+    expect((table as any)._editingCell).toBeNull();
+    expect(editor(table)).toBeNull();
+    expect(edits).toEqual([]);
+    expect(table.shadowRoot!.activeElement).toBe((table as any)._container);
+    table.remove();
+  });
+
+  it('keeps the editor and what was typed when its row is still there', async () => {
+    // A save repaints every row as a fresh object with the same ids. The editor stays,
+    // with the typed text, and Enter commits it as it would have before the repaint.
+    const rows = [
+      makeRow('a', 'A', { Value: { text: 'v1', editable: true } }),
+      makeRow('b', 'B', { Value: { text: 'v2', editable: true } }),
+    ];
+    const table = await mount(rows);
+    const edits = recordEdits(table);
+    const input = await openEditor(table, 'a', 'Value');
+    input.value = 'typed';
+
+    table.rows = rows.map((r) => ({ ...r }));
+    table.columns = [...HOST_COLUMNS];
+    await settle(table);
+
+    expect((table as any)._editingCell).toMatchObject({ rowId: 'a', columnId: 'Value' });
+    expect(editor(table)).toBe(input);
+    expect(editor(table).value).toBe('typed');
+    expect(table.shadowRoot!.activeElement).toBe(input);
+    editor(table).dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    expect(edits).toEqual([{ rowId: 'a', columnId: 'Value', oldValue: 'v1', newValue: 'typed' }]);
+    table.remove();
+  });
+});
