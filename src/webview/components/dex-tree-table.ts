@@ -187,6 +187,11 @@ const DEFAULT_COLUMN_ORDER = [
   'lastModifiedBy',
 ];
 const DEFAULT_HIDDEN_COLUMNS = ['Kind', 'Class', 'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit', 'storageClass', 'headerFile', 'alignment', 'lastModified', 'lastModifiedBy'];
+// The built-in columns (DEFAULT_COLUMN_ORDER) as they were when the column state was
+// last saved. A saved hidden set says nothing about a column that did not exist yet, so
+// on load a default-hidden column missing from this record gets its default, hidden.
+// See _loadPersistedState.
+const KNOWN_COLUMNS_KEY = 'dex-known-columns';
 
 // The columns where an empty read-only cell means "this property does not exist for this
 // kind of object" rather than "this property is unset". Only these get the not-applicable
@@ -1650,7 +1655,26 @@ export class DexTreeTable extends LitElement {
       if (hiddenJson) {
         const arr = JSON.parse(hiddenJson) as string[];
         if (Array.isArray(arr)) {
-          this._hiddenColumns = new Set(arr.filter((c) => c !== 'Name'));
+          const hidden = new Set(arr.filter((c) => c !== 'Name'));
+          // A default-hidden column that shipped after this set was saved starts hidden.
+          // Columns the set already knew keep what the user chose. This is forward-only,
+          // by the 2026-10-16 ruling (V-077): a set saved before the known-columns record
+          // existed is left exactly as it is, because a current user may have chosen to
+          // keep the columns that leaked into view then. Reset columns is how such a user
+          // gets today's defaults back.
+          const known = this._readKnownColumns();
+          if (known) {
+            for (const c of DEFAULT_HIDDEN_COLUMNS) {
+              if (!known.has(c)) hidden.add(c);
+            }
+          }
+          this._hiddenColumns = hidden;
+          // Record today's columns, so the next load is the same and the next column
+          // added is caught. That includes a set saved before the record existed, which
+          // otherwise would stay unrecorded until the user next touched the column menu.
+          if (!known || known.size !== DEFAULT_COLUMN_ORDER.length || !DEFAULT_COLUMN_ORDER.every((c) => known.has(c))) {
+            this._persistHidden();
+          }
         }
       }
     } catch {
@@ -1658,12 +1682,28 @@ export class DexTreeTable extends LitElement {
     }
   }
 
+  // The built-in columns the saved column state was saved against, or null when there is
+  // no record (state saved before it existed) or the record cannot be read. Its own
+  // try/catch, so an unreadable record is treated as absent rather than discarding the
+  // saved hidden set with it.
+  private _readKnownColumns(): Set<string> | null {
+    try {
+      const arr = JSON.parse(localStorage.getItem(KNOWN_COLUMNS_KEY) ?? 'null') as unknown;
+      return Array.isArray(arr) ? new Set(arr.filter((c): c is string => typeof c === 'string')) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Both writers also record the built-in columns this state was saved against.
   private _persistOrder(): void {
     localStorage.setItem('dex-column-order', JSON.stringify(this._columnOrder));
+    localStorage.setItem(KNOWN_COLUMNS_KEY, JSON.stringify(DEFAULT_COLUMN_ORDER));
   }
 
   private _persistHidden(): void {
     localStorage.setItem('dex-hidden-columns', JSON.stringify([...this._hiddenColumns]));
+    localStorage.setItem(KNOWN_COLUMNS_KEY, JSON.stringify(DEFAULT_COLUMN_ORDER));
   }
 
   // The set of columns this document supports. When the host provides `columns`

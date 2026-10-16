@@ -159,6 +159,125 @@ describe('persisted state is restored', () => {
   });
 });
 
+// Ruling V-077 (2026-10-16), option (b), forward-only. A saved hidden set records which
+// built-in columns existed when it was saved ('dex-known-columns'). A default-hidden
+// column that ships after that save starts hidden instead of leaking into view. Columns
+// the saved set already knew keep the user's choice, and a set saved before the key
+// existed is left as it is (the test above is that case, and stays as it was).
+describe('a column added after the hidden set was saved gets its default (V-077)', () => {
+  // The built-in universe and defaults, read off a fresh table rather than retyped.
+  const universe = (): string[] => [...((new DexTreeTable() as any)._columnOrder as string[])];
+  const defaultHidden = (): string[] => [...((new DexTreeTable() as any)._hiddenColumns as Set<string>)];
+  const savedHidden = (): string[] => JSON.parse(localStorage.getItem('dex-hidden-columns')!) as string[];
+  const savedKnown = (): string | null => localStorage.getItem('dex-known-columns');
+
+  function loaded(): DexTreeTable {
+    const table = makeTable();
+    (table as any)._loadPersistedState();
+    return table;
+  }
+
+  // Storage as a user left it before lastModifiedBy shipped, with every column shown.
+  function savedBeforeLastModifiedBy(): void {
+    localStorage.setItem('dex-hidden-columns', JSON.stringify([]));
+    localStorage.setItem('dex-known-columns', JSON.stringify(universe().filter((c) => c !== 'lastModifiedBy')));
+  }
+
+  it('guard: every default-hidden column is in the built-in universe the key records', () => {
+    const all = new Set(universe());
+    expect(defaultHidden().length).toBeGreaterThan(0);
+    for (const c of defaultHidden()) expect(all.has(c), c).toBe(true);
+  });
+
+  it('a default-hidden column the saved set never knew starts hidden, and known columns keep the choice', () => {
+    savedBeforeLastModifiedBy();
+    const cols = visibleCols(loaded());
+    expect(cols).not.toContain('lastModifiedBy');
+    // Default-hidden too, but known when the user chose to show them.
+    expect(cols).toContain('Kind');
+    expect(cols).toContain('Class');
+    expect(cols).toContain('lastModified');
+  });
+
+  it('the load writes the merged set and the current universe back, so the next load agrees', () => {
+    savedBeforeLastModifiedBy();
+    const first = visibleCols(loaded());
+    expect(savedHidden()).toContain('lastModifiedBy');
+    expect(savedKnown()).toBe(JSON.stringify(universe()));
+    expect(visibleCols(loaded())).toEqual(first);
+  });
+
+  it('a column the load just hid stays visible once the user shows it', () => {
+    savedBeforeLastModifiedBy();
+    const table = loaded();
+    expect(visibleCols(table)).not.toContain('lastModifiedBy');
+    (table as any)._toggleColumnVisibility('lastModifiedBy');
+    expect(visibleCols(table)).toContain('lastModifiedBy');
+    expect(visibleCols(loaded())).toContain('lastModifiedBy');
+  });
+
+  it('a set saved before the key existed is left as it is, and is stamped with the universe', () => {
+    localStorage.setItem('dex-column-order', JSON.stringify(['Name', 'Value', 'DataType', 'UsedBy', 'Status']));
+    localStorage.setItem('dex-hidden-columns', JSON.stringify([]));
+    const cols = visibleCols(loaded());
+    expect([...cols].sort()).toEqual([...HOST_COLUMNS].sort());
+    expect(savedHidden()).toEqual([]);
+    expect(savedKnown()).toBe(JSON.stringify(universe()));
+  });
+
+  it('an unreadable known key is treated as absent, and the saved hidden set still applies', () => {
+    for (const bad of ['{not json', '{"a":1}', '"Kind"']) {
+      localStorage.clear();
+      localStorage.setItem('dex-hidden-columns', JSON.stringify(['Value']));
+      localStorage.setItem('dex-known-columns', bad);
+      const cols = visibleCols(loaded());
+      expect(cols, bad).not.toContain('Value');
+      // Absent means legacy: nothing else is hidden on its account.
+      expect(cols, bad).toContain('lastModifiedBy');
+      expect(savedKnown(), bad).toBe(JSON.stringify(universe()));
+    }
+  });
+
+  it('with no saved hidden set, nothing is written on load', () => {
+    localStorage.setItem('dex-column-order', JSON.stringify(['Name', 'Status', 'Value']));
+    loaded();
+    expect(localStorage.getItem('dex-hidden-columns')).toBeNull();
+    expect(savedKnown()).toBeNull();
+  });
+
+  it('a toggle writes the known key', () => {
+    (makeTable() as any)._toggleColumnVisibility('Kind');
+    expect(savedKnown()).toBe(JSON.stringify(universe()));
+  });
+
+  it('a reorder writes the known key', () => {
+    const table = makeTable() as any;
+    table._menuDragCol = 'Status';
+    table._menuDragOverSide = 'top';
+    table._onMenuDrop('Value', { preventDefault() {} } as unknown as DragEvent);
+    expect(savedKnown()).toBe(JSON.stringify(universe()));
+  });
+
+  it('a reset writes the known key', () => {
+    (makeTable() as any)._resetColumns({ stopPropagation() {} } as Event);
+    expect(savedKnown()).toBe(JSON.stringify(universe()));
+  });
+
+  it('a table attached to the page renders no header for the column the saved set never knew', async () => {
+    savedBeforeLastModifiedBy();
+    const table = makeTable();
+    // The header renders only over rows.
+    table.rows = [row('a', {})];
+    document.body.appendChild(table);
+    await table.updateComplete;
+    const labels = Array.from(table.shadowRoot!.querySelectorAll('th .th-label')).map((el) => el.textContent!.trim());
+    table.remove();
+    expect(labels).toContain('Kind');
+    expect(labels).toContain('lastModified');
+    expect(labels).not.toContain('lastModifiedBy');
+  });
+});
+
 describe('schema-driven object-property columns', () => {
   const SCHEMA_COLS = ['dimensions', 'complexity', 'dimensionsMode', 'storageClass', 'headerFile', 'alignment'];
 
