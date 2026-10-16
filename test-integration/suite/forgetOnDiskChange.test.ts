@@ -35,6 +35,7 @@ import { strToU8, zipSync } from 'fflate';
 import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
 import { ensureIndex, invalidate as invalidateIndex, listEntries, reindexFile } from '../../src/host/nameIndex';
 import { forgetUnseenChange, sourceCache } from '../../src/host/sourceReads';
+import { forgetSource } from '../../src/host/sourceCache';
 import { followContentChanges } from '../../src/host/workspaceChange';
 import { SUPPORTED_GLOB } from '../../src/common/fileTypes';
 import { ctx, fakePanel, nameOf, settle, token, waitFor } from './tools/hostHarness';
@@ -148,6 +149,12 @@ suite('a write no stat can see, with no tab open on it', () => {
 
   setup(async () => {
     uri = vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, 'restored-no-tab.slx');
+    // Start each test with nothing held for the file. Both tests use this one uri, and the cache is
+    // shared across them: test 1 leaves a parse of NEW held at a whole-second mtime one second past
+    // its own setup. A setup that runs in that next second writes OLD with that same mtime and the
+    // same size, which is the very write this suite is about, and the index then serves NEW from
+    // the start. `invalidateIndex` clears the index, not the cache under it.
+    forgetSource(sourceCache, uri.toString());
     path = uri.fsPath;
     writeFileSync(path, OLD);
     const start = new Date(Math.floor(statSync(path).mtimeMs / 1000) * 1000);
