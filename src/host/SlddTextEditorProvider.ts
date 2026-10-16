@@ -1,7 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
 import { renderTableWebview } from './webviewHtml.js';
-import { getModel, invalidate, findNode, peekModel } from './SlddModel.js';
+import { getModel, invalidate, findNode, peekModel, openSourceView, releaseSourceView } from './SlddModel.js';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
 import {
   buildEntryRows,
@@ -190,6 +190,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // "Modified" marks are diffed against the content this document was opened with, and a
     // second tab does not re-baseline it to the edited text. See openDocs.
     const docState = openView(uriString);
+    // This view holds the tree it registers under the uri, until it closes (see onDidDispose).
+    openSourceView(uriString);
 
     /**
      * Whether both the tree this document holds and every row on screen were built from the
@@ -2054,6 +2056,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       changeSub.dispose();
       saveSub.dispose();
       navSub.dispose();
+      // Per VIEW, paired with the open above: the count is what decides which close is the
+      // last, and it is shared with the read-only view, which registers under the same uri.
+      // The last one drops the cached tree and the session's source, which nothing released.
+      releaseSourceView(uriString);
       // Only once the LAST tab of this document closes. Both of these are keyed by URI,
       // i.e. document-scoped, so tearing them down when ANY tab closed left a surviving
       // split panel showing no Modified marks and unable to complete a cross-document

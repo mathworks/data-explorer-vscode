@@ -1,7 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
 import { renderProjectWebview, renderTableWebview } from './webviewHtml.js';
-import { getModelForBinaryTab, invalidate } from './SlddModel.js';
+import { getModelForBinaryTab, invalidate, openSourceView, releaseIfUnviewed, releaseSourceView } from './SlddModel.js';
 import { forgetChangedSource, parsedModelForTab } from './sourceReads.js';
 import { COLUMNS, COLUMN_LABELS, COLUMN_GROUPS } from './rowBuilder.js';
 import { rowPlannerFor } from './rowPlanner.js';
@@ -164,10 +164,24 @@ async function readTextIfPresent(
 // Custom document. Read-only for all binary formats (.slx, .mat, .prj, zipped
 // .sldd). There is NO in-memory working-copy string: the file on disk is the
 // single source of truth, and this document only tracks its URI.
+//
+// It does hold one thing: the tree its tabs show, registered in core's session and cached in
+// SlddModel under the uri. VS Code disposes a custom document after its LAST panel closes, so
+// that is where the tree is given back — every file opened used to stay parsed for the life of
+// the window. Through SlddModel's view count, because the editable JSON view registers under the
+// same uri and may still be showing it.
 class BinaryDocument implements vscode.CustomDocument {
+  /** Set once VS Code has disposed this document; a read still in flight checks it. */
+  disposed = false;
+
   constructor(public readonly uri: vscode.Uri) {}
 
-  dispose(): void {}
+  dispose(): void {
+    // Once: a second release would spend a hold that belongs to another view of this uri.
+    if (this.disposed) return;
+    this.disposed = true;
+    releaseSourceView(this.uri.toString());
+  }
 }
 
 // Single byte-backed READ-ONLY custom editor for the binary formats (.slx,
@@ -212,6 +226,8 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     _openContext: vscode.CustomDocumentOpenContext,
     _token: vscode.CancellationToken,
   ): Promise<BinaryDocument> {
+    // Held until BinaryDocument.dispose — see there.
+    openSourceView(uri.toString());
     return new BinaryDocument(uri);
   }
 
@@ -422,6 +438,12 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           parsed: () => parsedModelForTab(document.uri),
           bytes: byteSource.read,
         });
+        // The tab closed while the file was being read. The read registered its tree AFTER the
+        // document released, so give it back here, or nothing ever will.
+        if (document.disposed) {
+          releaseIfUnviewed(uriString);
+          return;
+        }
         // Bounded BEFORE the payload is built, and before the Usage column is filled:
         // rows that are not going to be shown are not worth annotating, and a payload
         // over V8's maximum string length cannot be posted at all (rowCap.ts).

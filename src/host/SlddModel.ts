@@ -140,6 +140,72 @@ export function invalidate(uriString: string): void {
 }
 
 /**
+ * How many open views hold each uri's tree, across BOTH providers that register under the bare
+ * uri: the read-only `BinaryEditorProvider` (one per custom document) and the editable
+ * `SlddTextEditorProvider` (one per panel). One count rather than one per provider because the
+ * two share a srcId — a JSON `.sldd` over the sync limit opens read-only, "Reopen Editor With"
+ * moves a file between them, a split panel is a second view — and whichever closes first must
+ * not take the tree from under the other.
+ *
+ * `BinarySlddEditorProvider` is not counted here: it registers under its own prefixed srcId and
+ * already releases it from its document's dispose.
+ */
+const views = new Map<string, number>();
+
+/** Drop both halves of what a uri holds: this module's cached tree and the session's source. */
+function release(uriString: string): void {
+  cache.delete(uriString);
+  // A no-op for a srcId the session does not hold, so this is safe for a view that never
+  // got as far as registering (a `.prj` page, a read that failed, a redirect).
+  DataModel.removeDataSource(uriString);
+}
+
+/** A view of `uriString` has opened; it holds that uri's tree until `releaseSourceView`. */
+export function openSourceView(uriString: string): void {
+  views.set(uriString, (views.get(uriString) ?? 0) + 1);
+}
+
+/**
+ * A view of `uriString` has closed. On the LAST one, the cached tree and the session's source
+ * are released, and the answer is true.
+ *
+ * Without this a closed tab's tree lived for the life of the window: 66.8 MB retained per 20 MB
+ * dictionary, for every file ever opened. What a release takes away was audited before it was
+ * done: every reader of a registration (`findNode`'s selection, matrix and child requests) is a
+ * row of an OPEN tab; the Usage column and the tree read from disk, not from the session; and
+ * navigating to a file opens it, which registers it again. The one reader that loses something is
+ * core's own `UsedBy` cell, which counted every registered model — see usageCells.ts.
+ *
+ * A release with no view to release (never opened, or one past the last) does nothing and
+ * answers false: an unmatched release is a caller's bug, and the tree it would drop is not its own.
+ */
+export function releaseSourceView(uriString: string): boolean {
+  const held = views.get(uriString);
+  if (held === undefined) return false;
+  if (held > 1) {
+    views.set(uriString, held - 1);
+    return false;
+  }
+  views.delete(uriString);
+  release(uriString);
+  return true;
+}
+
+/**
+ * Release `uriString`'s tree if no view holds it; true when it did.
+ *
+ * For a read that lands after its last view closed. A read-only tab's read is asynchronous — a
+ * large file is still parsing when the user closes it — and the registration it ends in happened
+ * after the release, so nothing would ever release it. A view that opened meanwhile owns the tree,
+ * and keeps it.
+ */
+export function releaseIfUnviewed(uriString: string): boolean {
+  if (views.has(uriString)) return false;
+  release(uriString);
+  return true;
+}
+
+/**
  * The tree the session currently holds for a URI, or null — no parse, no registration.
  *
  * What an entry-scoped repaint starts from: the model that is already built, rather than
