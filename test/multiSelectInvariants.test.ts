@@ -21,7 +21,7 @@ import { sectionRules } from '../src/host/sectionRules.js';
 import { dropFactsOf } from '../src/host/dropFacts.js';
 import { buildClipboardSnapshot, buildDragSnapshot, pasteEntry } from '../src/host/structuralEdit.js';
 import { planDeletion } from 'data-explorer-core';
-import { resolveOperands } from '../src/webview/operands.js';
+import { resolveOperands, sectionRowIdOf } from '../src/webview/operands.js';
 import { buildContextMenuItems, type MenuRow } from '../src/webview/menuItems.js';
 import { dropDecision, rejectReason } from '../src/webview/dropDecision.js';
 import { buildSectionRowId } from '../src/common/sectionRowId.js';
@@ -72,6 +72,7 @@ const SELECTIONS: { name: string; sel: string[] }[] = [
   { name: 'across sections', sel: [D('AliasType'), E('DataInterface')] },
   { name: 'a section header among data rows', sel: [ARCH, E('DataInterface')] },
   { name: 'headers only', sel: [ARCH, DESIGN] },
+  { name: 'a header from another section', sel: [DESIGN, E('DataInterface')] },
   { name: 'a stale id', sel: [E('DataInterface'), E('WasDeletedLastEdit')] },
   { name: 'the same row twice', sel: [E('StructType'), E('StructType')] },
   { name: 'everything (Ctrl+A)', sel: h.rows.map((r) => r.ID) },
@@ -125,14 +126,16 @@ describe('the menu and the host resolve the same operands', () => {
     });
 
     it(`agrees about which SECTIONS are involved: ${name}`, () => {
-      // What Paste's ambiguity check is built on: more than one section and there is no
-      // single destination to offer.
+      // The sections the OPERANDS touch, which Paste's ambiguity check starts from: more
+      // than one section and there is no single destination to offer.
       //
       // Both sides answer in section ROW ids, and neither side counts a selected section
-      // HEADER: resolveOperands drops header rows outright, and the host only ever reaches
-      // a section through an entry it is about to touch. So this is set EQUALITY — a
+      // HEADER here: resolveOperands drops header rows outright, and the host only ever
+      // reaches a section through an entry it is about to touch. So this is set EQUALITY — a
       // one-way containment would let the menu invent an ambiguity the host does not have,
-      // which is a Paste refused for a destination that was never in doubt.
+      // which is a Paste refused for a destination that was never in doubt. Paste then adds
+      // each selected header on top of these, per spec §5 (ruling V-019; see the invariant 1
+      // block below): a header is a row that resolves to its own section.
       const plan = planDeletion(sel, h.find);
       const fromHost = new Set(
         [...plan.entries, ...plan.childGroups.map((g: any) => g.entry)]
@@ -142,6 +145,61 @@ describe('the menu and the host resolve the same operands', () => {
       );
       const fromMenu = new Set(resolveOperands(sel, h.rows).sections);
       expect([...fromMenu].sort()).toEqual([...fromHost].sort());
+    });
+  }
+});
+
+describe('the anchor cannot change where a Paste lands (invariant 1)', () => {
+  // Spec §5: Paste is offered only when every selected row resolves to one section, so it
+  // cannot matter which row anchors it: the right-clicked row for the menu, the first
+  // selected row for Cmd+V. Each live row of each shape is tried as the anchor, with that
+  // row's own section rule as the target, which is how table-main's menuFor builds it.
+  const sectionOf = (rowId: string) => sectionRowIdOf(rowId, h.rows);
+  const ruleOf = (rowId: string) => h.rules.find((r) => buildSectionRowId(r.sectionName) === sectionOf(rowId));
+
+  // A payload both sections accept, so a refusal below can only be the one-section check:
+  // a scalar numeric variable, which lands as a MATLAB variable in design and as a Constant
+  // in arch. No object entry of the fixture is allowed in both. Built by the real parser off
+  // a scratch model, as the drag-predictor block below builds its classless shapes.
+  const scratchUri = 'test://invariants-anchor.sldd';
+  invalidate(scratchUri);
+  const ANYWHERE = dropFactsOf(
+    getModel(scratchUri, 'arch.sldd', mixedText).getSection('design').parseEntry({ name: 'PlainVar', metadata: {}, value: 7 }),
+  );
+
+  const pasteAt = (sel: string[], anchor: string) => {
+    const rule = ruleOf(anchor)!;
+    return buildContextMenuItems({
+      rows: h.rows,
+      selectedRowIds: sel,
+      anchorRowId: anchor,
+      clipboard: { canPaste: true, mode: 'copy', items: [ANYWHERE] },
+      editable: true,
+      hasTextView: true,
+      pasteTarget: { sectionLabel: rule.sectionLabel, isDerived: rule.isDerived, allowedTypes: rule.allowedTypes },
+    }).find((i) => i.id === 'paste')!;
+  };
+
+  it('the payload is one both sections accept, so Paste is offered on a one-section shape', () => {
+    // Guards the cases below: with a payload some section refused, every anchor would be
+    // disabled for that reason instead and the invariant would hold for nothing.
+    for (const section of [ARCH, DESIGN]) {
+      const rule = ruleOf(section);
+      expect(rule, `${section} has a rule`).toBeDefined();
+      expect(rejectReason({ docUri: 'test://elsewhere.sldd', ...rule! }, ANYWHERE), `lands in ${section}`).toBeNull();
+    }
+    for (const anchor of [ARCH, E('DataInterface')]) {
+      expect(pasteAt([ARCH, E('DataInterface')], anchor).disabled, `anchored at ${anchor}`).toBeFalsy();
+    }
+  });
+
+  for (const { name, sel } of SELECTIONS) {
+    it(`gives one answer for every anchor: ${name}`, () => {
+      const anchors = [...new Set(sel)].filter((id) => ruleOf(id));
+      const offeredAt = anchors.filter((anchor) => !pasteAt(sel, anchor).disabled);
+      if (offeredAt.length === 0) return;
+      expect(new Set(anchors.map(sectionOf)).size, `sections of ${JSON.stringify(anchors)}`).toBe(1);
+      expect(offeredAt).toEqual(anchors);
     });
   }
 });

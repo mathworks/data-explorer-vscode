@@ -139,6 +139,44 @@ describe('disabled reasons', () => {
     expect(paste.reason).toBe('Select rows in one section to paste');
   });
 
+  // Ruling V-019, spec §5: "all selected rows resolve to one section", and a header is a
+  // row that resolves to its own section. Headers contribute no OPERANDS, so before this the
+  // check never saw them, and the menu (right-clicked row) and the keyboard (first selected
+  // row) could each pick a different section for the same selection.
+  describe('a selected section header counts as its section', () => {
+    const ONE_SECTION = 'Select rows in one section to paste';
+    const pasteOf = (selectedRowIds: string[], anchorRowId = selectedRowIds[0]) =>
+      byId(menu({ clipboard: BUS_CLIP, selectedRowIds, anchorRowId }), 'paste')!;
+
+    it('refuses two headers, whichever one anchors the menu', () => {
+      for (const anchor of ['section:design', 'section:arch']) {
+        const paste = pasteOf(['section:design', 'section:arch'], anchor);
+        expect(paste.disabled, `anchored at ${anchor}`).toBe(true);
+        expect(paste.reason, `anchored at ${anchor}`).toBe(ONE_SECTION);
+      }
+    });
+
+    it('refuses a header plus a row of another section', () => {
+      const paste = pasteOf(['section:design', 'u/arch/V'], 'u/arch/V');
+      expect(paste.disabled).toBe(true);
+      expect(paste.reason).toBe(ONE_SECTION);
+    });
+
+    it('still offers Paste on a lone header, the only target an empty section has', () => {
+      expect(pasteOf(['section:design']).disabled).toBeFalsy();
+    });
+
+    it('still offers Paste on a header selected with rows of its own section', () => {
+      expect(pasteOf(['section:design', 'u/design/A', 'u/design/B'], 'u/design/A').disabled).toBeFalsy();
+    });
+
+    it('ignores a header id the table no longer holds, as it ignores any stale row', () => {
+      // Rows can lag a repaint. A dead header id names no section, so it cannot be the
+      // second one.
+      expect(pasteOf(['section:gone', 'u/design/A'], 'u/design/A').disabled).toBeFalsy();
+    });
+  });
+
   it('asks for a single row for Add Child and Location in Text', () => {
     const items = menu({ selectedRowIds: ['u/design/A', 'u/design/B'] });
     expect(byId(items, 'addChild')!.reason).toBe('Select a single item to add a child');
