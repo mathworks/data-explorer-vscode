@@ -36,10 +36,13 @@ export const COLUMN_LABELS: Record<string, string> = {
 // columns (dimensions/complexity/dimensionsMode → Data Object;
 // storageClass/headerFile/alignment → Code Generation) all get their picker
 // header here. Read-only for most classes, but not by definition: on a
-// Simulink.BusElement, complexity and dimensionsMode emit an editable select over
-// MATLAB's own enum, which the generic cell path renders and edits like any other
-// object cell. Labels still come from the schema (schemaColumnLabels), which
-// remains the single source of truth for a column's display name.
+// Simulink.BusElement, a Simulink.ValueType and a Simulink.Signal, complexity and
+// dimensionsMode emit an editable select over MATLAB's own enum for that class,
+// and on a Simulink.Parameter or Simulink.Signal whose StorageClass is not 'Auto',
+// alignment emits an editable text cell. The generic cell path renders and edits
+// each like any other object cell.
+// Labels still come from the schema (schemaColumnLabels), which remains the
+// single source of truth for a column's display name.
 export const COLUMN_GROUPS: Record<string, string> = {
   Min: 'Data Object', Max: 'Data Object', Unit: 'Data Object',
   dimensions: 'Data Object', complexity: 'Data Object', dimensionsMode: 'Data Object',

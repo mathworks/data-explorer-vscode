@@ -367,3 +367,55 @@ describe('pasteEntryXml rebinds the pasted entry to the target section', () => {
     );
   });
 });
+
+// C-180, the binary twin of structuralEdit.test.ts's mpt paste. A paste copies an mpt object
+// MATLAB already wrote, so core admits an mpt.Parameter or mpt.Signal into Design Data, and
+// nowhere else. The source is params.sldd's MATLAB-written gravity and sig1, re-classed in the
+// chunk, so the payload is what a copy of a real mpt entry carries.
+describe('pasteEntryXml admits an mpt entry into Design Data only', () => {
+  /** `xml` with entry `name`'s first `<Element Class="from">` changed to `to`. */
+  function reclass(xml: string, name: string, from: string, to: string): string {
+    const at = xml.indexOf(`<P Name="Name" Class="char">${name}</P>`);
+    const tag = `<Element Class="${from}">`;
+    const el = xml.indexOf(tag, at);
+    if (at < 0 || el < at) throw new Error(`params.sldd spells no ${from} for ${name}`);
+    return xml.slice(0, el) + `<Element Class="${to}">` + xml.slice(el + tag.length);
+  }
+  const mptXml = reclass(
+    reclass(load('mem://xse-mpt-src').xml, 'gravity', 'Simulink.Parameter', 'mpt.Parameter'),
+    'sig1',
+    'Simulink.Signal',
+    'mpt.Signal',
+  );
+  const entryOf = (model: any, name: string) =>
+    (model.children as any[]).flatMap((s: any) => s.children as any[]).find((e: any) => e.name === name);
+
+  for (const [name, cls] of [['gravity', 'mpt.Parameter'], ['sig1', 'mpt.Signal']] as const) {
+    it(`pastes a copy of an ${cls} into Design Data, and the copy keeps its class`, () => {
+      const model = reparseModel(`mem://xse-mpt-${cls}`, mptXml);
+      const payload = entryOf(model, name).serialize() as Record<string, any>;
+      expect(payload.value._array_class).toBe(cls);
+
+      const { newText } = pasteEntryXml(mptXml, model.getSection('design'), payload);
+      expect(newText.split(`<Element Class="${cls}">`).length - 1, 'the copy writes the class').toBe(2);
+
+      // Reopened, the one new entry is in Design Data, with the class it was copied with.
+      const before = new Set(entryNames(reparseModel(`mem://xse-mpt-${cls}-before`, mptXml)));
+      const reread = reparseModel(`mem://xse-mpt-${cls}-after`, newText);
+      const added = entryNames(reread).filter((n) => !before.has(n));
+      expect(added).toHaveLength(1);
+      const copy = entryOf(reread, added[0]);
+      expect(copy.className).toBe(cls);
+      expect(copy.parent.name).toBe('design');
+      expect(siblingIdentical(mptXml, newText, name)).toBe(true);
+    });
+
+    it(`still refuses a copy of an ${cls} in Architectural Data`, () => {
+      const model = reparseModel(`mem://xse-mpt-${cls}-arch`, mptXml);
+      const payload = entryOf(model, name).serialize() as Record<string, unknown>;
+      expect(() => pasteEntryXml(mptXml, model.getSection('arch'), payload)).toThrow(
+        `A "${cls}" entry is not allowed in Architectural Data.`,
+      );
+    });
+  }
+});

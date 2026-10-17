@@ -36,13 +36,21 @@ describe('Dimensions Mode: real-fixture parity', () => {
     expect(cgSignal.serial._properties.DimensionsMode).toBe('Fixed');
   });
 
-  it('the Signal surfaces a read-only dimensionsMode column from real data', () => {
+  it('the Signal surfaces an editable dimensionsMode column from real data', () => {
+    // MATLAB constrains a Signal's DimensionsMode to set(Simulink.Signal,'DimensionsMode'),
+    // auto|Fixed|Variable, so it is a dropdown over that set, in MATLAB's own casing. It
+    // reaches the table as the object cell dex-tree-table opens a select from, not a string.
     const { cgSignal } = loadCodegen();
     const prop = cgSignal.getProperties().find((p: any) => p.key === 'dimensionsMode');
     expect(prop).toBeDefined();
-    expect(prop.editor).toBe('label');
+    expect(prop.editor).toBe('select');
     const row: any = cgSignal.toRow();
-    expect(row.dimensionsMode).toBe('Fixed');
+    expect(row.dimensionsMode).toEqual({
+      text: 'Fixed',
+      editable: true,
+      editor: 'select',
+      options: ['auto', 'Fixed', 'Variable'],
+    });
   });
 
   it('the Parameter has no DimensionsMode and surfaces no such column', () => {

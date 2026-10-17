@@ -34,6 +34,17 @@ import type { ParseWarning } from 'data-explorer-core';
 const SOURCE_LEVEL = new Set(['source-empty', 'source-unreadable']);
 
 /**
+ * The `code` core's session adds at open for siblings that share a name, and so one node
+ * id (F1-50). Nothing was lost: both are read and both are shown, but neither can be edited
+ * or deleted by id until the file names them apart. So it is never counted as a part that
+ * could not be read, and never a reason to refuse the file.
+ */
+const SHARED_NAME = 'duplicate-id';
+
+/** The headline when the only thing to say is that some names are shared. */
+const SHARED_NAME_HEADLINE = 'Some items in this file share a name, so they cannot be edited or deleted here.';
+
+/**
  * How many individual messages the banner spells out. A `.mat` with a truncated
  * record tail can report a warning per variable, and a banner tall enough to hold
  * twenty of them is a banner that hides the table it is describing. The count in
@@ -91,8 +102,10 @@ export function sourceWarnings(node: unknown): ParseWarning[] {
  *
  * The headline is a source-level warning's own message when there is one, because
  * core writes those as a whole sentence about the whole file ("…so this project
- * reads as empty") and that is the larger fact; otherwise it counts the parts. The
- * details are core's messages verbatim — each already names what it lost, so the
+ * reads as empty") and that is the larger fact; otherwise it counts the parts that
+ * could not be read. A shared name (`duplicate-id`) is not one of those: it gets a
+ * headline of its own when it is all there is, and otherwise only a line below. The
+ * details are core's messages verbatim — each already names what it is about, so the
  * `part` field is used to tell two warnings apart here and never rendered.
  */
 export function warningBanner(warnings: ParseWarning[] | undefined): WarningBanner | undefined {
@@ -115,11 +128,14 @@ export function warningBanner(warnings: ParseWarning[] | undefined): WarningBann
 
   const sourceLevel = unique.find((w) => SOURCE_LEVEL.has(w.code));
   const rest = unique.filter((w) => w !== sourceLevel);
+  const lost = rest.filter((w) => w.code !== SHARED_NAME).length;
   const headline = sourceLevel
     ? sourceLevel.message
-    : rest.length === 1
-      ? 'One part of this file could not be read, so what you see below is incomplete.'
-      : `${rest.length} parts of this file could not be read, so what you see below is incomplete.`;
+    : lost === 0
+      ? SHARED_NAME_HEADLINE
+      : lost === 1
+        ? 'One part of this file could not be read, so what you see below is incomplete.'
+        : `${lost} parts of this file could not be read, so what you see below is incomplete.`;
 
   const details = rest.slice(0, MAX_BANNER_DETAILS).map((w) => w.message);
   const hidden = rest.length - details.length;

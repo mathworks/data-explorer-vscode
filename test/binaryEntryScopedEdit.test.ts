@@ -650,13 +650,17 @@ describe('binary .sldd entry ops — undo, redo, delete, paste', () => {
 
     it('does NOT undo correctly with the inverses in forward order', () => {
       // Pinned as the reason patchOfPairs reverses: inserting the source while the copy is
-      // still standing puts two entries under one id, and the remove that follows resolves
-      // to whichever was indexed last — the source it just restored. The copy survives in
-      // its place, unindexed, and the table shows an entry no edit can address.
+      // still standing puts two entries under one id, and the remove that follows has no
+      // one entry to resolve to. Core refuses an id that names two nodes (F1-50), so the
+      // remove throws rather than taking whichever twin was indexed last, and the caller
+      // falls back to a wide repaint from the text. Forward order is still wrong: it leaves
+      // both entries standing, under one id that nothing can address.
       const { d, model, section, srcId, pairs, srcUuid } = setUp('test://ops-reclaim-forward.sldd');
-      applyEntryOps(model, pairs.map((p) => p.undo)); // NOT reversed
-      expect(gravities(section)).toEqual(['copy-uuid']);
+      expect(() => applyEntryOps(model, pairs.map((p) => p.undo))).toThrow(/No entry is indexed/); // NOT reversed
+      // The insert before the refused remove is not rolled back (applyEntryOps applies op by
+      // op): the source is back at its own index and the copy still stands after it.
       expect(srcUuid).not.toBe('copy-uuid');
+      expect(gravities(section)).toEqual([srcUuid, 'copy-uuid']);
       expect((DataModel as any).findNodeById(srcId)).toBeNull();
       d.dispose();
     });

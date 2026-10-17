@@ -196,6 +196,25 @@ describe('the catalog partitions what core allows', () => {
   it('never offers anything in Other Data', () => {
     expect(allTiles().filter((t) => (t.section as string) === 'other')).toEqual([]);
   });
+
+  // C-180. Core admits a paste of an mpt.Parameter or mpt.Signal into Design Data
+  // (allowsType, getAdmittedTypes) but refuses to create one (getAllowedTypes, which
+  // corePairs reads). A tile is a creation, so no tile may name a class that a section
+  // admits only to a paste. The set is pinned, so a class core starts admitting this way
+  // is a decision about the gallery here too.
+  it('offers no class a section admits only to a paste, such as an mpt class', () => {
+    const sections = sectionsOf();
+    const pasteOnly = new Set<string>();
+    for (const key of SECTION_KEYS) {
+      const allowed = new Set<string>(sections[key].getAllowedTypes());
+      for (const className of sections[key].getAdmittedTypes?.() ?? []) {
+        if (!allowed.has(className)) pasteOnly.add(pairKey(className, key));
+      }
+    }
+    expect([...pasteOnly].sort()).toEqual([pairKey('mpt.Parameter', 'design'), pairKey('mpt.Signal', 'design')]);
+    expect(allTiles().filter((t) => pasteOnly.has(pairKey(t.className, t.section))).map(tileName)).toEqual([]);
+    expect(allTiles().filter((t) => t.className.startsWith('mpt.')).map(tileName)).toEqual([]);
+  });
 });
 
 describe('how the catalog states a destination', () => {
