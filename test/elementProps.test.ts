@@ -62,8 +62,8 @@ for (const variant of ['elem_text', 'elem_binary'] as const) {
       const props = x.getProperties();
       // MATLAB constrains a BusElement's Complexity and DimensionsMode to a
       // closed enum, so each is a dropdown; Dimensions is a free numeric value
-      // and stays read-only. A Signal's dimensionsMode column comes from the
-      // declarative schema and is still a label — see dimensionsMode.test.ts.
+      // and stays read-only. A Signal's complexity and dimensionsMode are selects
+      // too, over the Signal's own sets, which add 'auto' — see dimensionsMode.test.ts.
       for (const [key, editor] of Object.entries({ complexity: 'select', dimensions: 'label', dimensionsMode: 'select' })) {
         const prop = props.find((p: any) => p.key === key);
         expect(prop, key).toBeDefined();
