@@ -147,3 +147,41 @@ describe('warningBanner', () => {
     expect(banner.headline).toContain(String(MAX_BANNER_DETAILS + 3));
   });
 });
+
+// Two siblings with one name (F1-50). Core's session warns at open, with the code
+// `duplicate-id`, because it refuses to edit or delete either of them by id. Nothing was
+// lost: both are read and both are on screen. So the banner must not count them as parts
+// that could not be read, and the file must still open.
+describe('warningBanner and duplicate-id', () => {
+  const SHARED = 'Some items in this file share a name, so they cannot be edited or deleted here.';
+  const twins = (part: string, where = 'Design Data'): ParseWarning => ({
+    code: 'duplicate-id',
+    message:
+      `Two entries in ${where} are named '${part}'. ` +
+      'Neither can be edited or deleted until the file gives one of them another name.',
+    part,
+  });
+
+  it('has a headline of its own when the only warnings are shared names, and core’s messages below it', () => {
+    const banner = warningBanner([twins('K'), twins('S')])!;
+    expect(banner.headline).toBe(SHARED);
+    expect(banner.details).toEqual([twins('K').message, twins('S').message]);
+    // And the file opens: a shared name is never a reason to refuse it.
+    expect(() => refuseIfUnreadable([twins('K')])).not.toThrow();
+  });
+
+  it('counts only the parts that could not be read when both kinds are present', () => {
+    const banner = warningBanner([part('Skipped a part.', 'data/chunk1.xml'), twins('K'), twins('S')])!;
+    expect(banner.headline).toBe('One part of this file could not be read, so what you see below is incomplete.');
+    // Every message is still listed: the shared names are worth saying, just not as a loss.
+    expect(banner.details).toEqual(['Skipped a part.', twins('K').message, twins('S').message]);
+  });
+
+  it('dedupes a repeated shared-name warning, and keeps one name shared in two sections apart', () => {
+    // One group reported twice is one line. One name doubled in Design Data and again in
+    // Other Data is two groups: `part` is the same and the message says where.
+    const banner = warningBanner([twins('K'), twins('K'), twins('K', 'Other Data')])!;
+    expect(banner.headline).toBe(SHARED);
+    expect(banner.details).toEqual([twins('K').message, twins('K', 'Other Data').message]);
+  });
+});

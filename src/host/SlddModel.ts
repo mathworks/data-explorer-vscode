@@ -232,16 +232,27 @@ export function findNode(uriString: string, nodeId: string): any | null {
   // model in DataModel under a prefixed srcId but NOT in this module's `cache`,
   // so gating on `cache.get(uriString)` here would wrongly drop their selections
   // (the Property Inspector would never render). Try the registry unconditionally.
-  // PRECONDITION (untested) for the `: null` arm: the pinned data-explorer-core
-  // always exports findNodeById on DataModel. The feature-detect exists because
-  // core is a git-pinned dependency bumped independently of this repo, so an older
-  // pin must degrade to the cache fallback below rather than throw on every
-  // selection; the `try` covers the same risk for a throwing implementation.
+  // The pinned data-explorer-core always exports findNodeById on DataModel. The
+  // feature-detect exists because core is a git-pinned dependency bumped
+  // independently of this repo, so an older pin must degrade to the cache fallback
+  // below rather than throw on every selection (test/findNodeSharedName.test.ts);
+  // the `try` covers the same risk for a throwing implementation.
+  //
+  // A null from the registry is FINAL when the registry holds this uri's source. Core
+  // answers null for an id that names two nodes (F1-50: two same-named entries in one
+  // section, and every row inside them), because it cannot tell which one a row meant.
+  // Every adder here registers under the uri and caches the very tree it registered, so
+  // flattening the cache would find the FIRST twin, the wrong-entry pick core refuses,
+  // and a cell edit, a child delete, a copy, a drag and the Property Inspector all act
+  // on what this returns. So the cache answers only what the registry cannot: an old
+  // pin without findNodeById, a lookup that threw, or a source it no longer holds.
   try {
-    const viaRegistry = (DataModel as any).findNodeById
-      ? (DataModel as any).findNodeById(nodeId)
-      : null;
-    if (viaRegistry) return viaRegistry;
+    const session = DataModel as any;
+    if (typeof session.findNodeById === 'function') {
+      const viaRegistry = session.findNodeById(nodeId);
+      if (viaRegistry) return viaRegistry;
+      if (session.hasDataSource?.(uriString)) return null;
+    }
   } catch {
     /* fall through */
   }
