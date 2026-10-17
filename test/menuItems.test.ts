@@ -2,6 +2,10 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type MenuRow, type ClipboardState, type MenuInput, type PasteTarget } from '../src/webview/menuItems.js';
 import type { ContextMenuItem } from '../src/webview/components/dex-context-menu.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { getModel, invalidate } from '../src/host/SlddModel.js';
+import { sectionRules } from '../src/host/sectionRules.js';
 
 // The rows a menu is built over: one section holding an entry A with a child x, plus a
 // second entry B, plus a second section holding V. Enough to state every shape the spec
@@ -419,5 +423,47 @@ describe('document-level readonly gates (shouldShowContextMenu / shouldOpenCellE
     // write-back/copy/paste/mutation handlers, so both would be dead UI.
     expect(shouldShowContextMenu(false)).toBe(false);
     expect(shouldOpenCellEditor(false)).toBe(false);
+  });
+});
+
+// C-180. Core admits a paste of an mpt.Parameter or mpt.Signal entry into Design Data. The
+// Paste item asks the target section's posted rules, so it is built here the way table-main
+// builds it, from what sectionRules posts for a real model.
+describe('Paste of an mpt entry, against the rules a real model posts', () => {
+  const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');
+  function realPasteTarget(sectionName: string): PasteTarget {
+    const uri = 'test://menu-mpt.sldd';
+    invalidate(uri);
+    const rule = sectionRules(getModel(uri, 'arch.sldd', archText)).find((r) => r.sectionName === sectionName)!;
+    return { sectionLabel: rule.sectionLabel, isDerived: rule.isDerived, allowedTypes: rule.allowedTypes };
+  }
+  const MPT_CLIP: ClipboardState = {
+    canPaste: true,
+    mode: 'copy',
+    items: [
+      { className: 'mpt.Parameter', arrayClass: 'mpt.Parameter', kind: 'Simulink Parameter', isMatlabVariable: false, isScalarNumeric: false },
+      { className: 'mpt.Signal', arrayClass: 'mpt.Signal', kind: 'Simulink Signal', isMatlabVariable: false, isScalarNumeric: false },
+    ],
+  };
+
+  it('offers Paste over a Design Data row', () => {
+    const paste = byId(menu({ clipboard: MPT_CLIP, pasteTarget: realPasteTarget('design') }), 'paste')!;
+    expect(paste.label).toBe('Paste 2 Entries');
+    expect(paste.disabled).toBeFalsy();
+    expect(paste.reason).toBeUndefined();
+  });
+
+  it('still refuses it over an Architectural Data row, and says why', () => {
+    const paste = byId(
+      menu({
+        clipboard: MPT_CLIP,
+        selectedRowIds: ['u/arch/V'],
+        anchorRowId: 'u/arch/V',
+        pasteTarget: realPasteTarget('arch'),
+      }),
+      'paste',
+    )!;
+    expect(paste.disabled).toBe(true);
+    expect(paste.reason).toBe('Simulink Parameter cannot be in Architectural Data');
   });
 });

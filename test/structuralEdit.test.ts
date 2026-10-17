@@ -418,6 +418,66 @@ describe('pasteEntry gates a classless payload against the allow-list too', () =
   });
 });
 
+// C-180. A paste copies an mpt object MATLAB already wrote, so core admits an mpt.Parameter
+// or mpt.Signal into Design Data, while creating one from scratch stays refused. The source is
+// params.sldd's MATLAB-written gravity and sig1, re-classed in the text, so the payload is what
+// a copy of a real mpt entry carries.
+describe('pasteEntry admits an mpt entry into Design Data only', () => {
+  const paramsText = readFileSync(
+    fileURLToPath(new URL('../test-integration/fixtures/workspace/params.sldd', import.meta.url)),
+    'utf8',
+  );
+  /** `text` with entry `name`'s first `_array_class` changed from `from` to `to`. */
+  function reclass(text: string, name: string, from: string, to: string): string {
+    const at = text.indexOf(`"name": "${name}"`);
+    const cls = text.indexOf(`"_array_class": "${from}"`, at);
+    if (at < 0 || cls < at) throw new Error(`params.sldd spells no ${from} for ${name}`);
+    return text.slice(0, cls) + `"_array_class": "${to}"` + text.slice(cls + `"_array_class": "${from}"`.length);
+  }
+  const mptText = reclass(
+    reclass(paramsText, 'gravity', 'Simulink.Parameter', 'mpt.Parameter'),
+    'sig1',
+    'Simulink.Signal',
+    'mpt.Signal',
+  );
+  const load = (uri: string, text = mptText) => {
+    invalidate(uri);
+    return getModel(uri, 'params.sldd', text);
+  };
+  const entryOf = (model: any, name: string) =>
+    (model.children as any[]).flatMap((s: any) => s.children as any[]).find((e: any) => e.name === name);
+
+  for (const [name, cls] of [['gravity', 'mpt.Parameter'], ['sig1', 'mpt.Signal']] as const) {
+    it(`pastes a copy of an ${cls} into Design Data, and the copy keeps its class`, () => {
+      const uri = `test://paste-${cls}.sldd`;
+      const model = load(uri);
+      const payload = entryOf(model, name).serialize() as Record<string, any>;
+      expect(payload.value._array_class).toBe(cls);
+
+      const { newText } = pasteEntry(mptText, model.getSection('design'), payload);
+      expect(isValidJson(newText)).toBe(true);
+      expect(newText.split(`"_array_class": "${cls}"`).length - 1, 'the copy writes the class').toBe(2);
+
+      // Reopened, the one new entry is in Design Data, with the class it was copied with.
+      const before = new Set(rowNames(`${uri}#before`, mptText));
+      const added = rowNames(`${uri}#after`, newText).filter((n) => !before.has(n));
+      expect(added).toHaveLength(1);
+      const copy = entryOf(load(`${uri}#reread`, newText), added[0]);
+      expect(copy.className).toBe(cls);
+      expect(copy.parent.name).toBe('design');
+      expect(siblingByteIdentical(mptText, newText, name)).toBe(true);
+    });
+
+    it(`still refuses a copy of an ${cls} in Architectural Data`, () => {
+      const model = load(`test://paste-${cls}-arch.sldd`);
+      const payload = entryOf(model, name).serialize() as Record<string, unknown>;
+      expect(() => pasteEntry(mptText, model.getSection('arch'), payload)).toThrow(
+        `A "${cls}" entry is not allowed in Architectural Data.`,
+      );
+    });
+  }
+});
+
 describe('deleteChild / addChild on a node that does not support it', () => {
   it('refuses to add a child to a scalar with an actionable message', () => {
     const uri = 'test://add-child-scalar-msg.sldd';

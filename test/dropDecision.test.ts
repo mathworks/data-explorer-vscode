@@ -7,7 +7,11 @@
 // mirror the Kind an entry shows AFTER the paste (a pasted entry loses its
 // SystemComposer classification, so a derived Bus becomes a "Data Interface").
 import { describe, it, expect } from 'vitest';
-import { dropDecision } from '../src/webview/dropDecision.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dropDecision, rejectReason } from '../src/webview/dropDecision.js';
+import { getModel, invalidate } from '../src/host/SlddModel.js';
+import { sectionRules } from '../src/host/sectionRules.js';
 
 // Allow-lists mirror SectionNode.ALLOWED_TYPES (only the classes these tests use).
 // 'MatlabVariable' and 'Constant' are in the real lists too, and they matter here:
@@ -338,5 +342,42 @@ describe('dropDecision — a target with no allow-list is unrestricted', () => {
     );
     expect(d.canDrop).toBe(false);
     expect(d.tooltip).toBe('MATLAB Variable must be scalar and numeric to be a Constant');
+  });
+});
+
+// C-180. Core admits a paste of an mpt.Parameter or mpt.Signal entry into Design Data, and
+// nowhere else. The targets here are built by sectionRules from a real model, not from a list
+// written in this file, so they say what the host's paste would say.
+describe('dropDecision — an mpt entry, against the rules a real model posts', () => {
+  const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');
+  function realTarget(sectionName: string) {
+    const uri = 'test://drop-mpt.sldd';
+    invalidate(uri);
+    const rule = sectionRules(getModel(uri, 'arch.sldd', archText)).find((r) => r.sectionName === sectionName)!;
+    return { docUri: 'a.sldd', ...rule };
+  }
+  // The facts a drag of a MATLAB-written mpt entry carries: its node is a ParameterNode or
+  // SignalNode, so the Kind is the superclass's.
+  const mptParam = () => ({ ...param(), className: 'mpt.Parameter', arrayClass: 'mpt.Parameter' });
+  const mptSignal = () => ({
+    className: 'mpt.Signal',
+    arrayClass: 'mpt.Signal',
+    kind: 'Simulink Signal',
+    isMatlabVariable: false,
+    isScalarNumeric: false,
+  });
+
+  it('lets an mpt.Parameter or mpt.Signal into Design Data', () => {
+    expect(rejectReason(realTarget('design'), mptParam())).toBeNull();
+    expect(rejectReason(realTarget('design'), mptSignal())).toBeNull();
+    const d = dropDecision(designSource([mptParam(), mptSignal()], 'b.sldd'), realTarget('design'), 'copy');
+    expect(d.canDrop).toBe(true);
+    expect(d.tooltip).toBe('Copy 2 items');
+  });
+
+  it('still refuses them in Architectural Data and Configurations', () => {
+    expect(rejectReason(realTarget('arch'), mptParam())).toBe('Simulink Parameter cannot be in Architectural Data');
+    expect(rejectReason(realTarget('arch'), mptSignal())).toBe('Simulink Signal cannot be in Architectural Data');
+    expect(rejectReason(realTarget('config'), mptParam())).toBe('Simulink Parameter cannot be in Configurations');
   });
 });
