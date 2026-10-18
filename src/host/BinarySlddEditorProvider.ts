@@ -4,20 +4,30 @@
 // .sldd is an OPC/zip package whose only editable text payload is data/chunk0.xml;
 // all other parts pass through verbatim. The document holds that chunkXml string
 // as its single edit surface plus the pass-through parts. Every table edit is a
-// pure string transform on chunkXml (xmlStructuralEdit), regenerating only the
-// touched entry's <Object> fragment so untouched entries stay byte-identical —
+// pure string transform on chunkXml (xmlStructuralEdit), replacing only the touched
+// entry's <Object>…</Object> with what core's spliceEntryObject writes for it: the
+// entry's bytes with what the edit changed written from the model, laid out as the
+// chunk is, and every byte around it as it was. Untouched entries stay byte-identical —
 // the same risk profile as the JSON .sldd table view.
 //
 // Unlike SlddTextEditorProvider (backed by a native TextDocument), this is a
 // CustomEditorProvider: it owns its own edit stack via onDidChangeCustomDocument,
-// and re-zips on save. The save gate (writeTo) re-reads chunkXml before writing and
-// refuses the save if the chunk does not read back, so a serializer bug that breaks
-// the markup, or a chunk core would read as an empty dictionary, becomes a failed
-// save and leaves the file on disk untouched. It checks that the chunk can be read,
-// not what it says: a well-formed chunk carrying a wrong value saves silently, and a
-// loss the reader and writer share (a value the reader drops or mis-decodes and the
-// writer writes back as misread) re-reads as unchanged, so no re-read can catch it.
-// Keeping values right is core's serializer's job, not this gate's.
+// and re-zips on save. Undo and redo restore the chunk text, and rebuild the entries
+// they change from that text (entryOps' fragments), so an undone entry keeps the
+// bytes it came from. The save gate (writeTo) makes two checks before it writes, and
+// a refusal leaves the file on disk untouched:
+//  - it re-reads chunkXml and refuses the save if the chunk does not read back, so a
+//    serializer bug that breaks the markup, or a chunk core would read as an empty
+//    dictionary, becomes a failed save;
+//  - it compares chunkXml with the chunk as last read or saved, entry by entry, with
+//    a scan of the markup rather than core's reader (binarySaveGate.ts, the
+//    maintainer's D12 addendum): an entry no edit changed must be its bytes, and an
+//    edited one must keep every part the edit did not change (core's
+//    keptPartsViolations), or the save is refused, naming the entry.
+// Neither checks that an edited value is right. A loss the reader and writer share
+// re-reads as unchanged, which is why the second check compares bytes, found by a scan
+// of the markup, and never a re-read of them; an edited part is written from the
+// model, and keeping that right is core's writers' job.
 //
 // The model is registered in the global DataModel singleton under a srcId that
 // PREFIXES the URI, so it never collides with the read-only BinaryEditorProvider's
@@ -35,18 +45,20 @@ import { sectionRules } from './sectionRules.js';
 // `passThroughParts`, and the re-insert in `writeTo`. Drift between them does not throw —
 // see `passThroughParts` — so they take the name core's own reader looks up.
 import {
-  serializeEntryToXml,
   DataModel,
   DATA_PART_XML,
   findEntryObjectSpan,
   entrySelectorOf,
   planDeletion,
+  spliceEntryObject,
   type ParseWarning,
 } from 'data-explorer-core';
 // Never parseBinarySlddParts directly: readSlddParts is the same read plus the rule
 // that a dictionary this host could not read is not passed on as an empty one, which
 // the reader itself no longer enforces (it recovers and warns instead).
 import { readSlddParts } from './slddContent.js';
+import { changedEntryKeys, savedChunkRefusal, SavedChunk } from './binarySaveGate.js';
+import { chunkEntryKey, entryKey, scanChunkEntries } from './chunkEntries.js';
 import { isZipBytes } from './slddFormat.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { postOrReport } from './postPayload.js';
@@ -91,6 +103,7 @@ import {
   type EntryOp,
   type EntryOpPair,
   type EntryPatch,
+  type EntryRecord,
 } from './entryOps.js';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 import { getClipboard, clearClipboard, clipboardState } from './clipboard.js';
@@ -241,9 +254,81 @@ async function readDisk(uri: vscode.Uri): Promise<DiskRead> {
  */
 const DISK_EVENT_SETTLE_MS = 100;
 
+const recordName = (record: EntryRecord): string => String(record.name ?? '');
+const recordUuid = (record: EntryRecord): string | undefined => {
+  const uuid = (record.metadata as Record<string, unknown> | undefined)?.uuid;
+  return typeof uuid === 'string' && uuid ? uuid : undefined;
+};
+
+/**
+ * The entries an edit changes, by entryKey: those its patch names — every op that builds an
+ * entry carries its record, and a removal's record is the inverse op's, on the other side — or,
+ * for an edit that could not state a patch, those whose text differs between its two chunks.
+ */
+function keysOfEdit(before: string, after: string, patch?: EntryPatch): Set<string> {
+  const keys = new Set<string>();
+  for (const op of patch ? [...patch.undo, ...patch.redo] : []) {
+    if (op.kind !== 'remove') keys.add(entryKey(recordName(op.record), recordUuid(op.record)));
+  }
+  return keys.size > 0 || before === after ? keys : changedEntryKeys(before, after);
+}
+
+/** How many ops look their fragment up one at a time; more share one scan of the chunk. */
+const FRAGMENT_LOOKUPS = 4;
+
+/**
+ * Give each op that rebuilds an entry that entry's `<Object>` text in `chunk`, the chunk state
+ * the op restores, so the entry it rebuilds keeps the bytes it came from (entryOps'
+ * EntryFragment). Once per op: an op restores the same chunk every time it runs. A few ops each
+ * look theirs up with core's findEntryObjectSpan, which on the largest dictionary measured
+ * (207 MB) is ~6× faster than a scan; more share one scan. One cut from the wrong place costs
+ * nothing but the provenance: entryOps uses a fragment only when it reads as exactly the entry
+ * the op's record names.
+ */
+function cutFragments(chunk: string, ops: EntryOp[]): void {
+  const wanting = ops.filter((op) => op.kind !== 'remove' && op.fragment === undefined) as Exclude<
+    EntryOp,
+    { kind: 'remove' }
+  >[];
+  if (wanting.length === 0) return;
+  if (wanting.length <= FRAGMENT_LOOKUPS) {
+    for (const op of wanting) {
+      const span = findEntryObjectSpan(chunk, { name: recordName(op.record), uuid: recordUuid(op.record) });
+      op.fragment = span ? chunk.slice(span.offset, span.offset + span.length) : null;
+    }
+    return;
+  }
+  const scan = scanChunkEntries(chunk);
+  const found = new Map<string, { start: number; end: number }[]>();
+  for (const entry of scan.clean ? scan.entries : []) {
+    const key = chunkEntryKey(entry);
+    found.set(key, [...(found.get(key) ?? []), entry]);
+  }
+  for (const op of wanting) {
+    const list = found.get(entryKey(recordName(op.record), recordUuid(op.record)));
+    op.fragment = list?.length === 1 ? chunk.slice(list[0].start, list[0].end) : null;
+  }
+}
+
 class BinarySlddDocument implements vscode.CustomDocument {
   chunkXml: string;
   readonly zipMeta: Record<string, Uint8Array>;
+
+  /**
+   * The chunk as this document last read or wrote it — opened, saved, reverted or reloaded —
+   * which the save gate holds a save to (binarySaveGate.ts). A document restored from a hot-exit
+   * backup read the backup, so that is its chunk until it is saved: the edits in a backup were
+   * made in another session, and nothing is left that could check them.
+   */
+  saved: SavedChunk;
+
+  /**
+   * The entries the edits since `saved` have changed, by entryKey: every entry not in here must
+   * be its bytes in `saved`. Each edit adds what it changes, and so does each undo and redo of
+   * it, so an entry edited and then undone stays in here. That is safe, since an entry back to
+   * its bytes passes either way. Emptied whenever `saved` is replaced.
+   */
+  edited = new Set<string>();
   private readonly _onDidChange = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<BinarySlddDocument>>();
   readonly onDidChangeCustomDocument = this._onDidChange.event;
 
@@ -313,6 +398,7 @@ class BinarySlddDocument implements vscode.CustomDocument {
     fromBackup = false,
   ) {
     this.chunkXml = chunkXml;
+    this.saved = new SavedChunk(chunkXml);
     this.zipMeta = zipMeta;
     this.misrouted = misrouted;
     // VS Code reports a document restored from a hot-exit backup as dirty, though it has no
@@ -374,7 +460,10 @@ class BinarySlddDocument implements vscode.CustomDocument {
    * rebuild it against the catalog the model is holding, which is a step ahead.
    */
   pushEdit(label: string, before: string, after: string, patch?: EntryPatch, part?: ScPartPatch): void {
+    // What the save gate is told this edit changes, in both directions — see `edited`.
+    const changed = keysOfEdit(before, after, patch);
     this.chunkXml = after;
+    this.markEdited(changed);
     if (part) this.zipMeta[part.member] = part.after;
     // The dirty-flag copy moves with VS Code's stack: this push, and each undo or redo VS
     // Code asks for through the two closures below.
@@ -384,17 +473,23 @@ class BinarySlddDocument implements vscode.CustomDocument {
       label,
       undo: () => {
         this.edits.undone();
+        this.markEdited(changed);
         this.chunkXml = before;
         if (part) this.zipMeta[part.member] = part.before;
         this.applyOps(part ? undefined : patch?.undo);
       },
       redo: () => {
         this.edits.redone();
+        this.markEdited(changed);
         this.chunkXml = after;
         if (part) this.zipMeta[part.member] = part.after;
         this.applyOps(part ? undefined : patch?.redo);
       },
     });
+  }
+
+  private markEdited(keys: ReadonlySet<string>): void {
+    for (const key of keys) this.edited.add(key);
   }
 
   /**
@@ -406,6 +501,9 @@ class BinarySlddDocument implements vscode.CustomDocument {
     const chunk = read.zip[DATA_PART_XML];
     if (chunk) {
       this.chunkXml = new TextDecoder().decode(chunk);
+      // What a save is held to from now on, and nothing yet edited against it.
+      this.saved = new SavedChunk(this.chunkXml);
+      this.edited = new Set();
       // The parts too, and for the same reason: an edit can have patched one of them (a
       // rename carried into the System Composer catalog), and a revert that restored only
       // the chunk would leave the entry named as the file spells it beside a catalog that
@@ -449,6 +547,9 @@ class BinarySlddDocument implements vscode.CustomDocument {
       try {
         const model = DataModel.getDataSource(this.srcId);
         if (model) {
+          // chunkXml is already the text this undo or redo restores: what the ops rebuild
+          // their entries from.
+          cutFragments(this.chunkXml, ops);
           this.repaintOps(applyEntryOps(model, ops));
           return;
         }
@@ -1138,9 +1239,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           return;
         }
         const before = document.chunkXml;
-        const frag = serializeEntryToXml(entry).replace(/\n$/, '');
-        const span = findEntryObjectSpan(before, entrySelectorForLookup);
-        if (!span) {
+        // Core writes the entry and splices it: its bytes, with what the edit changed written
+        // from the model, laid out as this chunk is, and every byte around it as it was.
+        const after = spliceEntryObject(before, entry, entrySelectorForLookup);
+        if (after === null) {
           // The node is already mutated and the text is not, so the model no longer
           // describes the file. Rebuild from the text — the edit is refused, so the
           // orphan mutation has to go rather than sit there looking applied. Before the
@@ -1149,7 +1251,6 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           webview.postMessage({ type: 'error', message: 'Could not locate the entry text to update.' });
           return;
         }
-        const after = before.slice(0, span.offset) + frag + before.slice(span.offset + span.length);
         // Each direction addresses the entry by the id the OTHER one leaves behind, and a
         // RENAME makes those two different: the model now holds the new id, so that is
         // what undo has to find; once undo has run they both hold the old one again, so
@@ -1173,7 +1274,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         document.repaintOps([{ kind: 'replace', entryRowId, entry }]);
         if (msg.columnId === 'Name') webview.postMessage({ type: 'selectRows', rowIds: [node.id] });
       } catch (err) {
-        // Same reason as the !span branch, in both halves: setProperty may have landed
+        // Same reason as the not-found branch above, in both halves: setProperty may have landed
         // before the throw, and the repaint clears the banner the message writes.
         document.repaintAll();
         webview.postMessage({ type: 'error', message: 'Failed to apply edit: ' + (err as Error).message });
@@ -1543,11 +1644,23 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     const at = document.edits.here();
     document.saving = true;
     let gated: ParsedChunk | null;
+    // The edits this save writes. writeTo gates them before its first await, so an edit that
+    // lands while the write is in flight goes into a fresh set and stays unsaved, as its text
+    // does. A save that fails wrote nothing, so they go back.
+    const edited = document.edited;
     try {
-      gated = await this.writeTo(document, document.uri, 'save', () => this.refuseIfChangedOnDisk(document));
+      const writing = this.writeTo(document, document.uri, 'save', () => this.refuseIfChangedOnDisk(document));
+      document.edited = new Set();
+      gated = await writing;
+      // What the next save is held to: the text this one wrote, not chunkXml, which an edit
+      // on the write's await may have moved on.
+      if (gated) document.saved = new SavedChunk(gated.chunkXml);
       // What a later save and the watcher compare the disk with. The watcher's event for
       // this write then finds the disk matching, and ignores it.
       document.stamp = await stampOf(document.uri);
+    } catch (err) {
+      for (const key of edited) document.edited.add(key);
+      throw err;
     } finally {
       document.saving = false;
     }
@@ -1747,9 +1860,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   //    error, and the on-disk file is never touched. This is the call site the
   //    reads-as-empty rule in readSlddParts matters most for: a chunk the reader cannot
   //    read yields a dictionary with no entries, and zipping that over the file on disk
-  //    would take every entry with it, silently. The gate checks that the chunk reads,
-  //    not that its values are right (see the header). It also compresses properly,
-  //    because the result is what the user keeps.
+  //    would take every entry with it, silently. Then the chunk is held to the chunk as
+  //    last read or saved (binarySaveGate.ts): what no edit changed must be its bytes,
+  //    and an edited entry must keep what the edit did not change. Neither check says
+  //    an edited value is right (see the header). It also compresses properly, because
+  //    the result is what the user keeps.
   //
   //  - 'backup' writes VS Code's hot-exit scratch copy, which is thrown away when the
   //    document goes clean or closes cleanly. It skips the gate (see
@@ -1780,6 +1895,13 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       } catch (err) {
         throw new Error('Refusing to save: the document did not re-parse (' + (err as Error).message + ').');
       }
+      const refusal = savedChunkRefusal(
+        document.saved,
+        gated.chunkXml,
+        document.edited,
+        DataModel.getDataSource(document.srcId) ?? null,
+      );
+      if (refusal) throw new Error(refusal);
     }
     const zipEntries: Record<string, Uint8Array> = { ...document.zipMeta };
     zipEntries[DATA_PART_XML] = new TextEncoder().encode(document.chunkXml);

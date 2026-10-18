@@ -28,6 +28,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync, unlinkSync, utimesSync, wr
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { unzipSync, zipSync } from 'fflate';
+import { DataModel } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 import { ctx, fakePanel, nameOf, settle, token, waitFor, wsUri } from './tools/hostHarness';
 
@@ -109,6 +110,8 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
   });
 
   teardown(async () => {
+    for (const view of editViews.values()) view.close();
+    editViews.clear();
     for (const doc of open.splice(0)) doc.dispose();
     // Disposing a watcher reaches the host asynchronously. Give it time to stop watching
     // before the directory goes, so that no later test inherits a watcher on a missing path.
@@ -122,15 +125,37 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     return doc;
   }
 
-  /** An unsaved edit, pushed the way the message handler pushes one. Returns its event. */
-  function edit(doc: any, to: string, from = 'Kp'): vscode.CustomDocumentEditEvent<vscode.CustomDocument> {
+  /**
+   * An unsaved edit, made through the provider's own message handler, as the table makes one: a
+   * rename of `from` to `to`. Returns its event.
+   *
+   * Through a view of the document's own, opened at its first edit. It used to push a text
+   * replacement with no model behind it, which the save gate now refuses, as it must: the
+   * provider never changes the chunk without its model, so such a change is no edit it made,
+   * and nothing could check it (D12).
+   */
+  const editViews = new Map<any, ReturnType<typeof fakePanel>>();
+  async function edit(doc: any, to: string, from = 'Kp'): Promise<vscode.CustomDocumentEditEvent<vscode.CustomDocument>> {
+    let view = editViews.get(doc);
+    if (!view) {
+      view = fakePanel();
+      editViews.set(doc, view);
+      await provider.resolveCustomEditor(doc, view.panel, token());
+      view.send({ type: 'ready' });
+      await waitFor('the edited document’s first rows', () => view!.posts.some((p) => p.type === 'setRows'));
+    }
     const events: vscode.CustomDocumentEditEvent<vscode.CustomDocument>[] = [];
     const sub = provider.onDidChangeCustomDocument((e) => events.push(e));
     const before = chunk(doc);
     assert.ok(before.includes(`>${from}<`), `the document spells ${from}, the entry this edit renames`);
-    doc.pushEdit('Edit Name', before, before.replace(`>${from}<`, `>${to}<`));
+    const entry = (DataModel.getDataSource(doc.srcId) as any)?.children
+      .flatMap((s: any) => s.children)
+      .find((e: any) => e.name === from);
+    assert.ok(entry, `the document's model holds ${from}`);
+    view.send({ type: 'edit', rowId: entry.id, columnId: 'Name', oldValue: from, newValue: to });
     sub.dispose();
     assert.strictEqual(events.length, 1, 'the edit reached VS Code’s event');
+    assert.ok(chunk(doc).includes(`>${to}<`), `the edit renamed ${from} to ${to}`);
     return events[0];
   }
 
@@ -202,7 +227,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
   test('with unsaved edits, nothing happens at the change, and the save then refuses instead of overwriting', async () => {
     const doc = await openDoc();
     const control = await witness();
-    edit(doc, 'Ki');
+    await edit(doc, 'Ki');
 
     const outside = renamedTo('Kp_matlab');
     writeOutside(path, outside);
@@ -229,7 +254,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
 
   test('undoing back to the saved state counts as no unsaved edits again', async () => {
     const doc = await openDoc();
-    const ev = edit(doc, 'Ki');
+    const ev = await edit(doc, 'Ki');
     ev.undo();
     writeOutside(path, renamedTo('Kp_matlab'));
     await untilFollowed('the document to reload', () => chunk(doc).includes('>Kp_matlab<'));
@@ -238,7 +263,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
 
   test('a prompt that is still open is not shown again by the next save', async () => {
     const doc = await openDoc();
-    edit(doc, 'Ki');
+    await edit(doc, 'Ki');
     writeOutside(path, renamedTo('Kp_matlab'));
     let close!: (choice: string | undefined) => void;
     provider.askSaveConflict = (message: string) => {
@@ -253,7 +278,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
 
   test('Overwrite writes over the version it was asked about, and a newer one is asked about again', async () => {
     const doc = await openDoc();
-    edit(doc, 'Ki');
+    await edit(doc, 'Ki');
     writeOutside(path, renamedTo('Kp_matlab'));
     answer = 'Overwrite';
     await assert.rejects(() => provider.saveCustomDocument(doc, token()), isCancellation);
@@ -267,7 +292,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     assert.strictEqual(asked.length, 1, 'without asking again');
 
     // The answer was about that version only.
-    edit(doc, 'Kd', 'Ki');
+    await edit(doc, 'Kd', 'Ki');
     writeOutside(path, renamedTo('Kp_again'));
     answer = undefined;
     await assert.rejects(() => provider.saveCustomDocument(doc, token()), isCancellation);
@@ -277,7 +302,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
 
   test('a revert reloads from disk and ends the conflict', async () => {
     const doc = await openDoc();
-    edit(doc, 'Ki');
+    await edit(doc, 'Ki');
     writeOutside(path, renamedTo('Kp_matlab'));
     await assert.rejects(() => provider.saveCustomDocument(doc, token()), isCancellation);
 
@@ -287,7 +312,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     assert.ok(!chunk(doc).includes('>Ki<'), 'and the edit is gone');
 
     // A new edit on the reloaded document, which no longer spells `Kp`.
-    edit(doc, 'Kz', 'Kp_matlab');
+    await edit(doc, 'Kz', 'Kp_matlab');
     await provider.saveCustomDocument(doc, token());
     assert.ok(chunkOnDisk(path).includes('>Kz<'), 'the next save writes without asking');
     assert.strictEqual(asked.length, 1);
@@ -309,7 +334,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     await settle(600);
     repaints.length = 0;
 
-    edit(doc, 'Ki');
+    await edit(doc, 'Ki');
     await provider.saveCustomDocument(doc, token());
     assert.deepStrictEqual(repaints, ['registered'], 'the save painted once, from what it registered');
 
@@ -327,7 +352,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
 
   test('files.saveConflictResolution: overwriteFileOnDisk saves without asking', async () => {
     const doc = await openDoc();
-    edit(doc, 'Ki');
+    await edit(doc, 'Ki');
     writeOutside(path, renamedTo('Kp_matlab'));
     await setFiles('saveConflictResolution', 'overwriteFileOnDisk', uri);
     try {
@@ -341,7 +366,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
 
   test('a file deleted under the view is recreated by the next save, as VS Code does', async () => {
     const doc = await openDoc();
-    edit(doc, 'Ki');
+    await edit(doc, 'Ki');
     unlinkSync(path);
     await settle(300);
     assert.ok(chunk(doc).includes('>Ki<'), 'the view keeps its contents');

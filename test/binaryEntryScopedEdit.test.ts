@@ -11,8 +11,7 @@
 // from the real modules:
 //   BinarySlddParser     (parseBinarySlddParts)      — the parse post() no longer does
 //   DataModel            (mutateSubtree, findNodeById)
-//   BinarySlddSerializer (serializeEntryToXml)
-//   xmlEntrySplice       (findEntryObjectSpan)
+//   BinarySlddSerializer (spliceEntryObject)
 //   xmlStructuralEdit    (addChildXml / deleteChildXml)
 //   slddBaseline         (isEntryModified vs computeModified)
 //   rowBuilder           (buildEntryRows vs buildRows)
@@ -37,8 +36,7 @@ import { unzipSync } from 'fflate';
 import {
   DataModel,
   parseBinarySlddParts,
-  serializeEntryToXml,
-  findEntryObjectSpan,
+  spliceEntryObject,
   entrySelectorOf,
   planDeletion,
 } from 'data-explorer-core';
@@ -112,13 +110,12 @@ function openDoc(uri: string) {
     if (isEntryModified(uri, entry)) modified.add(entry.name);
     return buildEntryRows(entry, entry.parent.name, modified);
   };
-  // The text half of an edit: replace the owning entry's <Object> with its
-  // reserialization, addressed by the selector the entry had BEFORE the mutation.
+  // The text half of an edit: core's splice of the owning entry's <Object>, addressed by
+  // the selector the entry had BEFORE the mutation.
   const spliceEntryText = (entry: any, selector: ReturnType<typeof entrySelectorOf>) => {
-    const frag = serializeEntryToXml(entry).replace(/\n$/, '');
-    const span = findEntryObjectSpan(doc.chunkXml, selector);
-    expect(span, `the entry text for "${selector.name}" is locatable`).not.toBeNull();
-    doc.chunkXml = doc.chunkXml.slice(0, span!.offset) + frag + doc.chunkXml.slice(span!.offset + span!.length);
+    const after = spliceEntryObject(doc.chunkXml, entry, selector);
+    expect(after, `the entry text for "${selector.name}" is locatable`).not.toBeNull();
+    doc.chunkXml = after!;
   };
 
   const entryNamed = (name: string) =>

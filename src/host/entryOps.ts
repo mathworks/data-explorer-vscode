@@ -18,7 +18,9 @@
 // That is what makes redo safe for a paste — re-running it would mint another uuid and
 // another unique name, so redo would not restore the state undo took away. The record
 // is deep-copied on capture for the same reason: it has to describe the entry as it
-// was at capture time even after later edits mutate that node.
+// was at capture time even after later edits mutate that node. A binary .sldd's op can
+// also carry the entry's text, and is rebuilt from that when it reads as the same entry,
+// so the entry keeps the bytes it came from (see EntryFragment).
 //
 // EVERY OP KEEPS THE SESSION HONEST. A node id is a PATH, so an entry joining,
 // leaving, or being renamed inside the tree rekeys itself and its descendants in the
@@ -31,7 +33,7 @@
 // than guessing when the model is not the shape it expects; the caller answers a throw
 // with the wide repaint, which rebuilds from the text that is already correct.
 
-import { DataModel, toEntrySelector, type EntrySelector } from 'data-explorer-core';
+import { DataModel, readEntryFragment, toEntrySelector, type EntrySelector } from 'data-explorer-core';
 
 /** One entry serialized the way `SectionNode.parseEntry` takes it back. */
 export type EntryRecord = Record<string, unknown>;
@@ -65,11 +67,29 @@ export function mutateEntry<T>(entry: any, mutate: () => T): T {
  */
 export type EntryOp =
   /** Rebuild the entry the table spells `rowId` from `record`, in its own slot. */
-  | { kind: 'replace'; rowId: string; record: EntryRecord }
+  | { kind: 'replace'; rowId: string; record: EntryRecord; fragment?: EntryFragment }
   /** Build `record` into `sectionName` at `index` (clamped; < 0 or past the end = last). */
-  | { kind: 'insert'; sectionName: string; index: number; record: EntryRecord }
+  | { kind: 'insert'; sectionName: string; index: number; record: EntryRecord; fragment?: EntryFragment; place?: unknown }
   /** Detach the entry the table spells `rowId`. */
   | { kind: 'remove'; rowId: string };
+
+/**
+ * The entry's `<Object>…</Object>` in the chunk state its op restores, for a binary .sldd, or
+ * null where it was looked for and not found. Absent until a host cuts it (the binary provider
+ * does, from the chunk an undo or redo has just restored); the JSON provider never does.
+ *
+ * WHY. A node rebuilt from `record` has no bytes it was read from, so the next edit of it
+ * writes the whole entry from the model, and every part the writers spell differently from
+ * the file changes with it. Rebuilt from the fragment (core's readEntryFragment), it is read
+ * as the file's own entries are, and given the place of the node it takes over (`place` for an
+ * insert, which has no live node to take over), so it is written as those bytes while nothing
+ * edits it and merged with them once something does. That is the maintainer's D12: undo and
+ * redo keep the original-bytes provenance.
+ *
+ * The record stays the fallback, so a fragment that does not read as exactly the entry the
+ * record names costs the provenance, never the undo.
+ */
+export type EntryFragment = string | null;
 
 /**
  * What an applied op leaves for the views to repaint — one per op, in order.
@@ -140,7 +160,13 @@ export function replaceOp(entry: any, rowId: string): EntryOp {
   return { kind: 'replace', rowId, record: entryRecord(entry) };
 }
 
-/** The op that puts `entry` back where it stands now — section and position included. */
+/**
+ * The op that puts `entry` back where it stands now — section and position included.
+ *
+ * `place` is the entry node itself, held only for the bytes it was read from: an entry
+ * rebuilt from a fragment takes its place in the file (see EntryFragment). It is never read
+ * for anything the record says.
+ */
 export function insertOp(entry: any): EntryOp {
   const section = entry.parent;
   return {
@@ -148,6 +174,7 @@ export function insertOp(entry: any): EntryOp {
     sectionName: section?.name ?? '',
     index: section ? section.children.indexOf(entry) : -1,
     record: entryRecord(entry),
+    place: entry,
   };
 }
 
@@ -312,13 +339,40 @@ function parseRecord(section: any, record: EntryRecord): any {
   return fresh;
 }
 
-function replaceEntry(model: any, op: { rowId: string; record: EntryRecord }): AppliedOp {
+function uuidOf(metadata: unknown): unknown {
+  return metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>).uuid : undefined;
+}
+
+// Build an op's entry into `section` from its fragment when it has one that reads as the entry
+// its record names, with the place of `placeFrom` in the file; otherwise from its record. See
+// EntryFragment. Appends, as parseRecord does.
+function rebuild(section: any, op: { record: EntryRecord; fragment?: EntryFragment }, placeFrom: unknown): any {
+  if (op.fragment) {
+    let fresh: any = null;
+    try {
+      fresh = readEntryFragment(op.fragment, {
+        section,
+        systemComposer: section.parent?.systemComposer ?? null,
+        inheritPlaceFrom: (placeFrom ?? undefined) as any,
+      });
+    } catch {
+      fresh = null;
+    }
+    // The same entry as the record, or it is not this op's: a fragment cut from the wrong
+    // span would rebuild another entry in this one's place.
+    if (fresh && fresh.name === op.record.name && uuidOf(fresh.metadata) === uuidOf(op.record.metadata)) return fresh;
+    if (fresh) section.removeChild(fresh);
+  }
+  return parseRecord(section, op.record);
+}
+
+function replaceEntry(model: any, op: { rowId: string; record: EntryRecord; fragment?: EntryFragment }): AppliedOp {
   const live = liveEntry(model, op.rowId);
   const section = live.parent;
   const index = section.children.indexOf(live);
   // Build first, so a record that will not parse throws before the live entry is
   // touched — the caller's wide fallback then repaints a model that is still intact.
-  const fresh = parseRecord(section, op.record);
+  const fresh = rebuild(section, op, live);
   section.removeChild(fresh);
   DataModel.unindexSubtree(live, () => section.removeChild(live));
   section.addChild(fresh, index);
@@ -328,10 +382,10 @@ function replaceEntry(model: any, op: { rowId: string; record: EntryRecord }): A
 
 function insertEntry(
   model: any,
-  op: { sectionName: string; index: number; record: EntryRecord },
+  op: { sectionName: string; index: number; record: EntryRecord; fragment?: EntryFragment; place?: unknown },
 ): AppliedOp {
   const section = sectionOf(model, op.sectionName);
-  const fresh = parseRecord(section, op.record);
+  const fresh = rebuild(section, op, op.place);
   const last = section.children.length - 1;
   const at = op.index < 0 || op.index > last ? last : op.index;
   if (at !== last) {
