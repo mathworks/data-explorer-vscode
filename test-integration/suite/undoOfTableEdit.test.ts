@@ -20,6 +20,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
+import { waitFor } from './tools/hostHarness';
 
 function ctx(): vscode.ExtensionContext {
   const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
@@ -32,8 +33,6 @@ function wsUri(name: string): vscode.Uri {
   assert.ok(ws, 'a workspace folder must be open');
   return vscode.Uri.joinPath(ws.uri, name);
 }
-
-const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -106,7 +105,7 @@ suite('A JSON .sldd table paints the undo of its own edit', () => {
         new vscode.CancellationTokenSource().token,
       );
       view.send({ type: 'ready' });
-      await settle(800);
+      await waitFor('the first paint', () => view.posts.some((m) => m.type === 'setRows'));
       const opened = view.posts.filter((m) => m.type === 'setRows').pop();
       assert.ok(opened, 'the first paint sent the whole table');
 
@@ -121,7 +120,7 @@ suite('A JSON .sldd table paints the undo of its own edit', () => {
 
       // A cell edit, exactly as the table sends it.
       view.send({ type: 'edit', rowId: row.ID, columnId: 'Value', oldValue: '1', newValue: '77' });
-      await settle(1500);
+      await waitFor('the edit to reach the document', () => doc.getText() !== before);
       const after = doc.getText();
       assert.notStrictEqual(after, before, 'the edit reached the document');
       const written = spanOf(after, 'Number');
@@ -139,7 +138,11 @@ suite('A JSON .sldd table paints the undo of its own edit', () => {
         original,
       );
       assert.ok(await vscode.workspace.applyEdit(undo), 'the undo applied');
-      await settle(1500);
+      // Any repaint, wide or narrow, ends the wait, so a wide one fails on the assert that
+      // names it rather than as a timeout.
+      await waitFor('the undo to repaint', () =>
+        view.posts.some((m) => m.type === 'updateEntryRows' || m.type === 'setRows'),
+      );
 
       assert.strictEqual(doc.getText(), before, 'the document is back to what it was');
       assert.ok(
