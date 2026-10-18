@@ -19,6 +19,7 @@
 // that no edit would write, which is what the gate is there to catch.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { readFileSync, statSync, utimesSync, writeFileSync } from 'fs';
 import { unzipSync, zipSync } from 'fflate';
 import { DataModel, serializeEntryToXml } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
@@ -103,7 +104,7 @@ async function open(uri: vscode.Uri) {
     doc.dispose();
     await vscode.workspace.fs.delete(uri);
   };
-  return { doc, view, edits, entry, edit, save, revert, close };
+  return { provider, doc, view, edits, entry, edit, save, revert, close };
 }
 
 type Doc = Awaited<ReturnType<typeof open>>;
@@ -720,6 +721,85 @@ suite('Binary .sldd: an edit keeps what it did not touch (D12)', () => {
       d.edits[d.edits.length - 1].undo();
       await d.save();
       assert.strictEqual(await chunkOnDisk(uri), first, 'with the edit undone, the document saves as it was written');
+    } finally {
+      await d.close();
+    }
+  });
+
+  // The same window in a save that fails after its gate: the file changed on disk since it was
+  // read, so the disk check refuses the save before it writes (binarySlddOutsideChange). A save
+  // that fails wrote nothing, so the edits it took go back, joining the edit made during it rather
+  // than replacing it. The user answers Overwrite, and the save after that writes.
+  /** Change the file behind the editor, as another program would: other bytes, and a later mtime. */
+  function changeOutside(uri: vscode.Uri): void {
+    const before = statSync(uri.fsPath).mtimeMs;
+    const zip = unzipSync(readFileSync(uri.fsPath));
+    zip[CHUNK] = new TextEncoder().encode(new TextDecoder().decode(zip[CHUNK]).replace('>MyAlias<', '>MyAliasOutside<'));
+    writeFileSync(uri.fsPath, zipSync(zip));
+    const later = new Date(Math.max(Date.now(), before) + 2000);
+    utimesSync(uri.fsPath, later, later);
+  }
+  /** A save the disk check refuses, with `during` made while it is in flight, answered Overwrite. */
+  async function refusedByTheDisk(d: Doc, during: () => void): Promise<void> {
+    const asked: string[] = [];
+    d.provider.askSaveConflict = async (message: string) => {
+      asked.push(message);
+      return 'Overwrite';
+    };
+    changeOutside(d.doc.uri);
+    const saving = d.save();
+    during();
+    await assert.rejects(saving, (err) => err instanceof vscode.CancellationError, 'the save is refused, as the file changed on disk');
+    await waitFor('the Overwrite answer', () => asked.length === 1 && d.doc.overwriteStamp !== undefined);
+  }
+
+  test('an edit made while a save is writing joins the edits it gives back when the disk check refuses it', async () => {
+    const uri = await workingCopy('d12_gate_during_refused_write.sldd', PARAMS);
+    const d = await open(uri);
+    try {
+      d.edit('MyAlias', 'Name', 'MyAliasR');
+      await refusedByTheDisk(d, () => d.edit('sglScalar', 'Name', 'sglR'));
+
+      await d.save();
+      const written = await chunkOnDisk(uri);
+      assert.strictEqual(written, d.doc.chunkXml, 'the save after Overwrite writes the document');
+      assert.ok(written.includes('>MyAliasR<') && written.includes('>sglR<'), 'with both edits');
+    } finally {
+      await d.close();
+    }
+  });
+
+  test('an edit made while a save is writing, of an entry the check cannot read, is refused after the disk check refused that save', async () => {
+    // And after the table re-reads the chunk, which builds the entry's node from the edit's text,
+    // so only the record made at the edit still says the file's entry cannot be checked.
+    const uri = await workingCopy('d12_gate_during_refused_write_unchecked.sldd', PARAMS, (xml) =>
+      xml.replace(PI_VALUE, PI_VALUE + '\n        <?keep this?>'),
+    );
+    const d = await open(uri);
+    try {
+      d.edit('sglScalar', 'Name', 'sglR');
+      await refusedByTheDisk(d, () => d.edit('scalarD', 'Name', 'scalarE'));
+      assert.ok(!d.doc.chunkXml.includes('<?keep this?>'), 'the edit made during the write wrote the entry whole, without its instruction');
+      const posts = d.view.posts.length;
+      d.view.send({ type: 'ready' });
+      await waitFor('the table to be rebuilt', () => d.view.posts.slice(posts).some((m) => m.type === 'setRows'));
+
+      const onDisk = await vscode.workspace.fs.readFile(uri);
+      assert.ok((await chunkOnDisk(uri)).includes('<?keep this?>'), 'the file holds the instruction');
+      await assert.rejects(
+        d.save(),
+        (err: Error) =>
+          /^Refusing to save/.test(err.message) && err.message.includes('"scalarE"') && /cannot (be )?check/.test(err.message),
+        'the save after Overwrite is refused, and says the entry could not be checked',
+      );
+      assert.deepStrictEqual(await vscode.workspace.fs.readFile(uri), onDisk, 'and the file on disk is untouched');
+
+      // Undo that edit, as the message says, and the rest saves with the instruction.
+      d.edits[d.edits.length - 1].undo();
+      await d.save();
+      const written = await chunkOnDisk(uri);
+      assert.strictEqual(written, d.doc.chunkXml, 'with that edit undone, the document saves');
+      assert.ok(written.includes('>sglR<') && written.includes('<?keep this?>'), 'with the other edit, and the instruction');
     } finally {
       await d.close();
     }
