@@ -577,6 +577,44 @@ suite('Binary .sldd: an edit keeps what it did not touch (D12)', () => {
     }
   });
 
+  test('a save is refused when the check cannot read an entry with no UUID renamed, re-read by the table, and renamed back', async () => {
+    // The re-read builds the entry's node from the text the first rename wrote, which the check can
+    // read, so the rename back records nothing of its own. The entry is back under the key the file
+    // has it by, and only the first rename's record, kept under every key the entry has gone by,
+    // still says that the file's entry cannot be checked.
+    const [, fixture, transform] = uncheckable[1];
+    const uri = await workingCopy('d12_gate_unchecked_renamed_back.sldd', fixture, transform);
+    const d = await open(uri);
+    try {
+      d.edit('paramArray', 'Name', 'pZ');
+      const posts = d.view.posts.length;
+      d.view.send({ type: 'ready' });
+      await waitFor('the table to be rebuilt', () => d.view.posts.slice(posts).some((m) => m.type === 'setRows'));
+      d.edit('pZ', 'Name', 'paramArray');
+      assert.ok(!d.doc.chunkXml.includes('<?keep this?>'), 'the text to be saved is without the instruction');
+      const onDisk = await vscode.workspace.fs.readFile(uri);
+      await assert.rejects(
+        d.save(),
+        (err: Error) =>
+          /^Refusing to save/.test(err.message) && err.message.includes('"paramArray"') && /cannot (be )?check/.test(err.message),
+        'the gate refuses, and says the entry could not be checked',
+      );
+      assert.deepStrictEqual(await vscode.workspace.fs.readFile(uri), onDisk, 'and the file on disk is untouched');
+      assert.ok((await chunkOnDisk(uri)).includes('<?keep this?>'), 'so it keeps the instruction');
+
+      // Undo both renames, and the file saves with the instruction.
+      const [first, second] = d.edits.slice(-2);
+      second.undo();
+      first.undo();
+      await d.save();
+      const written = await chunkOnDisk(uri);
+      assert.strictEqual(written, d.doc.chunkXml, 'with the renames undone, the document saves');
+      assert.ok(written.includes('<?keep this?>'), 'and keeps the instruction');
+    } finally {
+      await d.close();
+    }
+  });
+
   test('a revert forgets the entries the check could not read: the file it reads is checked anew', async () => {
     const value = PI_VALUE;
     const uri = await workingCopy('d12_gate_unchecked_revert.sldd', PARAMS, (xml) =>
