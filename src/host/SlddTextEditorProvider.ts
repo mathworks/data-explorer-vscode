@@ -657,7 +657,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         if (!plan) return false;
         const entryRowId = plan.entry.id;
         const applied = applyEntryOps(model, [
-          { kind: 'replace', rowId: plan.entry.id, record: plan.record },
+          { kind: 'replace', rowId: plan.entry.id, record: plan.record, fromDocumentText: plan.fromDocumentText },
         ]);
         const op = applied[0];
         // PRECONDITION (untested): applyEntryOps answers a `replace` op with a `replace`, one
@@ -714,7 +714,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // from an edit of another entry cannot move this repaint onto the wrong run of rows.
         const entryRowId = hint && hint.entryId === plan.entry.id ? hint.rowId : plan.entry.id;
         const applied = applyEntryOps(model, [
-          { kind: 'replace', rowId: plan.entry.id, record: plan.record },
+          { kind: 'replace', rowId: plan.entry.id, record: plan.record, fromDocumentText: plan.fromDocumentText },
         ]);
         const op = applied[0];
         // PRECONDITION (untested): applyEntryOps answers a `replace` op with a `replace`,

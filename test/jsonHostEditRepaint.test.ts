@@ -600,6 +600,7 @@ describe('planOwnEdit — the entry the host wrote, read back out of what it wro
       kind: 'replace',
       rowId: 'doc/design/Gain_renamed',
       record: { name: 'Gain_renamed', value: 42 },
+      fromDocumentText: true,
     });
     expect(plan!.entryRowId).toBe('doc/design/Gain');
   });

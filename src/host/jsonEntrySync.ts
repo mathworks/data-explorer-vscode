@@ -33,6 +33,11 @@ export interface EntrySyncPlan {
   entry: any;
   /** Its element re-parsed — exactly what `SectionNode.parseEntry` takes. */
   record: EntryRecord;
+  /**
+   * Always true: the record is the document's own text, so the replace op built from this plan
+   * says so (EntryOp's `fromDocumentText`) and core reads it as the file's read does.
+   */
+  fromDocumentText: true;
 }
 
 /** A single `vscode.TextDocumentContentChangeEvent`, as much of it as matters here. */
@@ -166,8 +171,9 @@ export function planOwnEdit(
   if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
   // The op resolves the entry as the MODEL spells it (the mutation renamed it already); the
   // repaint lands on the id the TABLE still shows. Neither substitutes for the other.
+  // The record is the text now in the document, so the op says so (see EntryOp).
   return {
-    op: { kind: 'replace', rowId: hint.entryId, record: record as EntryRecord },
+    op: { kind: 'replace', rowId: hint.entryId, record: record as EntryRecord, fromDocumentText: true },
     entryRowId: hint.rowId,
   };
 }
@@ -247,7 +253,7 @@ function planFromElementText(model: any, elementText: string, arrayCount?: numbe
   if (metaString(entryRecord.metadata, 'namespace') !== metaString(from, 'namespace')) return null;
   if (metaString(entryRecord.metadata, 'isderived') !== metaString(from, 'isderived')) return null;
 
-  return { entry, record: entryRecord };
+  return { entry, record: entryRecord, fromDocumentText: true };
 }
 
 /**

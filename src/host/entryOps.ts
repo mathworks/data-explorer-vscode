@@ -64,8 +64,15 @@ export function mutateEntry<T>(entry: any, mutate: () => T): T {
  * entry, which is why nothing here has to know how entries are built inside.
  */
 export type EntryOp =
-  /** Rebuild the entry the table spells `rowId` from `record`, in its own slot. */
-  | { kind: 'replace'; rowId: string; record: EntryRecord }
+  /**
+   * Rebuild the entry the table spells `rowId` from `record`, in its own slot.
+   *
+   * `fromDocumentText` says the record is the text dictionary's own text, re-read: the JSON
+   * view's plans set it (jsonEntrySync.ts), and core then reads the record as the file's read
+   * reads it (`parseEntry`'s `asRead`, mathworks/data-explorer-core#140). An undo or redo
+   * record, a paste and an insert are not the file's text, and never set it.
+   */
+  | { kind: 'replace'; rowId: string; record: EntryRecord; fromDocumentText?: boolean }
   /** Build `record` into `sectionName` at `index` (clamped; < 0 or past the end = last). */
   | { kind: 'insert'; sectionName: string; index: number; record: EntryRecord }
   /** Detach the entry the table spells `rowId`. */
@@ -306,19 +313,25 @@ function sectionOf(model: any, name: string): any {
 // path disagreeing about the same file.
 //
 // parseEntry APPENDS the node to the section; both callers below fix the position.
-function parseRecord(section: any, record: EntryRecord): any {
-  const fresh = section.parseEntry(record, section.parent?.systemComposer ?? null);
+//
+// `options` is parseEntry's own third argument. Only a replace whose record is the document's
+// text passes `asRead` (see EntryOp); an insert passes nothing.
+function parseRecord(section: any, record: EntryRecord, options?: { asRead?: boolean }): any {
+  const fresh = section.parseEntry(record, section.parent?.systemComposer ?? null, options);
   if (!fresh) throw new Error(`Could not rebuild entry "${String(record.name ?? '')}".`);
   return fresh;
 }
 
-function replaceEntry(model: any, op: { rowId: string; record: EntryRecord }): AppliedOp {
+function replaceEntry(
+  model: any,
+  op: { rowId: string; record: EntryRecord; fromDocumentText?: boolean },
+): AppliedOp {
   const live = liveEntry(model, op.rowId);
   const section = live.parent;
   const index = section.children.indexOf(live);
   // Build first, so a record that will not parse throws before the live entry is
   // touched — the caller's wide fallback then repaints a model that is still intact.
-  const fresh = parseRecord(section, op.record);
+  const fresh = parseRecord(section, op.record, { asRead: op.fromDocumentText });
   section.removeChild(fresh);
   DataModel.unindexSubtree(live, () => section.removeChild(live));
   section.addChild(fresh, index);

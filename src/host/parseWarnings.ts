@@ -28,7 +28,7 @@
 //      would. So it becomes the banner's headline instead of an exception.
 //
 // Kept VS-Code-free: the providers own the postMessage, this owns the rule.
-import type { ParseWarning } from 'data-explorer-core';
+import type { ParseWarning, ParseWarningCode } from 'data-explorer-core';
 
 /** The `code`s that describe the whole source rather than one piece of it. */
 const SOURCE_LEVEL = new Set(['source-empty', 'source-unreadable']);
@@ -43,6 +43,18 @@ const SHARED_NAME = 'duplicate-id';
 
 /** The headline when the only thing to say is that some names are shared. */
 const SHARED_NAME_HEADLINE = 'Some items in this file share a name, so they cannot be edited or deleted here.';
+
+/**
+ * The `code` core adds when a `.mat` file holds more values than its tree is built with
+ * (core #142). Nothing was lost: the file was read in full, and the values past the ceiling
+ * are shown as their summary or literal with no rows under them, and copy whole. So, like a
+ * shared name, it is never counted as a part that could not be read. Typed against core's
+ * union so a renamed code fails the typecheck instead of quietly counting as a loss again.
+ */
+const NOT_EXPANDED: ParseWarningCode = 'part-not-expanded';
+
+/** The headline when the only thing to say is that some values are shown without rows. */
+const NOT_EXPANDED_HEADLINE = 'This file was read in full, but some values are shown without the rows under them.';
 
 /**
  * How many individual messages the banner spells out. A `.mat` with a truncated
@@ -107,6 +119,10 @@ export function sourceWarnings(node: unknown): ParseWarning[] {
  * headline of its own when it is all there is, and otherwise only a line below. The
  * details are core's messages verbatim — each already names what it is about, so the
  * `part` field is used to tell two warnings apart here and never rendered.
+ *
+ * Values shown without rows (`part-not-expanded`) are not a loss either. The warning has
+ * the headline when it is the only one; otherwise its line goes last, after the cap, so a
+ * long list of losses cannot hide it and the withheld count never includes it.
  */
 export function warningBanner(warnings: ParseWarning[] | undefined): WarningBanner | undefined {
   if (!warnings || warnings.length === 0) {
@@ -127,12 +143,16 @@ export function warningBanner(warnings: ParseWarning[] | undefined): WarningBann
   }
 
   const sourceLevel = unique.find((w) => SOURCE_LEVEL.has(w.code));
-  const rest = unique.filter((w) => w !== sourceLevel);
+  const others = unique.filter((w) => w !== sourceLevel);
+  const notExpanded = others.filter((w) => w.code === NOT_EXPANDED);
+  const rest = others.filter((w) => w.code !== NOT_EXPANDED);
   const lost = rest.filter((w) => w.code !== SHARED_NAME).length;
   const headline = sourceLevel
     ? sourceLevel.message
     : lost === 0
-      ? SHARED_NAME_HEADLINE
+      ? rest.length === 0
+        ? NOT_EXPANDED_HEADLINE
+        : SHARED_NAME_HEADLINE
       : lost === 1
         ? 'One part of this file could not be read, so what you see below is incomplete.'
         : `${lost} parts of this file could not be read, so what you see below is incomplete.`;
@@ -142,5 +162,6 @@ export function warningBanner(warnings: ParseWarning[] | undefined): WarningBann
   if (hidden > 0) {
     details.push(`…and ${hidden} more.`);
   }
+  details.push(...notExpanded.map((w) => w.message));
   return { headline, details };
 }
