@@ -665,6 +665,66 @@ suite('Binary .sldd: an edit keeps what it did not touch (D12)', () => {
     }
   });
 
+  // An edit made while a save is writing. The save gates and zips the text before its first await,
+  // so that edit is not in what it writes: it stays unsaved, and the next save is held to the text
+  // this one wrote, with that edit counted as an edit. The save is started and not awaited until
+  // the edit is made, as when the user edits while the write is still in flight.
+  test('an edit made while a save is writing is left to the next save, which writes it', async () => {
+    const uri = await workingCopy('d12_gate_during_write.sldd', PARAMS);
+    const d = await open(uri);
+    try {
+      d.edit('MyAlias', 'Name', 'MyAliasR');
+      const first: string = d.doc.chunkXml;
+      const saving = d.save();
+      d.edit('sglScalar', 'Name', 'sglR');
+      await saving;
+      assert.strictEqual(await chunkOnDisk(uri), first, 'the save wrote the text it was started with, without the edit made during it');
+
+      await d.save();
+      const written = await chunkOnDisk(uri);
+      assert.strictEqual(written, d.doc.chunkXml, 'and the next save writes that edit too');
+      assert.ok(written.includes('>sglR<'), 'so it is on disk now');
+    } finally {
+      await d.close();
+    }
+  });
+
+  test('an edit made while a save is writing, of an entry the check cannot read, is refused at the next save', async () => {
+    // The text the save wrote still holds the instruction, as the file did, and the edit made
+    // during the write drops it. Held to the text the document had moved on to instead, the next
+    // save would find nothing changed and pass the loss.
+    const uri = await workingCopy('d12_gate_during_write_unchecked.sldd', PARAMS, (xml) =>
+      xml.replace(PI_VALUE, PI_VALUE + '\n        <?keep this?>'),
+    );
+    const d = await open(uri);
+    try {
+      d.edit('sglScalar', 'Name', 'sglR');
+      const first: string = d.doc.chunkXml;
+      const saving = d.save();
+      d.edit('scalarD', 'Name', 'scalarE');
+      assert.ok(!d.doc.chunkXml.includes('<?keep this?>'), 'the edit made during the write wrote the entry whole, without its instruction');
+      await saving;
+      assert.strictEqual(await chunkOnDisk(uri), first, 'the save wrote the text it was started with, without the edit made during it');
+      assert.ok(first.includes('<?keep this?>'), 'so the file keeps the instruction');
+
+      const onDisk = await vscode.workspace.fs.readFile(uri);
+      await assert.rejects(
+        d.save(),
+        (err: Error) =>
+          /^Refusing to save/.test(err.message) && err.message.includes('"scalarE"') && /cannot (be )?check/.test(err.message),
+        'the next save is refused, and says the entry could not be checked',
+      );
+      assert.deepStrictEqual(await vscode.workspace.fs.readFile(uri), onDisk, 'and the file on disk is untouched');
+
+      // Undo that edit, as the message says, and the file saves with the instruction.
+      d.edits[d.edits.length - 1].undo();
+      await d.save();
+      assert.strictEqual(await chunkOnDisk(uri), first, 'with the edit undone, the document saves as it was written');
+    } finally {
+      await d.close();
+    }
+  });
+
   // A chunk core reads but the gate's scan cannot vouch for: nothing can be compared entry by
   // entry, so the whole chunk is, and it saves only as it was.
   const unscannable: [label: string, transform: (xml: string) => string][] = [
