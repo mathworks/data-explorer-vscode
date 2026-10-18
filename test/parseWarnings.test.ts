@@ -185,3 +185,62 @@ describe('warningBanner and duplicate-id', () => {
     expect(banner.details).toEqual([twins('K').message, twins('K', 'Other Data').message]);
   });
 });
+
+// A `.mat` file past the node ceiling (core #142). Core builds its tree up to a ceiling and
+// adds ONE warning, coded `part-not-expanded`, naming the first value it left without rows
+// and how many others there are. Nothing was lost: the file was read in full, those values
+// show their summary or literal, and they copy whole. So the banner must not count it as a
+// part that could not be read, whether it is alone or beside real losses.
+describe('warningBanner and part-not-expanded', () => {
+  const NOT_EXPANDED = 'This file was read in full, but some values are shown without the rows under them.';
+  // Core's own message, in the shape MatNode.fromParsed writes it.
+  const notExpanded: ParseWarning = {
+    code: 'part-not-expanded',
+    message:
+      '"song{3}.events" and 36 other values are shown without their contents: ' +
+      'this file holds more than 500,000 values to show. Copying one copies it whole.',
+    part: 'song{3}.events',
+  };
+
+  it('has a headline of its own when it is the only warning, and core’s message below it', () => {
+    const banner = warningBanner([notExpanded])!;
+    expect(banner.headline).toBe(NOT_EXPANDED);
+    expect(banner.headline).not.toMatch(/could not be read|incomplete/);
+    expect(banner.details).toEqual([notExpanded.message]);
+    // And the file opens: a tree built short of the whole file is never a reason to refuse it.
+    expect(() => refuseIfUnreadable([notExpanded])).not.toThrow();
+  });
+
+  it('is not counted as a lost part when a part could not be read', () => {
+    const banner = warningBanner([part('Skipped a variable that could not be decoded.', 'alpha'), notExpanded])!;
+    expect(banner.headline).toBe('One part of this file could not be read, so what you see below is incomplete.');
+    // Still listed, below the loss: it explains rows the user would otherwise take for lost.
+    expect(banner.details).toEqual(['Skipped a variable that could not be decoded.', notExpanded.message]);
+  });
+
+  it('stays on screen when the list of losses is capped, and is not counted among the withheld', () => {
+    // Core adds it after the reader's warnings, so it arrives last: the place a cap cuts.
+    const losses = Array.from({ length: MAX_BANNER_DETAILS + 3 }, (_, i) => part(`lost ${i}`, `p${i}`));
+    const banner = warningBanner([...losses, notExpanded])!;
+    expect(banner.headline).toBe(
+      `${MAX_BANNER_DETAILS + 3} parts of this file could not be read, so what you see below is incomplete.`,
+    );
+    expect(banner.details).toEqual([
+      ...losses.slice(0, MAX_BANNER_DETAILS).map((w) => w.message),
+      '…and 3 more.',
+      notExpanded.message,
+    ]);
+  });
+
+  it('beside shared names alone, counts nothing as lost', () => {
+    const twins: ParseWarning = {
+      code: 'duplicate-id',
+      message: "Two entries in Design Data are named 'K'. Neither can be edited or deleted until the file gives one of them another name.",
+      part: 'K',
+    };
+    const banner = warningBanner([notExpanded, twins])!;
+    // The shared-name headline stays, because it is the one that says what cannot be done here.
+    expect(banner.headline).toBe('Some items in this file share a name, so they cannot be edited or deleted here.');
+    expect(banner.details).toEqual([twins.message, notExpanded.message]);
+  });
+});
