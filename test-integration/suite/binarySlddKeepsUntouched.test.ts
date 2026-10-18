@@ -470,4 +470,49 @@ suite('Binary .sldd: an edit keeps what it did not touch (D12)', () => {
     }
   });
 
+  // An entry the file does not hold has nothing of the file's to keep, so the refusal above is
+  // not for it: a pasted, an added and a moved entry each save.
+  const additions: [label: string, act: (d: Doc) => void][] = [
+    [
+      'a pasted entry',
+      (d) => {
+        d.view.send({ type: 'copy', rowIds: [d.entry('MyAlias').id] });
+        d.view.send({ type: 'paste', rowId: d.entry('MyAlias').id });
+      },
+    ],
+    [
+      'an added entry',
+      (d) => d.view.send({ type: 'addEntry', section: d.entry('MyAlias').parent.name, className: 'Simulink.Parameter', rename: false }),
+    ],
+    [
+      'an entry moved to another section',
+      (d) => {
+        const sections = (DataModel.getDataSource(d.doc.srcId) as any).children.map((s: any) => s.name);
+        const moved = d.entry('MyAlias');
+        const other = sections.find((n: string) => n !== moved.parent.name);
+        assert.ok(other, 'the dictionary has another section');
+        d.view.send({ type: 'dragStart', rowIds: [moved.id] });
+        d.view.send({ type: 'drop', rowId: 'section:' + other, mode: 'move' });
+      },
+    ],
+  ];
+  for (const [label, act] of additions) {
+    test(`${label} saves`, async () => {
+      const uri = await workingCopy('d12_gate_added.sldd', PARAMS);
+      const d = await open(uri);
+      try {
+        const before: string = d.doc.chunkXml;
+        d.view.posts.length = 0;
+        act(d);
+        const refused = () => d.view.posts.find((m) => m.type === 'error' || m.type === 'validationError');
+        await waitFor('the edit to reach the document', () => d.doc.chunkXml !== before || !!refused());
+        assert.ok(!refused(), `the edit was applied (${JSON.stringify(refused())})`);
+        await d.save();
+        assert.strictEqual(await chunkOnDisk(uri), d.doc.chunkXml, 'and the save writes the chunk as edited');
+      } finally {
+        await d.close();
+      }
+    });
+  }
+
 });
