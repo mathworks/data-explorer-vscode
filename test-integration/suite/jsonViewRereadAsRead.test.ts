@@ -161,6 +161,11 @@ suite('A JSON .sldd re-reads an edited entry from its text as the file read does
       assert.strictEqual(undone.find((r: any) => r.ID === gRow.ID)?.Value, '1', 'with the field back');
     } finally {
       view.close();
+      // Saved before it is deleted: VS Code answers the delete of a DIRTY document by opening a
+      // tab on it, to keep the unsaved text, and a tab left open changes the Usage graph's inputs
+      // for whichever suite runs next (its first edit then repaints twice).
+      const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === uri.toString());
+      if (open?.isDirty) await open.save();
       await vscode.workspace.fs.delete(uri);
     }
   }).timeout(60000);
