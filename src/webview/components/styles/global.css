@@ -15,6 +15,7 @@
   --dex-bg-tertiary: #f5f5f5;
   --dex-bg-hover: #e8e8e8;
   --dex-bg-active: #e0e0e0;
+  --dex-bg-badge: rgba(128, 128, 128, 0.18);
   --dex-border-color: #d0d0d0;
   --dex-border-color-light: #e0e0e0;
   --dex-focus-ring: 0 0 0 2px rgba(0, 120, 212, 0.4);
