@@ -69,6 +69,7 @@ describe('a by-name navigation selects the definition, not a same-named child', 
   let table: any;
   let rows: any[];
 
+  // Its own timeout: a cold import of the whole table-main webview is what a loaded machine stretches.
   beforeAll(async () => {
     rows = fixtureRows();
     (globalThis as any).acquireVsCodeApi = () => ({
@@ -77,7 +78,7 @@ describe('a by-name navigation selects the definition, not a same-named child', 
     document.body.innerHTML = '<dex-tree-table></dex-tree-table>';
     await import('../src/webview/table-main.js');
     table = document.querySelector('dex-tree-table');
-  });
+  }, 60_000);
 
   beforeEach(async () => {
     window.dispatchEvent(

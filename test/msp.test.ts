@@ -294,12 +294,13 @@ describe('a project that is not one', () => {
 describe('clicking a component row', () => {
   const posted: Array<Record<string, unknown>> = [];
 
+  // Its own timeout: a cold import of the whole project-main webview is what a loaded machine stretches.
   beforeAll(async () => {
     (globalThis as any).acquireVsCodeApi = () => ({
       postMessage: (m: unknown) => posted.push(m as Record<string, unknown>),
     });
     await import('../src/webview/project-main.js');
-  });
+  }, 60_000);
 
   beforeEach(() => {
     window.dispatchEvent(

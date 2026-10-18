@@ -32,13 +32,14 @@ describe('the Add gallery, wired through the webview entry point', () => {
   let table: any;
   let posted: any[];
 
+  // Its own timeout: a cold import of the whole table-main webview is what a loaded machine stretches.
   beforeAll(async () => {
     posted = [];
     (globalThis as any).acquireVsCodeApi = () => ({ postMessage: (m: any) => posted.push(m) });
     document.body.innerHTML = '<dex-tree-table></dex-tree-table>';
     await import('../src/webview/table-main.js');
     table = document.querySelector('dex-tree-table');
-  });
+  }, 60_000);
 
   beforeEach(() => {
     posted.length = 0;
