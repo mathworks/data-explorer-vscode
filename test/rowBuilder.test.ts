@@ -379,6 +379,8 @@ describe('an entry with more rows than the engine takes call arguments', () => {
     return { children: [{ name: 'design', displayName: 'Design Data', children: [entry] }] };
   };
 
+  // Its own timeout: 200,000 rows is the point of the test. ~250 ms idle, but it timed out at
+  // 5,683 ms and 5,252 ms under the 5 s default on a loaded machine.
   it('builds every row instead of overflowing the argument limit', () => {
     const count = 200000;
     const rows = buildRows(wideEntry(count));
@@ -386,5 +388,5 @@ describe('an entry with more rows than the engine takes call arguments', () => {
     expect(rows.length).toBe(count + 1);
     expect(rows[rows.length - 1].ID).toBe('n' + (count - 1));
     expect(rows.some((r) => r._lazy), 'and nothing is deferred without a budget').toBe(false);
-  });
+  }, 60_000);
 });

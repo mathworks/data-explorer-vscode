@@ -142,12 +142,13 @@ describe('read-only cell-editor gate (capture-phase interception)', () => {
 describe('the shipped gate keeps a read-only view searchable', () => {
   let table: any;
 
+  // Its own timeout: a cold import of the whole table-main webview is what a loaded machine stretches.
   beforeAll(async () => {
     (globalThis as any).acquireVsCodeApi = () => ({ postMessage: () => {} });
     document.body.innerHTML = '<dex-tree-table></dex-tree-table>';
     await import('../src/webview/table-main.js');
     table = document.querySelector('dex-tree-table');
-  });
+  }, 60_000);
 
   // A .slx-shaped payload: two rows and the read-only flag the gate reads.
   async function paint(editable: boolean): Promise<void> {

@@ -71,6 +71,7 @@ const isOpen = () => editor.hasAttribute('open');
 const gridCells = () => editor.shadowRoot.querySelector('dex-matrix-grid')?.matrix?.cells;
 const statusText = () => editor.shadowRoot.querySelector('.status')?.textContent?.trim();
 
+// Its own timeout: parsing all.sldd and a cold import of the whole pi-main webview are what a loaded machine stretches.
 beforeAll(async () => {
   const uri = 'pi://all.sldd';
   invalidate(uri);
@@ -84,7 +85,7 @@ beforeAll(async () => {
   await import('../src/webview/pi-main.js');
   pi = document.querySelector('dex-property-inspector');
   editor = document.querySelector('dex-variable-editor');
-});
+}, 60_000);
 
 beforeEach(async () => {
   // A selection, as the host sends one. It also closes whatever the last test left open.

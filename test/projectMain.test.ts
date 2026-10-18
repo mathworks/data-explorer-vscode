@@ -73,13 +73,14 @@ function type(input: HTMLInputElement, value: string, caret = value.length): voi
 }
 
 describe('the project page webview', () => {
+  // Its own timeout: a cold import of the whole project-main webview is what a loaded machine stretches.
   beforeAll(async () => {
     (globalThis as any).acquireVsCodeApi = () => ({
       postMessage: (m: unknown) => posted.push(m as { type: string }),
     });
     await import('../src/webview/project-main.js');
     atLoad = [...posted];
-  });
+  }, 60_000);
 
   beforeEach(() => {
     setProject({ shortcuts: SHORTCUTS });

@@ -24,13 +24,14 @@ let contextMenu: any;
 const send = (data: any) => window.dispatchEvent(new MessageEvent('message', { data }));
 const pastes = () => posted.filter((m) => m.type === 'paste');
 
+// Its own timeout: a cold import of the whole table-main webview is what a loaded machine stretches.
 beforeAll(async () => {
   (globalThis as any).acquireVsCodeApi = () => ({ postMessage: (m: any) => posted.push(m) });
   document.body.innerHTML = '<dex-tree-table></dex-tree-table>';
   await import('../src/webview/table-main.js');
   table = document.querySelector('dex-tree-table');
   contextMenu = document.querySelector('dex-context-menu');
-});
+}, 60_000);
 
 beforeEach(async () => {
   // Two sections with one entry each, the rules for both, and a clipboard both accept

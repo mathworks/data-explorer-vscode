@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { unzipSync } from 'fflate';
 import { DataModel } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
+import { waitFor } from './tools/hostHarness';
 
 function ctx(): vscode.ExtensionContext {
   const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
@@ -55,8 +56,9 @@ suite('BinarySlddEditorProvider', () => {
     assert.ok((doc as any).chunkXml.includes('<Object Class="DD.ENTRY">'), 'chunkXml decoded');
     const panel = makePanel();
     await provider.resolveCustomEditor(doc, panel, token());
-    // Let the ready/post round-trip settle.
-    await new Promise((r) => setTimeout(r, 500));
+    // "Renders" is the webview's 'ready' coming back and the paint registering the document,
+    // which is asynchronous; the shell html below is set before resolveCustomEditor returns.
+    await waitFor('the ready/post round trip to register the document', () => !!DataModel.getDataSource((doc as any).srcId));
     assert.ok(panel.webview.html.includes('dex-tree-table'), 'render shell present');
     panel.dispose();
     doc.dispose();
@@ -128,12 +130,12 @@ suite('BinarySlddEditorProvider', () => {
     // and a second red herring is the last thing a failure needs.
     try {
       await provider.resolveCustomEditor(doc, panel, token());
-      await new Promise((r) => setTimeout(r, 500));
+      const registered = () => (DataModel.getDataSource((doc as any).srcId) as any)?.meta?.path;
+      await waitFor('the paint to register the document', () => registered() !== undefined);
 
       // The srcId really is encoded, so "meta.path differs from it" means the decode is
       // load-bearing and not a restatement of the same string.
       assert.ok((doc as any).srcId.includes('my%20params.sldd'), 'srcId is percent-encoded');
-      const registered = () => (DataModel.getDataSource((doc as any).srcId) as any)?.meta?.path;
       assert.strictEqual(registered(), 'my params.sldd', 'paint registered the decoded basename');
 
       await provider.saveCustomDocument(doc, token());
@@ -211,20 +213,15 @@ suite('BinarySlddEditorProvider', () => {
     // rule — it then lands an editable JSON .sldd in the table view (and keeps an
     // over-the-sync-limit one read-only, which is why the choice is not made here).
     // So the tab the user ends up looking at is the table view.
-    const start = Date.now();
-    let found = false;
-    while (Date.now() - start < 5000) {
-      found = vscode.window.tabGroups.all
+    await waitFor('the JSON .sldd to open in the editable table view', () =>
+      vscode.window.tabGroups.all
         .flatMap((g) => g.tabs)
         .some(
           (t) =>
             (t.input as { viewType?: string })?.viewType === 'dataExplorer.tableView' &&
             (t.input as { uri?: vscode.Uri })?.uri?.toString() === uri.toString(),
-        );
-      if (found) break;
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    assert.ok(found, 'the JSON .sldd ended up in the editable table view');
+        ),
+    );
     doc.dispose();
   });
 });

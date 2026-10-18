@@ -66,12 +66,13 @@ const kids = [
   { ID: 'A.k1', parent: 'A', Name: { label: 'k1' } },
 ];
 
+// Its own timeout: a cold import of the whole table-main webview is what a loaded machine stretches.
 beforeAll(async () => {
   (globalThis as any).acquireVsCodeApi = () => ({ postMessage: (m: any) => posted.push(m) });
   document.body.innerHTML = `${BANNERS_HTML}<dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>`;
   await import('../src/webview/table-main.js');
   table = document.querySelector('dex-tree-table');
-});
+}, 60_000);
 
 beforeEach(() => {
   posted.length = 0;

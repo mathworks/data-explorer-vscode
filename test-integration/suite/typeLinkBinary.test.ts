@@ -24,6 +24,7 @@ import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvide
 import { buildRows } from '../../src/host/rowBuilder';
 import { handleNavigate } from '../../src/host/navigate';
 import { binaryEditSrcId } from '../../src/common/srcId';
+import { waitFor } from './tools/hostHarness';
 
 function ctx(): vscode.ExtensionContext {
   const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
@@ -68,9 +69,11 @@ suite('a Data Type link out of an editable binary .sldd', () => {
       enableScripts: true,
     });
     await provider.resolveCustomEditor(doc, panel, new vscode.CancellationTokenSource().token);
-    // Let the ready/post round-trip settle, as binarySlddEdit.test.ts does.
-    await new Promise((r) => setTimeout(r, 500));
+    // Registration waits for the webview's 'ready', so wait for it rather than for a guess at
+    // how long the round trip takes. A previous test's registration cannot satisfy this:
+    // disposing the document removes its source.
     const srcId = (doc as any).srcId as string;
+    await waitFor('the paint to register the document as a source', () => !!DataModel.getDataSource(srcId));
     const node = DataModel.getDataSource(srcId);
     assert.ok(node, 'the paint registered the document as a source');
     return { all: buildRows(node as any) as Record<string, any>[], srcId };

@@ -134,6 +134,7 @@ describe('a local click that finds no row still reaches the host', () => {
   const posted: { type: string; [k: string]: unknown }[] = [];
   let table: any;
 
+  // Its own timeout: a cold import of the whole table-main webview is what a loaded machine stretches.
   beforeAll(async () => {
     (globalThis as any).acquireVsCodeApi = () => ({
       postMessage: (m: unknown) => posted.push(m as { type: string }),
@@ -141,7 +142,7 @@ describe('a local click that finds no row still reaches the host', () => {
     document.body.innerHTML = '<dex-tree-table></dex-tree-table>';
     await import('../src/webview/table-main.js');
     table = document.querySelector('dex-tree-table');
-  });
+  }, 60_000);
 
   // A repaint carrying one row, from THIS document — the setRows `docUri` is what lets the
   // routing fire at all, so this doubles as the end-to-end check that the field arrives.
