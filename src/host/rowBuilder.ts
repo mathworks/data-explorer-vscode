@@ -11,20 +11,29 @@ import { planRows, stampLazy, type PlannedRow, type RowPlan } from './lazyRows.j
 // value properties surfaced as columns; lastModified/lastModifiedBy are
 // dictionary-entry metadata columns (host-owned, stamped in buildEntryRows).
 // Grouped and metadata columns ship hidden by default like Class/Kind.
+// definitionFile..qualifier are a Simulink.VariantBankCoderInfo's own fields (its HeaderFile
+// is the headerFile column), and bankName..activeChoiceCoderInfo a Simulink.VariantBank's,
+// node-owned like Min/Max/Unit: core sends each as an editable cell under this key.
 export const COLUMNS = [
   'Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class',
   'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit',
   'storageClass', 'headerFile', 'alignment',
+  'definitionFile', 'preStatement', 'postStatement', 'qualifier',
+  'bankName', 'variantConditions', 'allChoicesCoderInfo', 'activeChoiceCoderInfo',
   'lastModified', 'lastModifiedBy',
 ];
 // Base labels for the host-owned columns, merged with the schema-derived labels
 // for the schema-driven columns (dimensions/complexity/dimensionsMode/
 // storageClass/headerFile/alignment). The schema is the single source of truth
 // for its own columns' labels, so we overlay them rather than hand-copying them.
-// Min/Max/Unit are node-owned, so their (short) column labels live here.
+// Min/Max/Unit are node-owned, so their (short) column labels live here, and so are the
+// VariantBank and VariantBankCoderInfo fields, labelled as core's Property Inspector labels them.
 export const COLUMN_LABELS: Record<string, string> = {
   Name: 'Name', Value: 'Value', Class: 'Class', Kind: 'Kind', DataType: 'Data Type', Status: 'Status', UsedBy: 'Usage',
   Min: 'Min', Max: 'Max', Unit: 'Unit',
+  definitionFile: 'Definition File', preStatement: 'Pre Statement', postStatement: 'Post Statement', qualifier: 'Qualifier',
+  bankName: 'Bank Name', variantConditions: 'Variant Conditions',
+  allChoicesCoderInfo: 'All Choices Coder Info', activeChoiceCoderInfo: 'Active Choice Coder Info',
   lastModified: 'Last Modified', lastModifiedBy: 'Last Modified By',
   ...schemaColumnLabels(),
 };
@@ -47,6 +56,10 @@ export const COLUMN_GROUPS: Record<string, string> = {
   Min: 'Data Object', Max: 'Data Object', Unit: 'Data Object',
   dimensions: 'Data Object', complexity: 'Data Object', dimensionsMode: 'Data Object',
   storageClass: 'Code Generation', headerFile: 'Code Generation', alignment: 'Code Generation',
+  definitionFile: 'Code Generation', preStatement: 'Code Generation', postStatement: 'Code Generation',
+  qualifier: 'Code Generation',
+  bankName: 'Variant Bank', variantConditions: 'Variant Bank',
+  allChoicesCoderInfo: 'Variant Bank', activeChoiceCoderInfo: 'Variant Bank',
   lastModified: 'Data Dictionary', lastModifiedBy: 'Data Dictionary',
 };
 

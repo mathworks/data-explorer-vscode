@@ -143,6 +143,14 @@ const DEFAULT_WIDTHS: Record<string, number> = {
   storageClass: 14,
   headerFile: 16,
   alignment: 10,
+  definitionFile: 16,
+  preStatement: 16,
+  postStatement: 16,
+  qualifier: 10,
+  bankName: 14,
+  variantConditions: 20,
+  allChoicesCoderInfo: 16,
+  activeChoiceCoderInfo: 16,
   lastModified: 18,
   lastModifiedBy: 14,
 };
@@ -183,10 +191,18 @@ const DEFAULT_COLUMN_ORDER = [
   'storageClass',
   'headerFile',
   'alignment',
+  'definitionFile',
+  'preStatement',
+  'postStatement',
+  'qualifier',
+  'bankName',
+  'variantConditions',
+  'allChoicesCoderInfo',
+  'activeChoiceCoderInfo',
   'lastModified',
   'lastModifiedBy',
 ];
-const DEFAULT_HIDDEN_COLUMNS = ['Kind', 'Class', 'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit', 'storageClass', 'headerFile', 'alignment', 'lastModified', 'lastModifiedBy'];
+const DEFAULT_HIDDEN_COLUMNS = ['Kind', 'Class', 'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit', 'storageClass', 'headerFile', 'alignment', 'definitionFile', 'preStatement', 'postStatement', 'qualifier', 'bankName', 'variantConditions', 'allChoicesCoderInfo', 'activeChoiceCoderInfo', 'lastModified', 'lastModifiedBy'];
 // The built-in columns (DEFAULT_COLUMN_ORDER) as they were when the column state was
 // last saved. A saved hidden set says nothing about a column that did not exist yet, so
 // on load a default-hidden column missing from this record gets its default, hidden.
@@ -1396,6 +1412,14 @@ export class DexTreeTable extends LitElement {
         font-family: inherit;
         box-sizing: border-box;
         outline: none;
+      }
+
+      /* One line high, like the input, inside a row of fixed height; further lines scroll. */
+      .edit-textarea {
+        display: block;
+        resize: none;
+        line-height: inherit;
+        overflow-y: auto;
       }
 
       .name-icon {
@@ -3241,6 +3265,16 @@ export class DexTreeTable extends LitElement {
     }
   };
 
+  // Enter commits and Escape cancels, as in every other editor; Shift+Enter is left to the
+  // textarea, which starts a new line with it. Stopped here so the table does not act on it.
+  private _onTextAreaKeyDown = (e: KeyboardEvent): void => {
+    if (e.key === 'Enter' && e.shiftKey) {
+      e.stopPropagation();
+      return;
+    }
+    this._onEditKeyDown(e);
+  };
+
   // A repaint (any assignment of `rows` or `columns`: a save, an undo, a text-view
   // edit) can arrive while an editor is open. If the cell it edits is still there the
   // editor is kept, with what the user typed: a background repaint must not throw
@@ -3674,6 +3708,19 @@ export class DexTreeTable extends LitElement {
           >
             ${options.map((opt) => html`<option .value=${opt} ?selected=${opt === text}>${opt}</option>`)}
           </select>`;
+        }
+        // A textarea for text that may hold a line break (a coder info's Pre and Post
+        // Statement): an <input> drops every line break from the value it is given, so
+        // opening one and clicking away would write the text back as one line.
+        if (editor === 'textArea') {
+          return html`<textarea
+            class="edit-input edit-textarea"
+            rows="1"
+            title="Shift+Enter starts a new line"
+            .value=${text}
+            @keydown=${this._onTextAreaKeyDown}
+            @blur=${this._onEditBlur}
+          ></textarea>`;
         }
         return html`<input
           class="edit-input"

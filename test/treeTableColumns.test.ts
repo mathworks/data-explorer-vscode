@@ -8,8 +8,9 @@
 // unqualified search matches across every visible column.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import { COLUMNS, COLUMN_GROUPS } from '../src/host/rowBuilder.js';
 
-const HOST_COLUMNS = ['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class', 'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit', 'storageClass', 'headerFile', 'alignment', 'lastModified', 'lastModifiedBy'];
+const HOST_COLUMNS = ['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class', 'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit', 'storageClass', 'headerFile', 'alignment', 'definitionFile', 'preStatement', 'postStatement', 'qualifier', 'bankName', 'variantConditions', 'allChoicesCoderInfo', 'activeChoiceCoderInfo', 'lastModified', 'lastModifiedBy'];
 
 function makeTable(): DexTreeTable {
   const table = new DexTreeTable();
@@ -340,6 +341,79 @@ describe('editable Code Generation cells', () => {
     const r = row('p', { storageClass: { text: 'Auto' } } as any);
     (table as any)._onCellDblClickIfEditable(r, 'storageClass');
     expect((table as any)._editingCell).toBeNull();
+  });
+});
+
+// Ruling 2026-10-18, group F (C-168B, C-169B): a Simulink.VariantBank's own fields and a
+// Simulink.VariantBankCoderInfo's are columns, which ship hidden like the other grouped columns.
+describe('the Variant Bank and coder info columns', () => {
+  const BANK_COLS = ['bankName', 'variantConditions', 'allChoicesCoderInfo', 'activeChoiceCoderInfo'];
+  const CODER_INFO_COLS = ['definitionFile', 'preStatement', 'postStatement', 'qualifier'];
+  const NEW_COLS = [...CODER_INFO_COLS, ...BANK_COLS];
+
+  it("this file's host columns are the host's own", () => {
+    expect(HOST_COLUMNS).toEqual(COLUMNS);
+  });
+
+  it('ship hidden by default, and are in the picker to be shown', () => {
+    const table = makeTable();
+    expect(visibleCols(table)).toEqual(['Name', 'Value', 'DataType', 'UsedBy', 'Status']);
+    for (const col of NEW_COLS) {
+      expect((table as any)._orderedColumns, col).toContain(col);
+      expect(visibleCols(table), col).not.toContain(col);
+    }
+  });
+
+  it('a column shown from the picker is drawn', () => {
+    const table = makeTable();
+    (table as any)._toggleColumnVisibility('qualifier');
+    expect(visibleCols(table)).toContain('qualifier');
+  });
+
+  it('a hidden set saved before they shipped loads them hidden, and keeps every other choice (V-077)', () => {
+    const universe = [...((new DexTreeTable() as any)._columnOrder as string[])];
+    localStorage.setItem('dex-hidden-columns', JSON.stringify([]));
+    localStorage.setItem('dex-known-columns', JSON.stringify(universe.filter((c) => !NEW_COLS.includes(c))));
+    const table = makeTable();
+    (table as any)._loadPersistedState();
+    for (const col of NEW_COLS) expect(visibleCols(table), col).not.toContain(col);
+    expect(visibleCols(table)).toEqual(HOST_COLUMNS.filter((c) => !NEW_COLS.includes(c)));
+  });
+
+  it("with the host's groups, the picker draws each group's header once, in the default order", async () => {
+    const table = makeTable();
+    (table as any).columnGroups = COLUMN_GROUPS;
+    (table as any)._hiddenColumns = new Set();
+    (table as any)._columnMenuOpen = true;
+    document.body.appendChild(table as any);
+    await (table as any).updateComplete;
+    const headers = Array.from(
+      (table as any).shadowRoot.querySelectorAll('.column-menu-group-header'),
+    ).map((el: any) => el.textContent.trim());
+    const items = (table as any).shadowRoot.querySelectorAll('.column-menu-item').length;
+    (table as any).remove();
+    expect(headers).toEqual(['Data Object', 'Code Generation', 'Variant Bank', 'Data Dictionary']);
+    expect(items).toBe(HOST_COLUMNS.length);
+  });
+
+  it('each has a default width of its own, not the fallback for a column the table does not know', () => {
+    const WEIGHTS: Record<string, number> = {
+      definitionFile: 16,
+      preStatement: 16,
+      postStatement: 16,
+      qualifier: 10,
+      bankName: 14,
+      variantConditions: 20,
+      allChoicesCoderInfo: 16,
+      activeChoiceCoderInfo: 16,
+    };
+    for (const col of NEW_COLS) {
+      const table = new DexTreeTable();
+      table.columns = ['Name', col];
+      (table as any)._hiddenColumns = new Set();
+      // Name weighs 30, so a column's share beside it says its weight.
+      expect((table as any)._getColWidth(col), col).toBe(`${(WEIGHTS[col] / (30 + WEIGHTS[col])) * 100}%`);
+    }
   });
 });
 
