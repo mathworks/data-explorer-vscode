@@ -515,4 +515,25 @@ suite('Binary .sldd: an edit keeps what it did not touch (D12)', () => {
     });
   }
 
+  test('an edit undone, saved, and redone saves', async () => {
+    // Redo puts back an edit the last save did not write, so the entry it changes is edited again.
+    const uri = await workingCopy('d12_gate_redo.sldd', PARAMS);
+    const d = await open(uri);
+    try {
+      const original: string = d.doc.chunkXml;
+      d.edit('MyAlias', 'Name', 'MyAliasR');
+      const edited: string = d.doc.chunkXml;
+      const rename = d.edits[d.edits.length - 1];
+      rename.undo();
+      await d.save();
+      assert.strictEqual(await chunkOnDisk(uri), original, 'the undone edit saves as the file was');
+      rename.redo();
+      assert.strictEqual(d.doc.chunkXml, edited, 'redo put the edit back');
+      await d.save();
+      assert.strictEqual(await chunkOnDisk(uri), edited, 'and the redone edit saves');
+    } finally {
+      await d.close();
+    }
+  });
+
 });
