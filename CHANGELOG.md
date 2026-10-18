@@ -6,6 +6,10 @@ GitHub Release.
 
 Entries before this file existed were reconstructed from those release tags.
 
+## [Unreleased]
+
+This version ships `data-explorer-core` 1.41.0, which reads and saves more values as MATLAB does, opens more damaged `.mat` files with a warning and what could be read, and keeps more of the parts of an edited binary dictionary entry that the edit did not touch as they are in the file.
+
 ## [1.40.0] — 2026-10-17
 
 More numbers and classes read from a `.mat` file or a model workspace now match MATLAB and the dictionaries. A number inside an object, such as a Simulink.Parameter's Value, keeps its class: `int32([100 200 300 400])` shows class `int32` and a logical row shows `logical`, where both showed `double`, and an `int64` or `uint64` at the end of its range, such as `18446744073709551615`, shows as a number where it showed in quotes as text. A `single` shows the digits MATLAB writes into a dictionary, such as `3.3` and `[1.1 2.2 3.3]`, where it showed `3.299999952316284` and `[1.100000023841858 2.200000047683716 3.299999952316284]`, inside an object or not. A Parameter copied out of a `.mat` file into a dictionary keeps its Value's class; before, an `int8` -42 was pasted into a binary dictionary as the double `-42.0`. An array of objects of more than one class, held inside an object, takes the class MATLAB records for the array, and each element keeps its own: an array of a Simulink.Signal subclass and a Simulink.Signal shows as `<1x2 Simulink.Signal>`, where both elements showed as the subclass, and a configuration set's Components show in the Properties panel as `<9x1 Simulink.ConfigComponent>`, the class MATLAB gives them. Before, every element took the first one's class, so a configuration set copied into a dictionary was written with every one of its components as a Simulink.SolverCC.
