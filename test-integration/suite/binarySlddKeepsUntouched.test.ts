@@ -638,6 +638,38 @@ suite('Binary .sldd: an edit keeps what it did not touch (D12)', () => {
     }
   });
 
+  // A save forgets them too. A rename of an entry with no UUID that the check cannot read is
+  // recorded under the entry's old name and its new one. Once the rename is undone and a save has
+  // written the file, nothing edited against that file is in the record: another entry renamed to
+  // the same new name is one the check can read, and saves.
+  for (const [label, refusedFirst] of [
+    ['after a save', false],
+    ['after a save, with the rename refused at an earlier save', true],
+  ] as const) {
+    test(`an entry given the name of an undone rename the check could not read saves, ${label}`, async () => {
+      const [, fixture, transform] = uncheckable[1];
+      const uri = await workingCopy('d12_gate_unchecked_saved.sldd', fixture, transform);
+      const d = await open(uri);
+      try {
+        d.edit('paramArray', 'Name', 'pZ');
+        if (refusedFirst) await assert.rejects(d.save(), /cannot (be )?check/, 'the rename the check cannot read is refused');
+        d.edits[d.edits.length - 1].undo();
+        assert.ok(d.doc.chunkXml.includes('<?keep this?>'), 'undo put the entry back with its instruction');
+        d.edit('usageArray', 'Name', 'uR');
+        await d.save();
+        assert.strictEqual(await chunkOnDisk(uri), d.doc.chunkXml, 'another rename saves');
+
+        d.edit('uR', 'Name', 'pZ');
+        await d.save();
+        const written = await chunkOnDisk(uri);
+        assert.strictEqual(written, d.doc.chunkXml, 'and renaming that entry to pZ saves too');
+        assert.ok(written.includes('>pZ<') && written.includes('<?keep this?>'), 'with the rename, and the instruction kept');
+      } finally {
+        await d.close();
+      }
+    });
+  }
+
   // An entry the file does not hold has nothing of the file's to keep, so the refusal above is
   // not for it: a pasted, an added and a moved entry each save.
   const additions: [label: string, act: (d: Doc) => void][] = [
