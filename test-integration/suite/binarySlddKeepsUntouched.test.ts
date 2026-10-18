@@ -805,6 +805,62 @@ suite('Binary .sldd: an edit keeps what it did not touch (D12)', () => {
     }
   });
 
+  // An edit counts only against the chunk it was made to. A save, a revert, and the reload that
+  // follows a change made outside the editor with nothing unsaved each replace that chunk, so the
+  // next save is held to the new one with nothing edited against it yet: an entry edited before
+  // it and not since must be its bytes again. Once the table has re-read a chunk changed under
+  // the editor, the model holds the changed value too, and only the record of edits tells such an
+  // entry apart from an edited one (see the corruption test above that re-reads).
+  const replacements: [label: string, replace: (d: Doc) => Promise<void>, named: string][] = [
+    ['a save', (d) => d.save(), '"u8X"'],
+    ['a revert', (d) => d.revert(), '"u8Scalar"'],
+    [
+      'the reload after a change outside the editor',
+      async (d) => {
+        // Undone, so nothing is unsaved, and the editor follows the change silently.
+        d.edits[d.edits.length - 1].undo();
+        changeOutside(d.doc.uri);
+        await waitFor('the reload', () => d.doc.chunkXml.includes('>MyAliasOutside<'));
+      },
+      '"u8Scalar"',
+    ],
+  ];
+  for (const [label, replace, named] of replacements) {
+    test(`an entry edited before ${label} is held to its bytes again, after the table re-read a chunk that changed it`, async () => {
+      const uri = await workingCopy('d12_gate_edits_forgotten.sldd', PARAMS);
+      const d = await open(uri);
+      try {
+        d.edit('u8Scalar', 'Name', 'u8X');
+        await replace(d);
+        assert.strictEqual(d.doc.chunkXml, await chunkOnDisk(uri), 'the document holds the file as it is now');
+
+        d.edit('sglScalar', 'Name', 'sglR');
+        const edited: string = d.doc.chunkXml;
+        d.doc.chunkXml = edited.replace(U8, U8.replace('200', '201'));
+        assert.notStrictEqual(d.doc.chunkXml, edited, 'the test changed the chunk');
+        const posts = d.view.posts.length;
+        d.view.send({ type: 'ready' });
+        await waitFor('the table to be rebuilt', () => d.view.posts.slice(posts).some((m) => m.type === 'setRows'));
+
+        const onDisk = await vscode.workspace.fs.readFile(uri);
+        await assert.rejects(
+          d.save(),
+          (err: Error) =>
+            /^Refusing to save/.test(err.message) && err.message.includes(`entry ${named} `) && err.message.includes('no edit changed it'),
+          `the gate refuses, naming ${named} as an entry no edit changed`,
+        );
+        assert.deepStrictEqual(await vscode.workspace.fs.readFile(uri), onDisk, 'and the file on disk is untouched');
+
+        // With the value put back, the edit made since saves.
+        d.doc.chunkXml = edited;
+        await d.save();
+        assert.strictEqual(await chunkOnDisk(uri), edited, 'with the value put back, the edit saves');
+      } finally {
+        await d.close();
+      }
+    });
+  }
+
   // A chunk core reads but the gate's scan cannot vouch for: nothing can be compared entry by
   // entry, so the whole chunk is, and it saves only as it was.
   const unscannable: [label: string, transform: (xml: string) => string][] = [
