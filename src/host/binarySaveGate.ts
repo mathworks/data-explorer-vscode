@@ -26,6 +26,18 @@
 // exists to stop, and the user can still save every other edit by undoing that one. An entry
 // the last-saved chunk does not hold (a paste, a new entry) has nothing to keep.
 //
+// ASKED WHEN THE EDIT IS MADE, TOO. Asking the node at the save is not enough. Redo rebuilds an
+// entry's node from the text the edit wrote, and a re-read of the chunk (the webview reloading,
+// the repaint after a refused edit, a paste or move that could not state its ops) rebuilds it
+// from the chunk: either way its bytes are then the edit's, which the check can read, though
+// the file's could not be. And a rename of an entry with no UUID changes its key, so the gate
+// finds no entry of the last-saved chunk to pair it with and takes it for a new one. So each
+// edit asks the check about the entries it changes while their nodes still hold the bytes they
+// were read from (uncheckableEntries), and the document keeps the answer, under every key the
+// entry has gone by, until a save or a revert replaces the last-saved chunk; undo and redo put
+// it back with their edit. The gate refuses an entry so recorded whose text is not the
+// last-saved chunk's, when that chunk holds it under any of those keys.
+//
 // A CHUNK THE SCAN CANNOT READ. Then nothing can be compared entry by entry, so the whole chunk
 // is compared: it saves only unchanged. None of the repository's binary dictionaries is one.
 
@@ -113,16 +125,69 @@ function modelEntries(model: any): Map<string, any[]> {
   return map;
 }
 
+// Whether core's check can hold this entry node to the bytes it was read from: an armed check
+// reports the empty text, which keeps nothing. See the header, WHAT AN EMPTY ANSWER MEANS.
+function checkIsArmed(entry: any): boolean {
+  try {
+    return keptPartsViolations(entry, '').length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The entries of `model` an edit has just changed (`changed`, by entryKey) that the check cannot
+ * be held to, each as every key it goes by across the edit, for the document to record (see the
+ * header, ASKED WHEN THE EDIT IS MADE). `keyBefore` maps the row id that an entry the edit
+ * rebuilt in its slot has after it to the key it had before it, which a rename of an entry with
+ * no UUID changes. Null when the edit stated no ops: then all the keys it changed go together,
+ * since nothing says which of them was such an entry's before.
+ */
+export function uncheckableEntries(
+  model: any,
+  changed: ReadonlySet<string>,
+  keyBefore: ReadonlyMap<string, string> | null,
+): string[][] {
+  // EVERY_ENTRY: a chunk the scan cannot read, which saves only unchanged anyway.
+  if (!model || changed.size === 0 || changed.has(EVERY_ENTRY)) return [];
+  const groups: string[][] = [];
+  for (const section of (model.children ?? []) as any[]) {
+    for (const entry of (section?.children ?? []) as any[]) {
+      const uuid = entry?.metadata?.uuid;
+      const key = entryKey(entry?.name, typeof uuid === 'string' ? uuid : null);
+      if (!changed.has(key) || checkIsArmed(entry)) continue;
+      if (keyBefore === null) return [[...changed]];
+      const before = keyBefore.get(entry.id);
+      groups.push(before !== undefined && before !== key ? [key, before] : [key]);
+    }
+  }
+  return groups;
+}
+
 const label = (entry: ChunkEntry) => (entry.name === null ? '(an entry with no name)' : `"${decodeXmlText(entry.name)}"`);
 
 const REFUSE = 'Refusing to save: ';
 
+const cannotBeChecked = (name: string) =>
+  REFUSE +
+  `the edit to entry ${name} cannot be checked: the file spells that entry in a way the check cannot read ` +
+  '(a processing instruction inside it, for example), so it cannot confirm that the rest of the entry stays as ' +
+  `the file has it. Undo the edit to ${name} to save the rest, or make it in MATLAB.`;
+
 /**
  * Why `chunk` may not be saved over the file `saved` was read from or written as, or null when
  * it may. `edited` holds the keys of the entries the edits since then have changed; `model` is
- * the dictionary node they were made on (null when none is registered).
+ * the dictionary node they were made on (null when none is registered). `unchecked` maps the key
+ * of each entry those edits changed while the check could not be held to it to every key that
+ * entry has gone by (uncheckableEntries).
  */
-export function savedChunkRefusal(saved: SavedChunk, chunk: string, edited: ReadonlySet<string>, model: any): string | null {
+export function savedChunkRefusal(
+  saved: SavedChunk,
+  chunk: string,
+  edited: ReadonlySet<string>,
+  model: any,
+  unchecked: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
+): string | null {
   if (chunk === saved.xml) return null;
   const was = saved.scan;
   const now = scanChunkEntries(chunk);
@@ -157,6 +222,10 @@ export function savedChunkRefusal(saved: SavedChunk, chunk: string, edited: Read
           'This is a fault in the editor, not in your edits: undo them or revert the file, and report it.'
         );
       }
+      // Recorded when the edit was made, so whatever has rebuilt its node since, and whatever
+      // key a rename has given it: see the header, ASKED WHEN THE EDIT IS MADE.
+      const aliases = unchecked.get(key);
+      if (aliases && [...aliases].some((alias) => wasByKey.has(alias))) return cannotBeChecked(name);
       nodes ??= modelEntries(model);
       const decoded = entry.name === null ? null : decodeXmlText(entry.name);
       const candidates = (nodes.get(key) ?? []).filter((n) => n.name === decoded);
@@ -179,14 +248,7 @@ export function savedChunkRefusal(saved: SavedChunk, chunk: string, edited: Read
         );
       }
       // [] is a pass only from a check that would have reported something: see the header.
-      if (prior && keptPartsViolations(node, '').length === 0) {
-        return (
-          REFUSE +
-          `the edit to entry ${name} cannot be checked: the file spells that entry in a way the check cannot read ` +
-          '(a processing instruction inside it, for example), so it cannot confirm that the rest of the entry stays as ' +
-          `the file has it. Undo the edit to ${name} to save the rest, or make it in MATLAB.`
-        );
-      }
+      if (prior && keptPartsViolations(node, '').length === 0) return cannotBeChecked(name);
     }
   }
   for (const [key, list] of wasByKey) {

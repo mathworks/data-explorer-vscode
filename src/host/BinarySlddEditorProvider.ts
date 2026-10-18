@@ -57,7 +57,7 @@ import {
 // that a dictionary this host could not read is not passed on as an empty one, which
 // the reader itself no longer enforces (it recovers and warns instead).
 import { readSlddParts } from './slddContent.js';
-import { changedEntryKeys, savedChunkRefusal, SavedChunk } from './binarySaveGate.js';
+import { changedEntryKeys, savedChunkRefusal, SavedChunk, uncheckableEntries } from './binarySaveGate.js';
 import { chunkEntryKey, entryKey, scanChunkEntries } from './chunkEntries.js';
 import { isZipBytes } from './slddFormat.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
@@ -273,6 +273,18 @@ function keysOfEdit(before: string, after: string, patch?: EntryPatch): Set<stri
   return keys.size > 0 || before === after ? keys : changedEntryKeys(before, after);
 }
 
+/**
+ * For each entry an edit's patch rebuilds in its slot, its key before the edit (its undo
+ * record's), by the row id it has after the edit, which is the one its undo op addresses.
+ */
+function keysBeforeEdit(patch: EntryPatch): Map<string, string> {
+  const keys = new Map<string, string>();
+  for (const op of patch.undo) {
+    if (op.kind === 'replace') keys.set(op.rowId, entryKey(recordName(op.record), recordUuid(op.record)));
+  }
+  return keys;
+}
+
 /** How many ops look their fragment up one at a time; more share one scan of the chunk. */
 const FRAGMENT_LOOKUPS = 4;
 
@@ -329,6 +341,16 @@ class BinarySlddDocument implements vscode.CustomDocument {
    * its bytes passes either way. Emptied whenever `saved` is replaced.
    */
   edited = new Set<string>();
+
+  /**
+   * The entries the edits since `saved` have changed while core's check could not be held to
+   * them, each key mapped to every key that entry has gone by (binarySaveGate's
+   * uncheckableEntries): the save gate refuses any of them whose text is not `saved`'s. Asked
+   * when each edit is made, while the entry's node still holds the bytes it was read from, since
+   * a redo or a re-read rebuilds the node from the text the edit wrote. Like `edited`, each undo
+   * and redo puts its edit's back, and it is emptied whenever `saved` is replaced.
+   */
+  unchecked = new Map<string, ReadonlySet<string>>();
   private readonly _onDidChange = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<BinarySlddDocument>>();
   readonly onDidChangeCustomDocument = this._onDidChange.event;
 
@@ -462,8 +484,15 @@ class BinarySlddDocument implements vscode.CustomDocument {
   pushEdit(label: string, before: string, after: string, patch?: EntryPatch, part?: ScPartPatch): void {
     // What the save gate is told this edit changes, in both directions — see `edited`.
     const changed = keysOfEdit(before, after, patch);
+    // And which of those entries the check cannot be held to, asked now — see `unchecked`.
+    const uncheckable = uncheckableEntries(
+      DataModel.getDataSource(this.srcId) ?? null,
+      changed,
+      patch ? keysBeforeEdit(patch) : null,
+    );
     this.chunkXml = after;
     this.markEdited(changed);
+    this.markUnchecked(uncheckable);
     if (part) this.zipMeta[part.member] = part.after;
     // The dirty-flag copy moves with VS Code's stack: this push, and each undo or redo VS
     // Code asks for through the two closures below.
@@ -474,6 +503,7 @@ class BinarySlddDocument implements vscode.CustomDocument {
       undo: () => {
         this.edits.undone();
         this.markEdited(changed);
+        this.markUnchecked(uncheckable);
         this.chunkXml = before;
         if (part) this.zipMeta[part.member] = part.before;
         this.applyOps(part ? undefined : patch?.undo);
@@ -481,6 +511,7 @@ class BinarySlddDocument implements vscode.CustomDocument {
       redo: () => {
         this.edits.redone();
         this.markEdited(changed);
+        this.markUnchecked(uncheckable);
         this.chunkXml = after;
         if (part) this.zipMeta[part.member] = part.after;
         this.applyOps(part ? undefined : patch?.redo);
@@ -490,6 +521,15 @@ class BinarySlddDocument implements vscode.CustomDocument {
 
   private markEdited(keys: ReadonlySet<string>): void {
     for (const key of keys) this.edited.add(key);
+  }
+
+  /** Record entries in `unchecked`, each group the keys of one entry, joined to any it shares one with. */
+  markUnchecked(groups: Iterable<Iterable<string>>): void {
+    for (const group of groups) {
+      const keys = new Set<string>(group);
+      for (const key of [...keys]) for (const alias of this.unchecked.get(key) ?? []) keys.add(alias);
+      for (const key of keys) this.unchecked.set(key, keys);
+    }
   }
 
   /**
@@ -504,6 +544,7 @@ class BinarySlddDocument implements vscode.CustomDocument {
       // What a save is held to from now on, and nothing yet edited against it.
       this.saved = new SavedChunk(this.chunkXml);
       this.edited = new Set();
+      this.unchecked = new Map();
       // The parts too, and for the same reason: an edit can have patched one of them (a
       // rename carried into the System Composer catalog), and a revert that restored only
       // the chunk would leave the entry named as the file spells it beside a catalog that
@@ -1648,9 +1689,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // lands while the write is in flight goes into a fresh set and stays unsaved, as its text
     // does. A save that fails wrote nothing, so they go back.
     const edited = document.edited;
+    const unchecked = document.unchecked;
     try {
       const writing = this.writeTo(document, document.uri, 'save', () => this.refuseIfChangedOnDisk(document));
       document.edited = new Set();
+      document.unchecked = new Map();
       gated = await writing;
       // What the next save is held to: the text this one wrote, not chunkXml, which an edit
       // on the write's await may have moved on.
@@ -1660,6 +1703,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       document.stamp = await stampOf(document.uri);
     } catch (err) {
       for (const key of edited) document.edited.add(key);
+      document.markUnchecked(new Set(unchecked.values()));
       throw err;
     } finally {
       document.saving = false;
@@ -1900,6 +1944,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         gated.chunkXml,
         document.edited,
         DataModel.getDataSource(document.srcId) ?? null,
+        document.unchecked,
       );
       if (refusal) throw new Error(refusal);
     }

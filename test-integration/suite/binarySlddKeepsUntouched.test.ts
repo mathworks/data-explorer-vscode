@@ -10,7 +10,8 @@
 //    the next edit of it wrote the whole entry from the model.
 //  - The save gate compares the chunk with the chunk as last read or saved, entry by entry: every
 //    entry no edit touched must be its bytes, and every edited one must keep the parts the edit did
-//    not change (core's keptPartsViolations). An entry the check cannot read is refused, not passed.
+//    not change (core's keptPartsViolations). An entry the check cannot read is refused, not passed,
+//    whatever has rebuilt its node since the edit and whatever key a rename has given it.
 //
 // Everything here drives the real provider: the edits are the table's own `edit` messages, sent
 // through a stand-in panel (tools/hostHarness), and undo and redo are the closures the provider
@@ -95,13 +96,14 @@ async function open(uri: vscode.Uri) {
     assert.notStrictEqual(doc.chunkXml, before, `the ${columnId} edit of "${name}" reached the document`);
   };
   const save = () => provider.saveCustomDocument(doc, token());
+  const revert = () => provider.revertCustomDocument(doc, token());
   const close = async () => {
     sub.dispose();
     view.close();
     doc.dispose();
     await vscode.workspace.fs.delete(uri);
   };
-  return { doc, view, edits, entry, edit, save, close };
+  return { doc, view, edits, entry, edit, save, revert, close };
 }
 
 type Doc = Awaited<ReturnType<typeof open>>;
@@ -465,6 +467,133 @@ suite('Binary .sldd: an edit keeps what it did not touch (D12)', () => {
       await d.save();
       assert.strictEqual(await chunkOnDisk(uri), d.doc.chunkXml, 'with that edit undone, another one saves');
       assert.ok(d.doc.chunkXml.includes('<?keep this?>'), 'and the entry nobody edited keeps its instruction');
+    } finally {
+      await d.close();
+    }
+  });
+
+  // The same case on the routes that rebuild the entry's node after the edit, or give the entry a
+  // new key. Redo rebuilds the node from the text the edit wrote, and a re-read of the chunk (the
+  // webview reloading; a refused edit, and a paste or move that could not state its ops, do the
+  // same) builds it from the chunk: either way its bytes are then the edit's, which the check can
+  // read, so asking the node at the save says nothing about the file's bytes. And a rename of an
+  // entry with no UUID changes the key the gate pairs it with the file's entry by.
+  const PI_VALUE = '<P Name="Value" Class="double">3.14</P>';
+  const PI_DESCRIPTION = '<P Name="Description" Class="char">first</P>';
+  const uncheckable: [label: string, fixture: string[], transform: (xml: string) => string, name: string, renamed: string][] = [
+    ['an entry with a UUID', PARAMS, (xml) => xml.replace(PI_VALUE, PI_VALUE + '\n        <?keep this?>'), 'scalarD', 'scalarE'],
+    ['an entry with no UUID', ONE_LINE, (xml) => xml.replace(PI_DESCRIPTION, PI_DESCRIPTION + '<?keep this?>'), 'paramArray', 'pZ'],
+  ];
+  const routes: [label: string, route: (d: Doc) => Promise<void>][] = [
+    ['straight after the edit', async () => {}],
+    [
+      'after Undo and Redo',
+      async (d) => {
+        const rename = d.edits[d.edits.length - 1];
+        rename.undo();
+        rename.redo();
+      },
+    ],
+    [
+      'after Undo, a save, and Redo',
+      async (d) => {
+        const rename = d.edits[d.edits.length - 1];
+        rename.undo();
+        await d.save();
+        rename.redo();
+      },
+    ],
+    [
+      'after the table re-read the chunk',
+      async (d) => {
+        const posts = d.view.posts.length;
+        d.view.send({ type: 'ready' });
+        await waitFor('the table to be rebuilt', () => d.view.posts.slice(posts).some((m) => m.type === 'setRows'));
+      },
+    ],
+  ];
+  for (const [entryLabel, fixture, transform, name, renamed] of uncheckable) {
+    for (const [routeLabel, route] of routes) {
+      // Straight after the edit of an entry with a UUID is the test above.
+      if (fixture === PARAMS && routeLabel === 'straight after the edit') continue;
+      test(`a save is refused when the check cannot read ${entryLabel}, ${routeLabel}`, async () => {
+        const uri = await workingCopy('d12_gate_unchecked_route.sldd', fixture, transform);
+        const d = await open(uri);
+        try {
+          d.edit(name, 'Name', renamed);
+          assert.ok(!d.doc.chunkXml.includes('<?keep this?>'), 'the edit wrote the entry whole, without its instruction');
+          await route(d);
+          assert.ok(!d.doc.chunkXml.includes('<?keep this?>'), 'and the text to be saved is still without it');
+          const onDisk = await vscode.workspace.fs.readFile(uri);
+          await assert.rejects(
+            d.save(),
+            (err: Error) =>
+              /^Refusing to save/.test(err.message) && err.message.includes(`"${renamed}"`) && /cannot (be )?check/.test(err.message),
+            'the gate refuses, and says the entry could not be checked',
+          );
+          assert.deepStrictEqual(await vscode.workspace.fs.readFile(uri), onDisk, 'and the file on disk is untouched');
+          assert.ok((await chunkOnDisk(uri)).includes('<?keep this?>'), 'so it keeps the instruction');
+          await assert.rejects(
+            d.save(),
+            (err: Error) => /^Refusing to save/.test(err.message) && /cannot (be )?check/.test(err.message),
+            'and the next save is refused too: a refused save forgets nothing',
+          );
+
+          // Undo that edit, as the message says, and the file saves with the instruction.
+          d.edits[d.edits.length - 1].undo();
+          await d.save();
+          assert.ok((await chunkOnDisk(uri)).includes('<?keep this?>'), 'with the edit undone, the save keeps it too');
+        } finally {
+          await d.close();
+        }
+      });
+    }
+  }
+
+  test('a save is refused when the check cannot read an entry with no UUID renamed twice, after Undo and Redo of both', async () => {
+    // Each rename gives the entry another key, so only all three together name the file's entry.
+    const [, fixture, transform] = uncheckable[1];
+    const uri = await workingCopy('d12_gate_unchecked_twice.sldd', fixture, transform);
+    const d = await open(uri);
+    try {
+      d.edit('paramArray', 'Name', 'pZ');
+      d.edit('pZ', 'Name', 'pY');
+      const [first, second] = d.edits.slice(-2);
+      second.undo();
+      first.undo();
+      first.redo();
+      second.redo();
+      assert.ok(!d.doc.chunkXml.includes('<?keep this?>'), 'the text to be saved is without the instruction');
+      const onDisk = await vscode.workspace.fs.readFile(uri);
+      await assert.rejects(
+        d.save(),
+        (err: Error) => /^Refusing to save/.test(err.message) && err.message.includes('"pY"') && /cannot (be )?check/.test(err.message),
+        'the gate refuses, and says the entry could not be checked',
+      );
+      assert.deepStrictEqual(await vscode.workspace.fs.readFile(uri), onDisk, 'and the file on disk is untouched');
+    } finally {
+      await d.close();
+    }
+  });
+
+  test('a revert forgets the entries the check could not read: the file it reads is checked anew', async () => {
+    const value = PI_VALUE;
+    const uri = await workingCopy('d12_gate_unchecked_revert.sldd', PARAMS, (xml) =>
+      xml.replace(value, value + '\n        <?keep this?>'),
+    );
+    const d = await open(uri);
+    try {
+      d.edit('scalarD', 'Name', 'scalarE');
+      await assert.rejects(d.save(), /cannot (be )?check/, 'the edit of the entry the check cannot read is refused');
+
+      // The file changes outside the editor, losing the instruction, and the document is reverted
+      // to it: the same entry is now one the check can read, so the same edit of it saves.
+      await vscode.workspace.fs.writeFile(uri, await vscode.workspace.fs.readFile(vscode.Uri.joinPath(ctx().extensionUri, ...PARAMS)));
+      await d.revert();
+      assert.ok(!d.doc.chunkXml.includes('<?keep this?>'), 'the revert read the file as it is now');
+      d.edit('scalarD', 'Name', 'scalarE');
+      await d.save();
+      assert.strictEqual(await chunkOnDisk(uri), d.doc.chunkXml, 'and the edit saves');
     } finally {
       await d.close();
     }
