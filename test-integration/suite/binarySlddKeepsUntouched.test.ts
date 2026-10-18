@@ -31,7 +31,12 @@ const PARAMS = ['test', 'parity', 'artifacts', 'binary', 'params.sldd'];
 /** One line, no UUIDs, and entries the writers spell differently from their bytes. */
 const ONE_LINE = ['test', 'fixtures', 'object_array_binary.sldd'];
 
+/** LF, four-space indentation, entries with UUIDs, and an entry ("a") holding a struct in a struct. */
+const OBJECT_PROPS = ['test', 'fixtures', 'object_props_binary.sldd'];
+
 const toCrlf = (xml: string) => xml.replace(/\n/g, '\r\n');
+/** The chunk on one line: the whitespace between its tags removed, as a one-line file has none. */
+const toOneLine = (xml: string) => xml.replace(/>\s+</g, '><');
 
 /** A working copy of a repository fixture in the workspace, its chunk changed by `transform`. */
 async function workingCopy(name: string, fixture: string[], transform?: (xml: string) => string): Promise<vscode.Uri> {
@@ -99,6 +104,19 @@ async function open(uri: vscode.Uri) {
   return { doc, view, edits, entry, edit, save, close };
 }
 
+type Doc = Awaited<ReturnType<typeof open>>;
+
+/** The node named `name` below `node`, depth first. */
+function descendant(node: any, name: string): any {
+  const stack: any[] = [...(node.children ?? [])];
+  while (stack.length) {
+    const next = stack.shift();
+    if (next.name === name) return next;
+    stack.unshift(...(next.children ?? []));
+  }
+  assert.fail(`"${node.name}" holds a node named "${name}"`);
+}
+
 suite('Binary .sldd: an edit keeps what it did not touch (D12)', () => {
   suiteSetup(async () => {
     await vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.activate();
@@ -145,6 +163,49 @@ suite('Binary .sldd: an edit keeps what it did not touch (D12)', () => {
         await d.close();
       }
     });
+  }
+
+  // The structural edits splice through xmlStructuralEdit, not the edit handler: adding a child to
+  // a struct and deleting one from it. Entry "a" is a struct of `b` and of `c`, itself a struct.
+  for (const [label, transform] of [
+    ['an LF chunk', undefined],
+    ['a CRLF chunk', toCrlf],
+    ['a one-line chunk', toOneLine],
+  ] as const) {
+    for (const [gesture, act] of [
+      ['adding a child', (d: Doc) => d.view.send({ type: 'addChild', rowId: descendant(d.entry('a'), 'c').id })],
+      ['deleting a child', (d: Doc) => d.view.send({ type: 'delete', rowIds: [descendant(d.entry('a'), 'b').id] })],
+    ] as const) {
+      test(`${gesture} keeps ${label}'s layout, and every byte outside the entry`, async () => {
+        const uri = await workingCopy('d12_structural_copy.sldd', OBJECT_PROPS, transform);
+        const d = await open(uri);
+        try {
+          const original: string = d.doc.chunkXml;
+          const at = objectOf(original, 'a');
+          const before = original.slice(0, at.start);
+          const after = original.slice(at.end);
+          d.view.posts.length = 0;
+          act(d);
+          const refused = d.view.posts.find((m) => m.type === 'error' || m.type === 'validationError');
+          assert.ok(!refused, `${gesture} was applied (${JSON.stringify(refused)})`);
+          const chunk: string = d.doc.chunkXml;
+          assert.notStrictEqual(chunk, original, `${gesture} reached the document`);
+          assert.ok(chunk.startsWith(before), 'every byte before the entry is as it was');
+          assert.ok(chunk.endsWith(after), 'every byte after the entry is as it was');
+          const object = chunk.slice(before.length, chunk.length - after.length);
+          assert.ok(
+            object.startsWith('<Object Class="DD.ENTRY">'),
+            `the entry starts where it started, with no indentation crept in front of it (${JSON.stringify(object.slice(0, 40))})`,
+          );
+          assert.ok(object.endsWith('</Object>'), 'and ends where an object ends');
+          if (transform === toOneLine) assert.ok(!object.includes('\n'), 'the entry is still on the one line');
+          await d.save();
+          assert.strictEqual(await chunkOnDisk(uri), d.doc.chunkXml, 'and the save writes the chunk as edited');
+        } finally {
+          await d.close();
+        }
+      });
+    }
   }
 
   // --- (2) undo and redo keep the entry's bytes -------------------------------------------
@@ -408,4 +469,5 @@ suite('Binary .sldd: an edit keeps what it did not touch (D12)', () => {
       await d.close();
     }
   });
+
 });
