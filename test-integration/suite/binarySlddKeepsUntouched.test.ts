@@ -536,4 +536,41 @@ suite('Binary .sldd: an edit keeps what it did not touch (D12)', () => {
     }
   });
 
+  // A chunk core reads but the gate's scan cannot vouch for: nothing can be compared entry by
+  // entry, so the whole chunk is, and it saves only as it was.
+  const unscannable: [label: string, transform: (xml: string) => string][] = [
+    ['a DOCTYPE before the root', (xml) => xml.replace(/(<\?xml[^>]*\?>)/, '$1<!DOCTYPE DataSource>')],
+    [
+      'a close tag outside the entries that does not close the element open',
+      (xml) => xml.replace('<P Name="AccessBaseWorkspace" Class="logical">0</P>', '<P Name="AccessBaseWorkspace" Class="logical">0</Q>'),
+    ],
+    [
+      'an attribute value with no quotes in an entry',
+      (xml) => xml.replace('<P Name="DocUnits" Class="char">m/s^2</P>', '<P Name="DocUnits" Class=char>m/s^2</P>'),
+    ],
+  ];
+  for (const [label, transform] of unscannable) {
+    test(`in a chunk the scan cannot read (${label}), an edit is refused at save, and the chunk saves as it was`, async () => {
+      const uri = await workingCopy('d12_gate_unscannable.sldd', PARAMS, transform);
+      const d = await open(uri);
+      try {
+        const original: string = d.doc.chunkXml;
+        const onDisk = await vscode.workspace.fs.readFile(uri);
+        d.edit('scalarD', 'Name', 'scalarE');
+        await assert.rejects(
+          d.save(),
+          (err: Error) => /^Refusing to save/.test(err.message) && err.message.includes('compared the whole'),
+          'the gate refuses, comparing the whole chunk',
+        );
+        assert.deepStrictEqual(await vscode.workspace.fs.readFile(uri), onDisk, 'and the file on disk is untouched');
+
+        d.edits[d.edits.length - 1].undo();
+        assert.strictEqual(d.doc.chunkXml, original, 'undo put the chunk back');
+        await d.save();
+        assert.strictEqual(await chunkOnDisk(uri), original, 'and the chunk as it was saves');
+      } finally {
+        await d.close();
+      }
+    });
+  }
 });
