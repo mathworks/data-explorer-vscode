@@ -6,9 +6,14 @@
 // renders, edits apply, and the extension processes onDidChangeTextDocument
 // without throwing (a listener error would surface as an unhandled rejection /
 // deactivated extension). The row-parse itself is covered by the vitest suite.
+// Where a test needs to know the provider's change listener ran, it reads the
+// repaint that listener posts, from a provider built over a stand-in panel
+// (tools/hostHarness.ts fakePanel), since the registered table's webview cannot
+// be asked what it was told.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { waitFor } from './tools/hostHarness';
+import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
+import { ctx, fakePanel, token, waitFor } from './tools/hostHarness';
 
 // The editable JSON .sldd opens in the tableView, a CustomTextEditorProvider:
 // the table is a view of the native TextDocument, so there is ONE document and
@@ -21,10 +26,12 @@ const BINARY_VIEW = 'dataExplorer.binaryView';
 const BINARY_SLDD_VIEW = 'dataExplorer.binarySlddView';
 
 // Locate the `{...}` span of the entries[] element whose "name" equals the given
-// name. Kept local (not imported from src/host/entrySplice) so this integration
-// bundle stays free of jsonc-parser, which does not `require` cleanly inside the
-// Electron test host. The production write-back path uses the real entrySplice;
-// its span logic is covered by the vitest suites (entrySplice + editWriteback).
+// name. Kept local (not imported from src/host/entrySplice), so the span these
+// tests write is found independently of the code under test. (The bundle does
+// carry jsonc-parser, through the provider imported above; esbuild.test.mjs's
+// mainFields is what makes it load in the Electron test host.) The production
+// write-back path uses the real entrySplice; its span logic is covered by the
+// vitest suites (entrySplice + editWriteback).
 function findEntrySpanLocal(text: string, name: string): { offset: number; length: number } | null {
   const marker = `"name": ${JSON.stringify(name)}`;
   const nameIdx = text.indexOf(marker);
@@ -266,22 +273,42 @@ suite('Data Explorer .sldd live edit', () => {
     // The document starts clean.
     assert.strictEqual(doc0.isDirty, false, 'the shared document starts clean');
 
-    // Edit in the TEXT view (valid JSON: prepend whitespace).
-    const appliedTextEdit = await editor0.edit((eb) =>
-      eb.insert(new vscode.Position(0, 0), ' '),
-    );
-    assert.strictEqual(appliedTextEdit, true, 'the text edit applied');
+    // A table over the same document whose messages can be read: the registered
+    // table's webview cannot be asked what it was told. Painted once, and the
+    // posts cleared, so anything posted after the edit below is the answer to it.
+    const view = fakePanel();
+    try {
+      await new SlddTextEditorProvider(ctx()).resolveCustomTextEditor(doc0, view.panel, token());
+      view.send({ type: 'ready' });
+      await waitFor('the first paint', () => view.posts.some((m) => m.type === 'setRows'));
+      view.posts.length = 0;
 
-    // The provider's onDidChangeTextDocument listener reacts to the same change.
-    await waitFor('the text edit to dirty the shared document', () => doc0.isDirty);
+      // Edit in the TEXT view (valid JSON: prepend whitespace).
+      const appliedTextEdit = await editor0.edit((eb) =>
+        eb.insert(new vscode.Position(0, 0), ' '),
+      );
+      assert.strictEqual(appliedTextEdit, true, 'the text edit applied');
 
-    // The shared TextDocument is dirty — the single source of truth both views
-    // observe.
-    assert.ok(doc0.isDirty, 'the shared document is dirty after a text-view edit');
-    assert.ok(
-      vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
-      'extension remains active',
-    );
+      // The provider's onDidChangeTextDocument listener answers the change by
+      // repainting the table: the whole table (setRows) for a change outside every
+      // entry, as this one is, or one entry's rows (updateEntryRows). Nothing else
+      // in this test makes it repaint, so a repaint is the listener's own effect;
+      // a provider with no listener never sends one.
+      await waitFor('the change listener to repaint the table for the text edit', () =>
+        view.posts.some((m) => m.type === 'setRows' || m.type === 'updateEntryRows'),
+      );
+      await waitFor('the text edit to dirty the shared document', () => doc0.isDirty);
+
+      // The shared TextDocument is dirty — the single source of truth both views
+      // observe.
+      assert.ok(doc0.isDirty, 'the shared document is dirty after a text-view edit');
+      assert.ok(
+        vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
+        'extension remains active',
+      );
+    } finally {
+      view.close();
+    }
   });
 
   test('an invalid JSON edit is handled gracefully (no crash)', async () => {
