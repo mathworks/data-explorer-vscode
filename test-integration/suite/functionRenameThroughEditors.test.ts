@@ -31,7 +31,7 @@ import { unzipSync, zipSync } from 'fflate';
 import { SC_PART_XML, createSession, ingest } from 'data-explorer-core';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { childrenOf, ctx, fakePanel, isEntryRow, nameOf, settle, token, waitFor, ws } from './tools/hostHarness';
+import { childrenOf, ctx, fakePanel, isEntryRow, nameOf, token, waitFor, ws } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -184,9 +184,11 @@ async function openText(copyName: string, edit: (text: string) => string = (text
       `the rename to ${step.to} to be written or refused`,
       () => doc.version > version || problemsIn(view.posts.slice(mark)).length > 0,
     );
-    // A rename that carried the catalog is several ranges, which takes the wide repaint; the
-    // next step reads its row from that. A tail, not the work.
-    await settle(300);
+    // A write paints the entry before it is made, and again from its own change event: a
+    // rename that carried the catalog is several ranges, which takes the wide repaint, and the
+    // next step reads its row from that. A refusal paints the entry back, once.
+    const paints = () => view.posts.slice(mark).filter((m) => m.type === 'setRows' || m.type === 'updateEntryRows').length;
+    await waitFor(`the repaint after the rename to ${step.to}`, () => paints() >= (doc.version > version ? 2 : 1));
     return view.posts.slice(mark);
   };
 

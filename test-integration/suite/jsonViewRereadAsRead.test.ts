@@ -14,7 +14,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
-import { chunkOf, ctx, fakePanel, settle, token, waitFor, wsUri } from './tools/hostHarness';
+import { chunkOf, ctx, fakePanel, quiet, token, waitFor, wsUri } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -101,7 +101,7 @@ suite('A JSON .sldd re-reads an edited entry from its text as the file read does
       await waitFor('the text edit to repaint', () =>
         view.posts.some((m) => m.type === 'updateEntryRows' || m.type === 'setRows'),
       );
-      await settle(200);
+      await quiet(200, 'a rebuild or an error after the entry repaint');
       const synced = onlyEntryRepaint(view.posts, entryRow.ID, 'the text edit');
       const syncedEntry = synced.find((r: any) => r.ID === entryRow.ID);
       assert.ok(syncedEntry, 'the repaint carries the entry’s own row');
@@ -122,7 +122,14 @@ suite('A JSON .sldd re-reads an edited entry from its text as the file read does
         'the table edit to reach the document, or be refused',
         () => doc.version > version || errorsIn(view.posts).length > 0,
       );
-      await settle(200);
+      // The edit paints its entry before it writes, and again from the write's own change event;
+      // that second paint has to land here, not inside the undo's below.
+      await waitFor(
+        'the write’s own change event to repaint the entry',
+        () =>
+          errorsIn(view.posts).length > 0 ||
+          view.posts.filter((m) => m.type === 'updateEntryRows' || m.type === 'setRows').length >= 2,
+      );
       assert.deepStrictEqual(errorsIn(view.posts), [], 'the table edit was not refused');
       assert.ok(doc.version > version, 'the table edit reached the document');
       const written = chunkOf(doc.getText()).entries.find((e: any) => e.name === NAME);
@@ -152,7 +159,7 @@ suite('A JSON .sldd re-reads an edited entry from its text as the file read does
       await waitFor('the undo to repaint', () =>
         view.posts.some((m) => m.type === 'updateEntryRows' || m.type === 'setRows'),
       );
-      await settle(200);
+      await quiet(200, 'a rebuild or an error after the entry repaint');
       assert.strictEqual(doc.getText(), typedText, 'the document is back to the typed text');
       const undone = onlyEntryRepaint(view.posts, entryRow.ID, 'the undo');
       const undoneEntry = undone.find((r: any) => r.ID === entryRow.ID);

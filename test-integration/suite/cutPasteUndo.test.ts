@@ -19,6 +19,7 @@
 // one-undo contract against a live editor.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { waitFor } from './tools/hostHarness';
 
 const TABLE_VIEW = 'dataExplorer.tableView';
 
@@ -77,10 +78,8 @@ async function hostUndoWorks(): Promise<boolean> {
     await editor.edit((eb) => eb.insert(new vscode.Position(0, 0), 'x'));
     if (doc.getText() === before) return false; // the edit itself did not apply
     await vscode.commands.executeCommand('default:undo');
-    const start = Date.now();
-    while (Date.now() - start < 1500 && doc.getText() !== before) {
-      await new Promise((r) => setTimeout(r, 25));
-    }
+    // A timeout here is the answer "no", which the catch below gives.
+    await waitFor('the canary undo to land', () => doc.getText() === before, 1500);
     return doc.getText() === before;
   } catch {
     return false;
@@ -157,13 +156,9 @@ suite('Data Explorer .sldd lazy-cut move — one edit, one undo', () => {
     );
     await vscode.commands.executeCommand('default:undo');
     // Undo is async in the Electron host: the command returns before the model
-    // mutation settles. Poll for the document to return to its original (clean)
+    // mutation settles. Wait for the document to return to its original (clean)
     // state instead of a fixed sleep, which raced and made this test flaky.
-    const undoStart = Date.now();
-    while (Date.now() - undoStart < 3000) {
-      if (!doc.isDirty && doc.getText() === originalText) break;
-      await new Promise((r) => setTimeout(r, 25));
-    }
+    await waitFor('one undo to restore the clean original', () => !doc.isDirty && doc.getText() === originalText);
 
     assert.strictEqual(doc.getText(), originalText, 'one undo restored the original text exactly');
     assert.strictEqual(doc.isDirty, false, 'and the document is clean again (a full single-step undo)');

@@ -22,7 +22,7 @@ import { DataModel } from 'data-explorer-core';
 import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { parsedModelForTab } from '../../src/host/sourceReads';
-import { ctx, fakePanel, settle, token, waitFor, ws } from './tools/hostHarness';
+import { ctx, fakePanel, quiet, token, waitFor, ws } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -83,7 +83,7 @@ suite('a closed tab releases what it registered', () => {
     // provider does between that parse and registering it is synchronous, so a macrotask after
     // it is past the point where the registration would have happened.
     await parsedModelForTab(uri);
-    await settle(200);
+    await quiet(200, 'a registration or a paint by the read that finished after its tab closed');
     assert.ok(
       !DataModel.hasDataSource(uri.toString()),
       'the late read did not re-register a model whose tab is gone',

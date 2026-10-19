@@ -27,7 +27,7 @@ import { clearClipboard } from '../../src/host/clipboard';
 import { clearDrag } from '../../src/host/dragState';
 import { dropDecision } from '../../src/webview/dropDecision';
 import { buildContextMenuItems } from '../../src/webview/menuItems';
-import { chunkOf, ctx, fakePanel, isEntryRow, nameOf, settle, token, waitFor, ws, wsUri } from './tools/hostHarness';
+import { chunkOf, ctx, fakePanel, isEntryRow, nameOf, quiet, token, waitFor, ws, wsUri } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -93,7 +93,7 @@ async function answered(tab: Tab, msg: any): Promise<void> {
   tab.view.posts.length = 0;
   tab.view.send(msg);
   await waitFor(`an answer to ${msg.type}`, () => errorsIn(tab.view.posts).length > 0 || tab.snapshot() !== before);
-  await settle(100);
+  await quiet(100, `a second answer to ${msg.type}: an error after the write, or a write after the refusal`);
 }
 
 async function pasteAndDrop(tab: Tab): Promise<void> {

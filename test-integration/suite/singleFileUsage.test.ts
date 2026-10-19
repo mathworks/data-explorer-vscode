@@ -19,6 +19,7 @@ import {
   paramLinksForBlock,
   blocksUsingVariable,
 } from '../../src/host/usageGraph';
+import { waitFor } from './tools/hostHarness';
 
 const BINARY_VIEW = 'dataExplorer.binaryView';
 
@@ -44,21 +45,20 @@ function standaloneUri(): vscode.Uri {
 // what re-runs buildGraph against the live open-tab set (the code path under test).
 // The retry also absorbs any lag between `openWith` resolving and the tab
 // appearing in vscode.window.tabGroups.
-async function pollRebuilt<T>(fn: () => Promise<T>, timeoutMs = 5000): Promise<T> {
-  const start = Date.now();
-  const attempt = async (): Promise<T> => {
-    invalidateUsageGraph();
-    // No prebuild: every query in `fn` builds the graph for the file it asks about. So
-    // invalidating is the whole of what this does, and it is what re-runs the build against
-    // the live open-tab set — the code path under test.
-    return fn();
-  };
-  let last: T = await attempt();
-  while (Date.now() - start < timeoutMs) {
-    if (last) return last;
-    await new Promise((r) => setTimeout(r, 50));
-    last = await attempt();
-  }
+async function pollRebuilt<T>(what: string, fn: () => Promise<T>, timeoutMs = 5000): Promise<T> {
+  let last!: T;
+  await waitFor(
+    what,
+    async () => {
+      invalidateUsageGraph();
+      // No prebuild: every query in `fn` builds the graph for the file it asks about. So
+      // invalidating is the whole of what this does, and it is what re-runs the build against
+      // the live open-tab set — the code path under test.
+      last = await fn();
+      return !!last;
+    },
+    timeoutMs,
+  );
   return last;
 }
 
@@ -100,7 +100,7 @@ suite('single-file Usage (open-tab union)', () => {
     // Forward edge (block-view Usage cell): Gain1's `Gain` param resolves to the
     // model-workspace variable Bp. Rebuild the graph so it unions in the now-open
     // tab, then read the edge.
-    const links = await pollRebuilt(async () => {
+    const links = await pollRebuilt('Gain1’s param link', async () => {
       const l = await paramLinksForBlock(uri.toString(), GAIN1);
       return l.length > 0 ? l : null;
     });

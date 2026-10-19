@@ -30,7 +30,7 @@ import { tmpdir } from 'os';
 import { unzipSync, zipSync } from 'fflate';
 import { DataModel } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { ctx, fakePanel, nameOf, settle, token, waitFor, wsUri } from './tools/hostHarness';
+import { ctx, fakePanel, nameOf, quiet, token, waitFor, wsUri } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -113,9 +113,10 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     for (const view of editViews.values()) view.close();
     editViews.clear();
     for (const doc of open.splice(0)) doc.dispose();
-    // Disposing a watcher reaches the host asynchronously. Give it time to stop watching
-    // before the directory goes, so that no later test inherits a watcher on a missing path.
-    await settle(200);
+    // Disposing a watcher reaches the host asynchronously, and nothing says when it has
+    // stopped. Give it time before the directory goes, so that no later test inherits a
+    // watcher on a missing path.
+    await quiet(200, 'the disposed watchers to stop watching before their directory goes');
     rmSync(dir, { recursive: true, force: true });
   });
 
@@ -181,17 +182,16 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
    * document still waiting for one. A document with unsaved edits ignores it like any other.
    */
   async function untilFollowed(what: string, done: () => boolean): Promise<void> {
-    const deadline = Date.now() + 20000;
     let next = Date.now() + 400;
-    while (!done()) {
-      assert.ok(Date.now() < deadline, `timed out after 20000ms waiting for ${what}`);
+    await waitFor(what, () => {
+      if (done()) return true;
       if (Date.now() >= next) {
         const later = new Date(statSync(path).mtimeMs + 1000);
         utimesSync(path, later, later);
         next = Date.now() + 400;
       }
-      await settle(20);
-    }
+      return false;
+    });
   }
 
   /** A stand-in view that records each repaint and where it painted from. */
@@ -232,7 +232,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     const outside = renamedTo('Kp_matlab');
     writeOutside(path, outside);
     await untilFollowed('the clean witness to reload', () => chunk(control).includes('>Kp_matlab<'));
-    await settle(300);
+    await quiet(300, 'the same outside change, had it reached the edited document, to load over the edit');
     assert.ok(chunk(doc).includes('>Ki<'), 'the unsaved edit is still there');
     assert.ok(!chunk(doc).includes('>Kp_matlab<'), 'and the outside change was not loaded over it');
 
@@ -282,7 +282,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     writeOutside(path, renamedTo('Kp_matlab'));
     answer = 'Overwrite';
     await assert.rejects(() => provider.saveCustomDocument(doc, token()), isCancellation);
-    await settle(50);
+    await waitFor('the Overwrite answer to be taken', () => doc.overwriteStamp !== undefined && !doc.conflictPromptOpen);
     assert.strictEqual(asked.length, 1);
 
     // Overwrite saves through VS Code, which reaches the provider VS Code registered, not
@@ -331,7 +331,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     // from the last touch arrive before the log is cleared.
     writeOutside(path, FIXTURE);
     await untilFollowed('both watchers to be live', () => repaints.length > 0 && witnessed.length > 0);
-    await settle(600);
+    await quiet(600, 'any event from the last touch to arrive before the log is cleared');
     repaints.length = 0;
 
     await edit(doc, 'Ki');
@@ -341,7 +341,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     // The witness still holds the old stamp, so the event for our write reloads it. That
     // proves the event arrived, and our document ignored it.
     await followed(control, 'Ki');
-    await settle(300);
+    await quiet(300, 'the event for our own write, had our document taken it as an outside change, to reload it');
     assert.deepStrictEqual(repaints, ['registered'], 'the watcher’s event for that write reloaded nothing');
 
     writeOutside(path, renamedTo('Kp_matlab'));
@@ -368,7 +368,7 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     const doc = await openDoc();
     await edit(doc, 'Ki');
     unlinkSync(path);
-    await settle(300);
+    await quiet(300, 'the delete event, had the view taken it as a reason to drop its contents, to empty it');
     assert.ok(chunk(doc).includes('>Ki<'), 'the view keeps its contents');
     await provider.saveCustomDocument(doc, token());
     assert.ok(chunkOnDisk(path).includes('>Ki<'), 'and the save wrote the file back');

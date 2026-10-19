@@ -50,8 +50,8 @@ import {
   isEntryRow,
   isHeader,
   nameOf,
+  quiet,
   rowNamed,
-  settle,
   token,
   waitFor,
   ws,
@@ -108,9 +108,9 @@ async function deleteFromJson(
         (doc.version > versionBefore &&
           view.posts.some((m) => m.type === 'updateEntryRows' || m.type === 'setRows')),
     );
-    // The repaint is what the wait above catches; `selectRows` follows it. Small and fixed
-    // because it is a tail, not the work.
-    await settle(150);
+    // The repaint is what the wait above catches, and `selectRows` is posted beside it, before
+    // the write. What is left is an error after the write, which can only be given time.
+    await quiet(150, 'an error reported after the delete landed');
 
     const after = doc.getText();
     assert.ok(
@@ -324,7 +324,7 @@ suite('A scattered multi-row delete, on a JSON .sldd', () => {
       // The error IS the answer here, so it is what to wait for. Then a fixed tail, because
       // "nothing else happened" cannot be waited for — only given time to fail to happen.
       await waitFor('the refusal', () => view.posts.some((m) => m.type === 'error'));
-      await settle(500);
+      await quiet(500, 'a write, which the refused delete must not make');
 
       assert.strictEqual(doc.getText(), before, 'the document was not touched');
       assert.strictEqual(doc.version, version, 'and no write was attempted');

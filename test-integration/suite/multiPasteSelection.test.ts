@@ -31,7 +31,7 @@ import {
   fakePanel,
   isEntryRow,
   nameOf,
-  settle,
+  quiet,
   token,
   waitFor,
   ws,
@@ -103,7 +103,7 @@ async function pasteIntoJson(
         view.posts.some((m) => m.type === 'error') ||
         (doc.version > versionBefore && view.posts.some((m) => m.type === 'selectRows')),
     );
-    await settle(150);
+    await quiet(150, 'an error reported after the paste landed');
 
     assert.ok(
       !view.posts.some((m) => m.type === 'error'),
@@ -213,8 +213,11 @@ async function pasteIntoBinary(
     view.posts.length = 0;
     view.send({ type: 'paste', rowId: sources[0].ID });
     // The cross-document half of a cut is the only awaited step in this path, and a copy has
-    // none — but the handler is async, so give its microtasks a turn before reading.
-    await settle(0);
+    // none — but the handler is async, so its answer is waited for rather than read at once.
+    await waitFor(
+      'the paste to be applied or refused',
+      () => view.posts.some((m) => m.type === 'error' || m.type === 'selectRows'),
+    );
 
     assert.ok(
       !view.posts.some((m) => m.type === 'error'),

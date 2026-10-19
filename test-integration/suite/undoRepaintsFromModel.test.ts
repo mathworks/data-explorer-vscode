@@ -19,7 +19,8 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
-import { invalidateUsageGraph } from '../../src/host/usageGraph';
+import { annotateDataRowsNow, invalidateUsageGraph } from '../../src/host/usageGraph';
+import { quiet, waitFor } from './tools/hostHarness';
 
 function ctx(): vscode.ExtensionContext {
   const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
@@ -32,8 +33,6 @@ function wsUri(name: string): vscode.Uri {
   assert.ok(ws, 'a workspace folder must be open');
   return vscode.Uri.joinPath(ws.uri, name);
 }
-
-const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -125,7 +124,7 @@ suite('A JSON .sldd table paints an undo from the model', () => {
       new vscode.CancellationTokenSource().token,
     );
     view.send({ type: 'ready' });
-    await settle(800);
+    await waitFor('the first paint', () => view.posts.some((m) => m.type === 'setRows'));
     assert.ok(
       view.posts.some((m) => m.type === 'setRows'),
       'the first paint sent the whole table',
@@ -143,7 +142,9 @@ suite('A JSON .sldd table paints an undo from the model', () => {
     view.posts.length = 0;
 
     await editArrayEntry(uri, 4242);
-    await settle(1500);
+    const paints = () => view.posts.filter((m) => m.type === 'updateEntryRows').length;
+    await waitFor('the rows at once, and again once the graph is built', () => paints() >= 2);
+    await quiet(1500, 'a third paint, or a rebuild of the table');
 
     const painted = view.posts.filter((m) => m.type === 'updateEntryRows');
     assert.strictEqual(
@@ -160,12 +161,19 @@ suite('A JSON .sldd table paints an undo from the model', () => {
 
   test('sends them once when the graph is already built', async () => {
     // Warm the graph, then edit: nothing is waited for, so there is nothing to catch up on.
+    // The warm-up's paints all land before the count starts: the one at once, and, if the
+    // graph was cold, the one that follows its build (posted in the same turn the graph is
+    // published, so by the time this sees the graph built, it has been sent).
     await editArrayEntry(uri, 101);
-    await settle(1500);
+    await waitFor(
+      'the warm-up edit’s paint, and the usage graph it reads',
+      () => view.posts.some((m) => m.type === 'updateEntryRows') && annotateDataRowsNow(uri.toString(), []),
+    );
     view.posts.length = 0;
 
     await editArrayEntry(uri, 202);
-    await settle(1500);
+    await waitFor('the edit’s paint', () => view.posts.some((m) => m.type === 'updateEntryRows'));
+    await quiet(1500, 'a second paint, or a rebuild of the table, for the one change');
 
     assert.deepStrictEqual(
       view.posts.filter((m) => m.type === 'updateEntryRows' || m.type === 'setRows').map((m) => m.type),

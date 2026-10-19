@@ -23,7 +23,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { strFromU8, strToU8 } from 'fflate';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
-import { chunkOf, ctx, fakePanel, isEntryRow, nameOf, rowNamed, settle, token, waitFor, wsUri } from './tools/hostHarness';
+import { chunkOf, ctx, fakePanel, isEntryRow, nameOf, quiet, rowNamed, token, waitFor, wsUri } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -95,11 +95,11 @@ suite('two entries with one name in one section, in the text editor', () => {
     const before = opened.doc.getText();
     opened.view.posts.length = 0;
     opened.view.send(msg);
-    const deadline = Date.now() + 8000;
-    while (opened.doc.getText() === before && errorsIn(opened.view.posts).length === 0 && Date.now() < deadline) {
-      await settle(20);
-    }
-    await settle(300);
+    await waitFor(
+      `an answer to ${msg.type}`,
+      () => opened.doc.getText() !== before || errorsIn(opened.view.posts).length > 0,
+    );
+    await quiet(300, `a second answer to ${msg.type}: an error after the write`);
     return { before, errors: errorsIn(opened.view.posts) };
   }
 

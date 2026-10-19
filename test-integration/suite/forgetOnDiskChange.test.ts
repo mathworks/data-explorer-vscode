@@ -38,7 +38,7 @@ import { forgetUnseenChange, sourceCache } from '../../src/host/sourceReads';
 import { forgetSource } from '../../src/host/sourceCache';
 import { followContentChanges } from '../../src/host/workspaceChange';
 import { SUPPORTED_GLOB } from '../../src/common/fileTypes';
-import { ctx, fakePanel, nameOf, settle, token, waitFor } from './tools/hostHarness';
+import { ctx, fakePanel, nameOf, token, waitFor } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -226,16 +226,15 @@ suite('a write no stat can see, with no tab open on it', () => {
       // A watcher starts asynchronously, and on Linux (inotify) a write made before it is live
       // raises no event at all. So first make ordinary changes, one every 400 ms, until the handler
       // has run once (the same approach as binarySlddOutsideChange.test.ts).
-      const deadline = Date.now() + 20000;
       let next = 0;
-      while (rebuilds.length === 0) {
-        assert.ok(Date.now() < deadline, 'timed out waiting for the watcher to deliver an event');
+      await waitFor('the watcher to deliver an event', () => {
+        if (rebuilds.length > 0) return true;
         if (Date.now() >= next) {
           touch();
           next = Date.now() + 400;
         }
-        await settle(20);
-      }
+        return false;
+      });
       // Let the re-index that event started finish at the version the file has now. It re-read the
       // file, since its version moved, and found the same names.
       const touched = await seen();
@@ -248,13 +247,15 @@ suite('a write no stat can see, with no tab open on it', () => {
       const generation = sourceCache.generation;
       const asked = rebuilds.length;
       await restoreWrite();
-      const until = Date.now() + 10000;
-      let names = await indexed();
-      while (!names.includes('GainNew')) {
-        assert.ok(Date.now() < until, `timed out waiting for the index to follow the file: ${JSON.stringify(names)}`);
-        await settle(20);
-        names = await indexed();
-      }
+      let names: string[] = [];
+      await waitFor(
+        'the index to follow the file',
+        async () => {
+          names = await indexed();
+          return names.includes('GainNew');
+        },
+        10000,
+      );
       assert.deepStrictEqual(names, ['GainNew'], 'and the old block is gone from it');
       // The forget came before the rebuild was asked for. A rebuild started earlier reads the old
       // entry, and a forget after it only stops its stores: no further event rebuilds again.

@@ -30,6 +30,7 @@ import {
   paramLinksForBlock,
   blocksUsingVariable,
 } from '../../src/host/usageGraph';
+import { waitFor } from './tools/hostHarness';
 
 const BINARY_VIEW = 'dataExplorer.binaryView';
 const TABLE_VIEW = 'dataExplorer.tableView';
@@ -56,21 +57,20 @@ function caseRefUri(name: string): vscode.Uri {
 // instance's cache. Invalidating here is exactly what re-runs buildGraph against
 // the live open-tab set — the code path under test. The retry also absorbs the lag
 // between `openWith` resolving and the tab appearing in vscode.window.tabGroups.
-async function pollRebuilt<T>(fn: () => Promise<T>, timeoutMs = 10000): Promise<T> {
-  const start = Date.now();
-  const attempt = async (): Promise<T> => {
-    invalidateUsageGraph();
-    // No prebuild: every query in `fn` builds the graph for the file it asks about. So
-    // invalidating is the whole of what this does, and it is what re-runs the build against
-    // the live open-tab set — the code path under test.
-    return fn();
-  };
-  let last: T = await attempt();
-  while (Date.now() - start < timeoutMs) {
-    if (last) return last;
-    await new Promise((r) => setTimeout(r, 50));
-    last = await attempt();
-  }
+async function pollRebuilt<T>(what: string, fn: () => Promise<T>, timeoutMs = 10000): Promise<T> {
+  let last!: T;
+  await waitFor(
+    what,
+    async () => {
+      invalidateUsageGraph();
+      // No prebuild: every query in `fn` builds the graph for the file it asks about. So
+      // invalidating is the whole of what this does, and it is what re-runs the build against
+      // the live open-tab set — the code path under test.
+      last = await fn();
+      return !!last;
+    },
+    timeoutMs,
+  );
   return last;
 }
 
@@ -120,7 +120,7 @@ suite('case-insensitive reference matching (usage graph)', () => {
     // recorded ref, so this missed and Gain1 rendered with no source and no link —
     // indistinguishable from a genuinely unresolved parameter.
     await openAllFixtures();
-    const links = await pollRebuilt(async () => {
+    const links = await pollRebuilt('Gain1’s param link', async () => {
       const l = await paramLinksForBlock(modelUri(), SID.Gain1);
       return l.length > 0 ? l : null;
     });
@@ -139,7 +139,7 @@ suite('case-insensitive reference matching (usage graph)', () => {
     // (both stem and extension upper-cased); the file is `chained.sldd`. This leg
     // is normalised in slddSummary, a different line from the map keys above.
     await openAllFixtures();
-    const links = await pollRebuilt(async () => {
+    const links = await pollRebuilt('Gain2’s chained param link', async () => {
       const l = await paramLinksForBlock(modelUri(), SID.Gain2);
       return l.length > 0 && l[0].linkTarget ? l : null;
     });
@@ -155,7 +155,7 @@ suite('case-insensitive reference matching (usage graph)', () => {
     // dictionary nor a MAT file, so the link was dropped entirely — a stronger
     // failure than a case-mismatched name, since the ref never reached the map.
     await openAllFixtures();
-    const links = await pollRebuilt(async () => {
+    const links = await pollRebuilt('Gain3’s param link', async () => {
       const l = await paramLinksForBlock(modelUri(), SID.Gain3);
       return l.length > 0 && l[0].linkTarget ? l : null;
     });
@@ -169,7 +169,7 @@ suite('case-insensitive reference matching (usage graph)', () => {
     // `CaseBp.MAT` -> CaseBp.mat. Covers matByBase's key plus the /\.mat$/i filter;
     // the model owns no workspace variables, so nothing can shadow the MAT hit.
     await openAllFixtures();
-    const links = await pollRebuilt(async () => {
+    const links = await pollRebuilt('Const1’s param link', async () => {
       const l = await paramLinksForBlock(modelUri(), SID.Const1);
       return l.length > 0 && l[0].linkTarget ? l : null;
     });
@@ -185,7 +185,7 @@ suite('case-insensitive reference matching (usage graph)', () => {
     // failed to resolve produced no reverse edge either — the variable looked
     // unused in the dictionary's own Usage column.
     await openAllFixtures();
-    const usedBy = await pollRebuilt(async () => {
+    const usedBy = await pollRebuilt('the block that uses CaseVar', async () => {
       const u = await blocksUsingVariable(caseRefUri('CaseParams.sldd').toString(), 'CaseVar');
       return u.length > 0 ? u : null;
     });

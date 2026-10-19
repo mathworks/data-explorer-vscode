@@ -24,6 +24,7 @@ import { unzipSync } from 'fflate';
 import { DataModel } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 import { applyEntryOps, entryRecord } from '../../src/host/entryOps';
+import { waitFor } from './tools/hostHarness';
 
 function ctx(): vscode.ExtensionContext {
   const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
@@ -46,8 +47,6 @@ function makePanel(): vscode.WebviewPanel {
     enableScripts: true,
   });
 }
-
-const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** A working copy of the fixture, so a save in this suite cannot touch the fixture itself. */
 async function workingCopy(name: string): Promise<vscode.Uri> {
@@ -84,17 +83,17 @@ suite('Binary .sldd undo/redo', () => {
     const sub = provider.onDidChangeCustomDocument((e) => edits.push(e));
     const panel = makePanel();
     await provider.resolveCustomEditor(doc, panel, token());
-    await settle(500);
     assert.ok(panel.webview.html.includes('dex-tree-table'), 'the real render shell is up');
-    // The model is registered by a repaint, which the webview asks for with `ready`.
-    // Trigger one here instead of waiting on the webview's timing, then close the view so
-    // a late `ready` cannot rebuild the tree underneath the assertions below — they are
+    // The model is registered by a repaint, which the webview asks for with `ready`. Wait
+    // for that round trip, repaint once more here, and close the view, so that no `ready`
+    // is still on its way to rebuild the tree underneath the assertions below — they are
     // about the registered tree still being the SAME tree. (Nothing else can: a message
     // is only delivered at an await, and the stretch that follows has none.)
+    const srcId = (doc as unknown as { srcId: string }).srcId;
+    await waitFor('the ready/post round trip to register the document', () => !!DataModel.getDataSource(srcId));
     (doc as any).repaintAll();
     panel.dispose();
 
-    const srcId = (doc as unknown as { srcId: string }).srcId;
     const root: any = DataModel.getDataSource(srcId);
     assert.ok(root, 'resolving the editor registered the document’s model');
     const entry = firstEntry(root);
@@ -172,11 +171,12 @@ suite('Binary .sldd undo/redo', () => {
     const sub = provider.onDidChangeCustomDocument((e) => edits.push(e));
     const panel = makePanel();
     await provider.resolveCustomEditor(doc, panel, token());
-    await settle(500);
     // Register the model through the live view, then close it — same reason as above.
+    const registered = (doc as unknown as { srcId: string }).srcId;
+    await waitFor('the ready/post round trip to register the document', () => !!DataModel.getDataSource(registered));
     (doc as any).repaintAll();
     panel.dispose();
-    await settle(100);
+    await waitFor('the closed panel to leave the document’s views', () => (doc as any).views.size === 0);
 
     // Stand-in views, which is the only way to observe WHICH repaint ran: a real webview
     // panel cannot be asked what it was sent.

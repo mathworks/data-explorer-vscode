@@ -26,7 +26,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { chunkOf, ctx, fakePanel, rowNamed, settle, token, waitFor, ws } from './tools/hostHarness';
+import { chunkOf, ctx, fakePanel, rowNamed, token, waitFor, ws } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -300,14 +300,12 @@ suite('A VariantBank and a VariantBankCoderInfo are edited in their own columns,
     opened.view.send({ type: 'edit', rowId, columnId: column, oldValue, newValue });
     const since = () => opened.view.posts.slice(from);
     const repainted = () => since().some((p) => p.type === 'updateEntryRows' && p.entryRowId === rowId);
-    const deadline = Date.now() + 8000;
-    while (
-      !((opened.held() !== before || since().some((p) => p.type === 'validationError')) && repainted()) &&
-      !since().some((p) => p.type === 'error') &&
-      Date.now() < deadline
-    ) {
-      await settle(20);
-    }
+    await waitFor(
+      'the edit to land or be refused, and its entry to be repainted',
+      () =>
+        ((opened.held() !== before || since().some((p) => p.type === 'validationError')) && repainted()) ||
+        since().some((p) => p.type === 'error'),
+    );
     const failed = since().find((p) => p.type === 'error');
     assert.ok(!failed, `the edit posted an error: ${failed?.message}`);
     const repaints = since().filter((p) => p.type === 'updateEntryRows' && p.entryRowId === rowId);
@@ -350,6 +348,7 @@ suite('A VariantBank and a VariantBankCoderInfo are edited in their own columns,
       const opened = await openIn(format, uri);
       const original = opened.held();
       for (const e of EDITS) {
+        const mark = opened.view.posts.length;
         assertOffered(opened, e.column);
         assert.strictEqual(rowNamed(opened.rows, e.entry)[e.column]?.text, e.from, `${e.entry}'s ${e.column} reads as read`);
         const { before, after, refusal, repaint } = await edit(opened, e.entry, e.column, e.from, e.typed);
@@ -361,8 +360,13 @@ suite('A VariantBank and a VariantBankCoderInfo are edited in their own columns,
         if (format === 'JSON') {
           assert.deepStrictEqual(fieldsOf(after, e.entry)[e.field], e.saved, `${e.column}: written into ${e.field}`);
         }
-        // A tail for the write's own change event, which only confirms the paint above.
-        await settle(50);
+        // The write's own change event only confirms the paint above, by painting the entry
+        // again; it has to land here, not inside the next edit. A binary write fires none.
+        if (format === 'JSON') {
+          await waitFor('the write’s own change event to repaint the entry', () =>
+            opened.view.posts.slice(mark).filter((p) => p.type === 'updateEntryRows' || p.type === 'setRows').length >= 2,
+          );
+        }
       }
       assert.ok(opened.dirty(), 'the editor holds unsaved edits');
 

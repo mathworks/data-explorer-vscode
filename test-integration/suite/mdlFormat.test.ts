@@ -26,6 +26,7 @@ import {
   blocksUsingVariable,
 } from '../../src/host/usageGraph';
 import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
+import { waitFor } from './tools/hostHarness';
 
 const BINARY_VIEW = 'dataExplorer.binaryView';
 const TABLE_VIEW = 'dataExplorer.tableView';
@@ -58,21 +59,20 @@ function ctx(): vscode.ExtensionContext {
 // cache. Invalidating here is what re-runs buildGraph against the live open-tab
 // set — the code path under test. The retry also absorbs the lag between `openWith`
 // resolving and the tab appearing in vscode.window.tabGroups.
-async function pollRebuilt<T>(fn: () => Promise<T>, timeoutMs = 10000): Promise<T> {
-  const start = Date.now();
-  const attempt = async (): Promise<T> => {
-    invalidateUsageGraph();
-    // No prebuild: every query in `fn` builds the graph for the file it asks about. So
-    // invalidating is the whole of what this does, and it is what re-runs the build against
-    // the live open-tab set — the code path under test.
-    return fn();
-  };
-  let last: T = await attempt();
-  while (Date.now() - start < timeoutMs) {
-    if (last) return last;
-    await new Promise((r) => setTimeout(r, 50));
-    last = await attempt();
-  }
+async function pollRebuilt<T>(what: string, fn: () => Promise<T>, timeoutMs = 10000): Promise<T> {
+  let last!: T;
+  await waitFor(
+    what,
+    async () => {
+      invalidateUsageGraph();
+      // No prebuild: every query in `fn` builds the graph for the file it asks about. So
+      // invalidating is the whole of what this does, and it is what re-runs the build against
+      // the live open-tab set — the code path under test.
+      last = await fn();
+      return !!last;
+    },
+    timeoutMs,
+  );
   return last;
 }
 
@@ -162,7 +162,7 @@ suite('.mdl models (both flavours)', () => {
     // this model contributed no ModelSummary at all and ClassicGain rendered with
     // no source and no link, indistinguishable from a genuinely unresolved param.
     await openAllFixtures();
-    const links = await pollRebuilt(async () => {
+    const links = await pollRebuilt('ClassicGain’s param link', async () => {
       const l = await paramLinksForBlock(legacyUri(CLASSIC).toString(), 'ClassicGain');
       return l.length > 0 && l[0].linkTarget ? l : null;
     });
@@ -192,7 +192,7 @@ suite('.mdl models (both flavours)', () => {
     // SID at all, so there the name IS the key. Both spellings live on disk and the
     // answer is the same.
     await openAllFixtures();
-    const links = await pollRebuilt(async () => {
+    const links = await pollRebuilt('the modern model’s block 1 param link', async () => {
       const l = await paramLinksForBlock(legacyUri(MODERN).toString(), '1');
       return l.length > 0 && l[0].linkTarget ? l : null;
     });
@@ -209,7 +209,7 @@ suite('.mdl models (both flavours)', () => {
     // variable, two models, two different on-disk framings, one edge list. If either
     // flavour were dropped, Kp would look as though only one model used it.
     await openAllFixtures();
-    const usedBy = await pollRebuilt(async () => {
+    const usedBy = await pollRebuilt('both blocks that use Kp', async () => {
       const u = await blocksUsingVariable(legacyUri(DICT).toString(), 'Kp');
       return u.length >= 2 ? u : null;
     });

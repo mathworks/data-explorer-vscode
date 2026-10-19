@@ -40,6 +40,7 @@ import {
   scXmlRenamePatch,
 } from '../../src/host/scRename';
 import { mutateEntry } from '../../src/host/entryOps';
+import { waitFor } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -58,8 +59,6 @@ function ws(): vscode.Uri {
 function token() {
   return new vscode.CancellationTokenSource().token;
 }
-
-const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * A working copy of one of the vitest suite's architectural fixtures (`arch_binary.sldd`
@@ -102,13 +101,14 @@ async function open(provider: BinarySlddEditorProvider, uri: vscode.Uri) {
     enableScripts: true,
   });
   await provider.resolveCustomEditor(doc, panel, token());
-  await settle(500);
-  // The model is registered by a repaint, which the webview asks for with `ready`. Trigger
-  // one here rather than waiting on the webview's timing, then close the view so a late
-  // `ready` cannot rebuild the tree under the assertions.
+  // The model is registered by a repaint, which the webview asks for with `ready`. Wait for
+  // that round trip, then repaint once more here and close the view, so that no `ready` can
+  // still be on its way to rebuild the tree under the assertions.
+  const srcId = (doc as unknown as { srcId: string }).srcId;
+  await waitFor('the ready/post round trip to register the document', () => !!DataModel.getDataSource(srcId));
   (doc as any).repaintAll();
   panel.dispose();
-  const root: any = DataModel.getDataSource((doc as unknown as { srcId: string }).srcId);
+  const root: any = DataModel.getDataSource(srcId);
   assert.ok(root, 'resolving the editor registered the document’s model');
   return { doc, root };
 }

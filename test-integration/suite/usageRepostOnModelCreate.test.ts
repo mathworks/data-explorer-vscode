@@ -26,7 +26,7 @@ import * as vscode from 'vscode';
 import { strToU8, zipSync } from 'fflate';
 import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
-import { ctx, fakePanel, nameOf, settle, token, waitFor, ws, wsUri } from './tools/hostHarness';
+import { ctx, fakePanel, nameOf, quiet, token, waitFor, ws, wsUri } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -99,7 +99,7 @@ async function writeAndLetItLand(uri: vscode.Uri, bytes: Uint8Array): Promise<vo
   try {
     await vscode.workspace.fs.writeFile(uri, bytes);
     await waitFor(`the create event for ${name}`, () => seen);
-    await settle(800);
+    await quiet(800, `two debounce windows after the create event for ${name}, for a repost it would cause`);
   } finally {
     sub.dispose();
     witness.dispose();

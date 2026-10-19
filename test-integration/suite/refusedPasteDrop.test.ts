@@ -28,7 +28,7 @@ import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvide
 import { peekModel } from '../../src/host/SlddModel';
 import { clearClipboard } from '../../src/host/clipboard';
 import { clearDrag, getDrag } from '../../src/host/dragState';
-import { chunkOf, ctx, entryNames, fakePanel, isEntryRow, nameOf, settle, token, waitFor, ws, wsUri } from './tools/hostHarness';
+import { chunkOf, ctx, entryNames, fakePanel, isEntryRow, nameOf, quiet, token, waitFor, ws, wsUri } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -112,7 +112,7 @@ async function answered(tab: TextTab, msg: any): Promise<void> {
   tab.view.posts.length = 0;
   tab.view.send(msg);
   await waitFor(`an answer to ${msg.type}`, () => errorsIn(tab.view.posts).length > 0 || tab.doc.version > version);
-  await settle(100);
+  await quiet(100, `a second answer to ${msg.type}: an error after the write, or a write after the refusal`);
 }
 
 suite('A refused paste or drop into a JSON .sldd', () => {
@@ -172,7 +172,7 @@ suite('A refused paste or drop into a JSON .sldd', () => {
       try {
         tab.view.posts.length = 0;
         tab.view.send({ type: 'dragStart', rowIds: [source.ID] });
-        await settle(50);
+        await waitFor('the drag start to be refused', () => errorsIn(tab.view.posts).length > 0);
       } finally {
         restore();
       }
@@ -190,7 +190,7 @@ suite('A refused paste or drop into a JSON .sldd', () => {
       // drop did.
       tab.view.send({ type: 'copy', rowIds: [source.ID] });
       tab.view.send({ type: 'dragStart', rowIds: [source.ID] });
-      await settle(50);
+      await waitFor('the drag to start', () => getDrag() !== null);
       assert.ok(getDrag(), 'the drag started');
 
       const restore = refuse(tab.entry(), 'serialize', (self) => COPY.test(String(self.name)));
@@ -249,7 +249,7 @@ suite('A refused drag or drop on a compressed-binary .sldd', () => {
       try {
         view.posts.length = 0;
         view.send({ type: 'dragStart', rowIds: [source.ID] });
-        await settle(50);
+        await waitFor('the drag start to be refused', () => errorsIn(view.posts).length > 0);
       } finally {
         restore();
       }
@@ -263,14 +263,14 @@ suite('A refused drag or drop on a compressed-binary .sldd', () => {
       const source = rowOf(rows, ENTRY);
       const before = doc.chunkXml as string;
       view.send({ type: 'dragStart', rowIds: [source.ID] });
-      await settle(50);
+      await waitFor('the drag to start', () => getDrag() !== null);
       assert.ok(getDrag(), 'the drag started');
 
       // The same real refusal as the JSON cut above: a matrix dropped into Architectural Data.
       view.posts.length = 0;
       view.send({ type: 'drop', rowId: 'section:arch', mode: 'copy' });
       await waitFor('the refusal', () => errorsIn(view.posts).length > 0);
-      await settle(50);
+      await waitFor('the refused drop to end the drag', () => getDrag() === null);
       assert.match(errorsIn(view.posts)[0], /must be scalar and numeric/);
       assert.strictEqual(doc.chunkXml, before, 'the document is untouched');
       assert.strictEqual(getDrag(), null, 'and the drag is over');

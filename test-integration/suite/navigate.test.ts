@@ -11,6 +11,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { handleNavigate } from '../../src/host/navigate';
 import { SectionsTreeProvider } from '../../src/host/SectionsTreeProvider';
+import { waitFor } from './tools/hostHarness';
 
 function wsUri(name: string): vscode.Uri {
   const ws = vscode.workspace.workspaceFolders?.[0];
@@ -91,11 +92,10 @@ suite('handleNavigate — a bare name resolves in the referrer\'s own folder', (
     // findFiles runs a fresh search, but these files are milliseconds old: wait until the
     // search lists all four, so a slow search service reads as slow rather than as a wrong
     // answer. Only then build the tree whose graph is under test.
-    const deadline = Date.now() + 20000;
-    while ((await vscode.workspace.findFiles('navscope/**/*')).length < made.length) {
-      assert.ok(Date.now() < deadline, 'timed out waiting for the search to list the navscope files');
-      await new Promise((r) => setTimeout(r, 100));
-    }
+    await waitFor(
+      'the search to list the navscope files',
+      async () => (await vscode.workspace.findFiles('navscope/**/*')).length >= made.length,
+    );
     tree = new SectionsTreeProvider(vscode.extensions.getExtension('mathworks.simulink-data-explorer')!.extensionUri);
   });
 

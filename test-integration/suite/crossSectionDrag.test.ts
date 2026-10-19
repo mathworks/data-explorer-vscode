@@ -27,7 +27,7 @@ import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 import { clearDrag } from '../../src/host/dragState';
 import { dropDecision } from '../../src/webview/dropDecision';
-import { chunkOf, ctx, fakePanel, isEntryRow, nameOf, settle, token, waitFor, ws, wsUri } from './tools/hostHarness';
+import { chunkOf, ctx, fakePanel, isEntryRow, nameOf, quiet, token, waitFor, ws, wsUri } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -97,7 +97,7 @@ async function dragBothOntoArch(tab: Tab): Promise<void> {
     'the drop to be applied or refused',
     () => errorsIn(tab.view.posts).length > 0 || tab.derived().get(DESIGN_ENTRY) === '1',
   );
-  await settle(100);
+  await quiet(100, 'an error reported after the drop landed');
   assert.deepStrictEqual(errorsIn(tab.view.posts), [], 'the drop is applied');
 
   const after = tab.derived();

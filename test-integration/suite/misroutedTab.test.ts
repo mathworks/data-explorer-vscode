@@ -13,6 +13,7 @@
 // Only a real VS Code can produce that failure, so this test lives here.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { quiet, waitFor } from './tools/hostHarness';
 
 const TABLE_VIEW = 'dataExplorer.tableView';
 const BINARY_SLDD_VIEW = 'dataExplorer.binarySlddView';
@@ -35,15 +36,7 @@ function tabsForUri(uri: vscode.Uri): vscode.Tab[] {
 }
 
 // The repair runs off a tab event, so it completes some time after the open that
-// triggered it returns (or rejects).
-async function waitFor(predicate: () => boolean, message: string, timeoutMs = 10000): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (predicate()) return;
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  assert.ok(false, message);
-}
+// triggered it returns (or rejects): every check of it below is a wait.
 
 // Force a viewType the way "Reopen Editor With…" does. The open can also REJECT
 // ("cannot be opened as text"); the tab it left behind is still the bug, so the
@@ -88,15 +81,13 @@ suite('misrouted .sldd tab repair (#24)', () => {
     const uri = wsUri('binary.sldd');
     await forceOpenWith(uri, TABLE_VIEW);
 
-    await waitFor(
-      () => tabsForUri(uri).some((t) => viewTypeOf(t) === BINARY_SLDD_VIEW),
-      'the misrouted tab was never re-routed to the writable binary-sldd view',
+    await waitFor('the misrouted tab to be re-routed to the writable binary-sldd view', () =>
+      tabsForUri(uri).some((t) => viewTypeOf(t) === BINARY_SLDD_VIEW),
     );
     // The replacement is opened first, then the broken tab closed, so the file is
     // never absent from the editor area; what must not survive is the error page.
-    await waitFor(
-      () => !tabsForUri(uri).some((t) => viewTypeOf(t) === TABLE_VIEW),
-      'the broken tableView tab was left open next to the repaired one',
+    await waitFor('the broken tableView tab beside the repaired one to close', () =>
+      !tabsForUri(uri).some((t) => viewTypeOf(t) === TABLE_VIEW),
     );
   });
 
@@ -107,13 +98,12 @@ suite('misrouted .sldd tab repair (#24)', () => {
     // legitimate table tab in the editor.
     const uri = wsUri('data.sldd');
     await forceOpenWith(uri, TABLE_VIEW);
-    await waitFor(
-      () => tabsForUri(uri).some((t) => viewTypeOf(t) === TABLE_VIEW),
-      'the JSON .sldd did not open in the table view',
+    await waitFor('the JSON .sldd to open in the table view', () =>
+      tabsForUri(uri).some((t) => viewTypeOf(t) === TABLE_VIEW),
     );
 
     // Give the repair the same window it needs to act, then assert it did not.
-    await new Promise((r) => setTimeout(r, 1000));
+    await quiet(1000, 'a repair, had the guard let one through, to open a second tab');
     const tabs = tabsForUri(uri);
     assert.strictEqual(tabs.length, 1, 'no second tab was opened for the JSON .sldd');
     assert.strictEqual(viewTypeOf(tabs[0]), TABLE_VIEW, 'the JSON .sldd stayed in the table view');
