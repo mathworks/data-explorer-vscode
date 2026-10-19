@@ -123,7 +123,9 @@ function spanOf(text: string, name: string): { offset: number; length: number } 
  */
 async function lastRows(posts: any[]): Promise<any[]> {
   const setRows = () => posts.filter((m) => m?.type === 'setRows');
-  await waitFor('a whole-table paint', () => setRows().length > 0, 30000);
+  await waitFor('a whole-table paint', () => setRows().length > 0, 30000, () =>
+    `saw ${JSON.stringify(posts.map((m) => m?.type))}`,
+  );
   return setRows()[setRows().length - 1].rows;
 }
 

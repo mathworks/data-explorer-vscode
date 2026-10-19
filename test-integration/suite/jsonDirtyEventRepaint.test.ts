@@ -148,6 +148,10 @@ suite('A JSON .sldd table repaints only for changes that happened', () => {
       await waitFor(
         'both events, and the repaint of the edited entry',
         () => withChanges >= 1 && empties >= 1 && view.posts.some((m) => m.type === 'updateEntryRows'),
+        20000,
+        () =>
+          `saw ${withChanges} content changes, ${empties} empties, ` +
+          `and the posts ${JSON.stringify(view.posts.map((m) => m.type))}`,
       );
       // And long enough for a wide repaint to have finished, had either event started one.
       await quiet(1200, 'a wide repaint started by either event');

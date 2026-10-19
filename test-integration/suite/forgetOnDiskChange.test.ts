@@ -255,6 +255,7 @@ suite('a write no stat can see, with no tab open on it', () => {
           return names.includes('GainNew');
         },
         10000,
+        () => `the index held ${JSON.stringify(names)}`,
       );
       assert.deepStrictEqual(names, ['GainNew'], 'and the old block is gone from it');
       // The forget came before the rebuild was asked for. A rebuild started earlier reads the old
