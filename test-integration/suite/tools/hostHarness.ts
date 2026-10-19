@@ -48,12 +48,32 @@ const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
  *
  * `done` may answer through a promise, for a condition only a query can tell: a usage graph
  * rebuilt against the open tabs, a file search that lists a new file.
+ *
+ * `detail`, when given, says what the wait saw (the names an index held, the message types a
+ * panel was sent), so a timeout says how it failed and not only that it did. It is read once,
+ * at the timeout, and added to the message in parentheses; a detail that throws still leaves
+ * the timeout naming what it waited for.
  */
-export async function waitFor(what: string, done: () => boolean | Promise<boolean>, ms = 20000): Promise<void> {
+export async function waitFor(
+  what: string,
+  done: () => boolean | Promise<boolean>,
+  ms = 20000,
+  detail?: () => string,
+): Promise<void> {
   const deadline = Date.now() + ms;
   while (!(await done())) {
-    assert.ok(Date.now() < deadline, `timed out after ${ms}ms waiting for ${what}`);
+    if (Date.now() >= deadline) assert.fail(`timed out after ${ms}ms waiting for ${what}${seen(detail)}`);
     await pause(20);
+  }
+}
+
+/** A wait's `detail`, as the timeout message carries it. */
+function seen(detail: (() => string) | undefined): string {
+  if (!detail) return '';
+  try {
+    return ` (${detail()})`;
+  } catch (e) {
+    return ` (and its detail failed: ${e instanceof Error ? e.message : String(e)})`;
   }
 }
 
