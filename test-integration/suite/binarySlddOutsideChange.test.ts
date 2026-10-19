@@ -194,6 +194,21 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     });
   }
 
+  /**
+   * Wait until a clean document holds the stamp of the file as it is on disk now, read as the
+   * save's own check reads it (`workspace.fs.stat`, mtime and size).
+   *
+   * What a test sees of a reload, the rows or the chunk, does not show this. A touch moves
+   * only the mtime, so a touch that lands after a reload's stat leaves the same content and an
+   * older stamp, and a save made then is refused. The event for that touch reloads the
+   * document again, and this waits for it. Call it once nothing is touching the file any more.
+   */
+  const caughtUp = (doc: any) =>
+    waitFor('the document to catch up with the file on disk', async () => {
+      const now = await vscode.workspace.fs.stat(uri);
+      return doc.stamp?.mtime === now.mtime && doc.stamp?.size === now.size;
+    });
+
   /** A stand-in view that records each repaint and where it painted from. */
   const standIn = (log: string[]) => ({
     repaintAll: (from?: string) => log.push(from ?? 'chunk'),
@@ -214,6 +229,17 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
       assert.ok(!shows(view.posts, 'Kp'), 'the old name is gone from the latest rows');
       assert.strictEqual(chunk(doc), chunkOnDisk(path), 'the document holds what is on disk');
       assert.deepStrictEqual(asked, [], 'silently: nothing was asked');
+
+      // One of untilFollowed's touches can land after the reload's stat. The rows show the
+      // reload all the same, so untilFollowed returns, and the document's stamp is one touch
+      // behind the disk until the event for that touch reloads it again. That happened only
+      // when the first event was slow. Make it happen on every run: touch once more now,
+      // after the reload, as untilFollowed would. Then wait for the document to catch up
+      // with the disk before saving.
+      const later = new Date(statSync(path).mtimeMs + 1000);
+      utimesSync(path, later, later);
+      await caughtUp(doc);
+      assert.deepStrictEqual(asked, [], 'that reload was silent too');
 
       // The reload took the new stamp with it, so this save writes rather than refusing.
       await provider.saveCustomDocument(doc, token());
