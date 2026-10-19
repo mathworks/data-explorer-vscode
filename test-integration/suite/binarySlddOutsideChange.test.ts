@@ -278,6 +278,40 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     assert.ok(chunk(doc).includes('>Ki<'), 'a refused save keeps the edits');
   });
 
+  test('with unsaved edits, a change that moves only the mtime also refuses the save', async () => {
+    // A touch, or a rewrite to the same size, leaves the size as it was. The save's check
+    // compares the mtime too (`changedOnDisk`), so it refuses this save as well. Every other
+    // outside write in this suite changes the size, so without this test a save check that
+    // compared the size alone would pass them all.
+    const doc = await openDoc();
+    await edit(doc, 'Ki');
+
+    const read = await vscode.workspace.fs.stat(uri);
+    assert.deepStrictEqual(doc.stamp, { mtime: read.mtime, size: read.size }, 'the document holds the stamp it read');
+    const later = new Date(read.mtime + 2000);
+    utimesSync(path, later, later);
+    const touched = await vscode.workspace.fs.stat(uri);
+    assert.strictEqual(touched.size, read.size, 'the touch left the size as it was');
+    assert.notStrictEqual(touched.mtime, read.mtime, 'and moved the mtime');
+
+    await assert.rejects(() => provider.saveCustomDocument(doc, token()), isCancellation, 'the save is refused');
+    assert.deepStrictEqual(
+      new Uint8Array(readFileSync(path)),
+      new Uint8Array(FIXTURE),
+      'the file on disk is not written, byte for byte',
+    );
+    const after = await vscode.workspace.fs.stat(uri);
+    assert.deepStrictEqual([after.mtime, after.size], [touched.mtime, touched.size], 'and keeps the touched mtime');
+    assert.deepStrictEqual(
+      asked,
+      [
+        "Failed to save 'params.sldd': The content of the file is newer. Do you want to overwrite the file with your changes?",
+      ],
+      'VS Code’s own wording, once',
+    );
+    assert.ok(chunk(doc).includes('>Ki<'), 'a refused save keeps the edits');
+  });
+
   test('undoing back to the saved state counts as no unsaved edits again', async () => {
     const doc = await openDoc();
     const ev = await edit(doc, 'Ki');
