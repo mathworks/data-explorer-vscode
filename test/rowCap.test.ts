@@ -144,11 +144,11 @@ describe('postOrReport', () => {
       .fn()
       .mockRejectedValueOnce(new RangeError('Invalid string length'))
       .mockResolvedValue(true);
-    await expect(postOrReport({ postMessage }, { type: 'setRows' }, 'allMidi.mat')).resolves.toBe(false);
+    await expect(postOrReport({ postMessage }, { type: 'setRows' }, 'songs.mat')).resolves.toBe(false);
     expect(postMessage).toHaveBeenCalledTimes(2);
     expect(postMessage.mock.calls[1][0]).toEqual({
       type: 'error',
-      message: 'Failed to show allMidi.mat: Invalid string length',
+      message: 'Failed to show songs.mat: Invalid string length',
     });
   });
 

@@ -430,18 +430,18 @@ writeFileSync(
 
 // --- sid_blocks.slx: a block's identity is its SID, not its name ---------------
 //
-// The fourth model of the usage set, shaped after ~/delite/f/f14.slx, which is where
-// both halves of this were found:
+// The fourth model of the usage set, shaped after a shipped Simulink demo model, which
+// is where both halves of this were found:
 //
 //   two blocks named `Gain`, in DIFFERENT systems (SIDs 15 and 24). A block name is
-//   unique only within its own system, and f14 has four `Gain` blocks; keyed by name
+//   unique only within its own system, and that model has four `Gain` blocks; keyed by name
 //   they collapsed into ONE row reading `Gain=Mq, Gain=Zw, Gain=Kf, Gain=Zw` and all
-//   four shared the id `f14.slx/blocks/Gain`. Here they read different variables
+//   four shared the id `<model>.slx/blocks/Gain`. Here they read different variables
 //   (`Kp` and `Ki`) precisely so a merge is visible: each row must show its own.
 //
 //   a block with NO name (SID 65). Simulink wrote its `Name` attribute as a lone line
 //   break, which normalizes to the empty string, so it displayed as a blank Name, an
-//   id of `f14.slx/blocks/`, and an EMPTY Usage link the user could not click. It
+//   id of `<model>.slx/blocks/`, and an EMPTY Usage link the user could not click. It
 //   reads `Uo` — the same parameter, and the same block, the user asked about.
 //
 // The nameless block is written as `&#xA;` rather than `Name=""`: that is the byte
@@ -580,7 +580,7 @@ writeFileSync(
 // interface's definition), so renaming a function has to patch that member too.
 //
 // The same shape as core's functionElementRename.test.ts, which is the corpus's one binary
-// dictionary with a service interface (example/dd1.sldd), trimmed: `ServiceInterface` holds
+// dictionary with a service interface, trimmed: `ServiceInterface` holds
 // `f: y = f(u)` and `g: [a,b] = g(g)`. It carries two traps, because the host patches text:
 // a DATA interface that is also named `f`, and `g`'s first argument, which is named `g`. A
 // rename of either function that took either of those would corrupt something else.

@@ -265,9 +265,9 @@ interface ParamLinkCell {
 }
 
 // A Usage cell's block links, one group per model: `AFR, AFRMonitor,
-// MixTarget(EngineCtrl); AFRConst, AFRCheck(FuelInjector)`. A dictionary variable is
+// MixTarget(EngineLoop); AFRConst, AFRCheck(FuelPath)`. A dictionary variable is
 // used by as many blocks as a model has, so naming the model once per block spent most
-// of a narrow column repeating `(EngineCtrl)` and buried the block names the user is
+// of a narrow column repeating `(EngineLoop)` and buried the block names the user is
 // actually reading.
 //
 // Grouped on `modelUri`, NOT on the displayed `modelName`: the label is a stripped

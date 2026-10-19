@@ -454,13 +454,13 @@ describe('links navigate rather than following an href', () => {
   // four `Controller/Inner/Gain`s would fill a column sized for names.
   describe('a blockLink carries where its block is, as a tooltip', () => {
     it('titles each link with its own path, and adds nothing to the text', async () => {
-      const M = 'file:///w/f14.slx';
+      const M = 'file:///w/aircraft.slx';
       const table = await mount([
         makeRow('u', 'u', {
           UsedBy: {
             blockLinks: [
-              { blockName: 'Gain', blockPath: 'Controller/Gain', modelName: 'f14', modelUri: M, linkTarget: 'b:15' },
-              { blockName: 'Gain', blockPath: 'Sensors/Gain', modelName: 'f14', modelUri: M, linkTarget: 'b:24' },
+              { blockName: 'Gain', blockPath: 'Controller/Gain', modelName: 'aircraft', modelUri: M, linkTarget: 'b:15' },
+              { blockName: 'Gain', blockPath: 'Sensors/Gain', modelName: 'aircraft', modelUri: M, linkTarget: 'b:24' },
             ],
           } as any,
         }),
@@ -472,8 +472,8 @@ describe('links navigate rather than following an href', () => {
       ]);
       // The visible cell is unchanged by the paths — that is the point of a tooltip — so
       // sorting and copying read what they always did.
-      expect(td.textContent!.trim()).toBe('Gain, Gain(f14)');
-      expect((table as any)._getCellText(table.rows[0], 'UsedBy')).toBe('Gain, Gain(f14)');
+      expect(td.textContent!.trim()).toBe('Gain, Gain(aircraft)');
+      expect((table as any)._getCellText(table.rows[0], 'UsedBy')).toBe('Gain, Gain(aircraft)');
       table.remove();
     });
 
@@ -482,7 +482,7 @@ describe('links navigate rather than following an href', () => {
       // path. An empty `title=""` is a tooltip that flashes nothing on hover.
       const table = await mount([
         makeRow('u', 'u', {
-          UsedBy: { blockLinks: [{ blockName: 'Gain', modelName: 'f14', modelUri: 'file:///w/f14.slx', linkTarget: 'b:1' }] } as any,
+          UsedBy: { blockLinks: [{ blockName: 'Gain', modelName: 'aircraft', modelUri: 'file:///w/aircraft.slx', linkTarget: 'b:1' }] } as any,
         }),
       ]);
       const a = cell(table, 'u', 'UsedBy').querySelector('a.value-link')!;
@@ -493,7 +493,7 @@ describe('links navigate rather than following an href', () => {
   });
 
   // A dictionary variable is used by every block that reads it, so the one-qualifier-
-  // per-block form spent a narrow column repeating `(EngineCtrl)` and pushed the block
+  // per-block form spent a narrow column repeating `(EngineLoop)` and pushed the block
   // names — the part being read — out of sight.
   describe('blockLinks aggregate by model', () => {
     const linksOf = (td: HTMLElement): string[] =>
@@ -502,25 +502,25 @@ describe('links navigate rather than following an href', () => {
       [...td.querySelectorAll('.param-source')].map((s) => s.textContent!);
 
     it('names each model once, after its last block', async () => {
-      const E = 'file:///w/EngineCtrl.slx';
-      const F = 'file:///w/FuelInjector.slx';
+      const E = 'file:///w/EngineLoop.slx';
+      const F = 'file:///w/FuelPath.slx';
       const table = await mount([
         makeRow('u', 'u', {
           UsedBy: {
             blockLinks: [
-              { blockName: 'AFR', modelName: 'EngineCtrl', modelUri: E, linkTarget: 'b:1' },
-              { blockName: 'AFRMonitor', modelName: 'EngineCtrl', modelUri: E, linkTarget: 'b:2' },
-              { blockName: 'MixTarget', modelName: 'EngineCtrl', modelUri: E, linkTarget: 'b:3' },
-              { blockName: 'AFRConst', modelName: 'FuelInjector', modelUri: F, linkTarget: 'b:4' },
-              { blockName: 'AFRCheck', modelName: 'FuelInjector', modelUri: F, linkTarget: 'b:5' },
+              { blockName: 'AFR', modelName: 'EngineLoop', modelUri: E, linkTarget: 'b:1' },
+              { blockName: 'AFRMonitor', modelName: 'EngineLoop', modelUri: E, linkTarget: 'b:2' },
+              { blockName: 'MixTarget', modelName: 'EngineLoop', modelUri: E, linkTarget: 'b:3' },
+              { blockName: 'AFRConst', modelName: 'FuelPath', modelUri: F, linkTarget: 'b:4' },
+              { blockName: 'AFRCheck', modelName: 'FuelPath', modelUri: F, linkTarget: 'b:5' },
             ],
           } as any,
         }),
       ]);
       const td = cell(table, 'u', 'UsedBy');
-      expect(sourcesOf(td)).toEqual(['(EngineCtrl)', '(FuelInjector)']);
+      expect(sourcesOf(td)).toEqual(['(EngineLoop)', '(FuelPath)']);
       expect(linksOf(td)).toEqual(['AFR', 'AFRMonitor', 'MixTarget', 'AFRConst', 'AFRCheck']);
-      expect(td.textContent!.trim()).toBe('AFR, AFRMonitor, MixTarget(EngineCtrl); AFRConst, AFRCheck(FuelInjector)');
+      expect(td.textContent!.trim()).toBe('AFR, AFRMonitor, MixTarget(EngineLoop); AFRConst, AFRCheck(FuelPath)');
       // Every block keeps its own link — grouping is presentational and must not cost
       // the user a navigable target.
       expect(linksOf(td).length).toBe(5);
@@ -587,20 +587,20 @@ describe('links navigate rather than following an href', () => {
     });
 
     it('gives sorting and copying the same grouped text the cell shows', async () => {
-      const E = 'file:///w/EngineCtrl.slx';
-      const F = 'file:///w/FuelInjector.slx';
+      const E = 'file:///w/EngineLoop.slx';
+      const F = 'file:///w/FuelPath.slx';
       const table = await mount([
         makeRow('u', 'u', {
           UsedBy: {
             blockLinks: [
-              { blockName: 'AFR', modelName: 'EngineCtrl', modelUri: E, linkTarget: 'b:1' },
-              { blockName: 'AFRConst', modelName: 'FuelInjector', modelUri: F, linkTarget: 'b:2' },
-              { blockName: 'AFRMonitor', modelName: 'EngineCtrl', modelUri: E, linkTarget: 'b:3' },
+              { blockName: 'AFR', modelName: 'EngineLoop', modelUri: E, linkTarget: 'b:1' },
+              { blockName: 'AFRConst', modelName: 'FuelPath', modelUri: F, linkTarget: 'b:2' },
+              { blockName: 'AFRMonitor', modelName: 'EngineLoop', modelUri: E, linkTarget: 'b:3' },
             ],
           } as any,
         }),
       ]);
-      const grouped = 'AFR, AFRMonitor(EngineCtrl); AFRConst(FuelInjector)';
+      const grouped = 'AFR, AFRMonitor(EngineLoop); AFRConst(FuelPath)';
       expect((table as any)._getCellText(table.rows[0], 'UsedBy')).toBe(grouped);
       expect(cell(table, 'u', 'UsedBy').textContent!.trim()).toBe(grouped);
       table.remove();
