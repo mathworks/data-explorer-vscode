@@ -387,11 +387,21 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
     control.views.add(standIn(witnessed));
 
     // First make sure both watchers are live (see untilFollowed). Use the same bytes with a
-    // later mtime: an outside change that both clean documents reload. Then let any event
-    // from the last touch arrive before the log is cleared.
+    // later mtime: an outside change that both clean documents reload.
+    //
+    // One of untilFollowed's touches can land after a reload's stat, as in the first test.
+    // Our document would then be one touch behind the disk, so the save below would be
+    // refused, and the event for that touch could repaint after the log is cleared. The
+    // witness would be behind too, and could then reload from the event for that touch
+    // rather than for our write. Make it happen on every run: touch once more now. Then
+    // wait for both documents to catch up with the disk. Once they have, no event from a
+    // touch can reload either of them, because the disk matches the stamp each one holds.
     writeOutside(path, FIXTURE);
     await untilFollowed('both watchers to be live', () => repaints.length > 0 && witnessed.length > 0);
-    await quiet(600, 'any event from the last touch to arrive before the log is cleared');
+    const later = new Date(statSync(path).mtimeMs + 1000);
+    utimesSync(path, later, later);
+    await caughtUp(doc);
+    await caughtUp(control);
     repaints.length = 0;
 
     await edit(doc, 'Ki');
