@@ -213,7 +213,7 @@ function applyPendingNameSelection(): void {
   // written before SIDs existed) is a NAME and matches the Name label; a block
   // target is core's block KEY — the SID — which is not printed anywhere, so it is
   // matched against the `_blockKey` the row publishes. Without that second pass a
-  // `blocks:65@f14.slx` click would open the model and select nothing, since the
+  // `blocks:65@<model>.slx` click would open the model and select nothing, since the
   // row it means reads `<SID: 65>`. Name first, so every pre-SID target keeps its
   // existing answer when a same-spelled key also exists.
   //

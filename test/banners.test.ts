@@ -124,7 +124,7 @@ describe('renderBanners', () => {
     // OUTSIDE the strip — normal flow, ahead of a table pinned at inset:0 — so the
     // table painted over it, measured in a real browser as a cleared spinner above
     // the words "No data".
-    renderError(table, 'Failed to show allMidi.mat: Invalid string length', now);
+    renderError(table, 'Failed to show songs.mat: Invalid string length', now);
     expect(el('dex-error').style.display).toBe('block');
     expect(el('dex-error').textContent).toContain('Invalid string length');
     expect(table.style.top).not.toBe('');
@@ -151,7 +151,7 @@ describe('renderBanners', () => {
     // the offset from what is SHOWING rather than from its own argument. Before
     // that, an `updateEntryRows` with nothing to say would have dropped the table
     // back to the top of the panel and slid it under the error still above it.
-    renderError(table, 'Failed to show allMidi.mat: Invalid string length', now);
+    renderError(table, 'Failed to show songs.mat: Invalid string length', now);
     renderBanners(table, {}, now);
     expect(el('dex-error').style.display).toBe('block');
     expect(table.style.top).not.toBe('');

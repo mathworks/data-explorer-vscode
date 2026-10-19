@@ -4,14 +4,14 @@
 // A block is identified by its SID, and its NAME is only a label — over real bytes, from
 // the parse to the text in the cell.
 //
-// Found in ~/delite/f/f14.slx, in two shapes at once. A block name is unique only inside
-// its own system, and that model has four blocks named `Gain` in four different
-// subsystems; keyed by name they collapsed into ONE row whose Usage read
+// Found in a shipped Simulink demo model, in two shapes at once. A block name is unique
+// only inside its own system, and that model has four blocks named `Gain` in four
+// different subsystems; keyed by name they collapsed into ONE row whose Usage read
 // `Gain=Mq, Gain=Zw, Gain=Kf, Gain=Zw` — four blocks' parameters in one cell — and all
-// four shared the row id `f14.slx/blocks/Gain`, so the Property Inspector, a selection,
+// four shared the row id `<model>.slx/blocks/Gain`, so the Property Inspector, a selection,
 // and a Usage link could not tell them apart. And the model holds a Constant whose `Name`
 // attribute Simulink wrote as a lone line break (`Name="&#xA;"` SID 65): it normalizes to
-// the empty string, so the row showed a BLANK Name, took the id `f14.slx/blocks/`, and its
+// the empty string, so the row showed a BLANK Name, took the id `<model>.slx/blocks/`, and its
 // Usage link — whose text is the block name — was an empty anchor with nothing to click.
 //
 // Core v1.8.0 splits the two facts (`blockKey` = the SID, `blockLabel` = the name or
@@ -90,7 +90,7 @@ describe('the workspace graph over same-named and nameless blocks', () => {
   });
 
   it('gives the nameless block a printable label and a followable link', () => {
-    // The f14 block the user asked about, over the same `Uo` it reads there. The cell text
+    // That model's block the user asked about, over the same `Uo` it reads there. The cell text
     // was empty — an anchor with no characters in it cannot be clicked — and the target
     // named no block at all.
     expect(graph().blocksUsing(DICT, 'Uo')).toEqual([
