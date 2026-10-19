@@ -8,6 +8,7 @@
 // deactivated extension). The row-parse itself is covered by the vitest suite.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { waitFor } from './tools/hostHarness';
 
 // The editable JSON .sldd opens in the tableView, a CustomTextEditorProvider:
 // the table is a view of the native TextDocument, so there is ONE document and
@@ -71,16 +72,11 @@ function activeTab(): vscode.Tab | undefined {
   return vscode.window.tabGroups.activeTabGroup.activeTab ?? undefined;
 }
 
-// Poll until the active tab's custom-editor viewType matches, or time out.
-async function waitForActiveViewType(expected: string, timeoutMs = 5000): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    const vt = (activeTab()?.input as { viewType?: string } | undefined)?.viewType;
-    if (vt === expected) return;
-    await new Promise((r) => setTimeout(r, 50));
-  }
-  const vt = (activeTab()?.input as { viewType?: string } | undefined)?.viewType;
-  assert.strictEqual(vt, expected, 'active view type did not settle');
+// Wait until the active tab's custom-editor viewType matches.
+async function waitForActiveViewType(expected: string): Promise<void> {
+  const viewType = () => (activeTab()?.input as { viewType?: string } | undefined)?.viewType;
+  await waitFor(`the active tab to be a ${expected}`, () => viewType() === expected);
+  assert.strictEqual(viewType(), expected, 'active view type did not settle');
 }
 
 suite('Data Explorer .sldd live edit', () => {
@@ -276,8 +272,8 @@ suite('Data Explorer .sldd live edit', () => {
     );
     assert.strictEqual(appliedTextEdit, true, 'the text edit applied');
 
-    // Give the provider's onDidChangeTextDocument listener time to react.
-    await new Promise((r) => setTimeout(r, 300));
+    // The provider's onDidChangeTextDocument listener reacts to the same change.
+    await waitFor('the text edit to dirty the shared document', () => doc0.isDirty);
 
     // The shared TextDocument is dirty — the single source of truth both views
     // observe.

@@ -4,6 +4,7 @@
 // command registration, the openWith view swaps, and multi-editor splits.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { waitFor } from './tools/hostHarness';
 
 // Editable JSON .sldd now opens in the text-backed table view (native
 // undo/redo). The old binaryView is read-only and no longer owns .sldd.
@@ -46,37 +47,23 @@ function tabsForUri(uri: vscode.Uri): vscode.Tab[] {
 // The toggle commands fire openWith fire-and-forget, so the tab swap completes
 // asynchronously after the command returns. Poll until the active tab reaches
 // the expected viewType (undefined = plain text editor) or time out.
-async function waitForActiveViewType(
-  expected: string | undefined,
-  timeoutMs = 5000,
-): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (activeCustomViewType() === expected) return;
-    await new Promise((r) => setTimeout(r, 50));
-  }
+async function waitForActiveViewType(expected: string | undefined): Promise<void> {
+  await waitFor(`the active tab to be ${expected ?? 'a plain text editor'}`, () => activeCustomViewType() === expected);
   assert.strictEqual(activeCustomViewType(), expected, 'active view type did not settle');
 }
 
 // Waiting on `activeCustomViewType() === undefined` alone is too weak for a swap
 // to the built-in text editor: it also matches the transient "no active tab"
 // moment mid-swap, so the wait can resolve before the text editor is actually
-// active (activeTextEditor still undefined). Poll for the real post-condition —
+// active (activeTextEditor still undefined). Wait for the real post-condition —
 // the plain text editor for this URI being active — instead.
-async function waitForActiveTextEditor(
-  uri: vscode.Uri,
-  timeoutMs = 5000,
-): Promise<void> {
-  const start = Date.now();
-  while (Date.now() - start < timeoutMs) {
-    if (
+async function waitForActiveTextEditor(uri: vscode.Uri): Promise<void> {
+  await waitFor(
+    'the plain text editor for the URI to become active',
+    () =>
       activeCustomViewType() === undefined &&
-      vscode.window.activeTextEditor?.document.uri.toString() === uri.toString()
-    ) {
-      return;
-    }
-    await new Promise((r) => setTimeout(r, 50));
-  }
+      vscode.window.activeTextEditor?.document.uri.toString() === uri.toString(),
+  );
   assert.strictEqual(
     vscode.window.activeTextEditor?.document.uri.toString(),
     uri.toString(),

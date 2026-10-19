@@ -19,6 +19,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
+import { quiet, waitFor } from './tools/hostHarness';
 
 function ctx(): vscode.ExtensionContext {
   const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
@@ -31,8 +32,6 @@ function wsUri(name: string): vscode.Uri {
   assert.ok(ws, 'a workspace folder must be open');
   return vscode.Uri.joinPath(ws.uri, name);
 }
-
-const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -117,7 +116,7 @@ suite('A JSON .sldd table repaints only for changes that happened', () => {
     // The webview asks for its rows when it loads; the provider paints nothing before that,
     // and the narrow repaint is withdrawn until a full one has succeeded.
     view.send({ type: 'ready' });
-    await settle(800);
+    await waitFor('the first paint', () => view.posts.some((m) => m.type === 'setRows'));
     assert.ok(
       view.posts.some((m) => m.type === 'setRows'),
       'the first paint sent the whole table',
@@ -146,8 +145,12 @@ suite('A JSON .sldd table repaints only for changes that happened', () => {
         JSON.stringify(record, null, 2),
       );
       assert.ok(await vscode.workspace.applyEdit(edit), 'the edit applied');
-      // Long enough for both events, and for a wide repaint to have finished if one ran.
-      await settle(1200);
+      await waitFor(
+        'both events, and the repaint of the edited entry',
+        () => withChanges >= 1 && empties >= 1 && view.posts.some((m) => m.type === 'updateEntryRows'),
+      );
+      // And long enough for a wide repaint to have finished, had either event started one.
+      await quiet(1200, 'a wide repaint started by either event');
     } finally {
       watching.dispose();
     }

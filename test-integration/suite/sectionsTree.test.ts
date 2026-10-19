@@ -11,6 +11,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SectionsTreeProvider } from '../../src/host/SectionsTreeProvider';
 import { HEALTH_QUERY } from '../../src/host/health';
+import { waitFor } from './tools/hostHarness';
 
 function extensionUri(): vscode.Uri {
   const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
@@ -103,15 +104,14 @@ suite('SectionsTreeProvider', () => {
       // `findFiles` runs a fresh search, but this file is milliseconds old: poll on a fresh
       // provider instead of asserting the first answer, so a slow search service reads as
       // slow rather than as a missing feature.
-      let fresh = new SectionsTreeProvider(extensionUri());
-      let group = (await fresh.getChildren()).find((r) => r.groupKind === 'project');
-      const deadline = Date.now() + 20000;
-      while (!group) {
-        assert.ok(Date.now() < deadline, 'timed out waiting for ClickProj.prj to reach the tree');
-        await new Promise((r) => setTimeout(r, 100));
+      let fresh!: SectionsTreeProvider;
+      let group: Awaited<ReturnType<SectionsTreeProvider['getChildren']>>[number] | undefined;
+      await waitFor('ClickProj.prj to reach the tree', async () => {
         fresh = new SectionsTreeProvider(extensionUri());
         group = (await fresh.getChildren()).find((r) => r.groupKind === 'project');
-      }
+        return group !== undefined;
+      });
+      assert.ok(group, 'ClickProj.prj reached the tree');
 
       assert.strictEqual(group.label, 'ClickProj', 'labelled by project name, not file name');
       const item = fresh.getTreeItem(group);

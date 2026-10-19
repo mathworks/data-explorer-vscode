@@ -24,7 +24,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
-import { chunkOf, ctx, fakePanel, rowNamed, settle, token, waitFor, ws } from './tools/hostHarness';
+import { chunkOf, ctx, fakePanel, rowNamed, token, waitFor, ws } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -90,8 +90,7 @@ suite('a Parameter or Signal Alignment is edited in its table cell, as MATLAB ed
   /**
    * One cell edit, exactly as the table sends it, and what came of it: the text after it, and
    * the refusal if there was one. Waits for the edit to land in the document or be refused,
-   * and gives up quietly after a while, so that an edit that does neither fails on the
-   * assertion that says so rather than as a timeout.
+   * and then for the repaint of its entry, which the host posts beside either.
    */
   async function edit(
     opened: Opened,
@@ -105,16 +104,16 @@ suite('a Parameter or Signal Alignment is edited in its table cell, as MATLAB ed
     const rowId = rowNamed(opened.rows, entry).ID;
     opened.view.send({ type: 'edit', rowId, columnId, oldValue, newValue });
     const since = () => opened.view.posts.slice(from);
-    const deadline = Date.now() + 8000;
-    while (
-      opened.doc.getText() === before &&
-      !since().some((p) => p.type === 'validationError' || p.type === 'error') &&
-      Date.now() < deadline
-    ) {
-      await settle(20);
-    }
-    // The repaint is posted beside the write or the refusal; give it a moment to arrive.
-    await settle(300);
+    const errored = () => since().some((p) => p.type === 'error');
+    await waitFor(
+      'the edit to reach the document or be refused',
+      () => opened.doc.getText() !== before || since().some((p) => p.type === 'validationError') || errored(),
+    );
+    // A write paints the entry before it is made, and a refusal paints it back after.
+    await waitFor(
+      'the repaint of the edited entry',
+      () => errored() || since().some((p) => p.type === 'updateEntryRows' && p.entryRowId === rowId),
+    );
     const failed = since().find((p) => p.type === 'error');
     assert.ok(!failed, `the edit posted an error: ${failed?.message}`);
     const repaints = since().filter((p) => p.type === 'updateEntryRows' && p.entryRowId === rowId);

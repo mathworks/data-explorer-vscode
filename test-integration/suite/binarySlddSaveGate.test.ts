@@ -20,6 +20,7 @@ import { unzipSync } from 'fflate';
 import { DataModel } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 import { computeModified } from '../../src/host/slddBaseline';
+import { waitFor } from './tools/hostHarness';
 
 /** A payload the reader cannot recover, so the gate must refuse it. */
 const UNREADABLE = '<Root><unterminated';
@@ -45,8 +46,6 @@ function makePanel(): vscode.WebviewPanel {
     enableScripts: true,
   });
 }
-
-const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** A working copy of the fixture, so writing in this suite cannot touch the fixture. */
 async function workingCopy(name: string): Promise<vscode.Uri> {
@@ -147,10 +146,11 @@ suite('Binary .sldd save gate vs hot-exit backup', () => {
     const srcId = (doc as unknown as { srcId: string }).srcId;
     const panel = makePanel();
     await provider.resolveCustomEditor(doc, panel, token());
-    await settle(500);
     // Register the model through the live view, then keep the view: the repaint under test
     // is the real post(), not a stub. Asserted, because with no view registered the count
-    // below would come out at 1 whether or not the repaint rebuilds.
+    // below would come out at 1 whether or not the repaint rebuilds. The view's own `ready`
+    // is waited for first, so its paint cannot land inside the count.
+    await waitFor('the ready/post round trip to register the document', () => !!DataModel.getDataSource(srcId));
     (doc as any).repaintAll();
     assert.strictEqual(((doc as any).views as Set<unknown>).size, 1, 'the real view is the one that repaints');
 

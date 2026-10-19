@@ -30,6 +30,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { ensureUsageGraph, invalidateUsageGraph } from '../../src/host/usageGraph';
 import type { UsageGraph } from '../../src/host/usageCells';
+import { waitFor } from './tools/hostHarness';
 
 const BINARY_VIEW = 'dataExplorer.binaryView';
 const TABLE_VIEW = 'dataExplorer.tableView';
@@ -79,18 +80,20 @@ suite('a Usage graph reads only what can change its own file’s answers', () =>
     // links its OWN copy of usageGraph (esbuild bundles each suite file separately), so
     // the extension's onDidChangeTabs wiring never clears THIS cache and invalidating
     // here is what re-runs the build against the live tab set.
-    let built: { forUnrelated: UsageGraph; forDict: UsageGraph } | null = null;
-    const start = Date.now();
-    while (Date.now() - start < 10000) {
-      invalidateUsageGraph();
-      const forUnrelated = await ensureUsageGraph(unrelated());
-      const forDict = await ensureUsageGraph(dict());
-      if (forDict.blocksUsing(dict(), 'SharedGain').length === 3) {
+    // Typed by assertion, not narrowed to null: it is assigned inside the wait.
+    let built = null as { forUnrelated: UsageGraph; forDict: UsageGraph } | null;
+    await waitFor(
+      'the dictionary’s own graph to resolve all three usages from the open tabs',
+      async () => {
+        invalidateUsageGraph();
+        const forUnrelated = await ensureUsageGraph(unrelated());
+        const forDict = await ensureUsageGraph(dict());
+        if (forDict.blocksUsing(dict(), 'SharedGain').length !== 3) return false;
         built = { forUnrelated, forDict };
-        break;
-      }
-      await new Promise((r) => setTimeout(r, 50));
-    }
+        return true;
+      },
+      10000,
+    );
     assert.ok(built, 'the dictionary’s own graph resolves all three usages from the open tabs');
 
     // The control first, so the emptiness below cannot be a missing tab or a stale fixture:

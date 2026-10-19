@@ -32,7 +32,9 @@ export function token(): vscode.CancellationToken {
   return new vscode.CancellationTokenSource().token;
 }
 
-export const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
+// The suite's one timer. Not exported: a wait is `waitFor` or `quiet`, which say what they wait
+// for (test/integrationSleeps.test.ts holds every suite file to that).
+const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
  * Wait for the thing itself, with a generous cap, instead of sleeping for however long it
@@ -43,13 +45,29 @@ export const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * the single-cell edits this suite's older fixed sleeps were calibrated against. A sleep is
  * the wrong shape for that twice over: too short and it fails as a confusing assertion about
  * rows rather than as a timeout, too long and every test pays for the worst case.
+ *
+ * `done` may answer through a promise, for a condition only a query can tell: a usage graph
+ * rebuilt against the open tabs, a file search that lists a new file.
  */
-export async function waitFor(what: string, done: () => boolean, ms = 20000): Promise<void> {
+export async function waitFor(what: string, done: () => boolean | Promise<boolean>, ms = 20000): Promise<void> {
   const deadline = Date.now() + ms;
-  while (!done()) {
+  while (!(await done())) {
     assert.ok(Date.now() < deadline, `timed out after ${ms}ms waiting for ${what}`);
-    await settle(20);
+    await pause(20);
   }
+}
+
+/**
+ * Let `ms` pass, for what cannot be waited for, and say why.
+ *
+ * Two things have nothing to poll. Something that must NOT happen (a second paint, a write
+ * after a refusal, a prompt) can only be given the time it would take to happen and then
+ * found absent; and some events have no witness (a disposed watcher letting go of a folder).
+ * Everything else is a condition, and is `waitFor`'s.
+ */
+export async function quiet(ms: number, why: string): Promise<void> {
+  assert.ok(why.trim().length > 0, 'a quiet wait says what it gives the time to');
+  await pause(ms);
 }
 
 /**

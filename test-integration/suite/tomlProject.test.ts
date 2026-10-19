@@ -47,6 +47,7 @@ import { SUPPORTED_GLOB } from '../../src/common/fileTypes';
 import { readProjectStore } from '../../src/host/projectStore';
 import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
 import { SectionsTreeProvider } from '../../src/host/SectionsTreeProvider';
+import { waitFor } from './tools/hostHarness';
 
 /** The committed fixture's folder name — what every FOLDER-derived surface must show. */
 const FIXTURE_DIR = 'tomlproject';
@@ -84,18 +85,13 @@ function extensionUri(): vscode.Uri {
 }
 
 /** Retry `probe` until it answers, for a search service that may not see a new file yet. */
-async function pollFor<T>(
-  probe: () => Promise<T | undefined>,
-  message: string,
-  timeoutMs = 20000,
-): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
-  for (;;) {
-    const got = await probe();
-    if (got !== undefined) return got;
-    assert.ok(Date.now() < deadline, message);
-    await new Promise((r) => setTimeout(r, 100));
-  }
+async function pollFor<T>(what: string, probe: () => Promise<T | undefined>): Promise<T> {
+  let got: T | undefined;
+  await waitFor(what, async () => {
+    got = await probe();
+    return got !== undefined;
+  });
+  return got as T;
 }
 
 function tabsFor(uri: vscode.Uri): vscode.Tab[] {
@@ -157,10 +153,10 @@ suite('a TOML-format MATLAB project in a real VS Code', () => {
         ` — ${JSON.stringify(outside.map((u) => path.basename(u.fsPath)))}`,
     );
 
-    const inside = await pollFor(async () => {
+    const inside = await pollFor('the supported glob to match the copied matlab.toml', async () => {
       const hits = await vscode.workspace.findFiles(new vscode.RelativePattern(folder, SUPPORTED_GLOB));
       return hits.some((u) => u.fsPath === markerUri.fsPath) ? hits : undefined;
-    }, 'the supported glob never matched the copied matlab.toml');
+    });
 
     // Non-vacuity: both decoys really are on disk beside the marker, so their absence
     // below is the matcher rejecting them rather than nothing being there to reject.
@@ -236,11 +232,11 @@ suite('a TOML-format MATLAB project in a real VS Code', () => {
     // provider per attempt because the graph is cached on the instance; the file is
     // seconds old, so a slow search service must read as slow rather than as a missing
     // feature (the same shape as the .prj case in sectionsTree.test.ts).
-    const group = await pollFor(async () => {
+    const group = await pollFor('the matlab.toml to produce a project group in the tree', async () => {
       const fresh = new SectionsTreeProvider(extensionUri());
       const projects = (await fresh.getChildren()).filter((r) => r.groupKind === 'project');
       return projects.length > 0 ? projects : undefined;
-    }, 'the matlab.toml never produced a project group in the tree');
+    });
 
     // ONE, which also measures what the glob test could not assert: the provider's
     // base-less `findFiles` reaches the scratch copy and NOT the committed fixture beside
