@@ -2,6 +2,13 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## [1.43.0] — 2026-10-21
+
+- MAT-files can now be edited and saved.
+- Simulink.Parameter and Simulink.Signal properties stored inside a dictionary value can now be edited.
+- `.mdl` files saved in MATLAB's new text format now open.
+- Bug fixes.
+
 ## [1.42.0] — 2026-10-19
 
 - Values typed into the table are read more like MATLAB reads them.
