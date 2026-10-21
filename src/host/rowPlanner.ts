@@ -21,7 +21,7 @@
 // Kept vscode-free, like lazyRows.ts, so the pairing is unit-testable.
 import { isMatFile } from 'data-explorer-core';
 import { buildChildRows, buildRowsPlanned, type ClipMark } from './rowBuilder.js';
-import { buildMatRowsPlanned } from './matRowBuilder.js';
+import { buildMatRowsPlanned, type SavedStatus } from './matRowBuilder.js';
 import type { RowPlan } from './lazyRows.js';
 
 /** What the payload needs beyond the tree — the sectioned builder's two stamps. */
@@ -30,6 +30,12 @@ export interface PlanOptions {
   modifiedNames?: Set<string>;
   /** Entries on the host clipboard, for the cut/copied affordance. */
   clipMark?: ClipMark;
+  /**
+   * A MAT-file's variables that differ from the last save, for its Status column: the
+   * editable view's answer (saveMarks.ts), by node. The sectioned builder's `modifiedNames`
+   * is the same question for a dictionary.
+   */
+  savedStatus?: SavedStatus;
 }
 
 export interface RowPlanner {
@@ -52,7 +58,7 @@ export interface RowPlanner {
  * payload and the fetch are literally the same call from a different node.
  */
 const MAT_PLANNER: RowPlanner = {
-  payload: (node, budget) => buildMatRowsPlanned(node, budget),
+  payload: (node, budget, opts) => buildMatRowsPlanned(node, budget, opts?.savedStatus),
   children: (node, budget) => buildMatRowsPlanned(node, budget),
 };
 

@@ -128,6 +128,19 @@ describe('data-explorer-core is used only through its published entries', () => 
   });
 });
 
+// Every `import('node:…')` in src/, by specifier: the lazy imports the walker does not read.
+const lazyBuiltins = new Set(
+  graph.files.flatMap((f) =>
+    [...blankCommentsAndKeepLines(readFileSync(repo(`src/${f}`), 'utf8')).matchAll(/\bimport\(\s*'(node:[^']+)'\s*\)/g)].map((m) => m[1]),
+  ),
+);
+// The web build's `external` list, as esbuild.mjs spells it.
+const webExternals = new Set(
+  [...(/web\s*\?\s*\{[\s\S]*?external:\s*\[([^\]]*)\]/.exec(readFileSync(repo('esbuild.mjs'), 'utf8'))?.[1] ?? '').matchAll(/'([^']+)'/g)].map(
+    (m) => m[1],
+  ),
+);
+
 describe('every third-party import is a declared dependency', () => {
   it('names nothing an install would not provide', () => {
     // `vscode` is the one exception, and not an oversight: it is injected by the running
@@ -151,8 +164,21 @@ describe('every third-party import is a declared dependency', () => {
     // therefore the real gate and this test does not replace it; it fails in the unit
     // suite in milliseconds with a file and a line, rather than as a resolve error at
     // the end of a full build, and it also covers modules the entry does not reach yet.
-    const builtins = graph.edges.filter((e) => e.specifier.startsWith('node:'));
+    //
+    // A type-only import names no module at run time, so one is allowed where the module it
+    // names is the one a lazy import loads (below): the type of what that import resolves to.
+    const builtins = graph.edges.filter((e) => e.specifier.startsWith('node:') && !(e.typeOnly && lazyBuiltins.has(e.specifier)));
     expect(describeEdges(builtins)).toEqual([]);
+  });
+
+  // The one exception, and how it stays one. A save's replace-by-rename (host/safeWrite.ts)
+  // needs Node's fs, which the web host does not have, so it imports it lazily, on the save
+  // path, and writes through `workspace.fs` when the import fails. The web bundle can only be
+  // built if that specifier is external there; this pins the two lists to each other, so a
+  // second lazy builtin cannot appear without the web build being told of it.
+  it('loads a builtin only lazily, and only one the web bundle leaves external', () => {
+    expect([...lazyBuiltins].sort()).toEqual([...webExternals].filter((e) => e.startsWith('node:')).sort());
+    expect(lazyBuiltins.size, 'the lazy import is still found').toBeGreaterThan(0);
   });
 });
 

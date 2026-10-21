@@ -36,6 +36,7 @@ import type { ProjectToHostMessage, TableToHostMessage } from '../common/protoco
 // here as a constant to avoid importing the provider (which would be circular).
 const TABLE_VIEW_TYPE = 'dataExplorer.tableView';
 const BINARY_SLDD_VIEW_TYPE = 'dataExplorer.binarySlddView';
+const MAT_VIEW_TYPE = 'dataExplorer.matView';
 
 /**
  * The folder a project's paths are relative to: the one holding the marker — the `.prj`, or
@@ -162,8 +163,8 @@ async function readTextIfPresent(
   }
 }
 
-// Custom document. Read-only for all binary formats (.slx, .mat, .prj, zipped
-// .sldd). There is NO in-memory working-copy string: the file on disk is the
+// Custom document. Read-only for all the formats it shows (.slx, .mdl, .prj, and a
+// zipped .sldd too large for its editable view). There is NO in-memory working-copy string: the file on disk is the
 // single source of truth, and this document only tracks its URI.
 //
 // It does hold one thing: the tree its tabs show, registered in core's session and cached in
@@ -186,10 +187,11 @@ class BinaryDocument implements vscode.CustomDocument {
 }
 
 // Single byte-backed READ-ONLY custom editor for the binary formats (.slx,
-// .mat, .prj, zipped .sldd). Byte-backed so it can open binary (zip) .sldd —
+// .mdl, .prj, zipped .sldd). Byte-backed so it can open binary (zip) .sldd —
 // which VS Code refuses to open as a text document because of NUL bytes.
 // Editable JSON .sldd is handled by SlddTextEditorProvider; binary/zip .sldd is
-// routed here via an explicit openWith redirect in extension.ts.
+// routed here via an explicit openWith redirect in extension.ts. A .mat that lands
+// here is handed on to MatEditorProvider (see resolveCustomEditor).
 export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider<BinaryDocument> {
   public static readonly viewType = 'dataExplorer.binaryView';
 
@@ -269,6 +271,21 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     // view and spent on its first post — see the byte source further down. Left undefined
     // for every other format, none of which reads anything here.
     let seed: ArrayBuffer | undefined;
+
+    // A MAT-file has its own, writable editor, which is its default (package.json), so one only
+    // lands here by a route that named this view: a tab restored from before that editor
+    // existed, or an editor association. Send it there, as a zip .sldd is sent to its writable
+    // view below, so a .mat is never read-only in one tab and editable in another. A file that
+    // editor cannot save it opens read-only itself, saying why.
+    if (isMatFile(name)) {
+      const preview = this.isPanelPreview(document.uri);
+      await vscode.commands.executeCommand('vscode.openWith', document.uri, MAT_VIEW_TYPE, {
+        preview,
+        pinned: !preview,
+      });
+      webviewPanel.dispose();
+      return;
+    }
 
     // This byte-backed editor is the DEFAULT for *.sldd because it can open any
     // bytes (binary/zip .sldd fail to load as a TextDocument, so the text-backed
@@ -350,7 +367,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       // tab uses (SlddTextEditorProvider), so both .sldd forms look consistent.
       webviewPanel.iconPath = new vscode.ThemeIcon('table');
     } else {
-      // Every other format this editor owns — .slx, .mdl, .mat, .prj — is read-only
+      // Every other format this editor owns — .slx, .mdl, .prj — is read-only
       // with no editable counterpart to switch to, and nothing in the table says so:
       // VS Code has no read-only affordance of its own (a read-only editor renders
       // exactly like a writable one), and the banner is reserved for the SURPRISING

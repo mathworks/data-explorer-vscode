@@ -59,7 +59,7 @@ or from within VS Code via the Extensions view → **⋯** menu → **Install fr
 | --- | --- | --- |
 | Simulink data dictionaries | `.sldd` — textual (JSON) and compressed-binary | **Editable** |
 | Simulink models | `.slx`, `.mdl` — the modern text format and the classic pre-R2012 format | Read-only |
-| MAT-files | `.mat` — Level 5, i.e. `-v6`/`-v7` | Read-only |
+| MAT-files | `.mat` — Level 5, i.e. `-v6`/`-v7` | **Editable** |
 | MATLAB Projects | `.prj` — with its `resources/project/` store in any of the three XML layouts — or `matlab.toml`, the single file an R2026b project is stored as | Read-only |
 
 ## Requirements
@@ -69,6 +69,7 @@ Visual Studio Code 1.106.0 or later. Nothing else — Simulink Data Explorer rea
 ## Known Limitations
 
 - `.mat` support covers the Level 5 format only. **`-v7.3`** files, which are HDF5 and are what MATLAB requires for variables above 2 GB, are reported as unsupported rather than opened.
+- In a MAT-file, only what a save can write back exactly is editable: a string, a function handle, or an object other than a `Simulink.Parameter` or `Simulink.Signal` can be renamed or deleted but not changed. A save writes every variable you did not edit as the bytes it was read from.
 - Large textual (JSON) `.sldd` files are limited by size. Above **50 MB**, the file opens as a **read-only** table (VS Code cannot mirror a document that large for editing). Above **512 MB**, it cannot be rendered as a table at all and opens in VS Code's built-in **text editor** instead.
 - Paste creates a new top-level entry in the target section; pasting as a child of a struct/bus is not yet supported.
 - Reference resolution matches files by name (basename), preferring the referrer's own project or folder. Two project markers in the same directory are not supported.

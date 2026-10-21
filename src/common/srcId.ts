@@ -14,8 +14,10 @@
 // a document must come through `srcIdToUriString`.
 export const BINARY_EDIT_SRC_PREFIX = 'binedit:';
 
-// The srcId BinarySlddEditorProvider registers `uriString` under. Paired with
-// srcIdToUriString below; keeping both here is what makes the two directions one rule.
+// The srcId BinarySlddEditorProvider registers `uriString` under, and MatEditorProvider
+// too: an editable tree of a byte-backed file, which a .sldd and a .mat never share a uri
+// for. Paired with srcIdToUriString below; keeping both here is what makes the two
+// directions one rule.
 export function binaryEditSrcId(uriString: string): string {
   return BINARY_EDIT_SRC_PREFIX + uriString;
 }

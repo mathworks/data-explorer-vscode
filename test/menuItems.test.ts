@@ -467,3 +467,31 @@ describe('Paste of an mpt entry, against the rules a real model posts', () => {
     expect(paste.reason).toBe('Simulink Parameter cannot be in Architectural Data');
   });
 });
+
+// A MAT-file's menu (setRows' `clipboard: false`): its variables have no dictionary entry form,
+// so Copy, Cut and Paste are not on it at all, and the rest is the menu any editable view has.
+describe('a view with no clipboard', () => {
+  const MAT_ROWS: MenuRow[] = [
+    { ID: 'm/v', parent: null, Name: { label: 'v' }, _canCopy: false, _canDelete: true, _canAddChild: true },
+    { ID: 'm/v/1', parent: 'm/v', Name: { label: '1' }, _canCopy: false, _canDelete: true },
+  ];
+  const matMenu = (over: Partial<MenuInput> = {}) =>
+    menu({ rows: MAT_ROWS, selectedRowIds: ['m/v'], anchorRowId: 'm/v', hasTextView: false, pasteTarget: null, hasClipboard: false, ...over });
+
+  it('leaves Copy, Cut and Paste off, and keeps Add Child, Delete, Undo and Redo', () => {
+    const items = matMenu({ clipboard: BUS_CLIP });
+    expect(items.map((i) => i.id).filter((id) => !id.startsWith('_sep'))).toEqual(['addChild', 'delete', 'undo', 'redo']);
+    expect(byId(items, 'delete')!.disabled).toBe(false);
+    expect(byId(items, 'addChild')!.disabled).toBe(false);
+  });
+
+  it('on a menu with no row operand, offers only Undo and Redo', () => {
+    const items = matMenu({ selectedRowIds: [], anchorRowId: null });
+    expect(labels(items)).toEqual(['Undo', 'Redo']);
+  });
+
+  it('gives the copy, cut and paste chords no item to run', () => {
+    const items = matMenu();
+    for (const id of ['copy', 'cut', 'paste']) expect(byId(items, id)).toBeUndefined();
+  });
+});
