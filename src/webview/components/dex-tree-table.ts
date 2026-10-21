@@ -1466,6 +1466,11 @@ export class DexTreeTable extends LitElement {
   // the gallery elsewhere (toggleAddGallery) adds here too, so the two stay one gesture.
   @property({ type: Boolean }) addDirect = false;
 
+  // Whether a row can be dragged, or a dragged row let go over one. False where rows have no form
+  // to travel in (setRows' `clipboard: false`, a MAT-file): no row is draggable, and a drag from
+  // another table draws no drop target here.
+  @property({ type: Boolean }) rowDrag = true;
+
   get selectedRowId(): string {
     return this.selectedRowIds[this.selectedRowIds.length - 1] || '';
   }
@@ -2844,6 +2849,10 @@ export class DexTreeTable extends LitElement {
   }
 
   private _onRowDragStart(rowId: string, e: DragEvent): void {
+    if (!this.rowDrag) {
+      e.preventDefault();
+      return;
+    }
     // Section headers aren't draggable entries. If the grabbed row is a header,
     // there's nothing to drag; otherwise drag the multi-selection (when the
     // grabbed row is part of it) or just the grabbed row, minus any headers.
@@ -2907,6 +2916,11 @@ export class DexTreeTable extends LitElement {
   }
 
   private _onRowDragOver(rowId: string, e: DragEvent): void {
+    if (!this.rowDrag) {
+      // Not accepted (no preventDefault), and nothing drawn: no row of this table takes a drop.
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+      return;
+    }
     // Keep the floating affordance trailing the cursor even over the source row
     // (where the drop itself is a no-op) so the icon + name box never freezes.
     this._dropTooltipX = e.clientX;
@@ -4013,7 +4027,7 @@ export class DexTreeTable extends LitElement {
                         : 'drop-target-on'
                       : ''} ${isDropTarget && this._dropPosition === 'above' ? 'drop-target-above' : ''}"
                     data-row-id="${row.ID}"
-                    draggable="true"
+                    draggable=${this.rowDrag ? 'true' : 'false'}
                     @contextmenu=${(e: MouseEvent) => this._onRowContextMenu(row.ID, e)}
                     @dragstart=${(e: DragEvent) => this._onRowDragStart(row.ID, e)}
                     @dragend=${(e: DragEvent) => this._onRowDragEnd(e)}

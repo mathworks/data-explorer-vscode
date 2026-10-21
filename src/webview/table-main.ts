@@ -393,6 +393,7 @@ window.addEventListener('message', (event: MessageEvent) => {
     editable = !!msg.editable;
     hasTextView = !!msg.hasTextView;
     hasClipboard = msg.clipboard !== false;
+    table.rowDrag = hasClipboard;
     // Every table gets setRows, including the read-only ones that never receive
     // sectionRules — so this is the assignment that lets a .slx or .mat view answer a link
     // into itself. Guarded so a provider that has not been updated leaves the old value

@@ -56,21 +56,23 @@ function plannedRows(roots: any[], budget: number, saved: SavedStatus | undefine
   const pool = new RowCellPool();
   const plan = planRows(roots, budget);
   for (const { node: n, deferred } of plan.planned) {
-    let row: any;
+    let built: any;
     try {
-      row = n.toRow();
+      built = n.toRow();
     } catch {
       continue;
     }
-    if (!row) continue;
+    if (!built) continue;
+    // One copy, which the stamps below may then write: toRow's object is the node's.
+    const row = { ...built, ...capabilityFlags(n) };
     // Core's status says "edited since the file was read", and stays so through a save (it is
     // what makes the next save write the variable fresh); the editable view's column says
     // "differs from the file on disk", which is the caller's answer. A variable's own row only:
     // core marks nothing under one.
-    if (saved && n.isEntry) row = { ...row, Status: saved.get(n) ?? '' };
+    if (saved && n.isEntry) row.Status = saved.get(n) ?? '';
     // Same grid-view stamp as the sldd/slx builder — see test/matrixStamp.test.ts,
     // which asserts the rule against both builders so they cannot drift.
-    rows.push(pool.share(stampLazy(stampMatrix({ ...row, ...capabilityFlags(n) }, n), deferred)));
+    rows.push(pool.share(stampLazy(stampMatrix(row, n), deferred)));
   }
   return { rows, plan };
 }
@@ -82,12 +84,21 @@ function plannedRows(roots: any[], budget: number, saved: SavedStatus | undefine
  * save keeps. A variable is removable from its file, and anything under one from its parent if
  * the parent says so. Never copyable: a MAT-file's value has no dictionary entry to travel as,
  * and the editable view offers no clipboard (`clipboard: false` on its setRows).
+ *
+ * On every row, a read-only file's too: the MAT-file editor is the only view that builds these
+ * rows, and one that shows a file read-only shows no menu, so the flags there cost a few bytes a
+ * row and are read by nothing. A check that throws offers nothing, and the row still shows.
  */
 function capabilityFlags(n: any): { _canCopy: boolean; _canDelete: boolean; _canAddChild: boolean } {
-  const parent = n.parent;
-  const canDelete =
-    !!n.isEntry || !!(parent && typeof parent.canRemoveChild === 'function' && parent.canRemoveChild());
-  const canAddChild = typeof n.canAddChild === 'function' && !!n.canAddChild();
+  let canDelete = false;
+  let canAddChild = false;
+  try {
+    const parent = n.parent;
+    canDelete = !!n.isEntry || !!(parent && typeof parent.canRemoveChild === 'function' && parent.canRemoveChild());
+    canAddChild = typeof n.canAddChild === 'function' && !!n.canAddChild();
+  } catch {
+    /* offered nothing */
+  }
   return { _canCopy: false, _canDelete: canDelete, _canAddChild: canAddChild };
 }
 

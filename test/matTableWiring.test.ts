@@ -81,6 +81,19 @@ describe('the MAT-file table, wired through the webview entry point', () => {
     expect(posted.filter((m) => m.type === 'delete')).toEqual([{ type: 'delete', rowIds: ['m/x'] }]);
   });
 
+  it('no row is draggable, though a dictionary’s are', async () => {
+    const rowEls = () => [...table.shadowRoot.querySelectorAll('tr.data-row')] as HTMLElement[];
+    expect(rowEls().length).toBeGreaterThan(0);
+    expect(rowEls().every((r) => r.getAttribute('draggable') === 'false')).toBe(true);
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'setRows', docUri: 'file:///fx/d.sldd', rows: rowsOf(), columns: ['Name', 'Value'], columnLabels: {}, editable: true },
+      }),
+    );
+    await table.updateComplete;
+    expect(rowEls().every((r) => r.getAttribute('draggable') === 'true')).toBe(true);
+  });
+
   it('a row drag and a drop send nothing', () => {
     table.dispatchEvent(new CustomEvent('dex-row-drag-start', { detail: { rowIds: ['m/x'] } }));
     table.dispatchEvent(new CustomEvent('dex-row-drop', { detail: { targetRowId: 'm/y', mode: 'move' } }));

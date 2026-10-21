@@ -251,13 +251,14 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     const planner = rowPlannerFor(name);
     // Who fills the Usage column, chosen once for the same reason. A model (.slx/.mdl)
     // resolves its blocks' params to source files and its workspace vars to the blocks
-    // that use them; a .mat/.sldd data view resolves its variables to the blocks that use
-    // them; a .prj has no Usage column at all. The payload and the fetch share this
-    // because a row the user expanded showing an empty cell where its siblings show
-    // their users is the same drift as a row built by the wrong builder, only subtler.
+    // that use them; a .sldd data view resolves its entries to the blocks that use them;
+    // a .prj has no Usage column at all (and a .mat is handed on before any of this runs).
+    // The payload and the fetch share this because a row the user expanded showing an
+    // empty cell where its siblings show their users is the same drift as a row built by
+    // the wrong builder, only subtler.
     const fillUsage: UsageFiller = isModelFile(name)
       ? annotateModelRows
-      : isMatFile(name) || isSlddFile(name)
+      : isSlddFile(name)
         ? annotateDataRows
         : async () => false;
 
@@ -292,7 +293,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     // tableView can't be the default). But editable JSON .sldd should open in the
     // editable tableView. When one lands here (e.g. an Explorer double-click),
     // redirect it: reopen with tableView and close this binary tab. Binary/zip
-    // .sldd and .slx/.mat/.prj fall through and render read-only as normal.
+    // .sldd and .slx/.mdl/.prj fall through and render read-only as normal.
     if (isSlddFile(name)) {
       try {
         const bytes = await vscode.workspace.fs.readFile(document.uri);
