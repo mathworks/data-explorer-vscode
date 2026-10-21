@@ -383,17 +383,118 @@ suite('MAT-file editor: edit, undo, save', () => {
   });
 
   test('revert reads the disk, and an edit from before it is not undone on the new tree', async () => {
+    const replaced: string[] = [];
+    provider.onReplaced = (uri) => replaced.push(uri);
     const o = await open('cases.mat');
     edit(o, 'scalarD', 'Value', '42');
     await save(o);
     edit(o, 'negD', 'Value', '7');
     await provider.revertCustomDocument(o.doc, token());
+    assert.deepStrictEqual(replaced, [o.uri.toString()], 'the Property Inspector is told the tree changed');
     await waitFor('the reverted rows', () => topRow(o.view.posts, 'negD').Value === '-2.5');
     assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, '42', 'the disk holds the save');
     await o.events[0].undo();
     assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, '42', 'the old tree’s edit does nothing to this one');
     const mat: any = DataModel.getDataSource(o.doc.srcId);
     assert.strictEqual(mat.children.find((c: any) => c.name === 'scalarD').toRow().Value, '42');
+  });
+
+  test('a revert that cannot read the disk puts the tree back to the file as last saved', async () => {
+    const o = await open('cases.mat');
+    edit(o, 'scalarD', 'Value', '42');
+    await save(o);
+    edit(o, 'negD', 'Value', '7');
+    rmSync(o.path);
+    await assert.rejects(provider.revertCustomDocument(o.doc, token()));
+    // VS Code shows the document clean, so the tree must hold no edit the revert dropped.
+    assert.strictEqual(o.doc.edits.dirty, false);
+    await waitFor('the rows as saved', () => topRow(o.view.posts, 'negD').Value === '-2.5');
+    assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, '42');
+  });
+
+  test('a gesture that throws part-way is still one edit, so Undo lands on the edit it undoes', async () => {
+    const o = await open('cases.mat');
+    edit(o, 'scalarD', 'Value', '42');
+    const vec = topRow(o.view.posts, 'rowVec');
+    const kids = tableOf(o.view.posts).filter((r) => r.parent === vec.ID);
+    // The second of the gesture's two steps throws, after core recorded the first.
+    const session = DataModel as any;
+    const real = session.deleteNodeById;
+    let calls = 0;
+    session.deleteNodeById = (id: string) => {
+      if (++calls === 2) throw new Error('the second step failed');
+      return real.call(DataModel, id);
+    };
+    try {
+      o.view.send({ type: 'delete', rowIds: [kids[0].ID, kids[2].ID] });
+    } finally {
+      session.deleteNodeById = real;
+    }
+    assert.strictEqual(o.events.length, 2, 'the step core recorded is an edit VS Code knows of');
+    assert.match(o.view.posts.filter((p) => p.type === 'error').pop().message, /the second step failed/);
+    await waitFor('the rows as core left them', () => topRow(o.view.posts, 'rowVec').Value === '[2 3]');
+    await o.events[1].undo();
+    await waitFor('the delete undone', () => topRow(o.view.posts, 'rowVec').Value === '[1 2 3]');
+    assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, '42', 'and only the delete');
+    await o.events[0].undo();
+    assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, '3.141592653589793');
+    assert.strictEqual(o.doc.edits.dirty, false);
+  });
+
+  test('Save As onto the file itself is a save', async () => {
+    const o = await open('cases.mat');
+    edit(o, 'scalarD', 'Value', '42');
+    await provider.saveCustomDocumentAs(o.doc, o.uri, token());
+    assert.strictEqual(valuesOf(disk(o)).get('scalarD').Value, '42');
+    assert.strictEqual(o.doc.edits.dirty, false);
+    await quiet(500, 'the watcher to hear the write and leave the tree alone');
+    assert.strictEqual(o.doc.generation, 0, 'its own write, not an outside change');
+  });
+
+  test('a restored backup asks before writing over a file changed since the backup', async () => {
+    const o = await open('cases.mat');
+    edit(o, 'scalarD', 'Value', '42');
+    const destination = vscode.Uri.file(join(dir, 'backup.bin'));
+    const backup = await provider.backupCustomDocument(o.doc, { destination } as vscode.CustomDocumentBackupContext, token());
+    o.view.close();
+    o.doc.dispose();
+    opened.splice(opened.findIndex((x) => x.doc === o.doc), 1);
+    // Another program writes the file while VS Code is closed.
+    const outside = fixture('pv_basic.mat');
+    writeOutside(o.path, outside);
+    const restored: any = await provider.openCustomDocument(o.uri, { backupId: backup.id } as vscode.CustomDocumentOpenContext, token());
+    const view = fakePanel();
+    opened.push({ doc: restored, view });
+    await provider.resolveCustomEditor(restored, view.panel, token());
+    view.send({ type: 'ready' });
+    await waitFor('the restored rows', () => view.posts.some((p) => p.type === 'setRows'));
+    await assert.rejects(provider.saveCustomDocument(restored, token()), (err: unknown) => err instanceof vscode.CancellationError);
+    await waitFor('the conflict prompt', () => asked.length === 1);
+    assert.ok(same(disk(o), outside), 'the other program’s file is still the file');
+    await backup.delete();
+  });
+
+  test('a backup core refuses keeps the last one that could be written standing', async () => {
+    const o = await open('cases.mat');
+    edit(o, 'scalarD', 'Value', '42');
+    const first = vscode.Uri.file(join(dir, 'backup1.bin'));
+    const second = vscode.Uri.file(join(dir, 'backup2.bin'));
+    const b1 = await provider.backupCustomDocument(o.doc, { destination: first } as vscode.CustomDocumentBackupContext, token());
+    edit(o, 'negD', 'Value', '7');
+    // Core can no longer write the tree (its bytes handed away), so neither a save nor a backup can.
+    const mat: any = DataModel.getDataSource(o.doc.srcId);
+    structuredClone(mat.headerBytes.buffer, { transfer: [mat.headerBytes.buffer] });
+    const b2 = await provider.backupCustomDocument(o.doc, { destination: second } as vscode.CustomDocumentBackupContext, token());
+    assert.strictEqual(b2.id, b1.id, 'the last backup is handed on');
+    assert.throws(() => statSync(second.fsPath), 'and nothing is written for the refused one');
+    // The extension host deletes a backup when it is handed the next one: the file survives that.
+    await b1.delete();
+    assert.ok(statSync(first.fsPath).size > 0);
+    const kept: any = await provider.openCustomDocument(o.uri, { backupId: b2.id } as vscode.CustomDocumentOpenContext, token());
+    opened.push({ doc: kept, view: fakePanel() });
+    assert.strictEqual(valuesOf(new Uint8Array(readFileSync(first.fsPath))).get('scalarD').Value, '42');
+    await b2.delete();
+    assert.throws(() => statSync(first.fsPath), 'the last handle takes the file with it');
   });
 
   test('a hot-exit backup is a whole MAT-file, and restoring it restores the edits', async () => {

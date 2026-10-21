@@ -94,7 +94,11 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Resolve a selection (from table or tree) into a node and push it to the PI.
   // Section rows (id `section:<key>`) have no properties, so clear the PI.
+  // The selection the inspector was last asked to show, so a view whose tree is replaced (a
+  // MAT-file reverted or reloaded from disk) can have its node shown again from the new tree.
+  let lastSelection: { uriString: string; rowIds: string[] } | undefined;
   const showSelection = (uriString: string, rowIds: string[]): void => {
+    lastSelection = { uriString, rowIds };
     const first = rowIds && rowIds.length > 0 ? rowIds[0] : undefined;
     if (!first || isSectionRowId(first)) {
       piProvider.clear();
@@ -137,6 +141,11 @@ export function activate(context: vscode.ExtensionContext): void {
   const matProvider = new MatEditorProvider(context);
   matProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
   matProvider.onNavigate = navigate;
+  // Node ids are paths, so the node the inspector shows is found again in the new tree, or the
+  // inspector is cleared if it is gone; it never goes on showing a node of the tree that left.
+  matProvider.onReplaced = (uriString) => {
+    if (lastSelection?.uriString === uriString) showSelection(uriString, lastSelection.rowIds);
+  };
 
   // Health badges/colors on tree rows (missing/cycle/modified). The tree
   // encodes each row's state into its resourceUri; this provider renders it.
@@ -249,7 +258,8 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.window.registerCustomEditorProvider(
       MatEditorProvider.viewType,
       matProvider,
-      // One panel per document, for the binary .sldd editor's reason: one edit stack.
+      // One panel per document, for the binary .sldd editor's reason: one edit stack. So Split
+      // Right opens no second view of a MAT-file, as it opens none of a binary .sldd.
       { webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: false },
     ),
     vscode.window.registerTreeDataProvider('dataExplorer.sections', provider),

@@ -45,14 +45,14 @@ import { answerMatrixRequest } from './matrixRequest.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { subscribeUsageRepost } from './usageRepostWatch.js';
-import { refuseIfUnreadable, sourceWarnings, warningBanner } from './parseWarnings.js';
+import { refuseIfUnreadable, sourceWarnings, warningBanner, type WarningBanner } from './parseWarnings.js';
 import { postOrReport } from './postPayload.js';
 import { clearDrag, getDrag } from './dragState.js';
 import { broadcastDragState, registerAddGalleryView, unregisterAddGalleryView } from './editorHub.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, type FollowedDocument } from './diskFollow.js';
 import { SaveMarks, type SaveMark } from './saveMarks.js';
-import { writeFileSafely } from './safeWrite.js';
+import { sameFile, writeFileSafely } from './safeWrite.js';
 import { binaryEditSrcId } from '../common/srcId.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
@@ -85,8 +85,16 @@ interface Observed {
   /** The variables before the gesture, each with the row id the table spells it by. */
   before: Map<any, string>;
   order: any[];
+  /**
+   * What the gesture threw, if it threw. Its steps are counted all the same: core recorded them
+   * before it threw, and an edit VS Code is not told of would leave core's stack a step ahead of
+   * VS Code's, so that the next Undo undid the wrong edit.
+   */
+  error?: unknown;
 }
 
+// O(variables) a gesture, for the id map and the order: 10 ms on a file of 100,000 variables,
+// against the 300 ms the payload of such a file takes to build.
 function observe(mat: any, srcId: string, run: () => void): Observed {
   const before = new Map<any, string>();
   for (const v of mat.children) before.set(v, v.id);
@@ -115,6 +123,8 @@ function observe(mat: any, srcId: string, run: () => void): Observed {
   ];
   try {
     run();
+  } catch (err) {
+    observed.error = err;
   } finally {
     for (const s of subs) s.remove();
   }
@@ -161,6 +171,13 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
 
   /** The file's bytes, until the first paint registers them (`model`). */
   private bytes: ArrayBuffer | null;
+  /**
+   * The bytes the file holds as this document last read or wrote it, for a revert that cannot read
+   * the disk (revertCustomDocument). The read is the buffer the tree's records are views of, so it
+   * costs nothing; after a save it is the bytes the save wrote, one more copy of the file. None for
+   * a document restored from a backup, which was never the file.
+   */
+  onDisk: Uint8Array | null;
   /** The registered tree, or why there is none. Null until the first `model()`. */
   private loaded: { node: any } | { error: Error } | null = null;
 
@@ -174,6 +191,7 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
     fromBackup: boolean,
   ) {
     this.bytes = bytes;
+    this.onDisk = fromBackup ? null : new Uint8Array(bytes);
     // VS Code reports a document restored from a hot-exit backup as dirty, though it has no
     // edits, until it is saved or reverted.
     this.edits = new EditStackMirror(fromBackup);
@@ -225,11 +243,18 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
 
   /**
    * Core's message, saying the file's name where core says the srcId. A MatNode is named by the
-   * srcId it was registered under, and core quotes that name (`Cannot save "binedit:file:///…"`).
+   * srcId it was registered under, and core quotes that name (`Cannot save "binedit:file:///…"`),
+   * as a node's id, which a message can carry, begins with it. Every message this view shows of
+   * core's comes through here.
    */
   describe(err: unknown): string {
     const message = err instanceof Error ? err.message : String(err);
-    return message.split(`"${this.srcId}"`).join(`"${this.metaPath}"`);
+    return message.split(this.srcId).join(this.metaPath);
+  }
+
+  /** A warning banner with core's messages described (see `describe`). */
+  describeBanner(banner: WarningBanner | undefined): WarningBanner | undefined {
+    return banner && { headline: this.describe(banner.headline), details: banner.details.map((d) => this.describe(d)) };
   }
 
   /**
@@ -238,9 +263,9 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
    * the save was asked for: an edit that lands while they are being written stays unsaved.
    */
   serialize(): Uint8Array {
-    this.model();
     let out: ReturnType<typeof DataModel.serializeSource>;
     try {
+      this.model();
       out = DataModel.serializeSource(this.srcId);
     } catch (err) {
       throw new Error(this.describe(err));
@@ -293,6 +318,13 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
       }
     });
     this.version++;
+    if (observed.error) {
+      // Core's own step threw part-way: the tree is whatever it left, so every row is painted
+      // again from it, and the user is told. Nothing can put the two stacks back in step.
+      this.repaintAll();
+      void vscode.window.showErrorMessage(`Could not ${direction} the edit of ${this.metaPath}: ${this.describe(observed.error)}`);
+      return;
+    }
     this.repaint(observed);
   }
 
@@ -331,6 +363,9 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
   replace(read: DiskRead): void {
     DataModel.removeDataSource(this.srcId);
     this.bytes = read.bytes;
+    this.onDisk = new Uint8Array(read.bytes);
+    // A backup of the tree that is going is not one of this one.
+    this.lastBackup = undefined;
     this.loaded = null;
     this.generation++;
     this.version++;
@@ -338,8 +373,28 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
     this.stamp = read.stamp;
     this.inConflict = false;
     this.overwriteStamp = undefined;
+    // Registered now rather than at the paint, so that what asks the session next (the
+    // Property Inspector, below) finds the new tree. A file that no longer reads says so at
+    // the paint.
+    try {
+      this.model();
+    } catch {
+      /* reported by the paint */
+    }
     this.repaintAll();
+    this.onReplaced?.();
   }
+
+  /** Called after `replace`: the provider's, which refreshes the Property Inspector. */
+  onReplaced?: () => void;
+
+  /**
+   * The last hot-exit backup this document wrote, which a backup that cannot be written keeps
+   * standing (backupCustomDocument).
+   */
+  lastBackup: SharedBackup | undefined;
+  /** A backup was refused, and the user was told; reset by the next backup that succeeds. */
+  backupRefusalShown = false;
 
   dispose(): void {
     this.disposed = true;
@@ -353,12 +408,75 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
  * An undo or redo VS Code asked of an edit made before the file was last read from disk. Its steps
  * left with the old tree, so nothing is done to the new one, and the status bar says so rather
  * than leave the user guessing why the table did not move.
+ *
+ * VS Code has moved its stack all the same, so the document now shows as dirty while the tree
+ * is still what the disk holds. That is harmless: a save writes the file as it is, and Revert
+ * makes it clean. It is left so rather than reverted from inside VS Code's own undo.
  */
 function staleEdit(name: string, what: 'undone' | 'redone'): void {
   vscode.window.setStatusBarMessage(
     `${name} was reloaded from disk since this edit was made, so it cannot be ${what}.`,
     5000,
   );
+}
+
+/**
+ * A hot-exit backup VS Code may be handed more than once. The extension host deletes a backup when
+ * it is handed the next one, so a backup that is handed on again, because the edit after it could
+ * not be written, must survive the delete of its first handle: each handle holds a reference, and
+ * the file goes with the last.
+ */
+class SharedBackup {
+  private refs = 0;
+  /** False once the last handle is deleted, and the file with it. */
+  alive = true;
+  constructor(
+    readonly id: string,
+    private readonly destination: vscode.Uri,
+  ) {}
+
+  handle(): vscode.CustomDocumentBackup {
+    this.refs++;
+    let deleted = false;
+    return {
+      id: this.id,
+      delete: async () => {
+        if (deleted) return;
+        deleted = true;
+        if (--this.refs > 0) return;
+        this.alive = false;
+        try {
+          await vscode.workspace.fs.delete(this.destination);
+        } catch {
+          /* already gone */
+        }
+      },
+    };
+  }
+}
+
+/**
+ * A backup's id: where it is, and the stamp of the file the document was last read or saved as.
+ * A restore compares the file with that stamp at its first save, so an outside change between the
+ * backup and the restore is asked about rather than overwritten. Read back by `backupSource`.
+ */
+function backupId(destination: vscode.Uri, stamp: DiskStamp | undefined): string {
+  return JSON.stringify({ backup: destination.toString(), stamp: stamp ?? null });
+}
+
+/** Where a backup id points, and its stamp, or none for an id this editor did not write. */
+function backupSource(id: string): { uri: vscode.Uri; stamp: DiskStamp | undefined } {
+  try {
+    const parsed = JSON.parse(id) as { backup?: unknown; stamp?: { mtime?: unknown; size?: unknown } | null };
+    if (typeof parsed?.backup === 'string') {
+      const s = parsed.stamp;
+      const stamp = s && typeof s.mtime === 'number' && typeof s.size === 'number' ? { mtime: s.mtime, size: s.size } : undefined;
+      return { uri: vscode.Uri.parse(parsed.backup), stamp };
+    }
+  } catch {
+    /* a bare uri */
+  }
+  return { uri: vscode.Uri.parse(id), stamp: undefined };
 }
 
 export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocument> {
@@ -368,6 +486,9 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
   public onSelect?: (uriString: string, rowIds: string[]) => void;
   // Handle a Usage-column link click (wired in extension.ts).
   public onNavigate?: (target: string, referrer?: string) => void;
+  // A document's tree was replaced from disk (wired in extension.ts, which shows the Property
+  // Inspector's node again from the new tree, if it is this document's).
+  public onReplaced?: (uriString: string) => void;
 
   private readonly _onDidChangeCustomDocument = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<MatDocument>>();
   readonly onDidChangeCustomDocument = this._onDidChangeCustomDocument.event;
@@ -387,12 +508,19 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     _token: vscode.CancellationToken,
   ): Promise<MatDocument> {
     // A hot-exit backup is a whole MAT-file (backupCustomDocument), so a restore opens it as the
-    // document; the stamp is the FILE's, since the file is what a save will write over.
-    const source = openContext.backupId ? vscode.Uri.parse(openContext.backupId) : uri;
-    const stamp = await stampOf(uri);
+    // document. Its stamp is the one the backup recorded, of the file the edits were made over:
+    // the file now may be another program's since, and a save has to ask before writing over it.
+    let source = uri;
+    let stamp: DiskStamp | undefined;
+    if (openContext.backupId) {
+      ({ uri: source, stamp } = backupSource(openContext.backupId));
+    } else {
+      stamp = await stampOf(uri);
+    }
     const bytes = toArrayBuffer(await vscode.workspace.fs.readFile(source));
     const doc = new MatDocument(uri, bytes, !!openContext.backupId);
     doc.stamp = stamp;
+    doc.onReplaced = () => this.onReplaced?.(uri.toString());
     doc.onDidChangeCustomDocument((e) => this._onDidChangeCustomDocument.fire(e));
     doc.track(watchDisk(doc, () => followDisk(doc, () => readDisk(doc.uri), (read) => doc.replace(read))));
     return doc;
@@ -468,17 +596,19 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
             add: 'variable',
             // Nor does it copy, cut, paste or drag one: a variable has no dictionary entry form.
             clipboard: false,
-            warnings: lazyRowsBanner(built.planned.plan, warningBanner(sourceWarnings(mat))),
+            warnings: document.describeBanner(lazyRowsBanner(built.planned.plan, warningBanner(sourceWarnings(mat)))),
           },
           name,
         );
         drainNavigateSelect(webview, uriString);
       } catch (err) {
-        webview.postMessage({ type: 'error', message: `Failed to show ${name}: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: `Failed to show ${name}: ${document.describe(err)}` });
       }
     };
 
-    // One variable's rows, spliced over the run the table holds for it.
+    // One variable's rows, spliced over the run the table holds for it. The banner's count of rows
+    // still to load is the last whole payload's until the next one: one variable cannot move it
+    // by much, and recounting it is a walk of the whole file.
     const repaintVariables = (variables: Iterable<any>, before?: ReadonlyMap<any, string>) => {
       try {
         const saved = document.marks.marks();
@@ -489,7 +619,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
         }
       } catch (err) {
         void post();
-        webview.postMessage({ type: 'error', message: `Failed to update the row: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: `Failed to update the row: ${document.describe(err)}` });
       }
     };
 
@@ -515,17 +645,17 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
         webview.postMessage({ type: 'error', message: readOnlyNotice(mat) ?? `${name} is read-only.` });
         return null;
       }
-      let observed: Observed;
-      try {
-        observed = observe(mat, document.srcId, () => run(mat));
-      } catch (err) {
+      const observed = observe(mat, document.srcId, () => run(mat));
+      // What core recorded before a throw is one edit like any other, so that the next Undo
+      // undoes it and not the edit before it.
+      if (observed.steps > 0) document.pushEdit(label, observed, touched());
+      if (observed.error) {
         // Whatever core did before it threw is in the tree, and the table is shown it whole.
         document.version++;
         void post();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${document.describe(err)}` });
+        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${document.describe(observed.error)}` });
         return null;
       }
-      if (observed.steps > 0) document.pushEdit(label, observed, touched());
       document.repaint(observed);
       return observed;
     };
@@ -710,10 +840,11 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       const bytes = document.serialize();
       snapshot = document.marks.snapshot();
       await refuseIfChangedOnDisk(document, MatEditorProvider.viewType, (m) => this.askSaveConflict(m));
-      await this.write(document.uri, bytes);
-      // What a later save and the watcher compare the disk with. The watcher's event for this
-      // write then finds the disk matching, and ignores it.
-      document.stamp = await stampOf(document.uri);
+      // What a later save and the watcher compare the disk with, read off the written file itself
+      // where the write could: a stat after it would take an outside write landing just after
+      // for this one. The watcher's event for this write then finds the disk matching.
+      document.stamp = (await this.write(document.uri, bytes)) ?? (await stampOf(document.uri));
+      document.onDisk = bytes;
     } finally {
       document.saving = false;
     }
@@ -724,18 +855,40 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     document.repaintMarks(before);
   }
 
-  async saveCustomDocumentAs(document: MatDocument, dest: vscode.Uri, _token: vscode.CancellationToken): Promise<void> {
+  async saveCustomDocumentAs(document: MatDocument, dest: vscode.Uri, token: vscode.CancellationToken): Promise<void> {
+    // Onto the file itself, by its own name or another link to it: that is a save, and has to
+    // move the stamp and the marks as one does, or the next save would take its own write for an
+    // outside one.
+    if (dest.toString() === document.uri.toString() || (await sameFile(dest, document.uri))) {
+      return this.saveCustomDocument(document, token);
+    }
     await this.write(dest, document.serialize());
   }
 
   async revertCustomDocument(document: MatDocument, _token: vscode.CancellationToken): Promise<void> {
-    // VS Code marks the document clean as it asks for this, without waiting for it, so the
-    // dirty-flag copy is clean from here too. A revert also ends a save conflict, as it does
-    // for a text file, whether or not the read below succeeds.
+    // VS Code marks the document clean as it asks for this, without waiting for it. The read
+    // comes first, so that the watcher, which reads the dirty-flag copy, does not reload over
+    // a revert still reading; the copy is marked clean once the read is in, either way.
+    let read: DiskRead;
+    try {
+      read = await readDisk(document.uri);
+    } catch (err) {
+      // VS Code shows the document clean, so it must not go on holding the edits it dropped:
+      // the tree is put back to the bytes the file held as this document last read or wrote it.
+      // A document restored from a backup has none, and keeps its tree.
+      this.markReverted(document);
+      if (document.onDisk) document.replace({ stamp: document.stamp, bytes: toArrayBuffer(document.onDisk) });
+      throw err;
+    }
+    this.markReverted(document);
+    document.replace(read);
+  }
+
+  /** A revert also ends a save conflict, as it does for a text file. */
+  private markReverted(document: MatDocument): void {
     document.edits.reverted();
     document.inConflict = false;
     document.overwriteStamp = undefined;
-    document.replace(await readDisk(document.uri));
   }
 
   async backupCustomDocument(
@@ -745,21 +898,34 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
   ): Promise<vscode.CustomDocumentBackup> {
     // The whole file as a save would write it, so a restore opens a MAT-file like any other. A
     // scratch copy VS Code throws away, so written plainly: it is not the user's file.
-    await vscode.workspace.fs.writeFile(ctx.destination, document.serialize());
-    return {
-      id: ctx.destination.toString(),
-      delete: async () => {
-        try {
-          await vscode.workspace.fs.delete(ctx.destination);
-        } catch {
-          /* already gone */
-        }
-      },
-    };
+    let bytes: Uint8Array;
+    try {
+      bytes = document.serialize();
+    } catch (err) {
+      // Core refuses to write the tree as it stands, so the save would refuse it too. A restart
+      // restores the last state that could be written rather than nothing: the last backup, kept
+      // standing. Said once, until a backup succeeds again.
+      const kept = document.lastBackup?.alive ? document.lastBackup : undefined;
+      if (!document.backupRefusalShown) {
+        document.backupRefusalShown = true;
+        void vscode.window.showWarningMessage(
+          `${(err as Error).message} ${kept ? 'If VS Code restarts now, it restores ' + document.metaPath + ' as it was before the latest edits.' : ''}`.trim(),
+        );
+      }
+      if (!kept) throw err;
+      return kept.handle();
+    }
+    await vscode.workspace.fs.writeFile(ctx.destination, bytes);
+    document.backupRefusalShown = false;
+    document.lastBackup = new SharedBackup(backupId(ctx.destination, document.stamp), ctx.destination);
+    return document.lastBackup.handle();
   }
 
-  /** The user's file, replaced whole where the file system lets us (safeWrite.ts). */
-  private async write(uri: vscode.Uri, bytes: Uint8Array): Promise<void> {
-    await writeFileSafely(uri, bytes, () => vscode.workspace.fs.writeFile(uri, bytes));
+  /**
+   * The user's file, replaced whole where the file system lets us (safeWrite.ts). Answers the
+   * stamp the write left, where it could read one.
+   */
+  private async write(uri: vscode.Uri, bytes: Uint8Array): Promise<DiskStamp | undefined> {
+    return (await writeFileSafely(uri, bytes, () => vscode.workspace.fs.writeFile(uri, bytes))).stamp;
   }
 }
