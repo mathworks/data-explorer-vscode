@@ -1,7 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 //
 // Following the file behind a writable byte-backed document, the way VS Code follows a text
-// file it has open (V-071), for the two editors whose documents are not TextDocuments: the
+// file it has open, for the two editors whose documents are not TextDocuments: the
 // compressed-binary .sldd and the MAT-file. The rules are diskConflict.ts's, which is
 // vscode-free and unit-tested; this is the vscode half both providers share, so that a MAT-file
 // and a dictionary answer an outside write, and a save over one, the same way:

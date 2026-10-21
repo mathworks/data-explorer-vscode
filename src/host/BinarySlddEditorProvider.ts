@@ -347,7 +347,7 @@ class BinarySlddDocument implements vscode.CustomDocument, FollowedDocument {
    */
   readonly misrouted: boolean;
 
-  // --- Following the file on disk (V-071; the rules are in diskConflict.ts) ---
+  // --- Following the file on disk (the rules are in diskConflict.ts) ---
 
   /**
    * This document's copy of the dirty flag VS Code keeps, which the API gives no way to
