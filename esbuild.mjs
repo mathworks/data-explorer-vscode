@@ -20,6 +20,10 @@ const common = {
 const config = web
   ? {
       ...common,
+      // A save's replace-by-rename (src/host/safeWrite.ts) imports Node's fs lazily, on the
+      // save path only, and writes through `workspace.fs` when that import fails, which is what
+      // it does in the web host. Left external so the browser bundle builds; never loaded there.
+      external: [...common.external, 'node:fs/promises'],
       outfile: 'dist/web/extension.js',
       platform: 'browser',
       format: 'cjs',

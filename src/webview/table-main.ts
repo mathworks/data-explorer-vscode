@@ -61,6 +61,10 @@ let editable = false;
 // Whether the document has a plain-text view "Location in Text" can reveal a row
 // in (JSON .sldd yes, compressed-binary .sldd no). Gates that menu item + Cmd+L.
 let hasTextView = false;
+// Whether this document's rows travel on the clipboard and in row drags (setRows'
+// `clipboard`): false for a MAT-file. Gates the menu's Copy/Cut/Paste, their chords and
+// a row drag, all from this one flag.
+let hasClipboard = true;
 let clipboardState: ClipboardState = { canPaste: false, mode: null, items: [] };
 // The row id under the last right-click, relayed with the chosen action.
 let lastContextRowId: string | null = null;
@@ -101,6 +105,7 @@ function menuFor(anchorRowId: string | null): ContextMenuItem[] {
     clipboard: clipboardState,
     editable,
     hasTextView,
+    hasClipboard,
     // Paste's allow-check needs the target section's rules; without them the item is
     // offered only as far as "the clipboard is non-empty" can justify.
     pasteTarget: rule
@@ -387,15 +392,19 @@ window.addEventListener('message', (event: MessageEvent) => {
     const rows = msg.rows ?? [];
     editable = !!msg.editable;
     hasTextView = !!msg.hasTextView;
+    hasClipboard = msg.clipboard !== false;
+    table.rowDrag = hasClipboard;
     // Every table gets setRows, including the read-only ones that never receive
     // sectionRules — so this is the assignment that lets a .slx or .mat view answer a link
     // into itself. Guarded so a provider that has not been updated leaves the old value
     // rather than blanking it.
     docUri = typeof msg.docUri === 'string' ? msg.docUri : docUri;
     // The `+ Add` button exists only where entries can be created, which is the same
-    // condition the context menu is gated on — the two editable .sldd views. A read-only
-    // view gets no button rather than a dead one.
+    // condition the context menu is gated on — the editable views. A read-only view gets
+    // no button rather than a dead one.
     table.canAdd = editable;
+    // A MAT-file's Add makes one variable, so its button adds rather than opens the gallery.
+    table.addDirect = msg.add === 'variable';
     table.columns = msg.columns ?? null;
     table.columnLabels = msg.columnLabels ?? null;
     table.columnGroups = (msg.columnGroups as Record<string, string> | undefined) ?? null;
@@ -587,7 +596,7 @@ table.dropPredictor = predictDrop;
 // casts; on drop it completes the move/copy as paste (+ source delete). All
 // gated on editable so read-only views never initiate a structural drag.
 table.addEventListener('dex-row-drag-start', (e: Event) => {
-  if (!editable) return;
+  if (!editable || !hasClipboard) return;
   const rowIds = (e as CustomEvent).detail?.rowIds ?? [];
   vscode.postMessage({ type: 'dragStart', rowIds });
 });
@@ -595,7 +604,7 @@ table.addEventListener('dex-row-drag-end', () => {
   vscode.postMessage({ type: 'dragEnd' });
 });
 table.addEventListener('dex-row-drop', (e: Event) => {
-  if (!editable) return;
+  if (!editable || !hasClipboard) return;
   const detail = (e as CustomEvent).detail;
   vscode.postMessage({ type: 'drop', rowId: detail.targetRowId, mode: detail.mode });
 });

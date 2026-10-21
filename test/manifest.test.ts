@@ -28,6 +28,7 @@ const BINARY_VIEW = 'dataExplorer.binaryView';
 const TABLE_VIEW = 'dataExplorer.tableView';
 const BINARY_SLDD_VIEW = 'dataExplorer.binarySlddView';
 const PROJECT_VIEW = 'dataExplorer.projectView';
+const MAT_VIEW = 'dataExplorer.matView';
 
 describe('customEditors: text-backed table for JSON .sldd + byte-backed binary editor', () => {
   const editors = contributes.customEditors as Array<{
@@ -37,9 +38,23 @@ describe('customEditors: text-backed table for JSON .sldd + byte-backed binary e
     priority: string;
   }>;
 
-  it('registers exactly four custom editors: table, binary, binary sldd, project', () => {
+  it('registers exactly five custom editors: table, binary, binary sldd, MAT-file, project', () => {
     const viewTypes = editors.map((e) => e.viewType).sort();
-    expect(viewTypes).toEqual([BINARY_VIEW, TABLE_VIEW, BINARY_SLDD_VIEW, PROJECT_VIEW].sort());
+    expect(viewTypes).toEqual([BINARY_VIEW, TABLE_VIEW, BINARY_SLDD_VIEW, MAT_VIEW, PROJECT_VIEW].sort());
+  });
+
+  // A MAT-file's editor is decided by NAME, unlike a .sldd's, which its bytes decide: every
+  // MAT-file the reader opens, the writer can save or the editor opens read-only itself, so
+  // there is nothing for a redirect to choose between. So it is the default for its glob, and
+  // the read-only view does not claim it at all (it hands on one that lands there anyway).
+  it('the MAT-file editor owns *.mat at priority default, and nothing else', () => {
+    const view = editors.find((e) => e.viewType === MAT_VIEW)!;
+    expect(view, 'the matView editor must be declared').toBeTruthy();
+    expect(view.selector.map((s) => s.filenamePattern)).toEqual(['*.mat']);
+    expect(view.priority).toBe('default');
+    expect(view.displayName).toBe(editors.find((e) => e.viewType === BINARY_VIEW)!.displayName);
+    const claimers = editors.filter((e) => e.priority === 'default' && e.selector.some((s) => s.filenamePattern === '*.mat'));
+    expect(claimers.map((e) => e.viewType)).toEqual([MAT_VIEW]);
   });
 
   it('the writable binary-sldd table view owns *.sldd at priority option (reached via redirect)', () => {
@@ -51,7 +66,7 @@ describe('customEditors: text-backed table for JSON .sldd + byte-backed binary e
     expect(view.priority).toBe('option');
   });
 
-  it('the byte-backed binary editor is DEFAULT for every supported format incl *.sldd', () => {
+  it('the byte-backed binary editor is DEFAULT for every supported format incl *.sldd, but *.mat', () => {
     // binaryView must be the default for *.sldd because it can open ANY bytes —
     // a CustomTextEditorProvider (tableView) cannot open binary/zip .sldd (it
     // fails to load as a TextDocument: "cannot open as text"). binaryView opens
@@ -59,7 +74,7 @@ describe('customEditors: text-backed table for JSON .sldd + byte-backed binary e
     const binary = editors.find((e) => e.viewType === BINARY_VIEW)!;
     expect(binary, 'the binaryView editor must be declared').toBeTruthy();
     const patterns = binary.selector.map((s) => s.filenamePattern);
-    expect(patterns).toEqual(expect.arrayContaining(SUPPORTED_EXTS.map((e) => `*.${e}`)));
+    expect(patterns).toEqual(expect.arrayContaining(SUPPORTED_EXTS.filter((e) => e !== 'mat').map((e) => `*.${e}`)));
     expect(binary.priority).toBe('default');
   });
 
@@ -67,10 +82,15 @@ describe('customEditors: text-backed table for JSON .sldd + byte-backed binary e
   // the manifest is the one consumer of that list which no import can reach: the
   // host code can be updated for a new format and typecheck clean while the
   // selector here still omits it — the file then opens in VS Code's default
-  // (hex/text) editor and the extension appears simply not to support it.
+  // (hex/text) editor and the extension appears simply not to support it. Across the
+  // DEFAULT editors, since one format (.mat) has a default editor of its own.
   it('declares no supported format the host does not know about, and omits none', () => {
-    const binary = editors.find((e) => e.viewType === BINARY_VIEW)!;
-    const declared = binary.selector.map((s) => s.filenamePattern.replace(/^\*\./, '')).sort();
+    const declared = editors
+      .filter((e) => e.priority === 'default')
+      .flatMap((e) => e.selector.map((s) => s.filenamePattern))
+      .filter((p) => p.startsWith('*.'))
+      .map((p) => p.replace(/^\*\./, ''))
+      .sort();
     expect(declared).toEqual([...SUPPORTED_EXTS].sort());
   });
 
@@ -276,7 +296,7 @@ describe('menu wiring', () => {
   // whenever the page is, so nothing is unreachable — and a palette entry that fires on one
   // filename is a command the palette offers to a workspace that has no project at all.
   it('scopes every palette entry to a .sldd file or to an editable table view', () => {
-    const EDITABLE_VIEWS = [TABLE_VIEW, BINARY_SLDD_VIEW];
+    const EDITABLE_VIEWS = [TABLE_VIEW, BINARY_SLDD_VIEW, MAT_VIEW];
     for (const entry of contributes.menus.commandPalette) {
       const byFile = entry.when.includes('resourceExtname == .sldd');
       const byView = EDITABLE_VIEWS.some((v: string) => entry.when.includes(`activeCustomEditorId == ${v}`));
@@ -313,12 +333,13 @@ describe('the Add-gallery accelerator', () => {
   });
 
   // Unscoped, this would steal cmd+alt+a from every other editor in the workbench. Scoped to
-  // the two EDITABLE table views — the read-only .slx/.mat view has no Add button, so binding
-  // a key there would be a key that does nothing.
+  // the EDITABLE table views — the read-only .slx view has no Add button, so binding a key
+  // there would be a key that does nothing. The MAT-file view's adds a variable at once.
   it('fires only where an entry can be added', () => {
     const when = keybindings.find((k) => k.command === ADD)!.when!;
     expect(when).toContain(`activeCustomEditorId == ${TABLE_VIEW}`);
     expect(when).toContain(`activeCustomEditorId == ${BINARY_SLDD_VIEW}`);
+    expect(when).toContain(`activeCustomEditorId == ${MAT_VIEW}`);
     expect(when).not.toContain(BINARY_VIEW);
   });
 

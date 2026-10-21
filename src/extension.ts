@@ -5,6 +5,7 @@ import { PropertiesViewProvider } from './host/PropertiesViewProvider.js';
 import { BinaryEditorProvider } from './host/BinaryEditorProvider.js';
 import { SlddTextEditorProvider } from './host/SlddTextEditorProvider.js';
 import { BinarySlddEditorProvider } from './host/BinarySlddEditorProvider.js';
+import { MatEditorProvider } from './host/MatEditorProvider.js';
 import { HealthDecorationProvider } from './host/HealthDecorationProvider.js';
 import { invalidate, findNode } from './host/SlddModel.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, isZipBytes } from './host/slddFormat.js';
@@ -22,7 +23,7 @@ import {
 } from './host/nameIndex.js';
 import { isSectionRowId } from './common/sectionRowId.js';
 import { isSupportedPath, SUPPORTED_GLOB } from './common/fileTypes.js';
-import { isSlddFile, isTomlProjectFile } from 'data-explorer-core';
+import { isMatFile, isSlddFile, isTomlProjectFile } from 'data-explorer-core';
 
 function isSlddUri(uri: vscode.Uri | undefined): boolean {
   return !!uri && isSlddFile(uri.path);
@@ -31,9 +32,11 @@ function isSlddUri(uri: vscode.Uri | undefined): boolean {
 // The ONE format→editor rule: which viewType a URI belongs in, decided by its
 // CONTENT. Editable JSON .sldd → the text-backed table view (native undo/redo);
 // compressed-binary (zip/OPC) .sldd → the writable BinarySlddEditorProvider
-// (table editing + re-zip on save); a `matlab.toml` → the project view, which is
-// BinaryEditorProvider under a second view type; everything else → the read-only
-// BinaryEditorProvider, which opens any bytes.
+// (table editing + re-zip on save); a `.mat` → the writable MatEditorProvider, by
+// name, since every MAT-file it can read it can also edit (one it cannot save opens
+// there read-only); a `matlab.toml` → the project view, which is BinaryEditorProvider
+// under a second view type; everything else → the read-only BinaryEditorProvider,
+// which opens any bytes.
 //
 // A JSON .sldd larger than VS Code's TextDocument sync limit is NOT treated as
 // editable: the CustomTextEditorProvider can't resolve it (the ext host can't
@@ -55,6 +58,7 @@ async function bestViewType(uri: vscode.Uri): Promise<string> {
   // BinaryEditorProvider.projectViewType. Returning `viewType` here instead would be a dead
   // open: that entry's selector does not match `matlab.toml`, so VS Code has nothing to resolve.
   if (isTomlProjectFile(uri.path)) return BinaryEditorProvider.projectViewType;
+  if (isMatFile(uri.path)) return MatEditorProvider.viewType;
   if (!isSlddFile(uri.path)) return BinaryEditorProvider.viewType;
   let bytes: Uint8Array;
   try {
@@ -90,7 +94,11 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // Resolve a selection (from table or tree) into a node and push it to the PI.
   // Section rows (id `section:<key>`) have no properties, so clear the PI.
+  // The selection the inspector was last asked to show, so a view whose tree is replaced (a
+  // MAT-file reverted or reloaded from disk) can have its node shown again from the new tree.
+  let lastSelection: { uriString: string; rowIds: string[] } | undefined;
   const showSelection = (uriString: string, rowIds: string[]): void => {
+    lastSelection = { uriString, rowIds };
     const first = rowIds && rowIds.length > 0 ? rowIds[0] : undefined;
     if (!first || isSectionRowId(first)) {
       piProvider.clear();
@@ -127,6 +135,17 @@ export function activate(context: vscode.ExtensionContext): void {
   const binarySlddProvider = new BinarySlddEditorProvider(context);
   binarySlddProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
   binarySlddProvider.onNavigate = navigate;
+
+  // A MAT-file opens in this writable provider (edits through core's session, save
+  // through core's writer). Shares the selection→PI and navigate wiring.
+  const matProvider = new MatEditorProvider(context);
+  matProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
+  matProvider.onNavigate = navigate;
+  // Node ids are paths, so the node the inspector shows is found again in the new tree, or the
+  // inspector is cleared if it is gone; it never goes on showing a node of the tree that left.
+  matProvider.onReplaced = (uriString) => {
+    if (lastSelection?.uriString === uriString) showSelection(uriString, lastSelection.rowIds);
+  };
 
   // Health badges/colors on tree rows (missing/cycle/modified). The tree
   // encodes each row's state into its resourceUri; this provider renders it.
@@ -236,6 +255,13 @@ export function activate(context: vscode.ExtensionContext): void {
       // document keeps that stack unambiguous.
       { webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: false },
     ),
+    vscode.window.registerCustomEditorProvider(
+      MatEditorProvider.viewType,
+      matProvider,
+      // One panel per document, for the binary .sldd editor's reason: one edit stack. So Split
+      // Right opens no second view of a MAT-file, as it opens none of a binary .sldd.
+      { webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: false },
+    ),
     vscode.window.registerTreeDataProvider('dataExplorer.sections', provider),
     vscode.window.registerFileDecorationProvider(healthProvider),
     vscode.window.registerWebviewViewProvider(
@@ -325,9 +351,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dataExplorer.openFile', async (uri: vscode.Uri) => {
       if (!uri) return;
       // Route by content: editable JSON .sldd → text-backed table view (native
-      // undo/redo); binary/zip .sldd, .slx, .mat, .prj → read-only binary view;
-      // matlab.toml → the project view. Preview mode (italic, single reused tab)
-      // like the Explorer.
+      // undo/redo); binary/zip .sldd → the writable binary-sldd view; .mat → the
+      // MAT-file editor; .slx, .mdl, .prj → read-only binary view; matlab.toml → the
+      // project view. Preview mode (italic, single reused tab) like the Explorer.
       await openInBestEditor(uri, { preview: true });
     }),
     // Editor-tab toggle: open the current file in the Data Explorer or in VS Code's

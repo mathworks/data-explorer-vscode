@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 //
-// One table UI, three editors behind it, and the same sixteen messages dispatched three
+// One table UI, four editors behind it, and the same sixteen messages dispatched four
 // times.
 //
 // `TableToHostMessage` is the whole vocabulary the webview can speak. Every custom
@@ -9,7 +9,8 @@
 //
 //   SlddTextEditorProvider    a JSON `.sldd`, editable, backed by a TextDocument
 //   BinarySlddEditorProvider  a compressed-binary `.sldd`, editable, no text at all
-//   BinaryEditorProvider      `.slx` / `.mdl` / `.mat` / `.prj`, read-only
+//   MatEditorProvider         a `.mat`, editable, the document is core's tree
+//   BinaryEditorProvider      `.slx` / `.mdl` / `.prj`, read-only
 //
 // BinaryEditorProvider serves TWO webviews, because `.prj` shows a main page instead of a
 // table (see core's ProjectPage.ts): one dispatch chain, two vocabularies. So a provider's
@@ -83,8 +84,10 @@ const ALWAYS = ['ready', 'select', 'navigate', 'requestMatrix'];
 
 // Everything that MUTATES the document. A read-only editor never receives these because
 // the webview is told it is read-only and does not offer the gestures; an EDITABLE one
-// has no excuse, and this is the list that had to be implemented twice — once against a
-// TextDocument's edits, once against a re-zipped archive.
+// has no excuse, and this is the list that had to be implemented three times — against a
+// TextDocument's edits, a re-zipped archive, and a MAT-file's tree. An editable view may
+// still decline one, as the MAT-file's declines the clipboard and row drags, but it has to
+// say so: a branch that answers, not a message that lands and does nothing.
 const EDITING = [
   'edit',
   'delete',
@@ -136,6 +139,7 @@ interface Provider {
 const PROVIDERS: Provider[] = [
   'src/host/SlddTextEditorProvider.ts',
   'src/host/BinarySlddEditorProvider.ts',
+  'src/host/MatEditorProvider.ts',
   'src/host/BinaryEditorProvider.ts',
 ].map((file) => {
   const source = read(file);
@@ -172,8 +176,9 @@ describe('the message vocabulary and the editors that speak it are both still he
     expect(VOCABULARY).toContain('redo');
   });
 
-  it('finds all three dispatch chains, one per contract', () => {
+  it('finds all four dispatch chains, and every contract among them', () => {
     expect(PROVIDERS.map((p) => p.contract).sort()).toEqual([
+      'CustomEditorProvider',
       'CustomEditorProvider',
       'CustomReadonlyEditorProvider',
       'CustomTextEditorProvider',
@@ -296,9 +301,9 @@ describe('every setRows says which document it is describing', () => {
   };
   const posts = PROVIDERS.map((p) => ({ file: p.file, bodies: payloadsOf(read(`src/host/${p.file}`)) }));
 
-  it('finds all three posts, so none of them is missed below', () => {
+  it('finds all four posts, so none of them is missed below', () => {
     // A regex that matched nothing would make the loop vacuous.
-    expect(posts.reduce((n, p) => n + p.bodies.length, 0)).toBe(3);
+    expect(posts.reduce((n, p) => n + p.bodies.length, 0)).toBe(4);
   });
 
   for (const { file, bodies } of posts) {

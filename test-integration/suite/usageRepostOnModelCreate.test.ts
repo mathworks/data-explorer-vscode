@@ -12,7 +12,7 @@
 //
 // So an open data tab now reposts when a model file is created or deleted in the workspace,
 // once per burst (usageRepost.ts, debounced). Pinned here end to end, for both views that fill a
-// data file's Usage column: the JSON dictionary's editable table and the read-only view a
+// data file's Usage column: the JSON dictionary's editable table and the MAT-file editor a
 // `.mat` opens in. Nothing in this file tells a provider anything; what is asserted is only
 // what each posted. The two absences are pinned too, since both are what keep the cost bounded:
 // a file that is not a model does not repost, and a closed tab is never reposted again.
@@ -24,7 +24,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { strToU8, zipSync } from 'fflate';
-import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
+import { MatEditorProvider } from '../../src/host/MatEditorProvider';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { ctx, fakePanel, nameOf, quiet, token, waitFor, ws, wsUri } from './tools/hostHarness';
 
@@ -174,7 +174,7 @@ suite('Usage follows a model created or deleted beside an open data file', () =>
     );
   });
 
-  test('the read-only view of a .mat reposts its Usage column', async () => {
+  test('the MAT-file view reposts its Usage column', async () => {
     // A real MATLAB-written MAT-file defining the one variable `Bp` (see make-caserefs.mjs),
     // copied in beside the model for the reason the model is: only `findFiles` puts a data
     // file in the scope of a model that links it.
@@ -187,7 +187,7 @@ suite('Usage follows a model created or deleted beside an open data file', () =>
       await writeAndLetItLand(mat, await vscode.workspace.fs.readFile(source));
       await followsTheModel(
         async () => {
-          const provider = new BinaryEditorProvider(ctx());
+          const provider = new MatEditorProvider(ctx());
           const doc = await provider.openCustomDocument(mat, {} as vscode.CustomDocumentOpenContext, token());
           const view = fakePanel();
           await provider.resolveCustomEditor(doc, view.panel, token());

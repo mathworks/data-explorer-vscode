@@ -1,7 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 import { describe, it, expect } from 'vitest';
 import { DataModel } from 'data-explorer-core';
-import { buildMatRows } from '../src/host/matRowBuilder.js';
+import { buildMatRows, buildMatRowsPlanned, buildMatVariableRows } from '../src/host/matRowBuilder.js';
 
 // Build a MatNode from parsed variables (scalar + a struct with fields) the way
 // the extension does — through the core barrel (addMatSourceParsed builds the
@@ -81,5 +81,35 @@ describe('buildMatRows', () => {
     expect(() => buildMatRows(node)).not.toThrow();
     const labels = buildMatRows(node).map((r: any) => r.Name?.label ?? r.Name);
     expect(labels).toContain('ok'); // the good variable still renders
+  });
+});
+
+describe('buildMatRows for the editable view', () => {
+  it('stamps the menu flags from the node: a variable is deletable, nothing is copyable', () => {
+    const rows = buildMatRows(makeNode());
+    const kp = rows.find((r: any) => r.Name?.label === 'Kp');
+    expect(kp._canDelete).toBe(true);
+    expect(kp._canCopy).toBe(false);
+    expect(typeof kp._canAddChild).toBe('boolean');
+  });
+
+  it('shows the saved status it is given on a variable row, and nothing where it has none', () => {
+    const node: any = makeNode();
+    const kp = node.children.find((c: any) => c.name === 'Kp');
+    kp.status = 'Modified';
+    const cfg = node.children.find((c: any) => c.name === 'cfg');
+    const rows = buildMatRowsPlanned(node, Infinity, new Map([[cfg, 'New']])).rows;
+    // Core says Kp was edited since the read; the file as saved says it holds what is shown.
+    expect(rows.find((r: any) => r.Name?.label === 'Kp').Status).toBe('');
+    expect(rows.find((r: any) => r.Name?.label === 'cfg').Status).toBe('New');
+    // Without an answer, core's own status, as the read-only view always showed.
+    expect(buildMatRows(node).find((r: any) => r.Name?.label === 'Kp').Status).toBe('Modified');
+  });
+
+  it('builds one variable as the whole build would, its own row first', () => {
+    const node: any = makeNode();
+    const cfg = node.children.find((c: any) => c.name === 'cfg');
+    const whole = buildMatRows(node).filter((r: any) => r.ID === cfg.id || r.parent === cfg.id);
+    expect(buildMatVariableRows(cfg)).toEqual(whole);
   });
 });

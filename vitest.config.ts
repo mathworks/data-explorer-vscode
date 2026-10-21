@@ -21,6 +21,9 @@ export default defineConfig({
         // webviewHtml→webviewShell).
         'src/host/BinaryEditorProvider.ts',
         'src/host/BinarySlddEditorProvider.ts',
+        'src/host/MatEditorProvider.ts',
+        // The vscode half of following a file on disk; the rules are diskConflict.ts.
+        'src/host/diskFollow.ts',
         'src/host/HealthDecorationProvider.ts',
         'src/host/PropertiesViewProvider.ts',
         'src/host/SectionsTreeProvider.ts',

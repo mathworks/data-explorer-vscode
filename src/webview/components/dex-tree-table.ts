@@ -1461,6 +1461,16 @@ export class DexTreeTable extends LitElement {
   // disabled button invites a click and explains nothing.
   @property({ type: Boolean }) canAdd = false;
 
+  // Whether the `+ Add` button adds at once instead of opening the gallery: a MAT-file's,
+  // whose one addition is a plain variable (setRows' `add: 'variable'`). The key that opens
+  // the gallery elsewhere (toggleAddGallery) adds here too, so the two stay one gesture.
+  @property({ type: Boolean }) addDirect = false;
+
+  // Whether a row can be dragged, or a dragged row let go over one. False where rows have no form
+  // to travel in (setRows' `clipboard: false`, a MAT-file): no row is draggable, and a drag from
+  // another table draws no drop target here.
+  @property({ type: Boolean }) rowDrag = true;
+
   get selectedRowId(): string {
     return this.selectedRowIds[this.selectedRowIds.length - 1] || '';
   }
@@ -2021,6 +2031,18 @@ export class DexTreeTable extends LitElement {
       return;
     }
     if (!this.canAdd) return;
+    if (this.addDirect) {
+      // No class to pick and no section to land in: the host adds the one thing it can, and
+      // then opens its name editor, as an unpinned tile click does.
+      this.dispatchEvent(
+        new CustomEvent('dex-add-entry', {
+          detail: { section: '', className: 'MatlabVariable', label: 'Variable', rename: true },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+      return;
+    }
     this._addGalleryOpen = true;
   }
 
@@ -2827,6 +2849,10 @@ export class DexTreeTable extends LitElement {
   }
 
   private _onRowDragStart(rowId: string, e: DragEvent): void {
+    if (!this.rowDrag) {
+      e.preventDefault();
+      return;
+    }
     // Section headers aren't draggable entries. If the grabbed row is a header,
     // there's nothing to drag; otherwise drag the multi-selection (when the
     // grabbed row is part of it) or just the grabbed row, minus any headers.
@@ -2890,6 +2916,11 @@ export class DexTreeTable extends LitElement {
   }
 
   private _onRowDragOver(rowId: string, e: DragEvent): void {
+    if (!this.rowDrag) {
+      // Not accepted (no preventDefault), and nothing drawn: no row of this table takes a drop.
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+      return;
+    }
     // Keep the floating affordance trailing the cursor even over the source row
     // (where the drop itself is a no-op) so the icon + name box never freezes.
     this._dropTooltipX = e.clientX;
@@ -3996,7 +4027,7 @@ export class DexTreeTable extends LitElement {
                         : 'drop-target-on'
                       : ''} ${isDropTarget && this._dropPosition === 'above' ? 'drop-target-above' : ''}"
                     data-row-id="${row.ID}"
-                    draggable="true"
+                    draggable=${this.rowDrag ? 'true' : 'false'}
                     @contextmenu=${(e: MouseEvent) => this._onRowContextMenu(row.ID, e)}
                     @dragstart=${(e: DragEvent) => this._onRowDragStart(row.ID, e)}
                     @dragend=${(e: DragEvent) => this._onRowDragEnd(e)}
@@ -4063,9 +4094,9 @@ export class DexTreeTable extends LitElement {
       <button
         type="button"
         class="add-button"
-        title="Add an entry"
-        aria-haspopup="dialog"
-        aria-expanded=${this._addGalleryOpen}
+        title=${this.addDirect ? 'Add a variable' : 'Add an entry'}
+        aria-haspopup=${this.addDirect ? nothing : 'dialog'}
+        aria-expanded=${this.addDirect ? nothing : this._addGalleryOpen}
         @click=${(e: MouseEvent) => this._onAddButtonClick(e)}
       >
         <!-- A drawn plus, not the ⊞ this shipped with: at 12px that glyph is a small

@@ -1,14 +1,14 @@
 // Copyright 2026 The MathWorks, Inc.
 //
-// How the writable binary .sldd view tells that its file changed on disk, and whether it
-// is holding unsaved edits when that happens. The VS Code half — the watcher, the save that
-// refuses, the prompt — is in BinarySlddEditorProvider. This half has no `vscode` import, so
-// vitest can test it (test/diskConflict.test.ts).
+// How the writable byte-backed views (the binary .sldd and the MAT-file) tell that their
+// file changed on disk, and whether they are holding unsaved edits when that happens. The
+// VS Code half — the watcher, the save that refuses, the prompt — is in diskFollow.ts. This
+// half has no `vscode` import, so vitest can test it (test/diskConflict.test.ts).
 //
-// The rule is "follow VS Code", meaning what VS Code does for a text file (V-071, decided
-// 2026-10-15). The JSON .sldd view gets that for free: it is a CustomTextEditorProvider,
-// backed by VS Code's own TextDocument. The binary view is a plain CustomEditorProvider,
-// and VS Code does neither half for one of those. It never tells a custom editor that its
+// The rule is "follow VS Code", meaning what VS Code does for a text file. The JSON .sldd
+// view gets that for free: it is a CustomTextEditorProvider, backed by VS Code's own
+// TextDocument. The byte-backed views are plain CustomEditorProviders, and VS Code does
+// neither half for one of those. It never tells a custom editor that its
 // file moved, and it never checks the disk before the custom editor's save writes. So:
 //
 //   - outside change, no unsaved edits: reload from disk, silently;
@@ -38,12 +38,11 @@ export interface DiskStamp {
  *  - `recorded` undefined: the view never managed to stat the file, so there is nothing to
  *    compare with. Refusing every save forever would be the only other answer.
  *
- * Either number moving counts as a change. That is the ruling's own wording ("mtime+size
- * differ"), and it is STRICTER than VS Code. VS Code's `validateWriteFile` refuses only when
+ * Either number moving counts as a change, which is STRICTER than VS Code. VS Code's `validateWriteFile` refuses only when
  * the mtime on disk is LATER and the size differs, and then still writes if the bytes on disk
  * equal the bytes it is about to write. So VS Code misses a rewrite to the same size and a
  * rewrite with an older mtime (`tar -xp`). This check catches both. It refuses in every case
- * VS Code refuses, so following the ruling never lets through a write VS Code would block.
+ * VS Code refuses, so it never lets through a write VS Code would block.
  *
  * Neither check can see a rewrite that keeps both numbers (`unzip -o` of the same revision, or
  * two writes of equal size in one tick on a coarse-mtime mount). VS Code has the same blind

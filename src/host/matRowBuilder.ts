@@ -18,6 +18,13 @@ export interface MatRows {
 }
 
 /**
+ * How each variable differs from the file as last saved, for the Status column of the editable
+ * view (saveMarks.ts): by node, because two variables of a file can share a name. Absent, a row
+ * shows core's own status, as the read-only view always has.
+ */
+export type SavedStatus = ReadonlyMap<unknown, string>;
+
+/**
  * Rows for everything under `node`, within `budget`.
  *
  * The whole builder. A `.mat`'s variables ARE its root node's children and a
@@ -27,25 +34,72 @@ export interface MatRows {
  * The node's own row is never emitted: at the top there is nothing to show for the
  * file itself, and on an expansion the table already holds the row that was clicked.
  */
-export function buildMatRowsPlanned(node: any, budget: number = Infinity): MatRows {
+export function buildMatRowsPlanned(node: any, budget: number = Infinity, saved?: SavedStatus): MatRows {
+  return plannedRows((node?.children ?? []) as any[], budget, saved);
+}
+
+/**
+ * The rows of ONE variable, its own row first, within `budget`: what the editable view repaints
+ * after an edit of that variable, spliced over the run the table holds (`updateEntryRows`). The
+ * same walk as the payload's, from the variable instead of from the file, so a repainted
+ * variable's rows are the rows the next whole payload would hold for it.
+ */
+export function buildMatVariableRows(variable: any, budget: number = Infinity, saved?: SavedStatus): any[] {
+  return plannedRows([variable], budget, saved).rows;
+}
+
+function plannedRows(roots: any[], budget: number, saved: SavedStatus | undefined): MatRows {
   const rows: any[] = [];
-  // One cell pool per build, on the same terms as buildRows' — see the note there. This
-  // builder has no partial-repaint caller, so it owns its pool outright rather than taking
-  // one: every call materializes the whole table.
+  // One cell pool per build, on the same terms as buildRows' — see the note there. A pool per
+  // call, the repaint of one variable included: one that outlived the call would pin the cells
+  // of every build it had shared.
   const pool = new RowCellPool();
-  const plan = planRows((node?.children ?? []) as any[], budget);
+  const plan = planRows(roots, budget);
   for (const { node: n, deferred } of plan.planned) {
-    let row: any;
+    let built: any;
     try {
-      row = n.toRow();
+      built = n.toRow();
     } catch {
       continue;
     }
+    if (!built) continue;
+    // One copy, which the stamps below may then write: toRow's object is the node's.
+    const row = { ...built, ...capabilityFlags(n) };
+    // Core's status says "edited since the file was read", and stays so through a save (it is
+    // what makes the next save write the variable fresh); the editable view's column says
+    // "differs from the file on disk", which is the caller's answer. A variable's own row only:
+    // core marks nothing under one.
+    if (saved && n.isEntry) row.Status = saved.get(n) ?? '';
     // Same grid-view stamp as the sldd/slx builder — see test/matrixStamp.test.ts,
     // which asserts the rule against both builders so they cannot drift.
-    if (row) rows.push(pool.share(stampLazy(stampMatrix(row, n), deferred)));
+    rows.push(pool.share(stampLazy(stampMatrix(row, n), deferred)));
   }
   return { rows, plan };
+}
+
+/**
+ * The context-menu flags of a MAT-file's row, as rowBuilder stamps a dictionary's: what the
+ * webview, which holds no model, builds its menu from. Core answers both from what a save of the
+ * file can write (MatNode._editRefusal), so a Delete or an Add Child the menu offers is one the
+ * save keeps. A variable is removable from its file, and anything under one from its parent if
+ * the parent says so. Never copyable: a MAT-file's value has no dictionary entry to travel as,
+ * and the editable view offers no clipboard (`clipboard: false` on its setRows).
+ *
+ * On every row, a read-only file's too: the MAT-file editor is the only view that builds these
+ * rows, and one that shows a file read-only shows no menu, so the flags there cost a few bytes a
+ * row and are read by nothing. A check that throws offers nothing, and the row still shows.
+ */
+function capabilityFlags(n: any): { _canCopy: boolean; _canDelete: boolean; _canAddChild: boolean } {
+  let canDelete = false;
+  let canAddChild = false;
+  try {
+    const parent = n.parent;
+    canDelete = !!n.isEntry || !!(parent && typeof parent.canRemoveChild === 'function' && parent.canRemoveChild());
+    canAddChild = typeof n.canAddChild === 'function' && !!n.canAddChild();
+  } catch {
+    /* offered nothing */
+  }
+  return { _canCopy: false, _canDelete: canDelete, _canAddChild: canAddChild };
 }
 
 /** The rows alone, for every caller that cannot answer a fetch and so passes no budget. */
