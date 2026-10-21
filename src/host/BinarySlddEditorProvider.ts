@@ -124,16 +124,8 @@ import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { answerMatrixRequest } from './matrixRequest.js';
 import { binaryEditSrcId } from '../common/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
-import {
-  changedOnDisk,
-  checksSaveConflicts,
-  conflictMessage,
-  promptsForConflict,
-  EditStackMirror,
-  OVERWRITE,
-  REVERT,
-  type DiskStamp,
-} from './diskConflict.js';
+import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
+import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, type FollowedDocument } from './diskFollow.js';
 
 // viewType of the default byte-backed view (BinaryEditorProvider), which owns the rule
 // that picks an editor from a .sldd's bytes. A constant here rather than an import,
@@ -218,16 +210,6 @@ function passThroughParts(zip: Record<string, Uint8Array>): Record<string, Uint8
   return parts;
 }
 
-/** The file's mtime+size as VS Code reports them, or `undefined` if it cannot be stat'd (gone). */
-async function stampOf(uri: vscode.Uri): Promise<DiskStamp | undefined> {
-  try {
-    const stat = await vscode.workspace.fs.stat(uri);
-    return { mtime: stat.mtime, size: stat.size };
-  } catch {
-    return undefined;
-  }
-}
-
 /**
  * One read of the file behind a document, with the stamp it was read under.
  *
@@ -246,13 +228,6 @@ async function readDisk(uri: vscode.Uri): Promise<DiskRead> {
   const bytes = await vscode.workspace.fs.readFile(uri);
   return { stamp, zip: unzipSync(bytes) };
 }
-
-/**
- * How long the watcher waits for a burst of events to stop. One outside save can raise
- * several (write a temporary file and rename it over, or truncate and then write), and each
- * reload re-parses the whole dictionary.
- */
-const DISK_EVENT_SETTLE_MS = 100;
 
 const recordName = (record: EntryRecord): string => String(record.name ?? '');
 const recordUuid = (record: EntryRecord): string | undefined => {
@@ -322,7 +297,7 @@ function cutFragments(chunk: string, ops: EntryOp[]): void {
   }
 }
 
-class BinarySlddDocument implements vscode.CustomDocument {
+class BinarySlddDocument implements vscode.CustomDocument, FollowedDocument {
   chunkXml: string;
   readonly zipMeta: Record<string, Uint8Array>;
 
@@ -682,71 +657,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   }
 
   /**
-   * Follow the file on disk, the way VS Code follows a text file it has open. One watcher
-   * per DOCUMENT, not per view, because what it changes is the document.
-   *
-   * The pattern is the read-only view's (BinaryEditorProvider): the file's own name in its
-   * own directory. That also works for a file outside every workspace folder, which a
-   * workspace-wide watcher would not see. `onDidCreate` as well as `onDidChange`, because a
-   * writer that saves through a temporary file and renames it over this one shows up as a
-   * create. `onDidDelete` is left out on purpose: VS Code keeps a text editor open on a
-   * deleted file, with its contents, and a save recreates the file.
+   * Follow the file on disk, the way VS Code follows a text file it has open (diskFollow.ts,
+   * shared with the MAT-file editor): reload a clean document from what the disk now holds,
+   * through the same `applyDisk` a revert uses, and leave unsaved edits alone.
    */
   private watchDisk(document: BinarySlddDocument): vscode.Disposable {
-    const watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(vscode.Uri.joinPath(document.uri, '..'), basename(document.uri.path)),
-    );
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let following = false;
-    const schedule = () => {
-      if (timer !== undefined) clearTimeout(timer);
-      timer = setTimeout(() => void settled(), DISK_EVENT_SETTLE_MS);
-    };
-    const settled = async () => {
-      timer = undefined;
-      // A save in flight is about to record the stamp of its own write. Reading the disk
-      // before then would take the view's own write for an outside one, so wait it out.
-      // The same goes for a reload that is still running.
-      if (document.saving || following) return schedule();
-      following = true;
-      try {
-        await this.followDisk(document);
-      } catch {
-        // Nothing that failed here changed the document. The stamp has not moved either, so
-        // if the disk really did change, the next save asks.
-      } finally {
-        following = false;
-      }
-    };
-    const subs = [watcher, watcher.onDidChange(schedule), watcher.onDidCreate(schedule)];
-    return {
-      dispose: () => {
-        if (timer !== undefined) clearTimeout(timer);
-        for (const s of subs) s.dispose();
-      },
-    };
-  }
-
-  /**
-   * An event said the file may have changed. Do what VS Code does for a text file.
-   *
-   *  - The disk still matches the stamp: nothing changed. This is also how the view's own
-   *    save is ignored: it recorded the stamp of what it wrote. A file that is gone is
-   *    treated the same way (see `changedOnDisk`).
-   *  - Changed, unsaved edits: nothing. The edits stay, and the next save asks.
-   *  - Changed, no unsaved edits: reload, silently, through the same `applyDisk` a revert
-   *    uses.
-   *
-   * Dirtiness is checked again after the read, because an edit can land while the file is
-   * being read. Reloading over it would discard an edit VS Code already counts as unsaved.
-   */
-  private async followDisk(document: BinarySlddDocument): Promise<void> {
-    if (document.disposed) return;
-    if (!changedOnDisk(document.stamp, await stampOf(document.uri))) return;
-    if (document.edits.dirty) return;
-    const read = await readDisk(document.uri);
-    if (document.disposed || document.saving || document.edits.dirty) return;
-    document.applyDisk(read);
+    return watchDisk(document, () => followDisk(document, () => readDisk(document.uri), (read) => document.applyDisk(read)));
   }
 
   async resolveCustomEditor(
@@ -1691,7 +1607,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     const edited = document.edited;
     const unchecked = document.unchecked;
     try {
-      const writing = this.writeTo(document, document.uri, 'save', () => this.refuseIfChangedOnDisk(document));
+      const writing = this.writeTo(document, document.uri, 'save', () =>
+        refuseIfChangedOnDisk(document, BinarySlddEditorProvider.viewType, (m) => this.askSaveConflict(m)),
+      );
       document.edited = new Set();
       document.unchecked = new Map();
       gated = await writing;
@@ -1738,95 +1656,6 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     document.inConflict = false;
     document.overwriteStamp = undefined;
     document.applyDisk(await readDisk(document.uri));
-  }
-
-  /**
-   * The disk check a save makes before it writes, run between the gate and the write.
-   *
-   * If the file's mtime+size are no longer the ones this view last loaded, reverted to or
-   * wrote, the save fails, as VS Code's does for a text file. The rejection is a
-   * CancellationError on purpose. VS Code's save command shows its own "Failed to save" for
-   * any other error, with Retry and Revert, and Retry would only fail again. It shows nothing
-   * for a cancellation. The prompt shown instead is VS Code's own wording, with VS Code's two
-   * answers. VS Code keeps the document dirty, so the edits stay.
-   *
-   * No check when `files.saveConflictResolution` is `overwriteFileOnDisk`, read for this
-   * file as VS Code reads it. No check either when the user has already answered Overwrite
-   * for exactly this version of the outside file.
-   */
-  private async refuseIfChangedOnDisk(document: BinarySlddDocument): Promise<void> {
-    const files = vscode.workspace.getConfiguration('files', document.uri);
-    if (!checksSaveConflicts(files.get('saveConflictResolution'))) return;
-    const now = await stampOf(document.uri);
-    if (!changedOnDisk(document.stamp, now)) return;
-    if (document.overwriteStamp && !changedOnDisk(document.overwriteStamp, now)) return;
-    const ask = promptsForConflict({
-      promptOpen: document.conflictPromptOpen,
-      inConflict: document.inConflict,
-      autoSave: files.get('autoSave'),
-    });
-    document.inConflict = true;
-    if (ask) void this.askAboutConflict(document, now);
-    throw new vscode.CancellationError();
-  }
-
-  /**
-   * Show the prompt, and carry out the answer.
-   *
-   *  - Overwrite: save again, through VS Code (`workspace.save`), so that VS Code clears the
-   *    dirty flag. The save writes without asking because the user has accepted overwriting
-   *    `seen`, the version they were asked about. If the file has changed again since then,
-   *    the save asks about the new version.
-   *  - Revert: VS Code's own revert, which discards the edits from VS Code's stack and marks
-   *    the document clean, then calls `revertCustomDocument` to reload. Calling that method
-   *    directly would reload the content and leave VS Code showing the document as dirty.
-   *  - Dismissed: nothing. The conflict stands until a save or a revert resolves it.
-   *
-   * An answer that arrives after the conflict was already resolved some other way (a revert
-   * from the menu, or a reload) is ignored.
-   */
-  private async askAboutConflict(document: BinarySlddDocument, seen: DiskStamp | undefined): Promise<void> {
-    document.conflictPromptOpen = true;
-    let answer: string | undefined;
-    try {
-      answer = await this.askSaveConflict(conflictMessage(document.metaPath));
-    } finally {
-      document.conflictPromptOpen = false;
-    }
-    if (document.disposed || !document.inConflict) return;
-    if (answer === OVERWRITE) {
-      document.overwriteStamp = seen;
-      await vscode.workspace.save(document.uri);
-    } else if (answer === REVERT) {
-      await this.revertInVsCode(document);
-    }
-  }
-
-  /**
-   * Run VS Code's revert on this document. `workbench.action.files.revert` reverts the
-   * active editor and takes no resource, so this document's tab is made active first, in
-   * the group it is already in. Without that, `openWith` would open a second tab in the
-   * active group. VS Code's revert covers the whole document whichever of its tabs is
-   * active.
-   */
-  private async revertInVsCode(document: BinarySlddDocument): Promise<void> {
-    const uri = document.uri.toString();
-    for (const group of vscode.window.tabGroups.all) {
-      const tab = group.tabs.find(
-        (t) =>
-          t.input instanceof vscode.TabInputCustom &&
-          t.input.viewType === BinarySlddEditorProvider.viewType &&
-          t.input.uri.toString() === uri,
-      );
-      if (!tab) continue;
-      await vscode.commands.executeCommand('vscode.openWith', document.uri, BinarySlddEditorProvider.viewType, {
-        viewColumn: group.viewColumn,
-        preserveFocus: false,
-        preview: tab.isPreview,
-      });
-      await vscode.commands.executeCommand('workbench.action.files.revert');
-      return;
-    }
   }
 
   async backupCustomDocument(
