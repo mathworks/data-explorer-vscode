@@ -18,7 +18,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import './dex-icon.js';
-import { ADD_CATALOG, SECTION_LABEL, badgeOf, labelLinesOf } from '../../common/addCatalog.js';
+import { ADD_CATALOG, SECTION_LABEL, badgeOf, labelLinesOf, matCatalog } from '../../common/addCatalog.js';
 import type { GalleryCategory, GalleryTile } from '../../common/addCatalog.js';
 
 /**
@@ -449,6 +449,13 @@ export class DexAddGallery extends LitElement {
   @property({ type: Boolean }) pinned = false;
 
   /**
+   * The classes a MAT-file can take a new variable of, as its host says core lists them, or null
+   * for a dictionary's gallery. Given, the tiles are those classes' (matCatalog): a MAT-file has
+   * no sections, so no tile names one, and nothing is offered that the file cannot take.
+   */
+  @property({ attribute: false }) classes: readonly string[] | null = null;
+
+  /**
    * Which tile is the grid's one tab stop — the roving tabindex.
    *
    * 28 tiles were 28 tab stops, so reaching Configurations from the keyboard cost 20-odd
@@ -569,7 +576,7 @@ export class DexAddGallery extends LitElement {
   private _onTile(tile: GalleryTile): void {
     this.dispatchEvent(
       new CustomEvent('dex-add-tile', {
-        detail: { className: tile.className, section: tile.section, label: tile.label },
+        detail: { className: tile.className, section: this.classes ? '' : tile.section, label: tile.label },
         bubbles: true,
         composed: true,
       }),
@@ -624,7 +631,7 @@ export class DexAddGallery extends LitElement {
     // disagree with the DOM order it names.
     let index = 0;
     return html`
-      <div role="dialog" aria-label="Add an entry" @keydown=${this._onKeyDown} @focusin=${this._onFocusIn}>
+      <div role="dialog" aria-label=${this.classes ? 'Add a variable' : 'Add an entry'} @keydown=${this._onKeyDown} @focusin=${this._onFocusIn}>
         <div class="gallery-header">
           <span class="gallery-title">Add</span>
           <label
@@ -639,7 +646,7 @@ export class DexAddGallery extends LitElement {
             Keep open
           </label>
         </div>
-        ${ADD_CATALOG.map(
+        ${(this.classes ? matCatalog(this.classes) : ADD_CATALOG).map(
           (category) => html`
             <div class="kind-header">
               <span class="kind-name">${category.title}</span>
@@ -654,11 +661,12 @@ export class DexAddGallery extends LitElement {
   }
 
   private _renderTile(category: GalleryCategory, tile: GalleryTile, index: number) {
-    const badge = badgeOf(category, tile);
+    // A MAT-file's tiles name no destination: the file is the only one.
+    const badge = this.classes ? null : badgeOf(category, tile);
     // The accessible name has to carry the destination whether or not a badge does:
     // a screen reader gets no heading context from a button inside a group, and the
     // destination is the one thing about a tile that is not in its label.
-    const description = `Add ${tile.label} to ${SECTION_LABEL[tile.section]}`;
+    const description = this.classes ? `Add ${tile.label}` : `Add ${tile.label} to ${SECTION_LABEL[tile.section]}`;
     return html`
       <button
         type="button"

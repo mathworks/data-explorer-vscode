@@ -69,11 +69,11 @@ export interface SetRowsMessage {
    */
   hasTextView?: boolean;
   /**
-   * What the Add button (and its key) creates. Absent: an entry of the class the user picks
-   * in the gallery, a dictionary's. `'variable'`: one plain variable, at once, with its name
-   * editor open, a MAT-file's, whose Add (core's) makes `var` = 0 and nothing else.
+   * What the Add gallery offers. Absent: every tile, a dictionary's, each naming its section.
+   * `{classes}`: a MAT-file's, the tiles of the classes core says the file can take a new
+   * variable of (MatNode.getAllowedTypes), in no section.
    */
-  add?: 'variable';
+  add?: { classes: readonly string[] };
   /**
    * Whether rows can be copied, cut, pasted and dragged. Absent is true. False for a
    * MAT-file, whose variables have no dictionary entry form to travel as: the menu leaves

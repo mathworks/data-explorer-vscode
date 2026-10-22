@@ -216,6 +216,45 @@ export const OMITTED: readonly { className: string; section: string; why: string
   },
 ];
 
+/**
+ * Tiles only a MAT-file's gallery offers, each with the category it joins there. A `string` is a
+ * MATLAB value a MAT-file holds and a dictionary does not (no section admits one), so it has no
+ * place in ADD_CATALOG, which is every dictionary's gallery as it is.
+ */
+export const MAT_ONLY_TILES: readonly { category: string; after: string; tile: GalleryTile }[] = [
+  {
+    category: 'Parameters',
+    after: 'MatlabStruct',
+    tile: { label: 'MATLAB String', className: 'string', section: 'design', iconId: 'wsString' },
+  },
+];
+
+/**
+ * A MAT-file's gallery: the tiles of `classes`, the classes core says the file can take a new
+ * variable of (MatNode.getAllowedTypes), and no other. A MAT-file has no sections, so a class is
+ * offered once, by its Design Data tile; the Architectural Data tiles of the same classes, and
+ * every class core does not list (an enumeration, the variants, a configuration set), are left
+ * out, and so is a category none of whose tiles is left. The `.mat`-only tiles join where
+ * MAT_ONLY_TILES says. Every category left is Design Data's alone, so no tile is badged.
+ */
+export function matCatalog(classes: readonly string[]): GalleryCategory[] {
+  const offered = new Set(classes);
+  const out: GalleryCategory[] = [];
+  for (const c of ADD_CATALOG) {
+    const tiles: GalleryTile[] = [];
+    for (const t of c.tiles) {
+      if (t.section === 'design' && offered.has(t.className)) tiles.push(t);
+      for (const extra of MAT_ONLY_TILES) {
+        if (extra.category === c.title && extra.after === t.className && t.section === 'design' && offered.has(extra.tile.className)) {
+          tiles.push(extra.tile);
+        }
+      }
+    }
+    if (tiles.length > 0) out.push(category(c.title, tiles));
+  }
+  return out;
+}
+
 /** Every tile, flat, in display order — the order a keyboard walk follows. */
 export function allTiles(): GalleryTile[] {
   return ADD_CATALOG.flatMap((c) => c.tiles as GalleryTile[]);

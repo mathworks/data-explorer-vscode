@@ -479,6 +479,19 @@ function backupSource(id: string): { uri: vscode.Uri; stamp: DiskStamp | undefin
   return { uri: vscode.Uri.parse(id), stamp: undefined };
 }
 
+/**
+ * The classes `mat` can take a new variable of, as core lists them (MatNode.getAllowedTypes): a
+ * plain variable and a struct, and the classes of MATLAB's own default objects where the file's
+ * objects can be added to. A core without the list adds a plain variable only, as it always has.
+ */
+function allowedClasses(mat: any): readonly string[] {
+  if (typeof mat?.getAllowedTypes !== 'function') return ['MatlabVariable'];
+  const classes = mat.getAllowedTypes();
+  return Array.isArray(classes) ? classes.filter((c: unknown): c is string => typeof c === 'string') : [];
+}
+
+const sameList = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
+
 export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocument> {
   public static readonly viewType = 'dataExplorer.matView';
 
@@ -559,6 +572,12 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       return { planned, version: document.version };
     };
 
+    // The classes the gallery was last told the file can take a new variable of. Core's answer
+    // (MatNode.getAllowedTypes) can change with the file — a reload, a subsystem a save no longer
+    // writes as read — so a gesture that changes it repaints the whole table, which tells the
+    // gallery again (gesture, below).
+    let lastClasses: readonly string[] = [];
+
     const post = async (): Promise<void> => {
       let mat: any;
       try {
@@ -592,8 +611,8 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
             columnGroups: COLUMN_GROUPS,
             editable: !notice,
             notice,
-            // A MAT-file adds a variable, not an entry of a class picked from the gallery.
-            add: 'variable',
+            // The gallery offers the classes core says this file can take a new variable of.
+            add: { classes: lastClasses = allowedClasses(mat) },
             // Nor does it copy, cut, paste or drag one: a variable has no dictionary entry form.
             clipboard: false,
             warnings: document.describeBanner(lazyRowsBanner(built.planned.plan, warningBanner(sourceWarnings(mat)))),
@@ -657,6 +676,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
         return null;
       }
       document.repaint(observed);
+      if (!sameList(allowedClasses(mat), lastClasses)) void post();
       return observed;
     };
 
@@ -742,17 +762,27 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       if (landing && !doomed.has(landing)) webview.postMessage({ type: 'selectRows', rowIds: [landing.id] });
     };
 
-    // Add one variable: core names it `var` (then `var1`, …) and makes it the double 0, the only
-    // value a MAT-file's Add takes. Then its name editor, as the gallery's add opens it.
-    const applyAddEntry = (msg: { rename: boolean }) => {
+    // Add one variable of the class the gallery's tile names: core's addEntry, which names it (the
+    // class's own default name, `var` for a plain variable, with a counter where it is taken) and
+    // makes MATLAB's default value of it — the double 0, a struct of no field, or MATLAB's own
+    // default object of a Simulink class or a `string`. Then its name editor, unless the gallery is
+    // pinned. A class core does not list for this file is refused here as core would refuse it.
+    const applyAddEntry = (msg: { className?: string; rename: boolean }) => {
+      const className = msg.className || 'MatlabVariable';
       let added: any = null;
+      let offered = true;
       const observed = gesture('Add', (mat) => {
+        offered = allowedClasses(mat).includes(className);
+        if (!offered) return;
         DataModel.setActiveContext(mat);
-        added = DataModel.addEntry('', 'MatlabVariable');
+        added = DataModel.addEntry('', className);
       });
       if (!observed) return;
       if (!added) {
-        webview.postMessage({ type: 'error', message: `Could not add a variable to ${name}.` });
+        webview.postMessage({
+          type: 'error',
+          message: offered ? `Could not add a ${className} to ${name}.` : `${name} cannot take a new ${className}.`,
+        });
         return;
       }
       webview.postMessage({ type: 'selectRows', rowIds: [added.id] });

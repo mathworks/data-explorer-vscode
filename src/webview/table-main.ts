@@ -403,8 +403,8 @@ window.addEventListener('message', (event: MessageEvent) => {
     // condition the context menu is gated on — the editable views. A read-only view gets
     // no button rather than a dead one.
     table.canAdd = editable;
-    // A MAT-file's Add makes one variable, so its button adds rather than opens the gallery.
-    table.addDirect = msg.add === 'variable';
+    // A MAT-file's gallery offers the classes its host lists, a dictionary's every tile.
+    table.addClasses = msg.add && Array.isArray(msg.add.classes) ? msg.add.classes.filter((c) => typeof c === 'string') : null;
     table.columns = msg.columns ?? null;
     table.columnLabels = msg.columnLabels ?? null;
     table.columnGroups = (msg.columnGroups as Record<string, string> | undefined) ?? null;

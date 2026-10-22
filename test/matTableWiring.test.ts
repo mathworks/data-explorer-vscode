@@ -4,14 +4,21 @@
 // The MAT-file editor's two departures from a dictionary's table, through the webview entry
 // point as it ships (table-main.ts), as addEntryWiring.test.ts drives the gallery's:
 //
-//  - `add: 'variable'`: the Add button and its key add one variable at once, `var` = 0 in core,
-//    with its name editor asked for, and open no gallery of dictionary classes;
+//  - `add: {classes}`: the Add button and its key open a gallery of the classes the host says the
+//    file can take a new variable of (core's MatNode.getAllowedTypes), and a tile asks for one of
+//    that class, in no section, with its name editor asked for;
 //  - `clipboard: false`: the copy, cut and paste chords and a row drag send nothing, since a
 //    variable has no dictionary entry form to travel as. Delete still goes.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import '../src/webview/components/dex-add-gallery.js';
+import { allTiles } from '../src/common/addCatalog.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+// What a host says a MAT-file takes: a subset, in core's order, so the gallery's order is the
+// catalog's and not this list's (the String tile follows the Structure, its catalog place).
+const CLASSES = ['Simulink.Bus', 'string', 'MatlabVariable', 'Simulink.Parameter', 'MatlabStruct'];
+const IN_CATALOG_ORDER = ['MatlabVariable', 'MatlabStruct', 'string', 'Simulink.Parameter', 'Simulink.Bus'];
 
 const rowsOf = () => [
   { ID: 'm/x', parent: null, Name: { label: 'x', editable: true }, Value: '1', _canDelete: true, _canCopy: false },
@@ -40,7 +47,7 @@ describe('the MAT-file table, wired through the webview entry point', () => {
           columns: ['Name', 'Value'],
           columnLabels: { Name: 'Name', Value: 'Value' },
           editable: true,
-          add: 'variable',
+          add: { classes: CLASSES },
           clipboard: false,
         },
       }),
@@ -53,21 +60,52 @@ describe('the MAT-file table, wired through the webview entry point', () => {
   const popover = () => table.shadowRoot.querySelector('dex-add-gallery');
   const addsOf = () => posted.filter((m) => m.type === 'addEntry');
 
-  it('the Add button adds a variable at once and opens no gallery', async () => {
+  const tilesOf = (): HTMLElement[] => [...popover().shadowRoot.querySelectorAll('.tile')] as HTMLElement[];
+  const closeGallery = async () => {
+    if (popover()) table.toggleAddGallery();
+    await table.updateComplete;
+  };
+
+  it("the Add button opens a gallery of the file's classes, and a tile asks for one, in no section", async () => {
+    await closeGallery();
     const button = table.shadowRoot.querySelector('.add-button') as HTMLElement;
     expect(button.getAttribute('title')).toBe('Add a variable');
-    expect(button.hasAttribute('aria-haspopup')).toBe(false);
+    expect(button.getAttribute('aria-haspopup')).toBe('dialog');
     button.click();
     await table.updateComplete;
-    expect(popover()).toBeNull();
-    expect(addsOf()).toEqual([{ type: 'addEntry', section: '', className: 'MatlabVariable', rename: true }]);
+    await popover().updateComplete;
+    expect(tilesOf().map((t) => t.dataset.className)).toEqual(IN_CATALOG_ORDER);
+    expect(tilesOf().map((t) => t.getAttribute('aria-label'))).toEqual(['Add MATLAB Variable', 'Add MATLAB Structure', 'Add MATLAB String', 'Add Simulink Parameter', 'Add Simulink Bus']);
+    expect(popover().shadowRoot.querySelectorAll('.tile-badge').length).toBe(0);
+    tilesOf()[3].click();
+    await table.updateComplete;
+    expect(addsOf()).toEqual([{ type: 'addEntry', section: '', className: 'Simulink.Parameter', rename: true }]);
+    expect(popover(), 'an unpinned add closes the gallery').toBeNull();
   });
 
-  it('the Add key does the same', async () => {
+  it('the Add key opens the same gallery', async () => {
+    await closeGallery();
     window.dispatchEvent(new MessageEvent('message', { data: { type: 'openAddGallery' } }));
     await table.updateComplete;
-    expect(popover()).toBeNull();
-    expect(addsOf()).toEqual([{ type: 'addEntry', section: '', className: 'MatlabVariable', rename: true }]);
+    await popover().updateComplete;
+    expect(tilesOf().map((t) => t.dataset.className)).toEqual(IN_CATALOG_ORDER);
+    expect(addsOf()).toEqual([]);
+    await closeGallery();
+  });
+
+  it("a dictionary's table, told no classes, offers its whole gallery again", async () => {
+    await closeGallery();
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'setRows', docUri: 'file:///fx/d.sldd', rows: rowsOf(), columns: ['Name', 'Value'], columnLabels: {}, editable: true },
+      }),
+    );
+    await table.updateComplete;
+    table.toggleAddGallery();
+    await table.updateComplete;
+    await popover().updateComplete;
+    expect(tilesOf().map((t) => `${t.dataset.section} ${t.dataset.className}`)).toEqual(allTiles().map((t) => `${t.section} ${t.className}`));
+    await closeGallery();
   });
 
   it('copy, cut and paste chords send nothing; Delete still goes', async () => {
