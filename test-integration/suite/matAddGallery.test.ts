@@ -467,6 +467,10 @@ suite('MAT-file editor: the Add gallery', () => {
     assert.strictEqual(editable('wordLength'), false, 'derived while the mode is Double');
     provider.editFromInspector(uri, id, 'dataTypeMode', 'Fixed-point: binary point scaling', 'Double');
     assert.strictEqual(editable('wordLength'), true);
+    // The edit is named as the inspector names the property, not by its key.
+    const label = (DataModel as any).findNodeById(id).toPIObject().propertySheet.properties.find((p: any) => p.name === 'dataTypeMode').displayName;
+    assert.strictEqual((o.events[1] as any).label, `Edit ${label}`);
+    assert.ok(!/dataTypeMode/.test((o.events[1] as any).label));
     assert.strictEqual(piValue(id, 'wordLength'), '16', "the mode's own word length");
     provider.editFromInspector(uri, id, 'fractionLength', '4', '0');
     assert.strictEqual(piValue(id, 'slope'), '0.0625', 'the slope follows the fraction length');

@@ -12,7 +12,7 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DataModel } from 'data-explorer-core';
+import { DataModel, MAT_CREATABLE_CLASSES } from 'data-explorer-core';
 import { ADD_CATALOG, MAT_ONLY_TILES, allTiles, matCatalog } from '../src/common/addCatalog.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -102,6 +102,20 @@ describe('the MAT-file gallery agrees with core', () => {
       }
     });
   }
+});
+
+describe("core's list of what an Add creates in a MAT-file", () => {
+  it('has a tile for every class in it, so the gallery can offer each where a file takes it', () => {
+    const offered = matCatalog(['MatlabVariable', 'MatlabStruct', ...MAT_CREATABLE_CLASSES]).flatMap((c) => c.tiles).map((t) => t.className);
+    expect([...offered].sort()).toEqual(['MatlabVariable', 'MatlabStruct', ...MAT_CREATABLE_CLASSES].sort());
+  });
+
+  it('bounds what any file is told it can take: a plain variable, a struct, and those classes', () => {
+    const bound = new Set(['MatlabVariable', 'MatlabStruct', ...MAT_CREATABLE_CLASSES]);
+    for (const file of Object.keys(FILES)) {
+      expect(withMat(file, (mat) => mat.getAllowedTypes()).filter((c: string) => !bound.has(c)), file).toEqual([]);
+    }
+  });
 });
 
 describe('matCatalog', () => {

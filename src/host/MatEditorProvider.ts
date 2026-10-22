@@ -57,6 +57,7 @@ import { binaryEditSrcId } from '../common/srcId.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
+import { matCatalog } from '../common/addCatalog.js';
 
 /** One read of the file behind a document, with the stamp it was read under (stat first). */
 interface DiskRead {
@@ -497,6 +498,21 @@ function allowedClasses(mat: any): readonly string[] {
   return Array.isArray(classes) ? classes.filter((c: unknown): c is string => typeof c === 'string') : [];
 }
 
+/** The label the gallery's tile of `className` shows ('MATLAB Structure'), or the class itself. */
+function tileLabelOf(className: string): string {
+  return matCatalog([className]).flatMap((c) => c.tiles).find((t) => t.className === className)?.label ?? className;
+}
+
+/** The label the inspector shows property `key` of `node` by, or the key where it shows none. */
+function inspectorLabelOf(node: any, key: string): string {
+  try {
+    const prop = node?.toPIObject?.()?.propertySheet?.properties?.find((p: any) => p.name === key);
+    return typeof prop?.displayName === 'string' && prop.displayName !== '' ? prop.displayName : key;
+  } catch {
+    return key;
+  }
+}
+
 const sameList = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
 
 export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocument> {
@@ -735,8 +751,10 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     const applyInspectorEdit: InspectorEdit = (nodeId, propName, newValue, oldValue) => {
       const node = findNode(nodeId);
       if (!node) return { refused: 'Could not locate the item in the model.' };
+      // What the user knows the property as: the inspector's label for it ('Word Length'), not its key.
+      const label = inspectorLabelOf(node, propName);
       let result: unknown;
-      const observed = gesture('Edit ' + propName, (mat) => {
+      const observed = gesture('Edit ' + label, (mat) => {
         DataModel.setActive(mat, node);
         result = DataModel.editProperty(node.id, propName, newValue, oldValue);
       });
@@ -751,7 +769,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
         }
         return { refused: document.describe(refused.reason) };
       }
-      if (refused === false) return { refused: `Could not edit ${propName} of this item.` };
+      if (refused === false) return { refused: `Could not edit ${label} of this item.` };
       if (propName === 'Name') webview.postMessage({ type: 'selectRows', rowIds: [node.id] });
       return { nodeId: node.id };
     };
@@ -816,7 +834,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       });
       if (!observed) return;
       if (!added) {
-        webview.postMessage({ type: 'error', message: refusal ? document.describe(refusal) : `Could not add a ${className} to ${name}.` });
+        webview.postMessage({ type: 'error', message: refusal ? document.describe(refusal) : `Could not add a ${tileLabelOf(className)} to ${name}.` });
         return;
       }
       webview.postMessage({ type: 'selectRows', rowIds: [added.id] });
