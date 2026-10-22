@@ -1,7 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
 import { SectionsTreeProvider } from './host/SectionsTreeProvider.js';
-import { PropertiesViewProvider } from './host/PropertiesViewProvider.js';
+import { PropertiesViewProvider, type PropertyEditHandler } from './host/PropertiesViewProvider.js';
 import { BinaryEditorProvider } from './host/BinaryEditorProvider.js';
 import { SlddTextEditorProvider } from './host/SlddTextEditorProvider.js';
 import { BinarySlddEditorProvider } from './host/BinarySlddEditorProvider.js';
@@ -96,8 +96,10 @@ export function activate(context: vscode.ExtensionContext): void {
   // Section rows (id `section:<key>`) have no properties, so clear the PI.
   // The selection the inspector was last asked to show, so a view whose tree is replaced (a
   // MAT-file reverted or reloaded from disk) can have its node shown again from the new tree.
+  // `editor` is the edit channel of a document whose host takes edits made in the inspector (a
+  // MAT-file's); the inspector is read-only for every other.
   let lastSelection: { uriString: string; rowIds: string[] } | undefined;
-  const showSelection = (uriString: string, rowIds: string[]): void => {
+  const showSelection = (uriString: string, rowIds: string[], editor?: PropertyEditHandler): void => {
     lastSelection = { uriString, rowIds };
     const first = rowIds && rowIds.length > 0 ? rowIds[0] : undefined;
     if (!first || isSectionRowId(first)) {
@@ -105,7 +107,7 @@ export function activate(context: vscode.ExtensionContext): void {
       return;
     }
     const node = findNode(uriString, first);
-    if (node) piProvider.showNode(node, uriString);
+    if (node) piProvider.showNode(node, uriString, editor);
     else piProvider.clear();
   };
 
@@ -139,12 +141,20 @@ export function activate(context: vscode.ExtensionContext): void {
   // A MAT-file opens in this writable provider (edits through core's session, save
   // through core's writer). Shares the selection→PI and navigate wiring.
   const matProvider = new MatEditorProvider(context);
-  matProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
+  // Its inspector takes edits: each is a gesture of the MAT-file editor's, after which the node is
+  // shown again (a mode edit of a NumericType derives its other properties), with the reason
+  // core gave where it refused.
+  const matInspector = (uriString: string): PropertyEditHandler => (nodeId, propName, newValue, oldValue) => {
+    const result = matProvider.editFromInspector(uriString, nodeId, propName, newValue, oldValue);
+    showSelection(uriString, [result.nodeId ?? nodeId], matInspector(uriString));
+    if (result.refused) piProvider.refuse(propName, result.refused);
+  };
+  matProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds, matInspector(uriString));
   matProvider.onNavigate = navigate;
   // Node ids are paths, so the node the inspector shows is found again in the new tree, or the
   // inspector is cleared if it is gone; it never goes on showing a node of the tree that left.
   matProvider.onReplaced = (uriString) => {
-    if (lastSelection?.uriString === uriString) showSelection(uriString, lastSelection.rowIds);
+    if (lastSelection?.uriString === uriString) showSelection(uriString, lastSelection.rowIds, matInspector(uriString));
   };
 
   // Health badges/colors on tree rows (missing/cycle/modified). The tree

@@ -5,11 +5,20 @@ import { matrixCellsMessage } from './matrixRequest.js';
 import { renderWebviewHtml } from './webviewHtml.js';
 import type { PropsToHostMessage } from '../common/protocol.js';
 
+/**
+ * Where an edit made in the panel goes: the host of the node's document, which makes it a
+ * gesture of its own (one undo step, core's refusal reported back through `refuse`). Handed to
+ * showNode by a host that takes such edits; the panel is read-only for the others.
+ */
+export type PropertyEditHandler = (nodeId: string, propName: string, newValue: string, oldValue: string) => void;
+
 export class PropertiesViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'dataExplorer.properties';
   private view: vscode.WebviewView | null = null;
   private ready = false;
-  private pending: any[] | null = null; // pending groups
+  private pending: { groups: any[]; nodeId?: string } | null = null; // pending groups
+  // Where an edit of the node on display goes, or null: the panel is then read-only.
+  private editor: PropertyEditHandler | null = null;
   // The node currently on display, kept for `requestMatrix` only: its Value row may
   // carry a MatrixDescriptor, and the cells behind one are fetched when the panel
   // opens rather than stamped onto the row (see matrixRequest.ts for why).
@@ -37,7 +46,7 @@ export class PropertiesViewProvider implements vscode.WebviewViewProvider {
       if (msg?.type === 'ready') {
         this.ready = true;
         if (this.pending) {
-          view.webview.postMessage({ type: 'showProps', groups: this.pending });
+          view.webview.postMessage({ type: 'showProps', ...this.pending });
           this.pending = null;
         }
       } else if (msg?.type === 'navigate') {
@@ -46,6 +55,12 @@ export class PropertiesViewProvider implements vscode.WebviewViewProvider {
         this.onNavigate?.(msg.target, this.shownFrom);
       } else if (msg?.type === 'requestMatrix') {
         this.answerMatrix(view.webview, msg.nodeId);
+      } else if (msg?.type === 'editProperty') {
+        // Only an edit of the node on display, and only where its host takes one: a stale
+        // edit (the selection moved while it was typed) or one no host takes changes nothing.
+        if (this.editor && this.shown && this.shown.id === msg.nodeId) {
+          this.editor(msg.nodeId, msg.propName, msg.newValue, msg.oldValue);
+        }
       }
     });
     view.onDidDispose(() => {
@@ -53,24 +68,39 @@ export class PropertiesViewProvider implements vscode.WebviewViewProvider {
       this.ready = false;
       this.shown = null;
       this.shownFrom = undefined;
+      this.editor = null;
     });
     view.webview.html = this.getHtml(view.webview, distRoot);
   }
 
-  showNode(node: any, fromUri?: string): void {
-    const groups = buildPropertyGroups(node);
+  /**
+   * Show `node`'s properties. With `editor`, the rows core says are editable are, and an edit
+   * of one goes to it; without, the panel is read-only.
+   */
+  showNode(node: any, fromUri?: string, editor?: PropertyEditHandler): void {
+    const groups = buildPropertyGroups(node, { editable: !!editor });
     this.shown = node;
     this.shownFrom = fromUri;
+    this.editor = editor ?? null;
+    const payload = { groups, ...(typeof node?.id === 'string' ? { nodeId: node.id } : {}) };
     if (this.view && this.ready) {
-      this.view.webview.postMessage({ type: 'showProps', groups });
+      this.view.webview.postMessage({ type: 'showProps', ...payload });
     } else {
-      this.pending = groups;
+      this.pending = payload;
+    }
+  }
+
+  /** Say why the panel's last edit was refused. Sent after the showProps that put the row back. */
+  refuse(propName: string, reason: string): void {
+    if (this.view && this.ready) {
+      this.view.webview.postMessage({ type: 'propertyRefused', propName, reason });
     }
   }
 
   clear(): void {
     this.shown = null;
     this.shownFrom = undefined;
+    this.editor = null;
     if (this.view && this.ready) {
       this.view.webview.postMessage({ type: 'empty' });
     } else {

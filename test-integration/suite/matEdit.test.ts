@@ -172,11 +172,12 @@ suite('MAT-file editor: edit, undo, save', () => {
   const save = (o: { doc: any }) => provider.saveCustomDocument(o.doc, token());
   const disk = (o: { path: string }) => new Uint8Array(readFileSync(o.path));
 
-  test('the view is editable, adds a variable at once, and offers no clipboard', async () => {
+  test('the view is editable, offers the gallery of the classes the file takes, and offers no clipboard', async () => {
     const o = await open('cases.mat');
     const set = o.view.posts.find((p) => p.type === 'setRows');
     assert.strictEqual(set.editable, true);
-    assert.strictEqual(set.add, 'variable');
+    // Which classes, and each tile end to end, is matAddGallery.test.ts.
+    assert.ok(set.add.classes.includes('MatlabVariable'), 'the gallery offers a plain variable');
     assert.strictEqual(set.clipboard, false);
     assert.strictEqual(set.notice, undefined);
     // The menu's flags come with each row, from core's gate.
@@ -184,7 +185,7 @@ suite('MAT-file editor: edit, undo, save', () => {
     assert.strictEqual(vec._canDelete, true);
     assert.strictEqual(vec._canAddChild, true);
     assert.strictEqual(vec._canCopy, false);
-    assert.strictEqual(topRow(o.view.posts, 'strScalar')._valueEditable, false, 'a string takes no value edit');
+    assert.strictEqual(topRow(o.view.posts, 'strScalar')._valueEditable, true, 'a string takes a value edit');
   });
 
   test('a value edit saves as that variable written fresh, and every other record as it was', async () => {
@@ -289,23 +290,25 @@ suite('MAT-file editor: edit, undo, save', () => {
     keptUntouched(o.original, disk(o), ['rowVec']);
   });
 
-  test('a Parameter takes an edit of its Value; a property the save cannot write is refused', async () => {
+  test('a Parameter takes an edit of its Value and its Storage Class; a property the save cannot write is refused', async () => {
     const o = await open('pv_basic.mat');
-    const p = topRow(o.view.posts, 'p');
-    // Storage Class belongs to the object's CoderInfo, which a save does not rewrite: no editor.
-    assert.strictEqual(typeof p.storageClass, 'string', 'the Storage Class cell is not an editable one');
-    edit(o, 'p', 'storageClass', 'ExportedGlobal');
+    // Of the object's CoderInfo a save writes the Storage Class, and nothing else: the Header File
+    // is refused, in core's words, naming the variable.
+    edit(o, 'p', 'headerFile', 'a.h');
     const refused = o.view.posts.find((m) => m.type === 'validationError');
     assert.ok(refused, 'the edit is refused');
     assert.match(refused.reason, /"p"/);
     assert.ok(!refused.reason.includes('binedit:'), 'the refusal names the variable, not the srcId');
     assert.strictEqual(o.events.length, 0, 'and nothing reached VS Code');
     assert.strictEqual(o.doc.edits.dirty, false);
+    edit(o, 'p', 'storageClass', 'ExportedGlobal');
     edit(o, 'p', 'Value', '7');
-    assert.strictEqual(o.events.length, 1);
+    assert.strictEqual(o.events.length, 2);
     await save(o);
     const saved = disk(o);
-    assert.strictEqual(valuesOf(saved).get('p').Value, '7');
+    const p = valuesOf(saved).get('p');
+    assert.strictEqual(p.Value, '7');
+    assert.strictEqual(p.storageClass?.text ?? p.storageClass, 'ExportedGlobal');
     assert.strictEqual(valuesOf(saved).get('q').Value, '5', 'the other Parameter is untouched');
     // The object's edit is written into the file's objects; every variable record is as it was.
     keptUntouched(o.original, saved, ['']);

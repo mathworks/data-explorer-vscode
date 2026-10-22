@@ -57,6 +57,7 @@ import { binaryEditSrcId } from '../common/srcId.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
+import { matCatalog } from '../common/addCatalog.js';
 
 /** One read of the file behind a document, with the stamp it was read under (stat first). */
 interface DiskRead {
@@ -479,6 +480,41 @@ function backupSource(id: string): { uri: vscode.Uri; stamp: DiskStamp | undefin
   return { uri: vscode.Uri.parse(id), stamp: undefined };
 }
 
+/**
+ * The classes `mat` can take a new variable of, as core lists them (MatNode.getAllowedTypes): a
+ * plain variable and a struct, and the classes of MATLAB's own default objects where the file's
+ * objects can be added to. A core without the list adds a plain variable only, as it always has.
+ */
+/** What an edit from the Property Inspector came to: the node's id after it, or why it was refused. */
+export interface InspectorResult {
+  nodeId?: string;
+  refused?: string;
+}
+type InspectorEdit = (nodeId: string, propName: string, newValue: string, oldValue: string) => InspectorResult;
+
+function allowedClasses(mat: any): readonly string[] {
+  if (typeof mat?.getAllowedTypes !== 'function') return ['MatlabVariable'];
+  const classes = mat.getAllowedTypes();
+  return Array.isArray(classes) ? classes.filter((c: unknown): c is string => typeof c === 'string') : [];
+}
+
+/** The label the gallery's tile of `className` shows ('MATLAB Structure'), or the class itself. */
+function tileLabelOf(className: string): string {
+  return matCatalog([className]).flatMap((c) => c.tiles).find((t) => t.className === className)?.label ?? className;
+}
+
+/** The label the inspector shows property `key` of `node` by, or the key where it shows none. */
+function inspectorLabelOf(node: any, key: string): string {
+  try {
+    const prop = node?.toPIObject?.()?.propertySheet?.properties?.find((p: any) => p.name === key);
+    return typeof prop?.displayName === 'string' && prop.displayName !== '' ? prop.displayName : key;
+  } catch {
+    return key;
+  }
+}
+
+const sameList = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((x, i) => x === b[i]);
+
 export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocument> {
   public static readonly viewType = 'dataExplorer.matView';
 
@@ -489,6 +525,9 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
   // A document's tree was replaced from disk (wired in extension.ts, which shows the Property
   // Inspector's node again from the new tree, if it is this document's).
   public onReplaced?: (uriString: string) => void;
+
+  // Each open view's edit of a node from the Property Inspector, by document (editFromInspector).
+  private readonly inspectorEdits = new Map<string, InspectorEdit>();
 
   private readonly _onDidChangeCustomDocument = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<MatDocument>>();
   readonly onDidChangeCustomDocument = this._onDidChangeCustomDocument.event;
@@ -559,6 +598,12 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       return { planned, version: document.version };
     };
 
+    // The classes the gallery was last told the file can take a new variable of. Core's answer
+    // (MatNode.getAllowedTypes) can change with the file — a reload, a subsystem a save no longer
+    // writes as read — so a gesture that changes it repaints the whole table, which tells the
+    // gallery again (gesture, below).
+    let lastClasses: readonly string[] = [];
+
     const post = async (): Promise<void> => {
       let mat: any;
       try {
@@ -592,8 +637,8 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
             columnGroups: COLUMN_GROUPS,
             editable: !notice,
             notice,
-            // A MAT-file adds a variable, not an entry of a class picked from the gallery.
-            add: 'variable',
+            // The gallery offers the classes core says this file can take a new variable of.
+            add: { classes: lastClasses = allowedClasses(mat) },
             // Nor does it copy, cut, paste or drag one: a variable has no dictionary entry form.
             clipboard: false,
             warnings: document.describeBanner(lazyRowsBanner(built.planned.plan, warningBanner(sourceWarnings(mat)))),
@@ -657,6 +702,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
         return null;
       }
       document.repaint(observed);
+      if (!sameList(allowedClasses(mat), lastClasses)) void post();
       return observed;
     };
 
@@ -697,6 +743,35 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
         return;
       }
       if (msg.columnId === 'Name') webview.postMessage({ type: 'selectRows', rowIds: [node.id] });
+    };
+
+    // An edit from the Property Inspector: the same gesture as a table edit, through core's
+    // editProperty with the inspector's key (wordLength, dataScope, …), its rows repainted from the
+    // tree; a refusal is returned for the inspector to say, the variable repainted as it was.
+    const applyInspectorEdit: InspectorEdit = (nodeId, propName, newValue, oldValue) => {
+      const node = findNode(nodeId);
+      if (!node) return { refused: 'Could not locate the item in the model.' };
+      // What the user knows the property as: the inspector's label for it ('Word Length'), not its key.
+      const label = inspectorLabelOf(node, propName);
+      let result: unknown;
+      const observed = gesture('Edit ' + label, (mat) => {
+        DataModel.setActive(mat, node);
+        result = DataModel.editProperty(node.id, propName, newValue, oldValue);
+      });
+      if (!observed) return { refused: `${name} cannot be edited.` };
+      const refused = result as { error?: boolean; reason?: string } | boolean;
+      if (refused && typeof refused === 'object' && refused.error) {
+        for (let v = node; v; v = v.parent) {
+          if (v.parent === document.model()) {
+            repaintVariables([v]);
+            break;
+          }
+        }
+        return { refused: document.describe(refused.reason) };
+      }
+      if (refused === false) return { refused: `Could not edit ${label} of this item.` };
+      if (propName === 'Name') webview.postMessage({ type: 'selectRows', rowIds: [node.id] });
+      return { nodeId: node.id };
     };
 
     // Delete the rows the gesture named, as ONE edit: the variables in one batch (one step), and
@@ -742,17 +817,24 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       if (landing && !doomed.has(landing)) webview.postMessage({ type: 'selectRows', rowIds: [landing.id] });
     };
 
-    // Add one variable: core names it `var` (then `var1`, …) and makes it the double 0, the only
-    // value a MAT-file's Add takes. Then its name editor, as the gallery's add opens it.
-    const applyAddEntry = (msg: { rename: boolean }) => {
+    // Add one variable of the class the gallery's tile names: core's addEntry, which names it (the
+    // class's own default name, `var` for a plain variable, with a counter where it is taken) and
+    // makes MATLAB's default value of it — the double 0, a struct of no field, or MATLAB's own
+    // default object of a Simulink class or a `string`. Then its name editor, unless the gallery is
+    // pinned. An add core refuses (a class the file takes no new variable of, a file no save of
+    // which can be written, objects no new one can join) adds nothing, and says core's reason.
+    const applyAddEntry = (msg: { className?: string; rename: boolean }) => {
+      const className = msg.className || 'MatlabVariable';
       let added: any = null;
+      let refusal: string | null = null;
       const observed = gesture('Add', (mat) => {
         DataModel.setActiveContext(mat);
-        added = DataModel.addEntry('', 'MatlabVariable');
+        added = DataModel.addEntry('', className);
+        if (!added) refusal = (DataModel as any).addEntryRefusal?.() ?? null;
       });
       if (!observed) return;
       if (!added) {
-        webview.postMessage({ type: 'error', message: `Could not add a variable to ${name}.` });
+        webview.postMessage({ type: 'error', message: refusal ? document.describe(refusal) : `Could not add a ${tileLabelOf(className)} to ${name}.` });
         return;
       }
       webview.postMessage({ type: 'selectRows', rowIds: [added.id] });
@@ -819,13 +901,28 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
 
     webview.html = renderTableWebview(webview, distRoot);
 
+    this.inspectorEdits.set(uriString, applyInspectorEdit);
+
     webviewPanel.onDidDispose(() => {
       document.views.delete(view);
+      if (this.inspectorEdits.get(uriString) === applyInspectorEdit) this.inspectorEdits.delete(uriString);
       unregisterAddGalleryView(webviewPanel);
       sub.dispose();
       navSub.dispose();
       usageSub.dispose();
     });
+  }
+
+  /**
+   * An edit made in the Property Inspector of node `nodeId` of the document at `uriString`: one
+   * gesture through core's session, as a table edit is (editProperty with the PI's key, one undo
+   * step, the rows repainted), whose refusal comes back as the reason, in core's words, rather
+   * than as a cell's validation error. Returns the node's id after the edit (a rename moves it),
+   * so the inspector shows it again, derived properties and all.
+   */
+  editFromInspector(uriString: string, nodeId: string, propName: string, newValue: string, oldValue: string): InspectorResult {
+    const edit = this.inspectorEdits.get(uriString);
+    return edit ? edit(nodeId, propName, newValue, oldValue) : { refused: 'The file is no longer open for editing.' };
   }
 
   // --- Save / backup / revert --------------------------------------------------------------

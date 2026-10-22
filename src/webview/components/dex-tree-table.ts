@@ -1461,10 +1461,10 @@ export class DexTreeTable extends LitElement {
   // disabled button invites a click and explains nothing.
   @property({ type: Boolean }) canAdd = false;
 
-  // Whether the `+ Add` button adds at once instead of opening the gallery: a MAT-file's,
-  // whose one addition is a plain variable (setRows' `add: 'variable'`). The key that opens
-  // the gallery elsewhere (toggleAddGallery) adds here too, so the two stay one gesture.
-  @property({ type: Boolean }) addDirect = false;
+  // The classes a MAT-file's gallery offers, as its host says core lists them (setRows'
+  // `add: {classes}`), or null for a dictionary's gallery, which offers every tile. The gallery
+  // draws the tiles of these classes only (matCatalog).
+  @property({ attribute: false }) addClasses: readonly string[] | null = null;
 
   // Whether a row can be dragged, or a dragged row let go over one. False where rows have no form
   // to travel in (setRows' `clipboard: false`, a MAT-file): no row is draggable, and a drag from
@@ -2031,18 +2031,6 @@ export class DexTreeTable extends LitElement {
       return;
     }
     if (!this.canAdd) return;
-    if (this.addDirect) {
-      // No class to pick and no section to land in: the host adds the one thing it can, and
-      // then opens its name editor, as an unpinned tile click does.
-      this.dispatchEvent(
-        new CustomEvent('dex-add-entry', {
-          detail: { section: '', className: 'MatlabVariable', label: 'Variable', rename: true },
-          bubbles: true,
-          composed: true,
-        }),
-      );
-      return;
-    }
     this._addGalleryOpen = true;
   }
 
@@ -4094,9 +4082,9 @@ export class DexTreeTable extends LitElement {
       <button
         type="button"
         class="add-button"
-        title=${this.addDirect ? 'Add a variable' : 'Add an entry'}
-        aria-haspopup=${this.addDirect ? nothing : 'dialog'}
-        aria-expanded=${this.addDirect ? nothing : this._addGalleryOpen}
+        title=${this.addClasses ? 'Add a variable' : 'Add an entry'}
+        aria-haspopup="dialog"
+        aria-expanded=${this._addGalleryOpen}
         @click=${(e: MouseEvent) => this._onAddButtonClick(e)}
       >
         <!-- A drawn plus, not the ⊞ this shipped with: at 12px that glyph is a small
@@ -4126,6 +4114,7 @@ export class DexTreeTable extends LitElement {
     return html`
       <dex-add-gallery
         .pinned=${this._addPinned}
+        .classes=${this.addClasses}
         @dex-add-tile=${this._onAddTile}
         @dex-add-pin-changed=${(e: CustomEvent) => {
           this._addPinned = !!(e.detail as { pinned: boolean }).pinned;

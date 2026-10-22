@@ -2,6 +2,12 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## [Unreleased]
+
+- You can now add variables, strings and Simulink objects to MAT-files from the Add gallery.
+- Bus elements in MAT-files can be added and removed.
+- Properties of Simulink objects in MAT-files can be edited in the Properties panel.
+
 ## [1.43.0] — 2026-10-21
 
 - MAT-files can now be edited and saved.
