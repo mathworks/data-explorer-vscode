@@ -5,9 +5,6 @@ export interface PIPropertyRow {
   name: string;
   value: string;
   editable: boolean;
-  // On an editable row: the property's key, as core's editProperty takes it ('wordLength'),
-  // where `name` is the label the panel shows ('Word Length').
-  key?: string;
   type: 'text' | 'link';
   linkTarget?: string;
   // A link on the VALUE, set by core on the Data Type property when the type names another
@@ -27,17 +24,9 @@ export interface PIPropertyGroup {
   properties: PIPropertyRow[];
 }
 
-export interface PIBuildOptions {
-  // Whether the panel can write an edit back: its host handed it an edit channel for this
-  // node's document (PropertiesViewProvider.showNode). Then a row is editable exactly where core
-  // says it is (toPIObject's `editable`), and carries the key core's editProperty takes.
-  // Without one every row is read-only, as the dictionary and model views' panels are.
-  editable?: boolean;
-}
-
 // Replicates the vendored two-step transform (PIController.convertToPIObject +
 // LitRenderer.setPIContent). graphture/usedBy extras are intentionally omitted.
-export function buildPropertyGroups(node: any, options: PIBuildOptions = {}): PIPropertyGroup[] {
+export function buildPropertyGroups(node: any): PIPropertyGroup[] {
   if (!node || typeof node.toPIObject !== 'function') return [];
   const raw = node.toPIObject();
   if (!raw || !raw.propertySheet) return [];
@@ -56,12 +45,10 @@ export function buildPropertyGroups(node: any, options: PIBuildOptions = {}): PI
       // folded into `link`: that one would make this a `type: 'link'` row, whose template
       // anchors the property name and mutes the value.
       const valueLink = (propDef as any).valueLink;
-      const editable = !!options.editable && propDef.editable === true && !link;
       const row: PIPropertyRow = {
         name: propDef.displayName || propDef.name,
         value: String(obj[propDef.name] ?? ''),
-        editable,
-        ...(editable ? { key: propDef.name } : {}),
+        editable: false, // read-only V1
         type: link ? 'link' : 'text',
         linkTarget: link || undefined,
         ...(typeof valueLink === 'string' && valueLink !== '' ? { valueLink } : {}),

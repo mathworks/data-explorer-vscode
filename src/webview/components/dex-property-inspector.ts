@@ -15,8 +15,6 @@ export interface PropertyRow {
   name: string;
   value: string;
   editable?: boolean;
-  // The key an edit of an editable row names (piBuilder): core's, where `name` is its label.
-  key?: string;
   type?: 'text' | 'link';
   linkTarget?: string;
   // A link on the VALUE (piBuilder, from core's toPIObject): the Data Type of an entry
@@ -135,21 +133,9 @@ export class DexPropertyInspector extends LitElement {
       font-size: 11px;
       color: var(--dex-color-text-secondary, #888);
     }
-
-    .prop-refusal {
-      margin: 4px 8px;
-      padding: 4px 6px;
-      font-size: 12px;
-      border-left: 2px solid var(--vscode-inputValidation-errorBorder, #be1100);
-      background: var(--vscode-inputValidation-errorBackground, transparent);
-      color: var(--vscode-errorForeground, inherit);
-    }
   `;
 
   @property({ type: Array }) groups: PropertyGroup[] = [];
-
-  // Why the last edit made here was refused, in core's words, until the next node is shown.
-  @property({ attribute: false }) refusal: string | null = null;
 
   private _onPropertyChange(propName: string, newValue: string, oldValue: string): void {
     this.dispatchEvent(new CustomEvent('dex-property-changed', {
@@ -176,7 +162,7 @@ export class DexPropertyInspector extends LitElement {
       return html`<input
         class="prop-input"
         .value=${live(prop.value)}
-        @change=${(e: Event) => this._onPropertyChange(prop.key ?? prop.name, (e.target as HTMLInputElement).value, prop.value)}
+        @change=${(e: Event) => this._onPropertyChange(prop.name, (e.target as HTMLInputElement).value, prop.value)}
       />`;
     }
     // The type this value names, as a link to its definition — the same jump the table's
@@ -206,7 +192,6 @@ export class DexPropertyInspector extends LitElement {
   override render() {
     return html`
       <div class="content">
-        ${this.refusal ? html`<div class="prop-refusal" role="alert">${this.refusal}</div>` : ''}
         ${this.groups.map(group => html`
           <div class="group">
             <div class="group-header">${group.title}</div>

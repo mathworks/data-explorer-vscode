@@ -26,9 +26,6 @@ function setEmpty(show: boolean): void {
   if (pi) (pi as HTMLElement).style.display = show ? 'none' : 'block';
 }
 
-// The node the panel shows, as the last showProps named it: what an edit made here is of.
-let shownNodeId: string | null = null;
-
 window.addEventListener('message', (event: MessageEvent) => {
   const msg = event.data as HostToPropsMessage;
   // `showProps` and `empty` each replace every row an open grid was anchored to, so
@@ -39,26 +36,12 @@ window.addEventListener('message', (event: MessageEvent) => {
   if (msg.type === 'showProps') {
     matrixOpen.close();
     const groups = msg.groups ?? [];
-    shownNodeId = typeof msg.nodeId === 'string' ? msg.nodeId : null;
-    pi.refusal = null;
     pi.groups = groups;
     setEmpty(groups.length === 0);
   } else if (msg.type === 'empty') {
     matrixOpen.close();
-    shownNodeId = null;
-    pi.refusal = null;
     setEmpty(true);
-  } else if (msg.type === 'propertyRefused') {
-    pi.refusal = typeof msg.reason === 'string' ? msg.reason : null;
   }
-});
-
-// An edit committed in an editable row (the host made rows editable only where it takes them):
-// sent with the node it is of, which the host holds to the node it is showing.
-pi?.addEventListener('dex-property-changed', (e: Event) => {
-  const detail = (e as CustomEvent).detail ?? {};
-  if (!shownNodeId || typeof detail.propName !== 'string') return;
-  vscode.postMessage({ type: 'editProperty', nodeId: shownNodeId, propName: detail.propName, newValue: String(detail.newValue ?? ''), oldValue: String(detail.oldValue ?? '') });
 });
 
 // A cross-reference in the inspector was clicked. This webview has no rows to select in —

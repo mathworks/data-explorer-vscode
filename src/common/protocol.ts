@@ -231,15 +231,6 @@ export interface ValidationErrorMessage {
 export interface ShowPropsMessage {
   type: 'showProps';
   groups: any[];
-  // The node the groups are of, which an edit made in the panel names (PropertyEditMessage).
-  nodeId?: string;
-}
-
-/** The panel's last edit was refused: why, in core's words. Follows the showProps that reverts it. */
-export interface PropertyRefusedMessage {
-  type: 'propertyRefused';
-  propName: string;
-  reason: string;
 }
 
 /** Clear the inspector (nothing selected). */
@@ -360,7 +351,7 @@ export type HostToTableMessage =
   | ChildRowsMessage;
 
 /** Every message the property-inspector webview can receive from the host. */
-export type HostToPropsMessage = ShowPropsMessage | EmptyMessage | MatrixCellsMessage | PropertyRefusedMessage;
+export type HostToPropsMessage = ShowPropsMessage | EmptyMessage | MatrixCellsMessage;
 
 // --- Webview -> Host (table view -> providers) --------------------------------
 
@@ -565,16 +556,4 @@ export type ProjectToHostMessage = ReadyMessage | OpenFileMessage;
 // same thing from either webview, and the host answers both with the same closure. The
 // same goes for `RequestMatrixMessage`: the inspector's Value row opens the same Variable
 // Editor the table's does, and it is answered by the same function.
-/**
- * An edit committed in the Property Inspector: property `propName` (core's key) of node
- * `nodeId`, the node the panel shows. Taken only where the host gave the panel an edit channel.
- */
-export interface PropertyEditMessage {
-  type: 'editProperty';
-  nodeId: string;
-  propName: string;
-  newValue: string;
-  oldValue: string;
-}
-
-export type PropsToHostMessage = ReadyMessage | NavigateMessage | RequestMatrixMessage | PropertyEditMessage;
+export type PropsToHostMessage = ReadyMessage | NavigateMessage | RequestMatrixMessage;
