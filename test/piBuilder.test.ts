@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getModel, getModelFromBytes, invalidate } from '../src/host/SlddModel.js';
 import { buildPropertyGroups } from '../src/host/piBuilder.js';
+import { DataModel } from 'data-explorer-core';
 
 function fixturePath(name: string): string {
   return fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
@@ -183,6 +184,35 @@ describe('buildPropertyGroups', () => {
     const all = descend(root).flatMap((n) => buildPropertyGroups(n).flatMap((g) => g.properties));
     expect(all.length).toBeGreaterThan(0);
     expect(all.every((p) => p.editable === false)).toBe(true);
+  });
+
+  it("marks every property of a MAT-file's variables read-only too, however much core lets a MAT-file edit", () => {
+    // Core decides what a file type lets edit, and says so per property (toPIObject's `editable`);
+    // the panel is read-only in every editor until its edits are qualified, a MAT-file's included.
+    // Every class the MAT-file Add gallery creates, and a new Bus's element.
+    const b = readFileSync(fileURLToPath(new URL('../test-integration/fixtures/mat/pv_basic.mat', import.meta.url)));
+    const srcId = 'pi-readonly-mat';
+    const mat: any = DataModel.addMatSource(srcId, b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer, { path: 'pv_basic.mat' });
+    try {
+      DataModel.setActiveContext(mat);
+      const classes: string[] = mat.getAllowedTypes();
+      expect(classes).toEqual(expect.arrayContaining(['MatlabVariable', 'MatlabStruct', 'Simulink.Parameter', 'Simulink.Signal', 'Simulink.Bus', 'string']));
+      const nodes: any[] = classes.map((c) => DataModel.addEntry('', c));
+      const bus = nodes.find((n) => n?.className === 'Simulink.Bus');
+      DataModel.addChildTo(bus.id);
+      nodes.push(bus.children[0], ...mat.children.filter((c: any) => !nodes.includes(c)));
+      let coreEditable = 0;
+      for (const node of nodes) {
+        expect(node, 'core created a variable of each class it lists').toBeTruthy();
+        coreEditable += (node.toPIObject?.()?.propertySheet?.properties ?? []).filter((p: any) => p.editable === true).length;
+        const rows = buildPropertyGroups(node).flatMap((g) => g.properties);
+        expect(rows.length, node.name).toBeGreaterThan(0);
+        expect(rows.filter((p) => p.editable !== false).map((p) => p.name), `${node.className} ${node.name}`).toEqual([]);
+      }
+      expect(coreEditable, 'core itself offers edits of these rows').toBeGreaterThan(0);
+    } finally {
+      DataModel.removeDataSource(srcId);
+    }
   });
 
   it('places a block in the model, which is what tells two `Gain` rows apart', () => {
