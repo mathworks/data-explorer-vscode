@@ -803,23 +803,20 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     // class's own default name, `var` for a plain variable, with a counter where it is taken) and
     // makes MATLAB's default value of it — the double 0, a struct of no field, or MATLAB's own
     // default object of a Simulink class or a `string`. Then its name editor, unless the gallery is
-    // pinned. A class core does not list for this file is refused here as core would refuse it.
+    // pinned. An add core refuses (a class the file takes no new variable of, a file no save of
+    // which can be written, objects no new one can join) adds nothing, and says core's reason.
     const applyAddEntry = (msg: { className?: string; rename: boolean }) => {
       const className = msg.className || 'MatlabVariable';
       let added: any = null;
-      let offered = true;
+      let refusal: string | null = null;
       const observed = gesture('Add', (mat) => {
-        offered = allowedClasses(mat).includes(className);
-        if (!offered) return;
         DataModel.setActiveContext(mat);
         added = DataModel.addEntry('', className);
+        if (!added) refusal = (DataModel as any).addEntryRefusal?.() ?? null;
       });
       if (!observed) return;
       if (!added) {
-        webview.postMessage({
-          type: 'error',
-          message: offered ? `Could not add a ${className} to ${name}.` : `${name} cannot take a new ${className}.`,
-        });
+        webview.postMessage({ type: 'error', message: refusal ? document.describe(refusal) : `Could not add a ${className} to ${name}.` });
         return;
       }
       webview.postMessage({ type: 'selectRows', rowIds: [added.id] });

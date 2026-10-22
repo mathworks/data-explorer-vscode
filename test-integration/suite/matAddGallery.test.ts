@@ -244,6 +244,23 @@ suite('MAT-file editor: the Add gallery', () => {
     });
   }
 
+  test('a variable added and deleted before a save, or added and undone, leaves the file byte for byte as it was', async () => {
+    const o = await open('pv_basic.mat', fixture('pv_basic.mat'));
+    add(o, 'Simulink.Parameter', false);
+    await waitFor('the Param row', () => !!topRowOrNull(o.view.posts, 'Param'));
+    o.view.send({ type: 'delete', rowIds: [topRow(o.view.posts, 'Param').ID] });
+    await waitFor('the Param row gone', () => !topRowOrNull(o.view.posts, 'Param'));
+    await save(o);
+    assert.ok(same(disk(o), o.original), 'the save wrote the file as it was read');
+    const u = await open('plain.mat', plainMat());
+    add(u, 'Simulink.Signal', false);
+    await waitFor('the Signal row', () => !!topRowOrNull(u.view.posts, 'Signal'));
+    await u.events[0].undo();
+    await waitFor('the Signal row gone', () => !topRowOrNull(u.view.posts, 'Signal'));
+    await save(u);
+    assert.ok(same(disk(u), u.original), 'no subsystem is written for an object no longer there');
+  });
+
   test('a pinned add asks for no name editor, and two adds of a class take two names', async () => {
     const o = await open('pv_basic.mat', fixture('pv_basic.mat'));
     add(o, 'Simulink.Signal', false);
@@ -518,12 +535,22 @@ suite('MAT-file editor: the Add gallery', () => {
     }
   });
 
-  test('a class core does not list for the file is refused, and adds nothing', async () => {
-    const o = await open('cases.mat', fixture('cases.mat'));
-    add(o, 'Simulink.ConfigSet');
-    await waitFor('the refusal', () => o.view.posts.some((p) => p.type === 'error'));
-    assert.match(o.view.posts.filter((p) => p.type === 'error').pop().message, /cannot take a new Simulink\.ConfigSet/);
-    assert.strictEqual(o.events.length, 0);
-    assert.strictEqual(o.doc.edits.dirty, false);
-  });
+  for (const className of ['Simulink.ConfigSet', 'Simulink.data.dictionary.EnumTypeDefinition']) {
+    test(`an add of a class the file takes no new variable of (${className}) is refused in core's words, and adds nothing`, async () => {
+      const o = await open('cases.mat', fixture('cases.mat'));
+      if (lastSetRows(o.view.posts).add.classes.includes(className)) return; // core offers it after all
+      const before = tableOf(o.view.posts).length;
+      add(o, className);
+      await waitFor('the refusal', () => o.view.posts.some((p) => p.type === 'error'));
+      const message: string = o.view.posts.filter((p) => p.type === 'error').pop().message;
+      // Core's reason (MatNode.addEntryRefusal), with the file named as every other message names it.
+      assert.match(message, new RegExp(className.replace('.', '\\.')));
+      assert.match(message, /takes a new variable of a plain value, a struct, or one of /);
+      assert.ok(message.includes('cases.mat'), `the message names the file: ${message}`);
+      assert.ok(!message.includes('binedit:'), 'and not the session source it was opened as');
+      assert.strictEqual(o.events.length, 0, 'no edit reached VS Code');
+      assert.strictEqual(o.doc.edits.dirty, false);
+      assert.strictEqual(tableOf(o.view.posts).length, before, 'no row was added');
+    });
+  }
 });
