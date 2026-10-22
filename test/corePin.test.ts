@@ -18,9 +18,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const TAG = 'v1.45.0';
-const COMMIT = '58b7289371e7fa362efda99cc1e2ef5783949865';
-const VERSION = '1.45.0';
+const TAG = 'v1.45.1';
+const COMMIT = '72bb1e2a9505a7376545a25c22faad3d6bf23022';
+const VERSION = '1.45.1';
 
 const SPEC = `github:mathworks/data-explorer-core#${TAG}`;
 
