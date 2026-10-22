@@ -484,6 +484,13 @@ function backupSource(id: string): { uri: vscode.Uri; stamp: DiskStamp | undefin
  * plain variable and a struct, and the classes of MATLAB's own default objects where the file's
  * objects can be added to. A core without the list adds a plain variable only, as it always has.
  */
+/** What an edit from the Property Inspector came to: the node's id after it, or why it was refused. */
+export interface InspectorResult {
+  nodeId?: string;
+  refused?: string;
+}
+type InspectorEdit = (nodeId: string, propName: string, newValue: string, oldValue: string) => InspectorResult;
+
 function allowedClasses(mat: any): readonly string[] {
   if (typeof mat?.getAllowedTypes !== 'function') return ['MatlabVariable'];
   const classes = mat.getAllowedTypes();
@@ -502,6 +509,9 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
   // A document's tree was replaced from disk (wired in extension.ts, which shows the Property
   // Inspector's node again from the new tree, if it is this document's).
   public onReplaced?: (uriString: string) => void;
+
+  // Each open view's edit of a node from the Property Inspector, by document (editFromInspector).
+  private readonly inspectorEdits = new Map<string, InspectorEdit>();
 
   private readonly _onDidChangeCustomDocument = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<MatDocument>>();
   readonly onDidChangeCustomDocument = this._onDidChangeCustomDocument.event;
@@ -719,6 +729,33 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       if (msg.columnId === 'Name') webview.postMessage({ type: 'selectRows', rowIds: [node.id] });
     };
 
+    // An edit from the Property Inspector: the same gesture as a table edit, through core's
+    // editProperty with the inspector's key (wordLength, dataScope, …), its rows repainted from the
+    // tree; a refusal is returned for the inspector to say, the variable repainted as it was.
+    const applyInspectorEdit: InspectorEdit = (nodeId, propName, newValue, oldValue) => {
+      const node = findNode(nodeId);
+      if (!node) return { refused: 'Could not locate the item in the model.' };
+      let result: unknown;
+      const observed = gesture('Edit ' + propName, (mat) => {
+        DataModel.setActive(mat, node);
+        result = DataModel.editProperty(node.id, propName, newValue, oldValue);
+      });
+      if (!observed) return { refused: `${name} cannot be edited.` };
+      const refused = result as { error?: boolean; reason?: string } | boolean;
+      if (refused && typeof refused === 'object' && refused.error) {
+        for (let v = node; v; v = v.parent) {
+          if (v.parent === document.model()) {
+            repaintVariables([v]);
+            break;
+          }
+        }
+        return { refused: document.describe(refused.reason) };
+      }
+      if (refused === false) return { refused: `Could not edit ${propName} of this item.` };
+      if (propName === 'Name') webview.postMessage({ type: 'selectRows', rowIds: [node.id] });
+      return { nodeId: node.id };
+    };
+
     // Delete the rows the gesture named, as ONE edit: the variables in one batch (one step), and
     // each row under a variable on its own (one step each). Nodes are resolved first and each is
     // deleted by the id it has at that moment: an element's id is its index, which the removal of
@@ -849,13 +886,28 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
 
     webview.html = renderTableWebview(webview, distRoot);
 
+    this.inspectorEdits.set(uriString, applyInspectorEdit);
+
     webviewPanel.onDidDispose(() => {
       document.views.delete(view);
+      if (this.inspectorEdits.get(uriString) === applyInspectorEdit) this.inspectorEdits.delete(uriString);
       unregisterAddGalleryView(webviewPanel);
       sub.dispose();
       navSub.dispose();
       usageSub.dispose();
     });
+  }
+
+  /**
+   * An edit made in the Property Inspector of node `nodeId` of the document at `uriString`: one
+   * gesture through core's session, as a table edit is (editProperty with the PI's key, one undo
+   * step, the rows repainted), whose refusal comes back as the reason, in core's words, rather
+   * than as a cell's validation error. Returns the node's id after the edit (a rename moves it),
+   * so the inspector shows it again, derived properties and all.
+   */
+  editFromInspector(uriString: string, nodeId: string, propName: string, newValue: string, oldValue: string): InspectorResult {
+    const edit = this.inspectorEdits.get(uriString);
+    return edit ? edit(nodeId, propName, newValue, oldValue) : { refused: 'The file is no longer open for editing.' };
   }
 
   // --- Save / backup / revert --------------------------------------------------------------
