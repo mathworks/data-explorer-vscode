@@ -18,6 +18,9 @@
 //   - a same-document move made as ONE edit that removes the sources first, so the pasted
 //     entries keep their names (`removeFirst`), and a cross-document move made as the paste
 //     here and then the delete over there (`deleteFromSource`);
+//   - a move of an entry its document cannot tell apart by the selector the delete uses (a
+//     MAT-file variable whose name the file holds twice) refused before anything changes: a
+//     copy of it is fine, a move would take out the wrong original;
 //   - what each way of failing says. A refusal that changed nothing (`TransferRefused`) is a
 //     message; anything else thrown before the edit landed is the adapter's to repair
 //     (`onFailure`); a source delete that fails AFTER the edit landed is neither — the paste
@@ -35,6 +38,12 @@ export interface TransferItem {
   payload: Record<string, unknown>;
   /** The section the entry was taken from. `''` for a MAT-file, whose one section has no name. */
   sourceSection: string;
+  /**
+   * Another entry of its document answers to the selector a move would delete it by
+   * (structuralEdit's registerItemsOf), so a move of it is refused: the delete could take the
+   * other one. A copy of it is a copy like any other.
+   */
+  sharedName?: boolean;
 }
 
 /** What a register held when the transfer read it. */
@@ -269,6 +278,10 @@ async function transfer<T extends TransferTarget>(
   const label: TransferLabel = isPaste ? 'Paste' : contents.move ? 'Move' : 'Copy';
 
   try {
+    const shared = contents.move ? contents.items.find((it) => it.sharedName) : undefined;
+    if (shared) {
+      throw new TransferRefused(sharedNameRefusal(isPaste ? 'cut' : 'move', String(shared.payload.name ?? ''), contents.sourceDocUri));
+    }
     if (removeFirst.length > 0 && adapter.takesRemoveFirst === false) {
       throw new TransferRefused(`Cannot move entries within ${fileNameOf(adapter.docUri)}.`);
     }
@@ -321,6 +334,17 @@ function refusedOrFailed(err: unknown, adapter: TransferAdapter<any>): TransferO
   }
   adapter.onFailure(err);
   return { kind: 'failed', error: err };
+}
+
+/**
+ * Why an entry that shares its name in its document cannot be cut or moved, naming it and the
+ * document: the move would take its original out by that name, and could take the other one.
+ * Said where a cut is refused (clipboardAction) and where a move-mode drop is (above), in the
+ * same words, because it is the same rule.
+ */
+export function sharedNameRefusal(verb: 'cut' | 'move', name: string, sourceDocUri: string | undefined): string {
+  const where = sourceDocUri ? fileNameOf(sourceDocUri) : 'its file';
+  return `Cannot ${verb} "${name}": ${where} holds more than one "${name}", and a move takes its original out by name. Copy it instead.`;
 }
 
 /**

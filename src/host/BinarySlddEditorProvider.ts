@@ -68,11 +68,10 @@ import {
   refuseDisallowedPaste,
   sectionByName,
   sectionTarget,
-  buildDragSnapshot,
   reselectAfterRemoval,
   type SectionTarget,
 } from './structuralEdit.js';
-import { copyEntriesToClipboard } from './clipboardAction.js';
+import { copyEntriesToClipboard, dragEntries } from './clipboardAction.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
 import {
   deleteEntryXml,
@@ -111,7 +110,7 @@ import {
 } from './entryOps.js';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 import { clipboardState } from './clipboard.js';
-import { setDrag, getDrag, clearDrag } from './dragState.js';
+import { getDrag, clearDrag } from './dragState.js';
 import {
   registerWebview,
   unregisterWebview,
@@ -1384,23 +1383,19 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // Each dragged row's owning entry is serialized (the payload the drop pastes)
     // alongside the display facts (class/kind) the target webview needs to predict
     // the drop, then the payload-free descriptor is broadcast so every open table
-    // renders feedback. The snapshot itself is shared with SlddTextEditorProvider
-    // (buildDragSnapshot); only getting a live model differs between the formats.
+    // renders feedback. Shared with every other table (clipboardAction.dragEntries);
+    // only getting a live model differs between the formats.
     const applyDragStart = (msg: { rowIds: string[] }): void => {
-      try {
+      dragEntries(msg.rowIds, uriString, {
         // From the model as it stands: starting a drag changes no text, so a re-parse
         // could only rebuild the tree that is already there. See applyCopy.
-        liveModel();
-        const snap = buildDragSnapshot(msg.rowIds, findNode);
-        if (snap.items.length === 0) clearDrag();
-        else setDrag(uriString, snap.items);
-        broadcastDragState();
-      } catch (err) {
-        clearDrag();
-        broadcastDragState();
-        // Said, as a failed copy is — see SlddTextEditorProvider's applyDragStart.
-        webview.postMessage({ type: 'error', message: `Failed to drag: ${(err as Error).message}` });
-      }
+        refresh: () => {
+          liveModel();
+        },
+        findNode,
+        post: (message) => webview.postMessage(message),
+        broadcast: broadcastDragState,
+      });
     };
 
     const applyDragEnd = (): void => {

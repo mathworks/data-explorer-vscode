@@ -35,7 +35,7 @@ import {
   type RangeReplacement,
 } from './jsonEntrySync.js';
 import { clipboardState } from './clipboard.js';
-import { setDrag, getDrag, clearDrag } from './dragState.js';
+import { getDrag, clearDrag } from './dragState.js';
 import {
   registerWebview,
   unregisterWebview,
@@ -67,13 +67,12 @@ import {
   sectionByName,
   sectionTarget,
   reserializeEntry,
-  buildDragSnapshot,
   type SectionTarget,
   type StructuralResult,
   type TextPatch,
 } from './structuralEdit.js';
 import { entrySelectorOf, minimalReplacement, planDeletion, type EntrySelector } from 'data-explorer-core';
-import { copyEntriesToClipboard } from './clipboardAction.js';
+import { copyEntriesToClipboard, dragEntries } from './clipboardAction.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { subscribeUsageRepost } from './usageRepostWatch.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
@@ -1684,30 +1683,22 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // serialized (the payload the eventual paste uses) alongside the display
     // facts (class/kind) the webview needs to predict the drop. Then broadcast
     // the payload-free descriptor so every open table can render live feedback.
-    // The snapshot itself is shared with BinarySlddEditorProvider
-    // (buildDragSnapshot); only getting a live model differs between the formats.
+    // Shared with every other table (clipboardAction.dragEntries); only getting a live
+    // model differs between the formats.
     const applyDragStart = (msg: { rowIds: string[] }): void => {
-      try {
+      dragEntries(msg.rowIds, uriString, {
         // From the tree as it stands, for the reason applyCopy gives: a drag start changes no
         // text, and it is the first thing a drag does, so a re-parse here is latency before the
         // cursor can even predict a drop.
-        liveModel();
-        const snap = buildDragSnapshot(msg.rowIds, (rowId) => findNode(uriString, rowId));
-        if (snap.items.length === 0) {
-          clearDrag();
-        } else {
-          setDrag(uriString, snap.items);
-        }
-        broadcastDragState();
-      } catch (err) {
-        clearDrag();
-        broadcastDragState();
-        // Said, as a failed copy is (clipboardAction.ts). Silent, the drag looked like it had
-        // started, and the drop that ended it reported only "Nothing to drop." — the snapshot that
-        // failed is the serialize of every dragged entry, so this is where a value core will not
-        // write (a MatWriteError) says so.
-        webview.postMessage({ type: 'error', message: `Failed to drag: ${(err as Error).message}` });
-      }
+        refresh: () => {
+          liveModel();
+        },
+        findNode: (rowId) => findNode(uriString, rowId),
+        // Said, as a failed copy is: the snapshot that fails is the serialize of every dragged
+        // entry, so this is where a value core will not write (a MatWriteError) says so.
+        post: (message) => webview.postMessage(message),
+        broadcast: broadcastDragState,
+      });
     };
 
     // --- Drag end: clear the register and tell every webview the drag is over ---

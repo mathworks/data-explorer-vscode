@@ -64,6 +64,7 @@ export function dragDescriptor(): DragDescriptor | null {
       kind: it.kind,
       isMatlabVariable: it.isMatlabVariable,
       isScalarNumeric: it.isScalarNumeric,
+      ...(it.sharedName ? { sharedName: true } : {}),
     })),
   };
 }

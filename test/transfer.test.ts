@@ -15,6 +15,7 @@ import {
   isNoopMove,
   fileNameOf,
   sourceKeptMessage,
+  sharedNameRefusal,
   TransferRefused,
   type SourceDeleteResult,
   type TransferAdapter,
@@ -548,6 +549,64 @@ describe('a MAT-file shaped document', () => {
     const { deps, calls } = fakeDeps();
     expect((await runTransfer(ROW, drop('move'), moved.adapter, deps)).kind).toBe('done');
     expect(calls.map((c) => c.uri)).toEqual([THERE]);
+  });
+});
+
+// D3: a move takes its originals out by selector, and an entry whose selector its document does
+// not tell apart (a MAT-file variable of a name the file holds twice) carries `sharedName`. A
+// move of one is refused before anything changes; a copy of one, and a same-section move of
+// one (the no-op), are what they always were.
+describe('an entry whose name its document holds twice', () => {
+  const MAT = 'file:///work/gains.mat';
+  const shared = (name: string): ClipboardItem => ({ ...item(name, ''), payload: { name, metadata: null, value: 1 }, sharedName: true });
+
+  it('is not moved by a drop, and nothing is asked of either document', async () => {
+    setDrag(MAT, [item('A', ''), shared('x')]);
+    const { adapter, log } = fakeAdapter({ docUri: HERE });
+    const { deps, calls } = fakeDeps();
+    const out = await runTransfer(ROW, drop('move'), adapter, deps);
+    const message = 'Cannot move "x": gains.mat holds more than one "x", and a move takes its original out by name. Copy it instead.';
+    expect(out).toEqual({ kind: 'refused', message });
+    expect(log.reports).toEqual([message]);
+    expect(log.commits).toEqual([]);
+    expect(log.validated).toBe(0);
+    expect(calls).toEqual([]);
+    expect(getDrag(), 'a drop ends the drag whatever became of it').toBeNull();
+  });
+
+  it('is pasted by a drop in copy mode, and by a paste of a copy', async () => {
+    setDrag(MAT, [shared('x')]);
+    const dropped = fakeAdapter({ docUri: HERE });
+    expect((await runTransfer(ROW, drop('copy'), dropped.adapter, fakeDeps().deps)).kind).toBe('done');
+    expect(dropped.log.commits.map((c) => c.payloads.map((p) => p.name))).toEqual([['x']]);
+
+    setClipboard([shared('x')], 'copy', MAT);
+    const pasted = fakeAdapter({ docUri: HERE });
+    expect((await runTransfer(ROW, paste(), pasted.adapter, fakeDeps().deps)).kind).toBe('done');
+    expect(getClipboard(), 'a copy stays on the clipboard').not.toBeNull();
+  });
+
+  it('moved back into the section it came from is the no-op, not a refusal', async () => {
+    setDrag(MAT, [shared('x')]);
+    const { adapter, log } = fakeAdapter({ docUri: MAT, section: '' });
+    expect(await runTransfer(ROW, drop('move'), adapter, fakeDeps().deps)).toEqual({ kind: 'noop' });
+    expect(log.reports).toEqual([]);
+  });
+
+  it('on the clipboard as a cut (an older host let one through), keeps the cut', async () => {
+    setClipboard([shared('x')], 'cut', MAT);
+    const { adapter, log } = fakeAdapter({ docUri: HERE });
+    const out = await runTransfer(ROW, paste(), adapter, fakeDeps().deps);
+    expect(out.kind).toBe('refused');
+    expect(log.reports[0]).toMatch(/^Cannot cut "x": gains\.mat holds more than one "x"/);
+    expect(getClipboard()?.mode).toBe('cut');
+  });
+
+  it('says which file, decoded, or that it was its own when no document is named', () => {
+    expect(sharedNameRefusal('cut', 'k', 'file:///w/my%20gains.mat')).toBe(
+      'Cannot cut "k": my gains.mat holds more than one "k", and a move takes its original out by name. Copy it instead.',
+    );
+    expect(sharedNameRefusal('move', 'k', undefined)).toMatch(/^Cannot move "k": its file holds more than one "k"/);
   });
 });
 

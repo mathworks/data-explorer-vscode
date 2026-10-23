@@ -438,3 +438,33 @@ describe('isNoopMove — the rule dropDecision\'s no-op is', () => {
     expect(isNoopMove({ docUri: 'a.sldd', items: [bus()] }, { ...designTarget('a.sldd'), sectionName: undefined as any }, 'move')).toBe(false);
   });
 });
+
+// D3: an entry whose name its document holds twice (a MAT-file's two records of one name) can be
+// copied, never moved — the host refuses the move (transfer.ts), so the cursor does too. The
+// no-op of a move back into its own file is still the no-op.
+describe('a dragged entry that shares its name in its file', () => {
+  const FILE = { docUri: 'file:///gains.mat', sectionName: '', sectionLabel: 'gains.mat', isDerived: false, allowedTypes: [] as string[] };
+  const DICT = { docUri: 'file:///d.sldd', sectionName: 'design', sectionLabel: 'Design Data', isDerived: false, allowedTypes: DESIGN_ALLOWED };
+  const x = { className: 'double', arrayClass: '', kind: 'MATLAB Variable', isMatlabVariable: true, isScalarNumeric: true, sectionName: '', sharedName: true };
+  const kp = { ...x, sharedName: undefined };
+  const source = { docUri: 'file:///gains.mat', items: [kp, x] };
+
+  it('refuses a move anywhere, saying to copy it', () => {
+    for (const target of [DICT, { ...FILE, docUri: 'file:///other.mat' }]) {
+      expect(dropDecision(source, target, 'move')).toEqual({
+        canDrop: false,
+        cursor: 'no-drop',
+        tooltip: 'Its name is not unique in its file: copy it instead',
+        noop: false,
+      });
+    }
+  });
+
+  it('allows a copy', () => {
+    expect(dropDecision(source, DICT, 'copy')).toMatchObject({ canDrop: true, cursor: 'copy' });
+  });
+
+  it('moved within its own file, is the no-op', () => {
+    expect(dropDecision(source, FILE, 'move')).toMatchObject({ canDrop: false, noop: true });
+  });
+});

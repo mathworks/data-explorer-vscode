@@ -85,13 +85,14 @@ export function clipboardState(): {
     mode: current ? current.mode : null,
     sourceDocUri: current?.sourceDocUri,
     items: (current?.items ?? []).map(
-      ({ sourceSection, className, arrayClass, kind, isMatlabVariable, isScalarNumeric }) => ({
+      ({ sourceSection, className, arrayClass, kind, isMatlabVariable, isScalarNumeric, sharedName }) => ({
         sectionName: sourceSection,
         className,
         arrayClass,
         kind,
         isMatlabVariable,
         isScalarNumeric,
+        ...(sharedName ? { sharedName } : {}),
       }),
     ),
   };
