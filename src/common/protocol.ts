@@ -12,7 +12,7 @@
 // strict send-side type would fight without any behavior benefit.
 //
 // `rows` / `groups` / `columns` are intentionally loose (`any[]` / `unknown`):
-// they flow into the vendored table/inspector components (typed `any`) and are
+// they flow into the table/inspector components (typed `any`) and are
 // mapped with narrower callbacks, so a stricter element type would introduce new
 // contravariant-callback errors rather than catch real bugs.
 
@@ -34,8 +34,8 @@ export interface SetRowsMessage {
    * The uri of the document these rows came from, so the webview can answer a link into
    * itself without a host round-trip (see webview/linkRoute.ts).
    *
-   * On `setRows` rather than `sectionRules` because only the two EDITABLE providers post
-   * that one — it carries drop rules, which a read-only .slx/.mat view has none of. Hang
+   * On `setRows` rather than `sectionRules` because only the EDITABLE providers post
+   * that one — it carries drop rules, which a read-only .slx/.mdl/.prj view has none of. Hang
    * the uri off it and a read-only table never learns its own identity, so its links take
    * the host path while a dictionary's take the local one: the same rule behaving two ways
    * depending on which provider had drop rules to send.
@@ -92,8 +92,8 @@ export interface SetRowsMessage {
  * dictionary plus every row, which on a real customer .sldd is seconds of latency
  * and a ~67 MB payload to express a one-cell change.
  *
- * `rows` is `buildEntryRows` output — the entry row first, then its flattened
- * descendants — and an empty array removes the subtree.
+ * `rows` is `buildEntryRows` output (a MAT-file's: `buildMatVariableRows`) — the entry
+ * row first, then its flattened descendants — and an empty array removes the subtree.
  */
 export interface UpdateEntryRowsMessage {
   type: 'updateEntryRows';
@@ -147,8 +147,15 @@ export interface ClipboardStateMessage {
    * What the clipboard holds, payload-free — so the menu can ask the target section
    * whether a paste may land there before offering it, exactly as a dragover asks.
    * Never the entry records: on a 47.8 MB dictionary that is a 67 MB postMessage.
+   *
+   * `sectionName` is the section each entry was copied or cut from ('' for a MAT-file's
+   * variable), as a drag descriptor's items carry it. Optional: a host that does not send it
+   * (with `sourceDocUri`) only loses the menu's knowledge that a cut pasted back where it
+   * came from is a no-op.
    */
-  items: DropFacts[];
+  items: (DropFacts & { sectionName?: string })[];
+  /** The document the entries were copied or cut from. See `items`. */
+  sourceDocUri?: string;
 }
 
 /** Broadcast the in-flight drag descriptor (null when no drag is active). */
@@ -398,6 +405,12 @@ export interface DeleteMessage {
 }
 export interface PasteMessage {
   type: 'paste';
+  /**
+   * The row the paste is anchored at, whose section it lands in. '' is no row — the
+   * document itself — sent only by a table whose document is ONE target (a MAT-file, whose
+   * host posted a whole-file `sectionRules` rule): a right-click on its empty body, or Cmd+V
+   * with nothing selected. A dictionary posts no such rule, so it is never sent ''.
+   */
   rowId: string;
 }
 export interface AddChildMessage {
@@ -460,6 +473,11 @@ export interface DragEndMessage {
 /** Drop completed: apply the move/copy against the target row. */
 export interface DropMessage {
   type: 'drop';
+  /**
+   * The row dropped on. '' is the table's empty body, for the reason `PasteMessage.rowId`
+   * can be '': only a one-target document's table allows a drop there, which is how an empty
+   * MAT-file takes one.
+   */
   rowId: string;
   mode: 'copy' | 'move';
 }

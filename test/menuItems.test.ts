@@ -495,3 +495,81 @@ describe('a view with no clipboard', () => {
     for (const id of ['copy', 'cut', 'paste']) expect(byId(items, id)).toBeUndefined();
   });
 });
+
+// A section-less table (a MAT-file) pastes into the file wherever it is right-clicked: its
+// host posts one rule for section '' and table-main resolves every row, and no row, to it.
+describe('a section-less table: one paste target', () => {
+  const MAT_ROWS: MenuRow[] = [
+    { ID: 'm/x', parent: null, Name: { label: 'x' }, _canCopy: true, _canDelete: true },
+    { ID: 'm/cfg', parent: null, Name: { label: 'cfg' }, _canCopy: true, _canDelete: true, _canAddChild: true },
+    { ID: 'm/cfg/gain', parent: 'm/cfg', Name: { label: 'gain' }, _canCopy: true, _canDelete: true },
+  ];
+  const FILE: PasteTarget = { sectionLabel: 'gains.mat', isDerived: false, allowedTypes: ['MatlabVariable', 'Simulink.Bus'] };
+  const mat = (over: Partial<MenuInput>) =>
+    menu({ rows: MAT_ROWS, clipboard: BUS_CLIP, pasteTarget: FILE, hasTextView: false, ...over });
+
+  it('a selection over several variables offers one enabled Paste', () => {
+    const paste = byId(mat({ selectedRowIds: ['m/x', 'm/cfg/gain'], anchorRowId: 'm/x' }), 'paste')!;
+    expect(paste.disabled).toBeFalsy();
+    expect(paste.reason).toBeUndefined();
+  });
+
+  it('nothing selected, nothing anchored: Paste and Undo/Redo, Paste enabled', () => {
+    const items = mat({ selectedRowIds: [], anchorRowId: null });
+    expect(items.filter((i) => !i.separator).map((i) => i.id)).toEqual(['paste', 'undo', 'redo']);
+    expect(byId(items, 'paste')!.disabled).toBeFalsy();
+  });
+
+  it("refuses what the file's rule does not admit, naming the file", () => {
+    const items = mat({ selectedRowIds: [], anchorRowId: null, pasteTarget: { ...FILE, allowedTypes: ['MatlabVariable'] } });
+    expect(byId(items, 'paste')).toMatchObject({ disabled: true, reason: 'Bus cannot be in gains.mat' });
+  });
+});
+
+// Review #7: a cut pasted back into the section every item came from is a no-op — the host
+// clears the cut and changes nothing (applyPaste), and a drop the same shape is refused as
+// one (dropDecision). So Paste says so instead of offering a gesture that does nothing. The
+// facts come from the clipboard broadcast (`sourceDocUri`, each item's `sectionName`); a host
+// that does not send them leaves Paste offered, as before.
+describe('Paste of a cut back where it came from', () => {
+  const item = (sectionName?: string) => ({ ...BUS_CLIP.items[0], ...(sectionName === undefined ? {} : { sectionName }) });
+  const cut = (sourceDocUri: string | undefined, ...sections: Array<string | undefined>): ClipboardState => ({
+    canPaste: true,
+    mode: 'cut',
+    items: sections.map(item),
+    ...(sourceDocUri === undefined ? {} : { sourceDocUri }),
+  });
+  const HERE = 'file:///d.sldd';
+  const pasteOn = (clipboard: ClipboardState, over: Partial<MenuInput> = {}) =>
+    byId(menu({ clipboard, docUri: HERE, pasteTarget: { ...DESIGN, sectionName: 'design' }, ...over }), 'paste')!;
+
+  it('is disabled, and says the entries are already there', () => {
+    expect(pasteOn(cut(HERE, 'design'))).toMatchObject({ disabled: true, reason: 'Already in Design Data' });
+    expect(pasteOn(cut(HERE, 'design', 'design'))).toMatchObject({ disabled: true, reason: 'Already in Design Data' });
+  });
+
+  it('is offered for a copy, which duplicates', () => {
+    expect(pasteOn({ ...cut(HERE, 'design'), mode: 'copy' }).disabled).toBeFalsy();
+  });
+
+  it('is offered from another section, another document, or a cut spanning sections', () => {
+    expect(pasteOn(cut(HERE, 'arch')).disabled).toBeFalsy();
+    expect(pasteOn(cut('file:///other.sldd', 'design')).disabled).toBeFalsy();
+    // The rows from elsewhere really move, so the paste is not a no-op (as dropDecision).
+    expect(pasteOn(cut(HERE, 'design', 'arch')).disabled).toBeFalsy();
+  });
+
+  it('is offered when the host does not say where the cut came from', () => {
+    expect(pasteOn(cut(undefined, 'design')).disabled).toBeFalsy();
+    expect(pasteOn(cut(HERE, undefined)).disabled).toBeFalsy();
+    expect(pasteOn(cut(HERE, 'design'), { docUri: undefined }).disabled).toBeFalsy();
+    expect(pasteOn(cut(HERE, 'design'), { pasteTarget: DESIGN }).disabled).toBeFalsy();
+  });
+
+  it("holds for a MAT-file's one section, ''", () => {
+    const FILE: PasteTarget = { sectionName: '', sectionLabel: 'gains.mat', isDerived: false, allowedTypes: [] };
+    const fromMat: ClipboardState = { ...cut('file:///gains.mat', ''), items: [item('')] };
+    expect(pasteOn(fromMat, { docUri: 'file:///gains.mat', pasteTarget: FILE })).toMatchObject({ disabled: true, reason: 'Already in gains.mat' });
+    expect(pasteOn(fromMat, { docUri: 'file:///other.mat', pasteTarget: FILE }).disabled).toBeFalsy();
+  });
+});

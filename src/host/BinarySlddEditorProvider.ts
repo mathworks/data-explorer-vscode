@@ -131,6 +131,7 @@ import { answerMatrixRequest } from './matrixRequest.js';
 import { binaryEditSrcId } from '../common/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
+import { saveSettled } from './settledSave.js';
 import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, type FollowedDocument } from './diskFollow.js';
 
 // viewType of the default byte-backed view (BinaryEditorProvider), which owns the rule
@@ -1489,7 +1490,13 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   }
 
   // --- Save / backup / revert (the safety gate lives here) ---
-  async saveCustomDocument(document: BinarySlddDocument, _token: vscode.CancellationToken): Promise<void> {
+  async saveCustomDocument(document: BinarySlddDocument, token: vscode.CancellationToken): Promise<void> {
+    // Written again if the stack moved while it was being written (settledSave.ts).
+    await saveSettled(document.edits, token, () => this.writeDocument(document));
+  }
+
+  /** One write of the document as it stands, the save's own: one round of `saveSettled`. */
+  private async writeDocument(document: BinarySlddDocument): Promise<void> {
     // A save used to read the dictionary THREE times — the gate, then the re-baseline,
     // then the repaint's rebuild — for three trees that describe the same unchanged
     // chunkXml. On a real 2.6 MB dictionary that is ~3.1 s each, so ~9 s of a save spent
@@ -1499,7 +1506,6 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // see changes made before it runs, so the later it runs, the smaller the gap a change
     // can slip through. It also keeps the gate synchronous up to the first await, which is
     // what lets a save read the text the user actually saved (see writeTo).
-    const at = document.edits.here();
     document.saving = true;
     let gated: ParsedChunk | null;
     // The edits this save writes. writeTo gates them before its first await, so an edit that
@@ -1527,7 +1533,6 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     } finally {
       document.saving = false;
     }
-    document.edits.saved(at);
     document.inConflict = false;
     document.overwriteStamp = undefined;
     // Re-baseline to the just-saved content so per-row "Modified" marks clear,

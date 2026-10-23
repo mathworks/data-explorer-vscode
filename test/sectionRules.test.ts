@@ -6,8 +6,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { DataModel } from 'data-explorer-core';
 import { getModel, invalidate } from '../src/host/SlddModel.js';
-import { sectionRules } from '../src/host/sectionRules.js';
+import { sectionRules, wholeFileRules, WHOLE_FILE_SECTION } from '../src/host/sectionRules.js';
 
 const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');
 
@@ -134,5 +135,61 @@ describe('sectionRules', () => {
     // unrecognized section to derived would forbid drops the host would accept.
     const rules = sectionRules({ children: [{ name: 'notASection' }] });
     expect(rules[0].isDerived).toBe(false);
+  });
+});
+
+// A MAT-file has no section layer: its variables are the root node's children, and the whole
+// file is the one place a paste or a drop can land (design D2). So its rules are ONE rule, for
+// a section named '' — the name its clipboard and drag items carry as their source section,
+// which is what makes a same-file move the usual same-section no-op in dropDecision.
+describe('wholeFileRules', () => {
+  it("is one rule for the '' section, labelled as the caller says, never derived", () => {
+    const rules = wholeFileRules({ getAdmittedTypes: () => ['MatlabVariable', 'Simulink.Parameter'] }, 'gains.mat');
+    expect(rules).toEqual([
+      { sectionName: '', sectionLabel: 'gains.mat', isDerived: false, allowedTypes: ['MatlabVariable', 'Simulink.Parameter'] },
+    ]);
+    expect(WHOLE_FILE_SECTION).toBe('');
+  });
+
+  it('allows what core says the file admits to a paste, not what its gallery can create', () => {
+    // The same split sectionRules makes for a dictionary section (C-180): the gallery reads
+    // getAllowedTypes, the paste prediction reads getAdmittedTypes.
+    const model = { getAllowedTypes: () => ['MatlabVariable'], getAdmittedTypes: () => ['MatlabVariable', 'Simulink.Bus'] };
+    expect(wholeFileRules(model, 'f.mat')[0].allowedTypes).toEqual(['MatlabVariable', 'Simulink.Bus']);
+  });
+
+  it('restricts nothing on a core with no admitted list, rather than borrowing the creation list', () => {
+    // An empty list is dropDecision's "no restriction": the cursor and Paste then offer what
+    // core's own paste is left to refuse with its own words. Borrowing getAllowedTypes would
+    // instead refuse, silently, anything the gallery cannot create.
+    expect(wholeFileRules({ getAllowedTypes: () => ['MatlabVariable'] }, 'f.mat')[0].allowedTypes).toEqual([]);
+    expect(wholeFileRules(null, 'f.mat')[0].allowedTypes).toEqual([]);
+  });
+
+  it('a list core cannot give is no restriction too, and never core’s own array', () => {
+    expect(wholeFileRules({ getAdmittedTypes: () => { throw new Error('boom'); } }, 'f.mat')[0].allowedTypes).toEqual([]);
+    expect(wholeFileRules({ getAdmittedTypes: () => 'Simulink.Bus' }, 'f.mat')[0].allowedTypes).toEqual([]);
+    const own = ['MatlabVariable'];
+    const listed = wholeFileRules({ getAdmittedTypes: () => own }, 'f.mat')[0].allowedTypes;
+    expect(listed).toEqual(own);
+    expect(listed).not.toBe(own);
+  });
+
+  it("answers a real MatNode with core's admitted list, or none on a core that has none", () => {
+    const uri = 'test://rules-whole.mat';
+    DataModel.removeDataSource(uri);
+    const mat: any = DataModel.addMatSourceParsed(uri, { header: 'MATLAB 5.0', variables: [] }, { path: uri });
+    const expected = typeof mat.getAdmittedTypes === 'function' ? mat.getAdmittedTypes() : [];
+    expect(wholeFileRules(mat, 'rules-whole.mat')).toEqual([
+      { sectionName: '', sectionLabel: 'rules-whole.mat', isDerived: false, allowedTypes: expected },
+    ]);
+  });
+
+  it('is a rule no dictionary posts: every section of a real dictionary has a name', () => {
+    // The webview reads a '' rule as "this table is one target" (sectionRuleForRow), so a
+    // dictionary posting one would turn every row-less right-click into a paste target.
+    const uri = 'test://rules-noempty.sldd';
+    invalidate(uri);
+    expect(sectionRules(getModel(uri, 'arch.sldd', archText)).some((r) => r.sectionName === WHOLE_FILE_SECTION)).toBe(false);
   });
 });

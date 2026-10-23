@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dropDecision, rejectReason } from '../src/webview/dropDecision.js';
+import { dropDecision, isNoopMove, rejectReason } from '../src/webview/dropDecision.js';
 import { getModel, invalidate } from '../src/host/SlddModel.js';
 import { sectionRules } from '../src/host/sectionRules.js';
 
@@ -256,6 +256,39 @@ describe('dropDecision — same-section move is a no-op', () => {
   });
 });
 
+// A MAT-file is ONE target: its host posts a rule for section '' and its items carry '' as
+// their source section (design D2), so the same-section rule above needs no case of its own.
+describe("dropDecision — a section-less document's '' section", () => {
+  const matTarget = (docUri = 'gains.mat') => ({
+    docUri, sectionName: '', sectionLabel: 'gains.mat', isDerived: false, allowedTypes: ['MatlabVariable', 'Simulink.Parameter'],
+  });
+  const fromMat = (items: any[], docUri = 'gains.mat') => ({ docUri, items: items.map((it) => ({ ...it, sectionName: '' })) });
+
+  it('a move within one MAT-file is the same-section no-op; a copy duplicates', () => {
+    expect(dropDecision(fromMat([param()]), matTarget(), 'move')).toMatchObject({ noop: true, canDrop: false });
+    expect(dropDecision(fromMat([param()]), matTarget(), 'copy')).toMatchObject({ noop: false, canDrop: true });
+  });
+
+  it('between two MAT-files, or a dictionary and a MAT-file, a move really moves', () => {
+    expect(dropDecision(fromMat([param()], 'other.mat'), matTarget(), 'move')).toMatchObject({ noop: false, canDrop: true });
+    expect(dropDecision(designSource([param()], 'gains.mat'), matTarget(), 'move').noop).toBe(false);
+    expect(dropDecision(fromMat([bus()]), designTarget('gains.mat'), 'move').noop).toBe(false);
+  });
+
+  it('an item that names no section is never part of a no-op, even onto the empty-named one', () => {
+    // dragState items always name one; a clipboard item from an older host may not, and
+    // `undefined` must not read as ''.
+    expect(dropDecision({ docUri: 'gains.mat', items: [param()] }, matTarget(), 'move').noop).toBe(false);
+  });
+
+  it("refuses what the file does not admit, naming the file", () => {
+    expect(dropDecision(designSource([bus()], 'a.sldd'), matTarget(), 'move')).toMatchObject({
+      canDrop: false,
+      tooltip: 'Bus cannot be in gains.mat',
+    });
+  });
+});
+
 describe('dropDecision — multi-select: any rejected rejects all', () => {
   it('a Bus + a Parameter dropped into arch is rejected (the Parameter has no home)', () => {
     const d = dropDecision(designSource([bus(), param()], 'b.sldd'), archTarget('a.sldd'), 'copy');
@@ -379,5 +412,29 @@ describe('dropDecision — an mpt entry, against the rules a real model posts', 
     expect(rejectReason(realTarget('arch'), mptParam())).toBe('Simulink Parameter cannot be in Architectural Data');
     expect(rejectReason(realTarget('arch'), mptSignal())).toBe('Simulink Signal cannot be in Architectural Data');
     expect(rejectReason(realTarget('config'), mptParam())).toBe('Simulink Parameter cannot be in Configurations');
+  });
+});
+
+// The no-op is one rule asked from two places: a drop (dropDecision) and the Paste of a cut
+// (menuItems, review #7). isNoopMove IS that rule; this pins dropDecision to it, case by case.
+describe('isNoopMove — the rule dropDecision\'s no-op is', () => {
+  const docs = ['a.sldd', 'b.sldd'];
+  const sectionSets = [['design'], ['arch'], ['design', 'design'], ['design', 'arch'], [''], []];
+  for (const docUri of docs) {
+    for (const sections of sectionSets) {
+      for (const mode of ['move', 'copy'] as const) {
+        it(`${docUri} ${JSON.stringify(sections)} ${mode} onto a.sldd design`, () => {
+          const source = { docUri, items: sections.map((sectionName) => ({ ...bus(), sectionName })) };
+          const target = designTarget('a.sldd');
+          expect(dropDecision(source, target, mode).noop).toBe(isNoopMove(source, target, mode));
+        });
+      }
+    }
+  }
+
+  it('is never a no-op without a source document or a target section to compare', () => {
+    const items = [{ ...bus(), sectionName: 'design' }];
+    expect(isNoopMove({ docUri: '', items }, { ...designTarget(''), docUri: '' }, 'move')).toBe(false);
+    expect(isNoopMove({ docUri: 'a.sldd', items: [bus()] }, { ...designTarget('a.sldd'), sectionName: undefined as any }, 'move')).toBe(false);
   });
 });

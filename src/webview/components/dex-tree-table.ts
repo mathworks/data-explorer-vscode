@@ -1151,6 +1151,8 @@ export class DexTreeTable extends LitElement {
         color: var(--dex-color-text-secondary, #888);
         font-size: 13px;
         font-style: italic;
+        /* Focusable only to give the table the keyboard, like .table-container: no ring. */
+        outline: none;
       }
 
       /* Waiting for the first payload. This lives INSIDE the component, in the
@@ -1467,8 +1469,9 @@ export class DexTreeTable extends LitElement {
   @property({ attribute: false }) addClasses: readonly string[] | null = null;
 
   // Whether a row can be dragged, or a dragged row let go over one. False where rows have no form
-  // to travel in (setRows' `clipboard: false`, a MAT-file): no row is draggable, and a drag from
-  // another table draws no drop target here.
+  // to travel in (setRows' `clipboard: false`, a MAT-file today) or the document is read-only
+  // (table-main sets it from both): no row is draggable, and a drag from another table draws no
+  // drop target here, on a row or on the empty body.
   @property({ type: Boolean }) rowDrag = true;
 
   get selectedRowId(): string {
@@ -1523,10 +1526,11 @@ export class DexTreeTable extends LitElement {
   // the completed action in sync with the "Move"/"Copy" the tooltip showed.
   private _lastDragMode: 'copy' | 'move' = 'move';
 
-  // Predicts a drop for the row under the cursor, injected by the host-side glue
-  // (table-main) and backed by the pure dropDecision. Returns null when there is
-  // no active drag or the target can't be resolved, in which case the table
-  // falls back to its built-in permissive drag behavior.
+  // Predicts a drop for the row under the cursor ('' for the empty body), injected by the
+  // host-side glue (table-main) and backed by the pure dropDecision. Returns null when it
+  // cannot predict — no drag it was told about, or a target with no rule — and null REFUSES:
+  // with glue present, "cannot say" is not "yes". Only a table with no predictor at all
+  // falls back to the built-in permissive drag behavior, so it is usable without the glue.
   @property({ attribute: false }) dropPredictor:
     | ((
         targetRowId: string,
@@ -2750,8 +2754,20 @@ export class DexTreeTable extends LitElement {
     }
   }
 
+  // A right-click on space that holds no row — under the last row, or the "No data" of an
+  // empty table. Reported with no row, and the glue (table-main) decides whether there is a
+  // menu: only a document that is ONE target (a MAT-file, whose host posts a rule for the whole
+  // file) has one there, offering Paste. A row's own handler stops its event, so this never
+  // answers a right-click on a row a second time.
   private _onContainerContextMenu(e: MouseEvent): void {
     e.preventDefault();
+    this.dispatchEvent(
+      new CustomEvent('dex-table-context-menu', {
+        detail: { x: e.clientX, y: e.clientY, rowId: null },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private _onRowContextMenu(rowId: string, e: MouseEvent): void {
@@ -2924,11 +2940,21 @@ export class DexTreeTable extends LitElement {
     // Remember the mode from this dragover; the drop event can't read it reliably.
     this._lastDragMode = mode;
 
-    // Ask the injected predictor whether this drop is allowed and what to show.
-    // With no predictor (or no active drag it recognizes), fall back to the
-    // built-in permissive behavior so drag still works without the host glue.
-    const decision = this.dropPredictor ? this.dropPredictor(rowId, mode) : null;
-    if (decision) {
+    // Ask the injected predictor whether this drop is allowed and what to show. With no
+    // predictor, fall back to the built-in permissive behavior so drag still works without
+    // the host glue; a predictor that has no answer refuses (see dropPredictor).
+    if (this.dropPredictor) {
+      const decision = this.dropPredictor(rowId, mode);
+      if (!decision) {
+        // Nothing to predict with (see dropPredictor): refuse, and mark no row — there is
+        // no verdict to show, and a forbidden highlight would claim one.
+        this._dropTargetId = null;
+        this._dropPosition = null;
+        this._dropForbidden = false;
+        this._dropTooltip = '';
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+        return;
+      }
       this._dropTargetId = rowId;
       this._dropPosition = 'on';
       this._dropForbidden = !decision.canDrop;
@@ -2957,6 +2983,62 @@ export class DexTreeTable extends LitElement {
     this._dropTooltip = '';
   }
 
+  // Whether a drag event over the table body came from a row or the header, which answer it
+  // themselves (_onRowDragOver/_onRowDrop, the column reorder). Both bubble to the body.
+  private _isRowOrHeaderEvent(e: Event): boolean {
+    const target = e.target as Element | null;
+    return !!target?.closest?.('tr.data-row, thead');
+  }
+
+  // A row drag over space that holds no row: under the last row, or an empty table's "No
+  // data". The same question a row asks the predictor, about no row ('') — which the glue
+  // answers only for a document that is ONE target (a MAT-file's whole-file rule), so an empty
+  // MAT-file can still be dropped on. Elsewhere the answer is null and the drop is refused, as
+  // the body always refused it. No predictor, no target: unlike a row, the body has nothing to
+  // report to a host that did not say what it takes.
+  private _onBodyDragOver(e: DragEvent): void {
+    if (this._isRowOrHeaderEvent(e) || this._dragColId) return;
+    if (!this.rowDrag || !this.dropPredictor) {
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+      return;
+    }
+    const mode = this._dragModeFrom(e);
+    this._lastDragMode = mode;
+    const decision = this.dropPredictor('', mode);
+    this._dropTargetId = null;
+    this._dropPosition = null;
+    this._dropForbidden = !!decision && !decision.canDrop;
+    this._dropTooltip = decision?.tooltip ?? '';
+    this._dropTooltipX = e.clientX;
+    this._dropTooltipY = e.clientY;
+    if (decision?.canDrop) {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = decision.cursor === 'copy' ? 'copy' : 'move';
+    } else if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'none';
+    }
+  }
+
+  private _onBodyDrop(e: DragEvent): void {
+    if (this._isRowOrHeaderEvent(e) || this._dragColId) return;
+    e.preventDefault();
+    const mode = this._lastDragMode;
+    const decision = this.rowDrag && this.dropPredictor ? this.dropPredictor('', mode) : null;
+    this._dragSourceId = null;
+    this._dropTargetId = null;
+    this._dropPosition = null;
+    this._dropForbidden = false;
+    this._dropTooltip = '';
+    if (!decision?.canDrop) return;
+    this.dispatchEvent(
+      new CustomEvent('dex-row-drop', {
+        detail: { targetRowId: '', mode },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   private _onRowDragLeave(_e: DragEvent): void {
     this._dropTargetId = null;
     this._dropPosition = null;
@@ -2973,8 +3055,8 @@ export class DexTreeTable extends LitElement {
     // downgrade a Cmd-drag Copy to a Move. dragover tracked it correctly.
     const mode = this._lastDragMode;
 
-    // Respect the predictor: never complete a rejected or no-op drop. The drag
-    // may have started in ANOTHER webview, so the source rows come from the host
+    // Respect the predictor: never complete a rejected, no-op or unpredictable drop. The
+    // drag may have started in ANOTHER webview, so the source rows come from the host
     // drag register, not local dataTransfer (which doesn't cross the boundary) —
     // the drop event only needs to carry the target + mode.
     const decision = this.dropPredictor ? this.dropPredictor(targetRowId, mode) : null;
@@ -2985,7 +3067,7 @@ export class DexTreeTable extends LitElement {
     this._dropForbidden = false;
     this._dropTooltip = '';
 
-    if (decision && !decision.canDrop) return;
+    if (this.dropPredictor && !decision?.canDrop) return;
 
     this.dispatchEvent(
       new CustomEvent('dex-row-drop', {
@@ -3904,7 +3986,16 @@ export class DexTreeTable extends LitElement {
         </div>
       `;
     }
-    return html`<div class="empty-state">No data</div>`;
+    // Focusable (out of the tab order) so a click here gives the table the keyboard: Cmd+V
+    // on an empty MAT-file pastes into it. A target for a right-click and a drop, like the
+    // blank space under a table's rows (_onContainerContextMenu, _onBodyDragOver).
+    return html`<div
+      class="empty-state"
+      tabindex="-1"
+      @contextmenu=${this._onContainerContextMenu}
+      @dragover=${this._onBodyDragOver}
+      @drop=${this._onBodyDrop}
+    >No data</div>`;
   }
 
   private _renderTable(allVisible: TreeTableRow[], totalRows: number, visibleCols: string[]) {
@@ -3937,6 +4028,8 @@ export class DexTreeTable extends LitElement {
         @scroll=${this._onScroll}
         @keydown=${this._onTableKeyDown}
         @contextmenu=${this._onContainerContextMenu}
+        @dragover=${this._onBodyDragOver}
+        @drop=${this._onBodyDrop}
       >
         <div class="virtual-spacer" style="height: ${totalHeight + headerHeight}px;">
           <table>

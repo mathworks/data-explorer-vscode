@@ -8,8 +8,9 @@
 // building a row for every one of them. The default is Infinity — the whole tree, as
 // before — so only a caller that can answer a `requestChildren` passes a budget.
 import { RowCellPool } from 'data-explorer-core';
-import { stampMatrix } from './matrixPayload.js';
-import { planRows, stampLazy, type RowPlan } from './lazyRows.js';
+import { WHOLE_FILE_SECTION } from '../common/sectionRowId.js';
+import { planRows, type RowPlan } from './lazyRows.js';
+import { stampRow, type ClipMark } from './rowStamp.js';
 
 /** Rows for a .mat subtree, plus what the plan held back (for the banner). */
 export interface MatRows {
@@ -25,6 +26,25 @@ export interface MatRows {
 export type SavedStatus = ReadonlyMap<unknown, string>;
 
 /**
+ * What a MAT-file's rows take on top of the Status column: the stamps a dictionary's rows
+ * have had all along (rowStamp.ts), absent until the MAT-file's host offers the clipboard.
+ */
+export interface MatStampOptions {
+  /**
+   * The variables on the host clipboard, for the cut/copied affordance. Keyed ('', name): a
+   * MAT-file has no sections, and its clipboard and drag items carry '' as their source
+   * section, so the one key spelling serves both formats.
+   */
+  clipMark?: ClipMark;
+  /**
+   * Whether a variable travels on the clipboard (`_canCopy` on every row). Absent is false,
+   * which is what the editable view sends today (`clipboard: false` on its setRows). The read-only
+   * view shows no menu, so it reads nothing here.
+   */
+  canCopy?: boolean;
+}
+
+/**
  * Rows for everything under `node`, within `budget`.
  *
  * The whole builder. A `.mat`'s variables ARE its root node's children and a
@@ -34,27 +54,38 @@ export type SavedStatus = ReadonlyMap<unknown, string>;
  * The node's own row is never emitted: at the top there is nothing to show for the
  * file itself, and on an expansion the table already holds the row that was clicked.
  */
-export function buildMatRowsPlanned(node: any, budget: number = Infinity, saved?: SavedStatus): MatRows {
-  return plannedRows((node?.children ?? []) as any[], budget, saved);
+export function buildMatRowsPlanned(
+  node: any,
+  budget: number = Infinity,
+  saved?: SavedStatus,
+  opts?: MatStampOptions,
+): MatRows {
+  return plannedRows((node?.children ?? []) as any[], budget, saved, opts);
 }
 
 /**
  * The rows of ONE variable, its own row first, within `budget`: what the editable view repaints
  * after an edit of that variable, spliced over the run the table holds (`updateEntryRows`). The
  * same walk as the payload's, from the variable instead of from the file, so a repainted
- * variable's rows are the rows the next whole payload would hold for it.
+ * variable's rows are the rows the next whole payload would hold for it — given the same `opts`.
  */
-export function buildMatVariableRows(variable: any, budget: number = Infinity, saved?: SavedStatus): any[] {
-  return plannedRows([variable], budget, saved).rows;
+export function buildMatVariableRows(
+  variable: any,
+  budget: number = Infinity,
+  saved?: SavedStatus,
+  opts?: MatStampOptions,
+): any[] {
+  return plannedRows([variable], budget, saved, opts).rows;
 }
 
-function plannedRows(roots: any[], budget: number, saved: SavedStatus | undefined): MatRows {
+function plannedRows(roots: any[], budget: number, saved: SavedStatus | undefined, opts: MatStampOptions | undefined): MatRows {
   const rows: any[] = [];
   // One cell pool per build, on the same terms as buildRows' — see the note there. A pool per
   // call, the repaint of one variable included: one that outlived the call would pin the cells
   // of every build it had shared.
   const pool = new RowCellPool();
   const plan = planRows(roots, budget);
+  const canCopy = opts?.canCopy ?? false;
   for (const { node: n, deferred } of plan.planned) {
     let built: any;
     try {
@@ -63,43 +94,22 @@ function plannedRows(roots: any[], budget: number, saved: SavedStatus | undefine
       continue;
     }
     if (!built) continue;
-    // One copy, which the stamps below may then write: toRow's object is the node's.
-    const row = { ...built, ...capabilityFlags(n) };
-    // Core's status says "edited since the file was read", and stays so through a save (it is
-    // what makes the next save write the variable fresh); the editable view's column says
-    // "differs from the file on disk", which is the caller's answer. A variable's own row only:
-    // core marks nothing under one.
-    if (saved && n.isEntry) row.Status = saved.get(n) ?? '';
-    // Same grid-view stamp as the sldd/slx builder — see test/matrixStamp.test.ts,
-    // which asserts the rule against both builders so they cannot drift.
-    rows.push(pool.share(stampLazy(stampMatrix(row, n), deferred)));
+    // A variable's own row takes the entry stamps; core marks nothing under one. Its Status:
+    // core's says "edited since the file was read", and stays so through a save (it is what
+    // makes the next save write the variable fresh); the editable view's column says "differs
+    // from the file on disk", which is the caller's answer.
+    const entry = n.isEntry
+      ? { section: WHOLE_FILE_SECTION, name: n.name, status: saved ? (saved.get(n) ?? '') : undefined, clipMark: opts?.clipMark }
+      : undefined;
+    // The same chain as the sldd/slx builder's (rowStamp.ts) — see test/rowStamp.test.ts and
+    // test/matrixStamp.test.ts, which assert it against both builders so they cannot drift.
+    // Its Delete and Add Child flags are core's answers, which core gives from what a save of
+    // the file can write (MatNode._editRefusal), so an item the menu offers is one the save
+    // keeps. On every row, a read-only file's too: a view that shows a file read-only shows no
+    // menu, so there the flags cost a few bytes a row and are read by nothing.
+    rows.push(stampRow(built, n, { canCopy, entry, deferred, pool }));
   }
   return { rows, plan };
-}
-
-/**
- * The context-menu flags of a MAT-file's row, as rowBuilder stamps a dictionary's: what the
- * webview, which holds no model, builds its menu from. Core answers both from what a save of the
- * file can write (MatNode._editRefusal), so a Delete or an Add Child the menu offers is one the
- * save keeps. A variable is removable from its file, and anything under one from its parent if
- * the parent says so. Never copyable: a MAT-file's value has no dictionary entry to travel as,
- * and the editable view offers no clipboard (`clipboard: false` on its setRows).
- *
- * On every row, a read-only file's too: the MAT-file editor is the only view that builds these
- * rows, and one that shows a file read-only shows no menu, so the flags there cost a few bytes a
- * row and are read by nothing. A check that throws offers nothing, and the row still shows.
- */
-function capabilityFlags(n: any): { _canCopy: boolean; _canDelete: boolean; _canAddChild: boolean } {
-  let canDelete = false;
-  let canAddChild = false;
-  try {
-    const parent = n.parent;
-    canDelete = !!n.isEntry || !!(parent && typeof parent.canRemoveChild === 'function' && parent.canRemoveChild());
-    canAddChild = typeof n.canAddChild === 'function' && !!n.canAddChild();
-  } catch {
-    /* offered nothing */
-  }
-  return { _canCopy: false, _canDelete: canDelete, _canAddChild: canAddChild };
 }
 
 /** The rows alone, for every caller that cannot answer a fetch and so passes no budget. */

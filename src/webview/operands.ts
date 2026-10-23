@@ -13,10 +13,12 @@
 // `sectionRules` + `dropDecision` already answer "can this land here".
 //
 // Pure and row-shaped on purpose: the webview holds no model, so an owning entry is
-// found by walking `parent` until the parent is a section header. The model-side
-// mirror of the same rule is core's planDeletion, and the two are pinned against
-// each other in multiSelectInvariants.test.ts — that pairing is the point, because this
-// is the `one rule, two paths` bug class.
+// found by walking `parent` until the parent is a section header — or until there is no
+// parent, which is where a MAT-file's variables sit: its table has no section rows, so
+// every row of it resolves to no section, which table-main reads as the file's one
+// whole-file rule. The model-side mirror of the same rule is core's planDeletion, and
+// the two are pinned against each other in multiSelectInvariants.test.ts — that pairing
+// is the point, because this is the `one rule, two paths` bug class.
 import { isSectionRowId } from '../common/sectionRowId.js';
 
 /** The subset of a table row this module reads. */

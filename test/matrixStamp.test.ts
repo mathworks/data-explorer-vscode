@@ -1,6 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 // One rule, two builders. `buildEntryRows` (.sldd/.slx) and `buildMatRows` (.mat)
-// are independent, so the _matrix stamp is asserted here ONCE against both,
+// are independent walks that stamp through one chain (rowStamp.ts, pinned in
+// rowStamp.test.ts), so the _matrix stamp is asserted here ONCE against both,
 // rather than twice in two suites that could drift apart.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';

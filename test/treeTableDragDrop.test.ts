@@ -270,6 +270,27 @@ describe('the host predictor decides what a drop does', () => {
     table.remove();
   });
 
+  it('a predictor with no answer refuses the drop rather than waving it through', async () => {
+    // Review #6. The glue answers null when it cannot predict — no drag it was told about (a
+    // file or text dragged in from outside, or the host's broadcast not yet arrived), or a
+    // target with no rule. The permissive fallback below exists for a table with NO glue;
+    // with glue present, "cannot say" is not "yes", and a drop it let through reached the
+    // host as a drop of nothing.
+    const table = await mount(ROWS);
+    table.dropPredictor = () => null;
+    const drops: unknown[] = [];
+    table.addEventListener('dex-row-drop', (e) => drops.push((e as CustomEvent).detail));
+    fire(table, 'a', 'dragstart');
+    const { ev, dt } = fire(table, 'b', 'dragover');
+    await table.updateComplete;
+    expect(ev.defaultPrevented).toBe(false);
+    expect(dt.dropEffect).toBe('none');
+    expect((table.shadowRoot!.querySelector('tr[data-row-id="b"]') as HTMLElement).className).not.toContain('drop-target-on');
+    fire(table, 'b', 'drop');
+    expect(drops).toEqual([]);
+    table.remove();
+  });
+
   it('with no predictor the drop still works, so the table is usable without host glue', async () => {
     const table = await mount(ROWS);
     const drops: any[] = [];

@@ -106,6 +106,32 @@ function reject(tooltip: string): DropDecision {
   return { canDrop: false, cursor: 'no-drop', tooltip, noop: false };
 }
 
+// Whether moving `source` onto `target` would do nothing: same document + every item already
+// in the target section + move = reorder within one section, which we treat as a no-op (a
+// move here would delete and re-add the same entries). This is the paste rule, asked of the
+// same per-item sections: a cut pasted into the section every item came from does nothing,
+// and the host clears the cut without an edit. A drag whose rows span sections is NOT a
+// no-op, even onto one of its own sections: the rows from elsewhere really do move, and the
+// host deletes and re-adds the rest under the names they already had, as a cut and paste does.
+// A COPY into the same section is a genuine duplicate, so it is never a no-op. A MAT-file's
+// one section is '' and its items carry '', so a move within one file is this case too.
+//
+// Exported because the Paste of a cut asks it as well (menuItems): one rule for the drop and
+// the paste. Nothing to compare is no answer, so never a no-op: a source with no document, or
+// a target or item with no section — an older host's clipboard broadcast names neither, and
+// `undefined === undefined` must not read as "already there".
+export function isNoopMove(source: DragSource, target: DropTarget, mode: DragMode): boolean {
+  if (mode !== 'move') return false;
+  const items = source.items ?? [];
+  return (
+    items.length > 0 &&
+    !!source.docUri &&
+    source.docUri === target.docUri &&
+    typeof target.sectionName === 'string' &&
+    items.every((it) => it.sectionName === target.sectionName)
+  );
+}
+
 export function dropDecision(source: DragSource, target: DropTarget, mode: DragMode): DropDecision {
   // PRECONDITION (untested): `source` is built from the host's DragDescriptor,
   // whose `items` is always an array (dragState.dragDescriptor maps the register).
@@ -115,17 +141,7 @@ export function dropDecision(source: DragSource, target: DropTarget, mode: DragM
   const items = source.items ?? [];
   if (items.length === 0) return reject('Nothing to drop');
 
-  // Same document + every item already in the target section + move = reorder
-  // within one section, which we treat as a no-op (a move here would delete and
-  // re-add the same entries). This is the paste rule, asked of the same per-item
-  // sections: a cut pasted into the section every item came from does nothing. A
-  // drag whose rows span sections is NOT a no-op, even onto one of its own
-  // sections: the rows from elsewhere really do move, and the host deletes and
-  // re-adds the rest under the names they already had, as a cut and paste does.
-  // A COPY into the same section is a genuine duplicate, so it is allowed.
-  const sameSection =
-    source.docUri === target.docUri && items.every((it) => it.sectionName === target.sectionName);
-  if (sameSection && mode === 'move') {
+  if (isNoopMove(source, target, mode)) {
     return { canDrop: false, cursor: 'no-drop', tooltip: '', noop: true };
   }
 
