@@ -2,6 +2,10 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## [1.44.2] — 2026-10-23
+
+- Security updates.
+
 ## [1.44.1] — 2026-10-23
 
 - The overview now explains how this extension works alongside the MATLAB extension.
