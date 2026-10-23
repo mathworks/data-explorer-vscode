@@ -51,7 +51,8 @@ import { clearDrag, getDrag } from './dragState.js';
 import { broadcastDragState, registerAddGalleryView, unregisterAddGalleryView } from './editorHub.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, type FollowedDocument } from './diskFollow.js';
-import { SaveMarks, type SaveMark } from './saveMarks.js';
+import { SaveMarks, replacementsIn, type SaveMark, type SaveSnapshot } from './saveMarks.js';
+import { saveSettled } from './settledSave.js';
 import { sameFile, writeFileSafely } from './safeWrite.js';
 import { binaryEditSrcId } from '../common/srcId.js';
 import { basename } from '../common/pathUtil.js';
@@ -83,6 +84,11 @@ interface Observed {
   steps: number;
   touched: Set<any>;
   added: Set<any>;
+  /**
+   * Each of `added` that is put in the place of a variable the gesture took out, and that one:
+   * core's retype, a variable of another class swapped in under the same name (saveMarks.ts).
+   */
+  replaced: Map<any, any>;
   /** The variables before the gesture, each with the row id the table spells it by. */
   before: Map<any, string>;
   order: any[];
@@ -99,7 +105,7 @@ interface Observed {
 function observe(mat: any, srcId: string, run: () => void): Observed {
   const before = new Map<any, string>();
   for (const v of mat.children) before.set(v, v.id);
-  const observed: Observed = { steps: 0, touched: new Set(), added: new Set(), before, order: [...mat.children] };
+  const observed: Observed = { steps: 0, touched: new Set(), added: new Set(), replaced: new Map(), before, order: [...mat.children] };
   // The variable a node is or is under, while it is in the file; a variable just removed is
   // known by having been in it.
   const variableOf = (node: any): any => {
@@ -129,6 +135,7 @@ function observe(mat: any, srcId: string, run: () => void): Observed {
   } finally {
     for (const s of subs) s.remove();
   }
+  observed.replaced = replacementsIn(before, observed.added, (v) => v.id, (v) => v.parent === mat);
   return observed;
 }
 
@@ -138,12 +145,14 @@ function variablesMoved(mat: any, observed: Observed): boolean {
   return now.length !== observed.order.length || now.some((v, i) => v !== observed.order[i]);
 }
 
-/** One open view of a document: the two ways the document asks it to repaint. */
+/** One open view of a document: the ways the document asks it to repaint. */
 interface DocumentView {
   /** Every row, from the tree as it stands. */
   repaintAll(): void;
   /** The rows of these variables, each spliced over the run the table holds by `before`'s id. */
   repaintVariables(variables: Iterable<any>, before?: ReadonlyMap<any, string>): void;
+  /** Every row again, if the classes the gallery was last told the file takes are no longer core's. */
+  refreshGallery(): void;
 }
 
 class MatDocument implements vscode.CustomDocument, FollowedDocument {
@@ -162,7 +171,10 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
    */
   generation = 0;
 
-  /** Moved by every change to the tree, so a paint that awaited can tell it is stale. */
+  /**
+   * Moved by every change to the tree, and by every save (which moves the Status column), so a
+   * paint that awaited can tell it is stale.
+   */
   version = 0;
 
   /** Which variables differ from the file as last saved, for the Status column. */
@@ -285,7 +297,7 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
   pushEdit(label: string, observed: Observed, touched: Iterable<any> = []): void {
     const steps = observed.steps;
     const generation = this.generation;
-    const mark = this.marks.push([...observed.touched, ...touched], observed.added);
+    const mark = this.marks.push([...observed.touched, ...touched], observed.added, observed.replaced);
     this.version++;
     this.edits.pushed();
     this._onDidChange.fire({
@@ -339,17 +351,32 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
     }
     if (variablesMoved(mat, observed)) return this.repaintAll();
     const present = [...observed.touched].filter((v) => v.parent === mat);
-    for (const view of [...this.views]) view.repaintVariables(present, observed.before);
+    for (const view of [...this.views]) {
+      view.repaintVariables(present, observed.before);
+      // An edit can change what core says the file takes a new variable of, and so can its undo
+      // and its redo, which come through here as the gesture does.
+      view.refreshGallery();
+    }
   }
 
   /** Repaint the variables whose Status changed between two answers of `marks`. */
   repaintMarks(before: ReadonlyMap<any, SaveMark>): void {
+    let mat: any;
+    try {
+      mat = this.model();
+    } catch {
+      return;
+    }
     const after = this.marks.marks();
     const changed = new Set<any>();
     for (const [v, m] of before) if (after.get(v) !== m) changed.add(v);
     for (const [v, m] of after) if (before.get(v) !== m) changed.add(v);
-    if (changed.size === 0) return;
-    for (const view of [...this.views]) view.repaintVariables(changed);
+    // Of the variables in the file only. One an edit took out of it is marked all the same, and
+    // has no rows: a splice of rows the table does not hold has the webview ask for every row
+    // again, which resets its banners.
+    const present = [...changed].filter((v) => v.parent === mat);
+    if (present.length === 0) return;
+    for (const view of [...this.views]) view.repaintVariables(present);
   }
 
   repaintAll(): void {
@@ -580,26 +607,35 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
 
     // The classes the gallery was last told the file can take a new variable of. Core's answer
     // (MatNode.getAllowedTypes) can change with the file — a reload, a subsystem a save no longer
-    // writes as read — so a gesture that changes it repaints the whole table, which tells the
-    // gallery again (gesture, below).
+    // writes as read — so an edit that changes it, or the undo or redo of one, repaints the whole
+    // table, which tells the gallery again (refreshGallery, below).
     let lastClasses: readonly string[] = [];
 
-    const post = async (): Promise<void> => {
-      let mat: any;
+    // The document's tree, or null once the view has been told why there is none.
+    const treeOrError = (): any => {
       try {
-        mat = document.model();
+        return document.model();
       } catch (err) {
         webview.postMessage({ type: 'error', message: `Failed to parse ${name}: ${document.describe(err)}` });
-        return;
+        return null;
       }
+    };
+
+    const post = async (): Promise<void> => {
+      let mat = treeOrError();
+      if (!mat) return;
       try {
         let built = build(mat);
         // The Usage column, as the read-only view fills it. Awaited only here: an edit's repaint
         // fills it from the graph this built (annotateDataRowsNow).
         await annotateDataRows(uriString, built.planned.rows).catch(() => false);
         if (document.disposed) return;
-        // An edit landed while the graph was being built: these rows are from before it.
+        // The document moved while the graph was being built: these rows are from before it. A
+        // reload (replace) moves it onto another tree altogether, so the tree is asked for again,
+        // and the rows, the notice and the gallery's classes below are all of the one it holds.
         if (built.version !== document.version) {
+          mat = treeOrError();
+          if (!mat) return;
           built = build(mat);
           annotateDataRowsNow(uriString, built.planned.rows);
         }
@@ -643,12 +679,48 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
           webview.postMessage({ type: 'updateEntryRows', entryRowId: before?.get(v) ?? v.id, rows });
         }
       } catch (err) {
-        void post();
-        webview.postMessage({ type: 'error', message: `Failed to update the row: ${document.describe(err)}` });
+        repaintAndReport(`Failed to update the row: ${document.describe(err)}`);
       }
     };
 
-    const view: DocumentView = { repaintAll: () => void post(), repaintVariables };
+    // Every row painted again from the tree, and then `message` shown. In that order, and only
+    // once the paint is posted: a paint clears the error banner, and this one posts after its
+    // await, so a message sent beside it would be cleared as it arrived. A view closed by then
+    // has nothing left to tell (postPayload.ts).
+    const repaintAndReport = (message: string) => {
+      void post()
+        .then(() => webview.postMessage({ type: 'error', message }))
+        .catch(() => false);
+    };
+
+    // Put back what the table shows of `node`, from the tree, and then show `message`, if any:
+    // how a cell that shows what was typed is told what the tree holds, where the tree took
+    // nothing. The rows of the variable `node` is or is under; every row, where it is under none.
+    const putBack = (node: any, message?: string) => {
+      const mat = treeOrError();
+      if (!mat) return;
+      let v = node;
+      while (v && v.parent !== mat) v = v.parent;
+      if (!v) {
+        if (message) repaintAndReport(message);
+        else void post();
+        return;
+      }
+      repaintVariables([v]);
+      if (message) webview.postMessage({ type: 'error', message });
+    };
+
+    const refreshGallery = () => {
+      let mat: any;
+      try {
+        mat = document.model();
+      } catch {
+        return;
+      }
+      if (!sameList(allowedClasses(mat), lastClasses)) void post();
+    };
+
+    const view: DocumentView = { repaintAll: () => void post(), repaintVariables, refreshGallery };
     document.views.add(view);
 
     /**
@@ -659,13 +731,8 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
      * offers nothing either; this is the lock behind the door).
      */
     const gesture = (label: string, run: (mat: any) => void, touched: () => Iterable<any> = () => []): Observed | null => {
-      let mat: any;
-      try {
-        mat = document.model();
-      } catch (err) {
-        webview.postMessage({ type: 'error', message: `Failed to parse ${name}: ${document.describe(err)}` });
-        return null;
-      }
+      const mat = treeOrError();
+      if (!mat) return null;
       if (mat.readOnly) {
         webview.postMessage({ type: 'error', message: readOnlyNotice(mat) ?? `${name} is read-only.` });
         return null;
@@ -677,22 +744,22 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       if (observed.error) {
         // Whatever core did before it threw is in the tree, and the table is shown it whole.
         document.version++;
-        void post();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${document.describe(observed.error)}` });
+        repaintAndReport(`Failed to apply edit: ${document.describe(observed.error)}`);
         return null;
       }
+      // Its rows, and the gallery's classes where the edit moved them.
       document.repaint(observed);
-      if (!sameList(allowedClasses(mat), lastClasses)) void post();
       return observed;
     };
 
     // A value edit or a rename: core's editProperty, as the Property Inspector of core's own app
     // makes one, with the node selected. A refusal comes back as the cell's validation error, and
-    // the variable is repainted from the tree, which the refusal left as it was.
+    // the variable is repainted from the tree, which the refusal left as it was; so is every edit
+    // that did not land, since the table shows what was typed until it is told otherwise.
     const applyEdit = (msg: { rowId: string; columnId: string; oldValue: string; newValue: string }) => {
       const node = findNode(msg.rowId);
       if (!node) {
-        webview.postMessage({ type: 'error', message: 'Could not locate the edited item in the model.' });
+        repaintAndReport('Could not locate the edited item in the model.');
         return;
       }
       let result: unknown;
@@ -709,17 +776,11 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
           invalidValue: msg.newValue,
           previousValue: msg.oldValue,
         });
-        // Put the cell back: the table shows what was typed until it is told otherwise.
-        for (let v = node; v; v = v.parent) {
-          if (v.parent === document.model()) {
-            repaintVariables([v]);
-            break;
-          }
-        }
+        putBack(node);
         return;
       }
       if (refused === false) {
-        webview.postMessage({ type: 'error', message: `Could not edit ${msg.columnId} of this item.` });
+        putBack(node, `Could not edit ${msg.columnId} of this item.`);
         return;
       }
       if (msg.columnId === 'Name') webview.postMessage({ type: 'selectRows', rowIds: [node.id] });
@@ -816,7 +877,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     const noClipboard = (what: string) =>
       webview.postMessage({ type: 'error', message: `${what} is not available in a MAT-file.` });
 
-    const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
+    const handle = (msg: TableToHostMessage) => {
       if (msg?.type === 'ready') void post();
       else if (msg?.type === 'select') this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
       else if (msg?.type === 'edit') applyEdit(msg);
@@ -841,6 +902,16 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       } else if (msg?.type === 'requestChildren') {
         void answerChildRequest(webview, uriString, msg.nodeId, name, annotateDataRows, planner);
       } else if (msg?.type === 'undo' || msg?.type === 'redo') void vscode.commands.executeCommand(msg.type);
+    };
+
+    // A message that throws is said, as a gesture's throw is, over every row painted again from
+    // the tree: whatever it did before it threw is in it, and a cell may still show what was typed.
+    const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
+      try {
+        handle(msg);
+      } catch (err) {
+        repaintAndReport(`Failed to handle ${String(msg?.type)} in ${name}: ${document.describe(err)}`);
+      }
     });
 
     // The keyboard's Add (dataExplorer.addEntry): the webview adds a variable at once.
@@ -863,11 +934,17 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
 
   // --- Save / backup / revert --------------------------------------------------------------
 
-  async saveCustomDocument(document: MatDocument, _token: vscode.CancellationToken): Promise<void> {
-    const at = document.edits.here();
+  async saveCustomDocument(document: MatDocument, token: vscode.CancellationToken): Promise<void> {
+    // Written again if the stack moved while it was being written, so that VS Code, which calls
+    // what the document holds when this resolves saved, is right to (settledSave.ts).
+    await saveSettled(document.edits, token, () => this.writeDocument(document));
+  }
+
+  /** One write of the document as it stands, the save's own: one round of `saveSettled`. */
+  private async writeDocument(document: MatDocument): Promise<void> {
     document.saving = true;
     const before = document.marks.marks();
-    let snapshot: ReturnType<SaveMarks<any>['snapshot']>;
+    let snapshot: SaveSnapshot | undefined;
     try {
       // Before the first await, so the bytes are the document the save was asked for.
       const bytes = document.serialize();
@@ -878,13 +955,18 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       // for this one. The watcher's event for this write then finds the disk matching.
       document.stamp = (await this.write(document.uri, bytes)) ?? (await stampOf(document.uri));
       document.onDisk = bytes;
+    } catch (err) {
+      // Nothing was written, so what the snapshot held is never what the file holds.
+      if (snapshot) document.marks.release(snapshot);
+      throw err;
     } finally {
       document.saving = false;
     }
-    document.edits.saved(at);
     document.inConflict = false;
     document.overwriteStamp = undefined;
     document.marks.commit(snapshot);
+    // The Status column moved with it, which a paint on its await built before: it builds again.
+    document.version++;
     document.repaintMarks(before);
   }
 

@@ -131,6 +131,8 @@ export class EditStackMirror {
   /** The position that matches the file on disk, or `null` once that state is unreachable. */
   private savedAt: number | null = 0;
   private fromBackup: boolean;
+  /** How many times the stack has moved: see `moves`. */
+  private moved = 0;
 
   constructor(fromBackup = false) {
     this.fromBackup = fromBackup;
@@ -144,14 +146,17 @@ export class EditStackMirror {
   pushed(): void {
     if (this.savedAt !== null && this.savedAt > this.position) this.savedAt = null;
     this.position++;
+    this.moved++;
   }
 
   undone(): void {
     this.position--;
+    this.moved++;
   }
 
   redone(): void {
     this.position++;
+    this.moved++;
   }
 
   /** Where the stack is now, for a save to hand back to `saved` once its write lands. */
@@ -160,12 +165,22 @@ export class EditStackMirror {
   }
 
   /**
+   * How many times the stack has moved (an edit, an undo, a redo, a revert), for a save to tell
+   * whether the document it wrote is still the one it holds (settledSave.ts). The position alone
+   * cannot say: an undo and then a new edit put it back where it was, over another document.
+   */
+  get moves(): number {
+    return this.moved;
+  }
+
+  /**
    * What was applied at `at` is what is on disk: a save succeeded.
    *
    * `at` is the position when the save READ the document, not when its write finished. An
    * edit can land while the write is in flight, and the file does not have it. VS Code moves
-   * its save point when the save resolves, so it counts that edit as saved. Here it stays
-   * unsaved, which is the safe direction.
+   * its save point when the save resolves, so it would count that edit as saved; a save run by
+   * `saveSettled` writes again before it resolves, so that VS Code never does. Here, an edit
+   * after `at` stays unsaved, which is the safe direction.
    */
   saved(at: number = this.position): void {
     this.savedAt = at;
@@ -180,5 +195,6 @@ export class EditStackMirror {
    */
   reverted(): void {
     this.saved();
+    this.moved++;
   }
 }
