@@ -343,13 +343,21 @@ function installRows(rows: any[]): void {
   table._visibleRowsCache = null;
   const present = new Set(rows.map((r: { ID: string }) => r.ID));
   const stillSelected = prevSelected.filter((id) => present.has(id));
+  // Every selected row gone (a delete from the text view, the undo of an add): the
+  // selection named nothing any more, so the inspector showed a deleted entry and every
+  // chord found no operand. Cleared here, and the host told below — unless a pending
+  // selection takes over first, as a rename's does.
+  const vanished = prevSelected.length > 0 && stillSelected.length === 0;
   if (stillSelected.length > 0) table.selectedRowIds = stillSelected;
+  else if (vanished) table.selectedRowIds = [];
   if (typeof table.requestUpdate === 'function') table.requestUpdate();
   // A rename/structural edit posts selectRows then triggers this rebuild;
   // re-apply now that the rows it named exist.
   applyPendingSelection();
   // A cross-tab navigation may be waiting for its target row to appear.
   applyPendingNameSelection();
+  // Once: the next repaint starts from the empty selection, so it has nothing to report.
+  if (vanished && selectedRowIds().length === 0) vscode.postMessage({ type: 'select', rowIds: [] });
   // AFTER the selection, because selecting expands the row's ancestors and scrolls it into
   // view — an editor opened on a row still hidden under a collapsed section, or below the
   // viewport, is a table that has silently stopped responding to the keyboard.

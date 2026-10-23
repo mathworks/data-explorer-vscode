@@ -132,3 +132,52 @@ describe('a by-name selection in a table with no section rows prefers the top-le
     expect(table.selectedRowIds).toEqual(['d/design/A']);
   });
 });
+
+// #4: a repaint that removed every selected row (a delete from the text view, an undo of an
+// add, a revert) left the selection naming rows that no longer exist: the Property Inspector
+// went on showing a deleted entry and every chord found no operand. The selection now clears,
+// and the host is told so once.
+describe('a selection whose rows all vanished', () => {
+  const withoutB = () => DICT_ROWS().filter((r) => r.ID !== 'd/design/B');
+
+  it('is cleared, and the host told once', async () => {
+    await paint();
+    table.selectedRowIds = ['d/design/B'];
+    posted.length = 0;
+    send({ type: 'setRows', docUri: SLDD, rows: withoutB(), columns: ['Name'], columnLabels: {}, editable: true });
+    expect(table.selectedRowIds).toEqual([]);
+    expect(sent('select')).toEqual([{ type: 'select', rowIds: [] }]);
+    send({ type: 'setRows', docUri: SLDD, rows: withoutB(), columns: ['Name'], columnLabels: {}, editable: true });
+    expect(sent('select')).toHaveLength(1);
+  });
+
+  it('a selection that survives in part keeps the part, and says nothing new', async () => {
+    await paint();
+    table.selectedRowIds = ['d/design/A', 'd/design/B'];
+    posted.length = 0;
+    send({ type: 'setRows', docUri: SLDD, rows: withoutB(), columns: ['Name'], columnLabels: {}, editable: true });
+    expect(table.selectedRowIds).toEqual(['d/design/A']);
+    expect(sent('select')).toEqual([]);
+  });
+
+  it('a rename re-selects the row under its new id without a "nothing selected" in between', async () => {
+    await paint();
+    table.selectedRowIds = ['d/design/B'];
+    // The host asks for the new id first, then repaints (SlddTextEditorProvider's rename).
+    send({ type: 'selectRows', rowIds: ['d/design/B2'] });
+    posted.length = 0;
+    const renamed = DICT_ROWS().map((r) => (r.ID === 'd/design/B' ? { ...r, ID: 'd/design/B2', Name: { label: 'B2' } } : r));
+    send({ type: 'setRows', docUri: SLDD, rows: renamed, columns: ['Name'], columnLabels: {}, editable: true });
+    expect(table.selectedRowIds).toEqual(['d/design/B2']);
+    expect(sent('select')).toEqual([{ type: 'select', rowIds: ['d/design/B2'] }]);
+  });
+
+  it('an entry-scoped repaint that removes the selected entry clears it too', async () => {
+    await paint();
+    table.selectedRowIds = ['d/design/A'];
+    posted.length = 0;
+    send({ type: 'updateEntryRows', entryRowId: 'd/design/A', rows: [] });
+    expect(table.selectedRowIds).toEqual([]);
+    expect(sent('select')).toEqual([{ type: 'select', rowIds: [] }]);
+  });
+});
