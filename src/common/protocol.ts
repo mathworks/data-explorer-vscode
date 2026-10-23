@@ -147,8 +147,15 @@ export interface ClipboardStateMessage {
    * What the clipboard holds, payload-free — so the menu can ask the target section
    * whether a paste may land there before offering it, exactly as a dragover asks.
    * Never the entry records: on a 47.8 MB dictionary that is a 67 MB postMessage.
+   *
+   * `sectionName` is the section each entry was copied or cut from ('' for a MAT-file's
+   * variable), as a drag descriptor's items carry it. Optional: a host that does not send it
+   * (with `sourceDocUri`) only loses the menu's knowledge that a cut pasted back where it
+   * came from is a no-op.
    */
-  items: DropFacts[];
+  items: (DropFacts & { sectionName?: string })[];
+  /** The document the entries were copied or cut from. See `items`. */
+  sourceDocUri?: string;
 }
 
 /** Broadcast the in-flight drag descriptor (null when no drag is active). */

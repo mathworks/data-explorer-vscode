@@ -9,7 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dropDecision, rejectReason } from '../src/webview/dropDecision.js';
+import { dropDecision, isNoopMove, rejectReason } from '../src/webview/dropDecision.js';
 import { getModel, invalidate } from '../src/host/SlddModel.js';
 import { sectionRules } from '../src/host/sectionRules.js';
 
@@ -412,5 +412,29 @@ describe('dropDecision — an mpt entry, against the rules a real model posts', 
     expect(rejectReason(realTarget('arch'), mptParam())).toBe('Simulink Parameter cannot be in Architectural Data');
     expect(rejectReason(realTarget('arch'), mptSignal())).toBe('Simulink Signal cannot be in Architectural Data');
     expect(rejectReason(realTarget('config'), mptParam())).toBe('Simulink Parameter cannot be in Configurations');
+  });
+});
+
+// The no-op is one rule asked from two places: a drop (dropDecision) and the Paste of a cut
+// (menuItems, review #7). isNoopMove IS that rule; this pins dropDecision to it, case by case.
+describe('isNoopMove — the rule dropDecision\'s no-op is', () => {
+  const docs = ['a.sldd', 'b.sldd'];
+  const sectionSets = [['design'], ['arch'], ['design', 'design'], ['design', 'arch'], [''], []];
+  for (const docUri of docs) {
+    for (const sections of sectionSets) {
+      for (const mode of ['move', 'copy'] as const) {
+        it(`${docUri} ${JSON.stringify(sections)} ${mode} onto a.sldd design`, () => {
+          const source = { docUri, items: sections.map((sectionName) => ({ ...bus(), sectionName })) };
+          const target = designTarget('a.sldd');
+          expect(dropDecision(source, target, mode).noop).toBe(isNoopMove(source, target, mode));
+        });
+      }
+    }
+  }
+
+  it('is never a no-op without a source document or a target section to compare', () => {
+    const items = [{ ...bus(), sectionName: 'design' }];
+    expect(isNoopMove({ docUri: '', items }, { ...designTarget(''), docUri: '' }, 'move')).toBe(false);
+    expect(isNoopMove({ docUri: 'a.sldd', items: [bus()] }, { ...designTarget('a.sldd'), sectionName: undefined as any }, 'move')).toBe(false);
   });
 });

@@ -126,10 +126,12 @@ function menuFor(anchorRowId: string | null, selection: string[] = selectedRowId
     hasTextView,
     hasClipboard,
     // Paste's allow-check needs the target section's rules; without them the item is
-    // offered only as far as "the clipboard is non-empty" can justify.
+    // offered only as far as "the clipboard is non-empty" can justify. The section's name
+    // and this document's uri are what tell a cut pasted back where it came from.
     pasteTarget: rule
-      ? { sectionLabel: rule.sectionLabel, isDerived: rule.isDerived, allowedTypes: rule.allowedTypes }
+      ? { sectionName: rule.sectionName, sectionLabel: rule.sectionLabel, isDerived: rule.isDerived, allowedTypes: rule.allowedTypes }
       : null,
+    docUri,
   });
 }
 
@@ -458,6 +460,9 @@ window.addEventListener('message', (event: MessageEvent) => {
       canPaste: !!msg.canPaste,
       mode: msg.mode ?? null,
       items: Array.isArray(msg.items) ? msg.items : [],
+      // Where the entries came from, when the host says: what lets Paste refuse a cut
+      // pasted back into its own section (menuItems, isNoopMove).
+      sourceDocUri: typeof msg.sourceDocUri === 'string' ? msg.sourceDocUri : undefined,
     };
   } else if (msg.type === 'sectionRules') {
     docUri = typeof msg.docUri === 'string' ? msg.docUri : docUri;
