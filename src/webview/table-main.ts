@@ -486,8 +486,11 @@ window.addEventListener('message', (event: MessageEvent) => {
     // providers post sectionRules behind setRows), so wiping them here would leave the
     // view rule-less until the next message — or for good, from a host that posts first.
     if (!editable || !hasClipboard) sectionRulesList = [];
-    // A drag broadcast from before this payload is about rows it replaced.
-    dragDescriptor = null;
+    // NOT the broadcast drag (dragDescriptor): it mirrors the host's drag register, which a
+    // repaint does not end — the register keeps the rows it snapped at drag start, and the
+    // host broadcasts the end itself (dragEnd, and after every drop). Cleared here, a repaint
+    // landing mid-drag (a file changed on disk, a Usage repost) would leave this table
+    // refusing the rest of that drag.
     installRows(rows);
     // AFTER the install, which is the requests' one chance at this payload: a full payload
     // holds every row it is going to, so a selection or a rename still waiting now would

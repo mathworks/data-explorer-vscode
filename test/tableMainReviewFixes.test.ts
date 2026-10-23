@@ -190,8 +190,8 @@ describe('a selection whose rows all vanished', () => {
 // #8: what a full payload leaves stale. A selection or a rename still waiting for its row
 // after a `setRows` has none in it — and a full payload holds every row it is going to —
 // so holding the request would let it land on whatever row next takes that id (after an
-// undo, a different entry). The broadcast drag is cleared with it, and a document's drop
-// rules when the payload says its rows no longer travel.
+// undo, a different entry). A document's drop rules go when the payload says its rows no
+// longer travel. The broadcast drag does NOT: it is the host's, and a repaint ends no drag.
 describe('a full payload clears what it leaves stale', () => {
   const NEW = 'd/design/New';
   const withNew = () => [...DICT_ROWS(), { ID: NEW, parent: 'section:design', Name: { label: 'New' } }];
@@ -236,13 +236,19 @@ describe('a full payload clears what it leaves stale', () => {
     expect(table.selectedRowIds).toEqual(['d/design/A']);
   });
 
-  it('the broadcast drag does not outlive the payload', async () => {
+  it('a drag in flight is still predicted after a repaint lands under it', async () => {
+    // The descriptor mirrors the host's drag register, whose snapshot a repaint does not
+    // touch; only the host ends a drag (dragEnd, and after every drop). Clearing it here
+    // would refuse the rest of the drag after, say, a file changed on disk.
     await paint();
     send({ type: 'sectionRules', docUri: SLDD, rules: [{ sectionName: 'design', sectionLabel: 'Design Data', isDerived: false, allowedTypes: [] }] });
     send({ type: 'dragState', descriptor: { docUri: 'file:///fx/other.sldd', items: [{ className: 'Simulink.Bus', arrayClass: 'Simulink.Bus', kind: 'Bus', isMatlabVariable: false, isScalarNumeric: false, sectionName: 'design' }] } });
     expect(dragOver('d/design/B').defaultPrevented).toBe(true);
     repaint(DICT_ROWS());
+    send({ type: 'sectionRules', docUri: SLDD, rules: [{ sectionName: 'design', sectionLabel: 'Design Data', isDerived: false, allowedTypes: [] }] });
     await table.updateComplete;
+    expect(dragOver('d/design/B').defaultPrevented).toBe(true);
+    send({ type: 'dragState', descriptor: null });
     expect(dragOver('d/design/B').defaultPrevented).toBe(false);
   });
 
