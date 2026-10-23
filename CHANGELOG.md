@@ -2,6 +2,10 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## [1.44.1] — 2026-10-23
+
+- The overview now explains how this extension works alongside the MATLAB extension.
+
 ## [1.44.0] — 2026-10-23
 
 - You can now add variables, strings and Simulink objects to MAT-files from the Add gallery.
