@@ -2,8 +2,8 @@
 
 import { ModelBlockNode, RowCellPool, schemaColumnLabels } from 'data-explorer-core';
 import { buildSectionRowId } from '../common/sectionRowId.js';
-import { stampMatrix } from './matrixPayload.js';
-import { planRows, stampLazy, type PlannedRow, type RowPlan } from './lazyRows.js';
+import { planRows, type PlannedRow, type RowPlan } from './lazyRows.js';
+import { stampRow, type ClipMark, type EntryStamp } from './rowStamp.js';
 
 // Columns shown across the dictionary tree (union that fits all sections), in
 // display order: the ungrouped core columns first, then the grouped columns
@@ -71,30 +71,9 @@ export const PROJECT_COLUMN_LABELS: Record<string, string> = {
   Name: 'Name', Type: 'Type', Location: 'Location', Labels: 'Labels',
 };
 
-// Identifies the entries currently marked on the host clipboard, so their source rows
-// can render the cut (dimmed) / copied (dashed) affordance. A SET because the clipboard
-// holds every entry a multi-row copy resolved to, and all of their rows carry the mark.
-//
-// Keyed by section AND name because entry names are only unique within a section. The key
-// is a PATH shape rather than a bare name so that dimming an individual child row (the
-// deferred node-granular seam) widens the key instead of reshaping this.
-export interface ClipMark {
-  keys: Set<string>;
-  mode: 'cut' | 'copy';
-}
-
-/** The mark key for one entry. `\0` cannot occur in a section or entry name. */
-export function clipMarkKey(section: string, name: string): string {
-  return `${section}\u0000${name}`;
-}
-
-/** The section and name a mark key spells. */
-export function splitClipMarkKey(key: string): { section: string; name: string } {
-  const at = key.indexOf('\u0000');
-  return at < 0
-    ? { section: '', name: key }
-    : { section: key.slice(0, at), name: key.slice(at + 1) };
-}
+// The clipboard mark and its key live with the stamper that reads them (rowStamp.ts); they
+// are re-exported here because the providers have always imported them from this module.
+export { clipMarkKey, splitClipMarkKey, type ClipMark } from './rowStamp.js';
 
 /** The rows for a sectioned tree, plus what the plan held back (for the banner). */
 export interface SectionedRows {
@@ -218,25 +197,6 @@ export function buildChildRows(node: any, budget: number = Infinity): SectionedR
   return { rows, plan };
 }
 
-// Context-menu capability flags for a node, computed host-side so the webview
-// (which holds no model) can build the right-click menu synchronously from row
-// data. Every method is called defensively: canAddChild/canRemoveChild only
-// exist on some node types, so we guard with typeof before invoking.
-function capabilityFlags(n: any): {
-  _canCopy: boolean;
-  _canDelete: boolean;
-  _canAddChild: boolean;
-} {
-  // An entry is removable from its section; a nested child is removable only if
-  // its parent container permits it (bus/struct/enum expose canRemoveChild).
-  const parent = n.parent;
-  const canDelete =
-    !!n.isEntry ||
-    !!(parent && typeof parent.canRemoveChild === 'function' && parent.canRemoveChild());
-  const canAddChild = typeof n.canAddChild === 'function' && n.canAddChild();
-  return { _canCopy: true, _canDelete: canDelete, _canAddChild: canAddChild };
-}
-
 // Build the rows for a single entry subtree (the entry plus its nested children),
 // reparented under its section. Used by the incremental edit write-back, which repaints
 // only the edited entry's rows instead of rebuilding the whole table.
@@ -275,10 +235,12 @@ export function buildEntryRows(
  *
  * Three callers reach it (the whole payload, one entry's repaint, one row's fetch) and
  * the rule they share is everything below: the block-row column remap, the section
- * reparent, the entry-only stamps, the capability flags, the matrix payload and the
- * deferred mark. This repo's recurring defect is one rule with two implementations, and
- * a row is the shape most able to hide one — a missing stamp renders as a plausible row
- * with a feature quietly absent.
+ * reparent and the dictionary metadata columns, which are this builder's own, and then
+ * the stamps every table row takes (rowStamp.ts — the entry's Status and clip mark, the
+ * capability flags, the matrix payload, the deferred mark), which are the MAT builder's
+ * too. This repo's recurring defect is one rule with two implementations, and a row is
+ * the shape most able to hide one — a missing stamp renders as a plausible row with a
+ * feature quietly absent.
  *
  * `entry` null means "this node is not under an entry row in this delivery" (a fetch),
  * which switches off exactly the two things that are about the entry: the reparent onto
@@ -308,6 +270,7 @@ function plannedRow(
     // this cell with cross-file-resolved param links + source labels.
     row = { ...row, UsedBy: row.DataType, DataType: n.blockType, Value: '', _isBlockRow: true };
   }
+  let entryStamp: EntryStamp | undefined;
   if (entry) {
     // Reparent top-level entries under the section row; keep nested parents as-is.
     if (row.parent == null || row.ID === entry.id) {
@@ -317,29 +280,6 @@ function plannedRow(
     // are never marked Modified, carry no dictionary metadata, and never take
     // the clipboard affordance.
     if (row.ID === entry.id) {
-      // The "Modified" mark is a diff against the last-saved baseline, so the
-      // CALLER owns the answer — and when it supplies one, that answer is
-      // authoritative in BOTH directions.
-      //
-      // Clearing is the half that used to be free. A node carries its own
-      // `status = 'Modified'` from the moment it is mutated (DataNode._markModified)
-      // and never clears it, and toRow() surfaces it; the full-rebuild path was blind
-      // to that because it re-parsed the file and threw the mutated node away. The
-      // entry-scoped repaint keeps the mutated node, so the node's flag now reaches a
-      // row — and it answers a DIFFERENT question ("was this node touched since it was
-      // parsed") from the one the mark shows ("does this entry differ from the last
-      // save"). Where they disagree, the baseline wins, because that is what the column
-      // means. Only a stale 'Modified' is cleared; any other status is left alone.
-      //
-      // Today they cannot disagree end to end — an edit rewrites the entry's
-      // lastModified stamp, so a mutated entry never matches its baseline again, not
-      // even when edited back to the value it had. That is why this is stated as a rule
-      // with a unit test (binaryEntryScopedEdit.test.ts) rather than left implicit: the
-      // alternative is a row marked forever on the strength of the wrong flag.
-      if (modifiedNames) {
-        if (modifiedNames.has(entry.name)) row = { ...row, Status: 'Modified' };
-        else if (row.Status === 'Modified') row = { ...row, Status: '' };
-      }
       // Dictionary metadata columns (Last Modified / Last Modified By). The entry
       // node normalizes the two parse-path key schemes into these display
       // strings; absent values are empty and simply render blank.
@@ -348,24 +288,36 @@ function plannedRow(
       if (lastModified || lastModifiedBy) {
         row = { ...row, lastModified, lastModifiedBy };
       }
-      // Clipboard affordance for a cut/copied entry. The key carries the section, so no
-      // caller has to pre-match it. The table reads Name.clipboardMode to dim (cut) or
-      // dash-outline (copied).
-      if (clipMark?.keys.has(clipMarkKey(sectionName, entry.name)) && row.Name && typeof row.Name === 'object') {
-        row = { ...row, Name: { ...row.Name, clipboardMode: clipMark.mode } };
-      }
+      entryStamp = { section: sectionName, name: entry.name, status: modifiedStatus(row, entry, modifiedNames), clipMark };
     }
   }
-  // Context-menu capability flags (consumed by the webview menu builder), then the
-  // grid-view payload if this node's value is a griddable matrix, then the deferred mark
-  // if the plan held this node's children back. All three are stamps over the node's own
-  // row; none rewrites the row's columns. `_lazy` last, in the same order matRowBuilder
-  // applies it, so the two builders' rows are the same shape for the same node.
-  const stamped = stampLazy(stampMatrix({ ...row, ...capabilityFlags(n) }, n), p.deferred);
-  // Share the FINISHED row, rather than passing the pool to `n.toRow()` above. This row
-  // is the node's cells plus this host's own — Usage/Data Type remapped for a block row,
-  // the dictionary metadata columns, the clipboard mark — so sharing here covers all of
-  // them in ONE walk where doing both would cost two. `_matrix` is left alone: the pool
-  // declines any cell it cannot key exactly, and a matrix payload holds a number[].
-  return pool ? pool.share(stamped) : stamped;
+  // Every row of a dictionary, model or project copies: Copy acts on the owning entry.
+  return stampRow(row, n, { canCopy: true, entry: entryStamp, deferred: p.deferred, pool });
+}
+
+/**
+ * The Status an entry row shows, or undefined to leave the node's own.
+ *
+ * The "Modified" mark is a diff against the last-saved baseline, so the CALLER owns the
+ * answer — and when it supplies one, that answer is authoritative in BOTH directions.
+ *
+ * Clearing is the half that used to be free. A node carries its own `status = 'Modified'`
+ * from the moment it is mutated (DataNode._markModified) and never clears it, and toRow()
+ * surfaces it; the full-rebuild path was blind to that because it re-parsed the file and
+ * threw the mutated node away. The entry-scoped repaint keeps the mutated node, so the
+ * node's flag now reaches a row — and it answers a DIFFERENT question ("was this node
+ * touched since it was parsed") from the one the mark shows ("does this entry differ from
+ * the last save"). Where they disagree, the baseline wins, because that is what the column
+ * means. Only a stale 'Modified' is cleared; any other status is left alone.
+ *
+ * Today they cannot disagree end to end — an edit rewrites the entry's lastModified stamp,
+ * so a mutated entry never matches its baseline again, not even when edited back to the
+ * value it had. That is why this is stated as a rule with a unit test
+ * (binaryEntryScopedEdit.test.ts) rather than left implicit: the alternative is a row
+ * marked forever on the strength of the wrong flag.
+ */
+function modifiedStatus(row: any, entry: any, modifiedNames: Set<string> | undefined): string | undefined {
+  if (!modifiedNames) return undefined;
+  if (modifiedNames.has(entry.name)) return 'Modified';
+  return row.Status === 'Modified' ? '' : undefined;
 }
