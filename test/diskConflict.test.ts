@@ -175,6 +175,22 @@ describe('EditStackMirror: VS Code’s dirty flag for a custom document', () => 
     expect(m.dirty).toBe(false);
   });
 
+  it('counts every move of the stack, which a position that comes back cannot tell, and no save', () => {
+    const m = new EditStackMirror();
+    m.pushed();
+    const at = m.here();
+    const moves = m.moves;
+    m.undone();
+    m.pushed();
+    expect(m.here(), 'back where it was').toBe(at);
+    expect(m.moves).toBe(moves + 2);
+    m.redone();
+    m.reverted();
+    expect(m.moves).toBe(moves + 4);
+    m.saved();
+    expect(m.moves, 'a save moves the save point, not the stack').toBe(moves + 4);
+  });
+
   it('an edit after an undo that stayed at or above the save point keeps it reachable', () => {
     const m = new EditStackMirror();
     m.pushed();

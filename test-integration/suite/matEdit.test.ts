@@ -243,6 +243,30 @@ suite('MAT-file editor: edit, undo, save', () => {
     keptUntouched(o.original, disk(o), ['scalarD']);
   });
 
+  test('an edit that lands while a save is writing is written by that save before it resolves', async () => {
+    // VS Code calls saved whatever the document holds when the save resolves, so a save that
+    // resolved with the first edit only would leave the tab clean over a file without the second.
+    const o = await open('cases.mat');
+    edit(o, 'scalarD', 'Value', '42');
+    const saving = save(o);
+    // On the save's awaits: it serialized the tree before the first of them.
+    edit(o, 'negD', 'Value', '7');
+    await saving;
+    const back = valuesOf(disk(o));
+    assert.strictEqual(back.get('scalarD').Value, '42');
+    assert.strictEqual(back.get('negD').Value, '7', 'the edit that landed is on disk');
+    keptUntouched(o.original, disk(o), ['scalarD', 'negD']);
+    assert.strictEqual(o.doc.edits.dirty, false, 'and the document is clean, as VS Code shows it');
+    assert.strictEqual(topRow(o.view.posts, 'negD').Status, '', 'nothing differs from the file');
+    // An undo and a new edit that put the stack back where the save read it are a move too.
+    const again = save(o);
+    await o.events[1].undo();
+    edit(o, 'negD', 'Value', '8');
+    await again;
+    assert.strictEqual(valuesOf(disk(o)).get('negD').Value, '8');
+    assert.strictEqual(o.doc.edits.dirty, false);
+  });
+
   test('a rename is the record with its new name; a delete leaves the rest as they were', async () => {
     const o = await open('cases.mat');
     edit(o, 'kp', 'Name', 'kpRenamed');

@@ -52,6 +52,7 @@ import { broadcastDragState, registerAddGalleryView, unregisterAddGalleryView } 
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, type FollowedDocument } from './diskFollow.js';
 import { SaveMarks, type SaveMark } from './saveMarks.js';
+import { saveSettled } from './settledSave.js';
 import { sameFile, writeFileSafely } from './safeWrite.js';
 import { binaryEditSrcId } from '../common/srcId.js';
 import { basename } from '../common/pathUtil.js';
@@ -863,8 +864,14 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
 
   // --- Save / backup / revert --------------------------------------------------------------
 
-  async saveCustomDocument(document: MatDocument, _token: vscode.CancellationToken): Promise<void> {
-    const at = document.edits.here();
+  async saveCustomDocument(document: MatDocument, token: vscode.CancellationToken): Promise<void> {
+    // Written again if the stack moved while it was being written, so that VS Code, which calls
+    // what the document holds when this resolves saved, is right to (settledSave.ts).
+    await saveSettled(document.edits, token, () => this.writeDocument(document));
+  }
+
+  /** One write of the document as it stands, the save's own: one round of `saveSettled`. */
+  private async writeDocument(document: MatDocument): Promise<void> {
     document.saving = true;
     const before = document.marks.marks();
     let snapshot: ReturnType<SaveMarks<any>['snapshot']>;
@@ -881,7 +888,6 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     } finally {
       document.saving = false;
     }
-    document.edits.saved(at);
     document.inConflict = false;
     document.overwriteStamp = undefined;
     document.marks.commit(snapshot);
