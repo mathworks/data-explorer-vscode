@@ -307,6 +307,34 @@ function clearError(): void {
   renderError(table, undefined);
 }
 
+// A selection whose every row a repaint removed is cleared, and the host told, ONE TASK
+// later rather than in the repaint. The host can repaint and then re-select as two messages
+// — a rename's narrow path sends updateEntryRows (the old id leaves) and then selectRows (the
+// new id) — and clearing on the first posted `select []` and then `select [new]`, so the
+// Property Inspector blanked and came back. A selectRows cancels the clear (the host has said
+// what is selected), and the clear itself re-checks: a selection that names a row again by
+// the time it runs — re-applied, or made by the user — is left alone.
+let vanishedClear: ReturnType<typeof setTimeout> | null = null;
+
+function cancelVanishedClear(): void {
+  if (vanishedClear === null) return;
+  clearTimeout(vanishedClear);
+  vanishedClear = null;
+}
+
+function scheduleVanishedClear(): void {
+  cancelVanishedClear();
+  vanishedClear = setTimeout(() => {
+    vanishedClear = null;
+    const present = new Set(((table.rows ?? []) as { ID: string }[]).map((r) => r.ID));
+    const selection = selectedRowIds();
+    if (selection.length === 0 || selection.some((id) => present.has(id))) return;
+    table.selectedRowIds = [];
+    // Once: the next repaint starts from the empty selection, so it has nothing to report.
+    vscode.postMessage({ type: 'select', rowIds: [] });
+  }, 0);
+}
+
 // Whether a payload with rows has been shown yet. Until then there is no expansion of the
 // user's to keep, so the next one opens the top level (rowUpdates.nextExpandedIds); after
 // it, an empty expansion is the user's own — they collapsed everything — and stays empty.
@@ -348,19 +376,17 @@ function installRows(rows: any[]): void {
   const stillSelected = prevSelected.filter((id) => present.has(id));
   // Every selected row gone (a delete from the text view, the undo of an add): the
   // selection named nothing any more, so the inspector showed a deleted entry and every
-  // chord found no operand. Cleared here, and the host told below — unless a pending
-  // selection takes over first, as a rename's does.
+  // chord found no operand. Cleared, and the host told — one task later, unless a pending
+  // selection takes over first, here or in the selectRows right behind (scheduleVanishedClear).
   const vanished = prevSelected.length > 0 && stillSelected.length === 0;
   if (stillSelected.length > 0) table.selectedRowIds = stillSelected;
-  else if (vanished) table.selectedRowIds = [];
   if (typeof table.requestUpdate === 'function') table.requestUpdate();
   // A rename/structural edit posts selectRows then triggers this rebuild;
   // re-apply now that the rows it named exist.
   applyPendingSelection();
   // A cross-tab navigation may be waiting for its target row to appear.
   applyPendingNameSelection();
-  // Once: the next repaint starts from the empty selection, so it has nothing to report.
-  if (vanished && selectedRowIds().length === 0) vscode.postMessage({ type: 'select', rowIds: [] });
+  if (vanished && !selectedRowIds().some((id) => present.has(id))) scheduleVanishedClear();
   // AFTER the selection, because selecting expands the row's ancestors and scrolls it into
   // view — an editor opened on a row still hidden under a collapsed section, or below the
   // viewport, is a table that has silently stopped responding to the keyboard.
@@ -507,7 +533,9 @@ window.addEventListener('message', (event: MessageEvent) => {
     applyPendingNameSelection();
   } else if (msg.type === 'selectRows') {
     // Select rows by id (a rename changed one, a paste added several). Apply now if they
-    // are all present, else stash until a rebuild brings the rest.
+    // are all present, else stash until a rebuild brings the rest. Either way the host has
+    // said what is selected, so a vanished selection's pending clear is moot.
+    cancelVanishedClear();
     pendingSelectIds = Array.isArray(msg.rowIds) ? msg.rowIds.filter((id) => typeof id === 'string') : [];
     applyPendingSelection();
   } else if (msg.type === 'beginRename') {

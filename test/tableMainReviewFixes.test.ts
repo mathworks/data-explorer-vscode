@@ -144,15 +144,20 @@ describe('a by-name selection in a table with no section rows prefers the top-le
 // and the host is told so once.
 describe('a selection whose rows all vanished', () => {
   const withoutB = () => DICT_ROWS().filter((r) => r.ID !== 'd/design/B');
+  // The clear waits one task, so a re-selection the host sends right behind the repaint can
+  // take over first (see the rows-then-selectRows case below).
+  const settle = () => new Promise<void>((r) => setTimeout(r, 0));
 
   it('is cleared, and the host told once', async () => {
     await paint();
     table.selectedRowIds = ['d/design/B'];
     posted.length = 0;
     send({ type: 'setRows', docUri: SLDD, rows: withoutB(), columns: ['Name'], columnLabels: {}, editable: true });
+    await settle();
     expect(table.selectedRowIds).toEqual([]);
     expect(sent('select')).toEqual([{ type: 'select', rowIds: [] }]);
     send({ type: 'setRows', docUri: SLDD, rows: withoutB(), columns: ['Name'], columnLabels: {}, editable: true });
+    await settle();
     expect(sent('select')).toHaveLength(1);
   });
 
@@ -161,6 +166,7 @@ describe('a selection whose rows all vanished', () => {
     table.selectedRowIds = ['d/design/A', 'd/design/B'];
     posted.length = 0;
     send({ type: 'setRows', docUri: SLDD, rows: withoutB(), columns: ['Name'], columnLabels: {}, editable: true });
+    await settle();
     expect(table.selectedRowIds).toEqual(['d/design/A']);
     expect(sent('select')).toEqual([]);
   });
@@ -173,6 +179,22 @@ describe('a selection whose rows all vanished', () => {
     posted.length = 0;
     const renamed = DICT_ROWS().map((r) => (r.ID === 'd/design/B' ? { ...r, ID: 'd/design/B2', Name: { label: 'B2' } } : r));
     send({ type: 'setRows', docUri: SLDD, rows: renamed, columns: ['Name'], columnLabels: {}, editable: true });
+    await settle();
+    expect(table.selectedRowIds).toEqual(['d/design/B2']);
+    expect(sent('select')).toEqual([{ type: 'select', rowIds: ['d/design/B2'] }]);
+  });
+
+  it('nor when the host repaints the renamed entry first and asks for its new id after', async () => {
+    // The narrow rename path's order: updateEntryRows (the old id leaves the table), then
+    // selectRows (the new id), as two messages. Clearing on the first and re-selecting on the
+    // second posted `select []` and then `select [new]`, and the Property Inspector blanked
+    // and came back between them.
+    await paint();
+    table.selectedRowIds = ['d/design/B'];
+    posted.length = 0;
+    send({ type: 'updateEntryRows', entryRowId: 'd/design/B', rows: [{ ID: 'd/design/B2', parent: 'section:design', Name: { label: 'B2' } }] });
+    send({ type: 'selectRows', rowIds: ['d/design/B2'] });
+    await settle();
     expect(table.selectedRowIds).toEqual(['d/design/B2']);
     expect(sent('select')).toEqual([{ type: 'select', rowIds: ['d/design/B2'] }]);
   });
@@ -182,8 +204,20 @@ describe('a selection whose rows all vanished', () => {
     table.selectedRowIds = ['d/design/A'];
     posted.length = 0;
     send({ type: 'updateEntryRows', entryRowId: 'd/design/A', rows: [] });
+    await settle();
     expect(table.selectedRowIds).toEqual([]);
     expect(sent('select')).toEqual([{ type: 'select', rowIds: [] }]);
+  });
+
+  it('a selection the user makes before the clear lands is theirs, and is not cleared', async () => {
+    await paint();
+    table.selectedRowIds = ['d/design/B'];
+    send({ type: 'setRows', docUri: SLDD, rows: withoutB(), columns: ['Name'], columnLabels: {}, editable: true });
+    table.selectedRowIds = ['d/design/A'];
+    posted.length = 0;
+    await settle();
+    expect(table.selectedRowIds).toEqual(['d/design/A']);
+    expect(sent('select')).toEqual([]);
   });
 });
 
