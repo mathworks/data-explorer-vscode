@@ -408,8 +408,10 @@ describe('a drag is a no-op exactly where the same cut and paste is (V-002)', ()
       const text = blankCommentsAndKeepLines(
         readFileSync(fileURLToPath(new URL(`../src/host/${provider}.ts`, import.meta.url)), 'utf8'),
       );
+      // Each register reaches runTransfer — directly, or (for a queued drop, which captures its
+      // register as the message arrives) through the one statement that queues it.
       expect(text).toMatch(/runTransfer\([^;]*clipboardRegister\(/);
-      expect(text).toMatch(/runTransfer\([^;]*dragRegister\(/);
+      expect(text).toMatch(/runTransfer\([^;]*dragRegister\(|dragRegister\([^;]*\);\s*return queueStructural\(\(\) => runTransfer\(/);
       expect(text, 'and no copy of the no-op rule of its own').not.toMatch(/\.every\(\(it\) => it\.sourceSection ===/);
     });
   }
