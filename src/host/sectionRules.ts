@@ -16,6 +16,7 @@
 // getAllowedTypes. A core without getAdmittedTypes admits exactly its creation
 // list, which is the fallback.
 import { getSectionMetadata } from 'data-explorer-core';
+import { WHOLE_FILE_SECTION } from '../common/sectionRowId.js';
 
 export interface SectionRule {
   sectionName: string;
@@ -39,13 +40,8 @@ export function sectionRules(model: any): SectionRule[] {
   }));
 }
 
-/**
- * The section name of a document that has no sections: a MAT-file, whose variables are its
- * root node's own children. Its clipboard and drag items carry it as their source section, and
- * the clip mark keys its variables with it (rowStamp.ts), so a same-file move is the usual
- * same-section no-op and nothing downstream needs a case of its own.
- */
-export const WHOLE_FILE_SECTION = '';
+// Re-exported beside the rule it names; it lives in common/ because the webview spells it too.
+export { WHOLE_FILE_SECTION };
 
 /**
  * The rules for a document with no section layer: ONE rule, the whole file, which is the one
@@ -64,9 +60,9 @@ export const WHOLE_FILE_SECTION = '';
 export function wholeFileRules(model: any, label: string): SectionRule[] {
   let admitted: unknown = [];
   try {
-    admitted = typeof model?.getAdmittedTypes === 'function' ? model.getAdmittedTypes() : [];
+    if (typeof model?.getAdmittedTypes === 'function') admitted = model.getAdmittedTypes();
   } catch {
-    admitted = [];
+    /* restricts nothing, as a core without the list does */
   }
   return [
     {

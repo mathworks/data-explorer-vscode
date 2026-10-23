@@ -288,7 +288,7 @@ function plannedRow(
       if (lastModified || lastModifiedBy) {
         row = { ...row, lastModified, lastModifiedBy };
       }
-      entryStamp = { section: sectionName, name: entry.name, status: modifiedStatus(row, entry, modifiedNames), clipMark };
+      entryStamp = { section: sectionName, name: entry.name, status: modifiedStatus(entry.name, row.Status, modifiedNames), clipMark };
     }
   }
   // Every row of a dictionary, model or project copies: Copy acts on the owning entry.
@@ -296,7 +296,8 @@ function plannedRow(
 }
 
 /**
- * The Status an entry row shows, or undefined to leave the node's own.
+ * The Status the entry `name` shows, or undefined to leave `nodeStatus`, the node's own
+ * (what toRow() surfaced).
  *
  * The "Modified" mark is a diff against the last-saved baseline, so the CALLER owns the
  * answer — and when it supplies one, that answer is authoritative in BOTH directions.
@@ -316,8 +317,8 @@ function plannedRow(
  * (binaryEntryScopedEdit.test.ts) rather than left implicit: the alternative is a row
  * marked forever on the strength of the wrong flag.
  */
-function modifiedStatus(row: any, entry: any, modifiedNames: Set<string> | undefined): string | undefined {
+function modifiedStatus(name: string, nodeStatus: unknown, modifiedNames: Set<string> | undefined): string | undefined {
   if (!modifiedNames) return undefined;
-  if (modifiedNames.has(entry.name)) return 'Modified';
-  return row.Status === 'Modified' ? '' : undefined;
+  if (modifiedNames.has(name)) return 'Modified';
+  return nodeStatus === 'Modified' ? '' : undefined;
 }

@@ -22,7 +22,7 @@ import { linkRoute } from './linkRoute.js';
 import type { ContextMenuItem } from './components/dex-context-menu.js';
 import type { SectionRule } from '../host/sectionRules.js';
 import type { DragDescriptor } from '../host/dragState.js';
-import { isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
+import { isSectionRowId, sectionNameFromRowId, WHOLE_FILE_SECTION } from '../common/sectionRowId.js';
 import type { HostToTableMessage } from '../common/protocol.js';
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
@@ -80,11 +80,11 @@ let sectionRulesList: SectionRule[] = [];
 let dragDescriptor: DragDescriptor | null = null;
 
 // The rule of a document that is ONE target: a MAT-file has no section layer, so its host
-// posts a single rule for the whole file, under section '' (sectionRules.wholeFileRules).
-// No dictionary posts one, so for every dictionary this is null and nothing below changes.
+// posts a single rule for the whole file, under WHOLE_FILE_SECTION ('', the spelling host and
+// webview share — sectionRules.wholeFileRules). No dictionary posts one, so for every
+// dictionary this is null and nothing below changes.
 // Nor does a table whose rows do not travel (`clipboard: false`): the rule is only ever
 // about where a paste or a drop lands, and such a table offers neither.
-const WHOLE_FILE_SECTION = '';
 function wholeFileRule(): SectionRule | null {
   if (!hasClipboard) return null;
   return sectionRulesList.find((r) => r.sectionName === WHOLE_FILE_SECTION) ?? null;
@@ -310,10 +310,10 @@ function clearError(): void {
 // A selection whose every row a repaint removed is cleared, and the host told, ONE TASK
 // later rather than in the repaint. The host can repaint and then re-select as two messages
 // — a rename's narrow path sends updateEntryRows (the old id leaves) and then selectRows (the
-// new id) — and clearing on the first posted `select []` and then `select [new]`, so the
-// Property Inspector blanked and came back. A selectRows cancels the clear (the host has said
-// what is selected), and the clear itself re-checks: a selection that names a row again by
-// the time it runs — re-applied, or made by the user — is left alone.
+// new id) — and clearing on the first of the two posted `select []` and then `select [new]`,
+// so the Property Inspector blanked and came back. A selectRows cancels the clear (the host
+// has said what is selected), and the clear itself re-checks: a selection that names a row
+// again by the time it runs — re-applied, or made by the user — is left alone.
 let vanishedClear: ReturnType<typeof setTimeout> | null = null;
 
 function cancelVanishedClear(): void {

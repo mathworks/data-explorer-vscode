@@ -8,6 +8,7 @@
 // building a row for every one of them. The default is Infinity — the whole tree, as
 // before — so only a caller that can answer a `requestChildren` passes a budget.
 import { RowCellPool } from 'data-explorer-core';
+import { WHOLE_FILE_SECTION } from '../common/sectionRowId.js';
 import { planRows, type RowPlan } from './lazyRows.js';
 import { stampRow, type ClipMark } from './rowStamp.js';
 
@@ -98,7 +99,7 @@ function plannedRows(roots: any[], budget: number, saved: SavedStatus | undefine
     // makes the next save write the variable fresh); the editable view's column says "differs
     // from the file on disk", which is the caller's answer.
     const entry = n.isEntry
-      ? { section: '', name: n.name, status: saved ? (saved.get(n) ?? '') : undefined, clipMark: opts?.clipMark }
+      ? { section: WHOLE_FILE_SECTION, name: n.name, status: saved ? (saved.get(n) ?? '') : undefined, clipMark: opts?.clipMark }
       : undefined;
     // The same chain as the sldd/slx builder's (rowStamp.ts) — see test/rowStamp.test.ts and
     // test/matrixStamp.test.ts, which assert it against both builders so they cannot drift.

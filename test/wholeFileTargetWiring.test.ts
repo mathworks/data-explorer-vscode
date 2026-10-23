@@ -80,12 +80,26 @@ beforeEach(async () => {
 
 afterEach(() => contextMenu.close());
 
-async function openMenu(rowId: string | null): Promise<any[]> {
+interface ShownItem {
+  label: string;
+  disabled: boolean;
+  /** A disabled item's reason is its title (dex-context-menu's _tooltipFor). */
+  reason: string | null;
+}
+
+/** The items of the menu a right-click on `rowId` opens, as they render: none if it opens none. */
+async function openMenu(rowId: string | null): Promise<ShownItem[]> {
   table.dispatchEvent(new CustomEvent('dex-table-context-menu', { detail: { rowId, x: 10, y: 10 } }));
   await new Promise<void>((r) => requestAnimationFrame(() => r()));
   await contextMenu.updateComplete;
-  return contextMenu._open ? contextMenu._items : [];
+  return [...contextMenu.shadowRoot.querySelectorAll('.item')].map((el: any) => ({
+    label: el.querySelector('.item-label')?.textContent ?? '',
+    disabled: el.getAttribute('aria-disabled') === 'true',
+    reason: el.getAttribute('title'),
+  }));
 }
+
+const pasteIn = (items: ShownItem[]) => items.find((i) => i.label === 'Paste');
 
 function clickItem(label: string): HTMLElement {
   const item = [...contextMenu.shadowRoot.querySelectorAll('.item')].find(
@@ -102,7 +116,7 @@ describe('every row of a section-less table pastes into the file', () => {
   it('a variable, and a field deep under one, both offer Paste', async () => {
     for (const rowId of ['m/x', 'm/cfg/gain']) {
       table.selectedRowIds = [rowId];
-      const paste = (await openMenu(rowId)).find((i) => i.id === 'paste');
+      const paste = pasteIn(await openMenu(rowId));
       expect(paste?.disabled, rowId).toBeFalsy();
       contextMenu.close();
     }
@@ -110,14 +124,14 @@ describe('every row of a section-less table pastes into the file', () => {
 
   it('a selection over several variables is one target, not several', async () => {
     table.selectedRowIds = ['m/x', 'm/cfg/gain'];
-    const paste = (await openMenu('m/x')).find((i) => i.id === 'paste');
+    const paste = pasteIn(await openMenu('m/x'));
     expect(paste?.disabled).toBeFalsy();
   });
 
   it("refuses what the file's rule does not admit, naming the file", async () => {
     holding(BUS);
     table.selectedRowIds = ['m/x'];
-    const paste = (await openMenu('m/x')).find((i) => i.id === 'paste');
+    const paste = pasteIn(await openMenu('m/x'));
     expect(paste).toMatchObject({ disabled: true, reason: 'Bus cannot be in gains.mat' });
   });
 });
@@ -127,7 +141,7 @@ describe('the empty body is the file too', () => {
     table.selectedRowIds = ['m/x'];
     await table.updateComplete;
     const items = await openMenu(null);
-    expect(items.filter((i) => !i.separator).map((i) => i.id)).toEqual(['paste', 'undo', 'redo']);
+    expect(items.map((i) => i.label)).toEqual(['Paste', 'Undo', 'Redo']);
     clickItem('Paste');
     expect(sent('paste')).toEqual([{ type: 'paste', rowId: '' }]);
   });
@@ -135,7 +149,7 @@ describe('the empty body is the file too', () => {
   it('on an EMPTY file, Paste is offered and Cmd+V with nothing selected pastes', async () => {
     paintMat([]);
     await table.updateComplete;
-    expect((await openMenu(null)).find((i) => i.id === 'paste')?.disabled).toBeFalsy();
+    expect(pasteIn(await openMenu(null))?.disabled).toBeFalsy();
     contextMenu.close();
     pressPaste();
     expect(sent('paste')).toEqual([{ type: 'paste', rowId: '' }]);
@@ -148,7 +162,7 @@ describe('the empty body is the file too', () => {
 
   it('with nothing on the clipboard the body offers a disabled Paste and sends nothing', async () => {
     send({ type: 'clipboardState', canPaste: false, mode: null, items: [] });
-    expect((await openMenu(null)).find((i) => i.id === 'paste')).toMatchObject({ disabled: true, reason: 'Nothing to paste' });
+    expect(pasteIn(await openMenu(null))).toMatchObject({ disabled: true, reason: 'Nothing to paste' });
     pressPaste();
     expect(sent('paste')).toEqual([]);
   });

@@ -67,11 +67,16 @@ async function pressPasteOn(rowId: string | null): Promise<void> {
   table.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true, cancelable: true, composed: true }));
 }
 
-async function pasteItemOn(rowId: string | null): Promise<any> {
+/** The Paste item of the menu a right-click on `rowId` opens, as it renders. */
+async function pasteItemOn(rowId: string | null): Promise<{ disabled: boolean; reason: string | null } | undefined> {
   table.dispatchEvent(new CustomEvent('dex-table-context-menu', { detail: { rowId, x: 1, y: 1 } }));
   await new Promise<void>((r) => requestAnimationFrame(() => r()));
   await contextMenu.updateComplete;
-  return (contextMenu._items as any[]).find((i) => i.id === 'paste');
+  const item = [...contextMenu.shadowRoot.querySelectorAll('.item')].find(
+    (el: any) => el.querySelector('.item-label')?.textContent === 'Paste',
+  ) as HTMLElement | undefined;
+  // A disabled item's reason is its title (dex-context-menu's _tooltipFor).
+  return item && { disabled: item.getAttribute('aria-disabled') === 'true', reason: item.getAttribute('title') };
 }
 
 describe('a dictionary', () => {

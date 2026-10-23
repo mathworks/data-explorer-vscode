@@ -41,7 +41,7 @@ function drag(el: Element, type: string) {
 }
 
 const ROWS = [makeRow('m/x', null, 'x'), makeRow('m/y', null, 'y')];
-const container = (t: DexTreeTable) => (t as any)._container as HTMLElement;
+const container = (t: DexTreeTable) => t.shadowRoot!.querySelector('.table-container') as HTMLElement;
 const emptyState = (t: DexTreeTable) => t.shadowRoot!.querySelector('.empty-state') as HTMLElement;
 const rowEl = (t: DexTreeTable, id: string) => t.shadowRoot!.querySelector(`tr[data-row-id="${id}"]`) as HTMLElement;
 
