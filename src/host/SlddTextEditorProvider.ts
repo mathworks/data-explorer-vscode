@@ -53,6 +53,7 @@ import {
   broadcastClipboardState,
   broadcastDragState,
   deleteFromSource,
+  NOT_FOUND_REASON,
   type DeleteTarget,
   type SourceDeleteResult,
 } from './editorHub.js';
@@ -1775,7 +1776,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       if (!parsesAsJson(srcText)) return { removed: false, reason: 'the file has invalid JSON' };
       const trimmed = deleteEntriesByName(srcText, targets);
       // Renamed or deleted since the cut: nothing answers to those names any more.
-      if (trimmed === srcText) return { removed: false, reason: 'nothing in it answers to that name any more' };
+      if (trimmed === srcText) return { removed: false, reason: NOT_FOUND_REASON };
       // Byte-scoped, for the same reason every write to THIS document is: the source may be
       // another 47.8 MB dictionary, and removing one entry from it should not rewrite it.
       const patch = minimalReplacement(srcText, trimmed);

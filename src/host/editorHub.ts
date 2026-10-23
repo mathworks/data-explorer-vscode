@@ -37,6 +37,12 @@ export type DeleteTarget = string | EntrySelector;
  */
 export type SourceDeleter = (targets: DeleteTarget[]) => Promise<SourceDeleteResult> | SourceDeleteResult;
 
+/**
+ * A deleter's reason when nothing in its document answers to the names it was given any more:
+ * renamed or deleted since the cut. One spelling for every format, because it is one fact.
+ */
+export const NOT_FOUND_REASON = 'nothing in it answers to that name any more';
+
 // Live table webviews → their repaint callback. A repaint (not just a state
 // post) is needed because a lazy cut makes no document edit, yet its source row
 // must gain/lose the dimmed affordance, so the owning view must repaint.

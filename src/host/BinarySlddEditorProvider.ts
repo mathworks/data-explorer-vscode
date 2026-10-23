@@ -121,6 +121,7 @@ import {
   broadcastClipboardState,
   broadcastDragState,
   deleteFromSource,
+  NOT_FOUND_REASON,
 } from './editorHub.js';
 import { basename } from '../common/pathUtil.js';
 import { runTransfer, type TransferAdapter, type TransferDeps } from './transfer.js';
@@ -137,9 +138,6 @@ import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, type FollowedDoc
 // because importing that provider would be circular — the same reason it spells this
 // provider's viewType out as a constant of its own.
 const BINARY_VIEW_TYPE = 'dataExplorer.binaryView';
-
-/** A source deleter's answer when nothing in the document answers to the names it was given. */
-const NOT_FOUND = 'nothing in it answers to that name any more';
 
 /**
  * One open view of a document: the two ways the document can ask it to repaint.
@@ -960,7 +958,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       const after = deleteEntriesByNameXml(before, targets);
       // Nothing answers to those names any more: renamed or deleted since the cut. Said, because
       // the move's other half has landed and the user is left holding a copy.
-      if (after === before) return { removed: false, reason: NOT_FOUND };
+      if (after === before) return { removed: false, reason: NOT_FOUND_REASON };
       // The model half of the delete, narrowly when every target resolves to exactly
       // one live entry. Deliberately keyed on the SAME targets the text splice used, so
       // the two halves cannot remove different entries. removalPairs refuses before it
@@ -1071,9 +1069,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
      * Delete acts on ROWS (see webview/operands.ts), so its operands can mix whole entries
      * with nested children of other entries. This format's undo stack is this document's
      * own and steps by pushEdit, so the whole gesture is ONE push: one `after` string built
-     * by folding every removal, and one op list describing all of them. applyDrop already
-     * has this shape for N payloads — deliberately, because a drop IS a paste and a delete
-     * of the same N.
+     * by folding every removal, and one op list describing all of them. The transfer's commit
+     * (paste and drop, below) already has this shape for N payloads — deliberately, because a
+     * drop IS a paste and a delete of the same N.
      *
      * READ THE MODEL FIRST, for the reason the JSON path does: a removal takes its node out
      * of the tree, so the selectors the splice needs, the row to select afterwards, and the
@@ -1131,7 +1129,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // pair, and a patch missing one op would restore a partial state. No patch means
         // both directions repaint wide, which is merely slow (see `attempt`).
         const complete = !!entryRemoval && childPairs.length === plan.childGroups.length;
-        const patch = complete ? patchOfPairs([...childPairs, ...entryRemoval!.pairs]) : undefined;
+        const patch = complete ? patchOfPairs([...childPairs, ...entryRemoval.pairs]) : undefined;
 
         document.pushEdit('Delete', before, working, patch);
         document.repaintOps(applied);
