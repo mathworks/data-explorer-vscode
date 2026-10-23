@@ -439,7 +439,7 @@ describe('isNoopMove — the rule dropDecision\'s no-op is', () => {
   });
 });
 
-// D3: an entry whose name its document holds twice (a MAT-file's two records of one name) can be
+// An entry whose name its document holds twice (a MAT-file's two records of one name) can be
 // copied, never moved — the host refuses the move (transfer.ts), so the cursor does too. The
 // no-op of a move back into its own file is still the no-op.
 describe('a dragged entry that shares its name in its file', () => {

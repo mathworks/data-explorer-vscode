@@ -552,7 +552,7 @@ describe('a MAT-file shaped document', () => {
   });
 });
 
-// D3: a move takes its originals out by selector, and an entry whose selector its document does
+// A move takes its originals out by selector, and an entry whose selector its document does
 // not tell apart (a MAT-file variable of a name the file holds twice) carries `sharedName`. A
 // move of one is refused before anything changes; a copy of one, and a same-section move of
 // one (the no-op), are what they always were.

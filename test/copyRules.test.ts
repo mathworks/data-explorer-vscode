@@ -9,7 +9,7 @@
 //    section), so a same-file move is the usual no-op and the clip mark keys it as the rows do;
 //  - whether a move could take the original out alone: a selector with no uuid names whichever
 //    entry of that name the delete finds first, so an entry whose name its document holds twice
-//    is copied, never cut (D3). In a MAT-file such a variable is not even addressable (its id
+//    is copied, never cut. In a MAT-file such a variable is not even addressable (its id
 //    names both, and core resolves a shared id to neither), so the rule bites on a dictionary's
 //    hand-added entries; the MAT-file's source deleter refuses an ambiguous name as a backstop.
 import { describe, it, expect, beforeEach } from 'vitest';

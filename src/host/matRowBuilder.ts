@@ -27,7 +27,7 @@ export type SavedStatus = ReadonlyMap<unknown, string>;
 
 /**
  * What a MAT-file's rows take on top of the Status column: the stamps a dictionary's rows
- * have had all along (rowStamp.ts), absent until the MAT-file's host offers the clipboard.
+ * have had all along (rowStamp.ts), which the editable view passes on every build.
  */
 export interface MatStampOptions {
   /**
@@ -37,9 +37,9 @@ export interface MatStampOptions {
    */
   clipMark?: ClipMark;
   /**
-   * Whether a variable travels on the clipboard (`_canCopy` on every row). Absent is false,
-   * which is what the editable view sends today (`clipboard: false` on its setRows). The read-only
-   * view shows no menu, so it reads nothing here.
+   * Whether a variable travels on the clipboard (`_canCopy` on every row). True from the
+   * editable view, whose variables copy, cut, paste and drag as a dictionary's entries do.
+   * Absent is false: the read-only view shows no menu, so it reads nothing here.
    */
   canCopy?: boolean;
 }

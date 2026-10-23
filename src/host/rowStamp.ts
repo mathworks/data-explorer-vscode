@@ -63,10 +63,10 @@ export interface CapabilityFlags {
  * guarded this, the dictionary builder did not, and there a throw escaped the whole build and
  * blanked the table instead of one row's menu.
  *
- * `canCopy` is the caller's because it is a fact about the FORMAT, not the node: a
- * dictionary's entries always travel on the clipboard, and a MAT-file's do once its host
- * offers the clipboard (matRowBuilder's `canCopy`). Copy and Cut act on the owning entry, so
- * every row of a document carries the same answer.
+ * `canCopy` is the caller's because it is a fact about the VIEW, not the node: a
+ * dictionary's entries always travel on the clipboard, and a MAT-file's do in the editable view
+ * that offers it (matRowBuilder's `canCopy`). Copy and Cut act on the owning entry, so every
+ * row of a document carries the same answer.
  */
 export function capabilityFlags(n: any, opts: { canCopy: boolean }): CapabilityFlags {
   let canDelete = false;

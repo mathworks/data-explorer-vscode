@@ -272,6 +272,18 @@ describe('a planned payload and the fetch that completes it', () => {
     for (const r of answer.rows) expect((r as any).parent).toBe(parentRow.ID);
   });
 
+  it("stamps a fetched row with the payload's options, so an expanded row's menu is its siblings'", () => {
+    // The editable MAT view plans with canCopy: true; a row it fetches later must say the same,
+    // or Copy would vanish from the menu of every row the user opened.
+    const node: any = structNode();
+    const parentRow: any = buildMatRowsPlanned(node, 1, undefined, { canCopy: true }).rows[0];
+    expect(parentRow._canCopy).toBe(true);
+    const fetched = childRowsMessage(parentRow.ID, node.children[0], MAT_PLANNER, { canCopy: true });
+    expect(fetched.rows.length).toBeGreaterThan(0);
+    expect(fetched.rows.every((r: any) => r._canCopy === true)).toBe(true);
+    expect(childRowsMessage(parentRow.ID, node.children[0], MAT_PLANNER).rows.every((r: any) => r._canCopy === false)).toBe(true);
+  });
+
   it('plans the payload through the same call the fetch makes, which is the `.mat` planner’s whole claim', () => {
     // The sectioned planner's two halves are different functions and are pinned as a
     // pair in sectionedRowPlan.test.ts; this one's are the same function from a
@@ -331,6 +343,15 @@ describe('answerChildRequest — the whole round trip, on the webview that asked
     expect(webview.posts[0].type).toBe('childRows');
     expect(webview.posts[0].nodeId).toBe(parentRow.ID);
     expect(webview.posts[0].rows.map((r: any) => r.Name?.label ?? r.Name).sort()).toEqual(['gain', 'trim']);
+  });
+
+  it("hands the view's plan options to the planner", async () => {
+    const { uri, node } = structSource();
+    const parentRow: any = buildMatRowsPlanned(node, 1).rows[0];
+    const webview = spy();
+    await answerChildRequest(webview, uri, parentRow.ID, 'cfg.mat', noUsage, MAT_PLANNER, { canCopy: true });
+    expect(webview.posts[0].rows.length).toBeGreaterThan(0);
+    expect(webview.posts[0].rows.every((r: any) => r._canCopy === true)).toBe(true);
   });
 
   it('fills the Usage column for the fetched rows, as the payload does for its own', async () => {
