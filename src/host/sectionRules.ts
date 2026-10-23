@@ -38,3 +38,42 @@ export function sectionRules(model: any): SectionRule[] {
           : [],
   }));
 }
+
+/**
+ * The section name of a document that has no sections: a MAT-file, whose variables are its
+ * root node's own children. Its clipboard and drag items carry it as their source section, and
+ * the clip mark keys its variables with it (rowStamp.ts), so a same-file move is the usual
+ * same-section no-op and nothing downstream needs a case of its own.
+ */
+export const WHOLE_FILE_SECTION = '';
+
+/**
+ * The rules for a document with no section layer: ONE rule, the whole file, which is the one
+ * place a paste or a drop into it can land. Posted by the MAT-file's host the way a
+ * dictionary's posts `sectionRules`; the webview reads a '' rule as "this table is one target"
+ * (table-main's sectionRuleForRow), and no dictionary posts one.
+ *
+ * `label` is what the drop tooltip and the Paste item name the target by — the file's name,
+ * since the file is the target. `allowedTypes` is what core says the file admits to a paste
+ * (getAdmittedTypes), for the reason sectionRules reads a section's: the cursor and Paste must
+ * predict what core's paste takes. A core without that list restricts nothing here (an empty
+ * list), deliberately NOT the creation list the gallery reads (getAllowedTypes): offering a
+ * paste core then refuses in its own words is recoverable, refusing one core would take is
+ * not even visible.
+ */
+export function wholeFileRules(model: any, label: string): SectionRule[] {
+  let admitted: unknown = [];
+  try {
+    admitted = typeof model?.getAdmittedTypes === 'function' ? model.getAdmittedTypes() : [];
+  } catch {
+    admitted = [];
+  }
+  return [
+    {
+      sectionName: WHOLE_FILE_SECTION,
+      sectionLabel: label,
+      isDerived: false,
+      allowedTypes: Array.isArray(admitted) ? admitted.filter((t): t is string => typeof t === 'string') : [],
+    },
+  ];
+}
