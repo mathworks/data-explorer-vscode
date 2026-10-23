@@ -258,6 +258,22 @@ describe('insertEntryRows — add one new entry to a section', () => {
     insertEntryRows(before, 'section:P', undefined, addition);
     expect(before).toEqual(rows());
   });
+
+  it('drops a row whose id the table already holds, rather than holding it twice', () => {
+    // Review #5. The insert can arrive after a full repaint that already carried the entry
+    // (a setRows racing a paste's insertEntryRows), and a duplicate id is not a duplicate
+    // row: it is two rows the tree walk files under one parent and the search counts twice.
+    const once = insertEntryRows(rows(), 'section:P', undefined, addition)!;
+    const twice = insertEntryRows(once, 'section:P', undefined, addition)!;
+    expect(twice.map((r) => r.ID)).toEqual(once.map((r) => r.ID));
+    // Only the rows already present are dropped; the rest still go in.
+    const more = [...addition, { ID: 'section:P/New/kid2', parent: 'section:P/New' }];
+    expect(insertEntryRows(once, 'section:P', undefined, more)!.filter((r) => r.ID.startsWith('section:P/New')).map((r) => r.ID)).toEqual([
+      'section:P/New',
+      'section:P/New/kid',
+      'section:P/New/kid2',
+    ]);
+  });
 });
 
 // The third row-level repaint, and the only one the USER triggers directly: opening a
