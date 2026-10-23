@@ -178,22 +178,35 @@ export function entryRecord(entry: any): EntryRecord {
  * in an array, a `toJSON` is asked (a Date is its text), and a `__proto__` key stays a key.
  * structuredClone would be the other answer, and it keeps `undefined` members a writer would
  * then meet, and throws on a function.
+ *
+ * And a BigInt is refused, as JSON.stringify refuses one, with a TypeError — naming where it
+ * stands, which JSON's does not. Core's MAT reader can hold a 64-bit integer as one, and a record
+ * that holds one is a record neither writer here can write: the refusal is what made the entry
+ * capture behind a removal (removeEntries) and an undo record refuse BEFORE anything changed,
+ * and passing it through would move that failure to a later write, after the model has moved.
  */
 export function recordCopy(value: unknown): unknown {
+  return copyAt(value, '');
+}
+
+function copyAt(value: unknown, at: string): unknown {
   if (typeof value === 'number') return value;
+  if (typeof value === 'bigint') {
+    throw new TypeError(`Do not know how to serialize a BigInt${at ? ` (at ${at})` : ''}`);
+  }
   if (value === undefined || typeof value === 'function' || typeof value === 'symbol') return undefined;
   if (value === null || typeof value !== 'object') return value;
   const asJson = (value as { toJSON?: () => unknown }).toJSON;
-  if (typeof asJson === 'function') return recordCopy(asJson.call(value));
+  if (typeof asJson === 'function') return copyAt(asJson.call(value), at);
   if (Array.isArray(value)) {
-    return value.map((element) => {
-      const copy = recordCopy(element);
+    return value.map((element, i) => {
+      const copy = copyAt(element, `${at}[${i}]`);
       return copy === undefined ? null : copy;
     });
   }
   const out: Record<string, unknown> = {};
   for (const [key, member] of Object.entries(value)) {
-    const copy = recordCopy(member);
+    const copy = copyAt(member, at ? `${at}.${key}` : key);
     if (copy === undefined) continue;
     // Defined, not assigned: assigning `__proto__` would set the copy's prototype, where a
     // JSON.parse makes it an own key like any other.

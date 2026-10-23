@@ -451,6 +451,28 @@ describe('recordCopy — a JSON round trip that keeps every number', () => {
     expect(copy.list[0]).not.toBe(inner);
   });
 
+  it('refuses a BigInt as JSON.stringify does, with a TypeError that says where it stands', () => {
+    // Core's MAT reader can hold a 64-bit integer as one. A JSON round trip threw on it, which is
+    // what made removeEntries and an undo record refuse before anything changed.
+    const record = { name: 'big', value: { _elements: [{ _properties: { Value: 2n ** 63n } }] } };
+    expect(() => JSON.stringify(record)).toThrow(TypeError);
+    expect(() => recordCopy(record)).toThrow(TypeError);
+    expect(() => recordCopy(record)).toThrow('Do not know how to serialize a BigInt (at value._elements[0]._properties.Value)');
+    expect(() => recordCopy(5n)).toThrow('Do not know how to serialize a BigInt');
+  });
+
+  it('so an entry whose record holds a BigInt refuses its removal before anything is removed', () => {
+    const d = openModel('test://ops-remove-bigint.sldd');
+    const section = (d.model.children as any[]).find((s: any) => s.children.length >= 2);
+    const [p, q] = section.children;
+    const before = d.inventory();
+    const serialize = q.serialize.bind(q);
+    q.serialize = () => ({ ...serialize(), value: 9007199254740993n });
+    expect(() => removeEntries(d.model, [p, q])).toThrow(TypeError);
+    expect(d.inventory()).toEqual(before);
+    d.dispose();
+  });
+
   it('keeps a "__proto__" key a key, as JSON.parse does', () => {
     const parsed = JSON.parse('{"__proto__": {"x": 1}, "y": 2}');
     const copy = recordCopy(parsed) as any;
