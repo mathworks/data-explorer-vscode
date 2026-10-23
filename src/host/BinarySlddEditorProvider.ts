@@ -121,6 +121,7 @@ import {
   deleteFromSource,
 } from './editorHub.js';
 import { basename } from '../common/pathUtil.js';
+import { sourceKeptMessage } from './transfer.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { answerMatrixRequest } from './matrixRequest.js';
 import { binaryEditSrcId } from '../common/srcId.js';
@@ -133,6 +134,9 @@ import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, type FollowedDoc
 // because importing that provider would be circular — the same reason it spells this
 // provider's viewType out as a constant of its own.
 const BINARY_VIEW_TYPE = 'dataExplorer.binaryView';
+
+/** A source deleter's answer when nothing in the document answers to the names it was given. */
+const NOT_FOUND = 'nothing in it answers to that name any more';
 
 /**
  * One open view of a document: the two ways the document can ask it to repaint.
@@ -895,8 +899,18 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       // gaining it. A key present in both yields one repaint (the `seen` guard below),
       // as does a copy re-taken as a cut.
       const affected = new Set<string>([...(paintedMark?.keys ?? []), ...(next?.keys ?? [])]);
+      let model: any;
+      try {
+        model = liveModel();
+      } catch {
+        // No tree to name the affected entries in (liveModel re-reads the chunk when none is
+        // registered, and that read failed). The wide repaint is both the fallback and where
+        // the read error is reported; paintedMark is left alone because nothing was painted.
+        // As in the JSON view, where this guard came from.
+        post();
+        return;
+      }
       paintedMark = next;
-      const model = liveModel();
       const ops: AppliedOp[] = [];
       const seen = new Set<string>();
       for (const key of affected) {
@@ -941,7 +955,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     registerSourceDeleter(uriString, (targets) => {
       const before = document.chunkXml;
       const after = deleteEntriesByNameXml(before, targets);
-      if (after === before) return;
+      // Nothing answers to those names any more: renamed or deleted since the cut. Said, because
+      // the move's other half has landed and the user is left holding a copy.
+      if (after === before) return { removed: false, reason: NOT_FOUND };
       // The model half of the delete, narrowly when every target resolves to exactly
       // one live entry. Deliberately keyed on the SAME targets the text splice used, so
       // the two halves cannot remove different entries. removalPairs refuses before it
@@ -954,6 +970,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       // is not the one being interacted with.
       if (removal) document.repaintOps(removal.applied);
       else document.repaintAll();
+      return { removed: true };
     });
 
     /**
@@ -1332,7 +1349,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           // document's own format-appropriate deleter (JSON or binary), a second
           // native undo step — exactly a cut in one file + paste in another.
           if (isCut && !sameDoc && clip.sourceDocUri && named.length) {
-            await deleteFromSource(clip.sourceDocUri, named);
+            const result = await deleteFromSource(clip.sourceDocUri, named);
+            if (!result.removed) {
+              const message = sourceKeptMessage(true, clip.sourceDocUri, named.length, result.reason);
+              webview.postMessage({ type: 'error', message });
+            }
           }
         } finally {
           // Cleared even if the source-delete throws: the paste above already
@@ -1499,7 +1520,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // Cross-document move: remove the originals from the SOURCE document via
         // its own deleter (a second native undo step on that document).
         if (isMove && !sameDoc) {
-          await deleteFromSource(drag.sourceDocUri, sourceTargets);
+          const result = await deleteFromSource(drag.sourceDocUri, sourceTargets);
+          if (!result.removed) {
+            const message = sourceKeptMessage(false, drag.sourceDocUri, sourceTargets.length, result.reason);
+            webview.postMessage({ type: 'error', message });
+          }
         }
       } catch (err) {
         // Same as applyPaste: the fold attaches nodes as it goes, so a failure part-way

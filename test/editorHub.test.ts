@@ -69,6 +69,35 @@ describe('editorHub — clipboard broadcast', () => {
     }
   });
 
+  it('a view whose post or repaint throws costs only that view its update', () => {
+    // One table that throws — a panel disposed under the loop, a model that will not read —
+    // used to stop the loop, and every table registered after it went on showing the old
+    // clipboard state.
+    const throwsOnPost = { postMessage: () => { throw new Error('Webview is disposed'); } };
+    const rejectsPost = { postMessage: () => Promise.reject(new Error('Webview is disposed')) };
+    const after = fakeWebview();
+    let repaints = 0;
+    registerWebview(throwsOnPost as any, () => repaints++);
+    registerWebview(rejectsPost as any, () => {
+      throw new Error('no model');
+    });
+    registerWebview(after as any, () => repaints++);
+    try {
+      setClipboard([{ payload: { name: 'X' }, sourceSection: 'design', className: '', arrayClass: '', kind: '', isMatlabVariable: true, isScalarNumeric: true }], 'copy', 'mem://a');
+      expect(() => broadcastClipboardState()).not.toThrow();
+      expect(after.posted.at(-1)).toMatchObject({ type: 'clipboardState', canPaste: true });
+      expect(repaints, 'the throwing view still got its repaint, and so did the one after').toBe(2);
+
+      setDrag('mem://a', [{ payload: { name: 'X' }, sourceSection: 'design', className: '', arrayClass: '', kind: '', isMatlabVariable: true, isScalarNumeric: true }]);
+      expect(() => broadcastDragState()).not.toThrow();
+      expect(after.posted.at(-1)).toMatchObject({ type: 'dragState' });
+    } finally {
+      unregisterWebview(throwsOnPost as any);
+      unregisterWebview(rejectsPost as any);
+      unregisterWebview(after as any);
+    }
+  });
+
   it('stops posting to an unregistered webview', () => {
     const wv = fakeWebview();
     registerWebview(wv as any, () => {});
@@ -156,23 +185,50 @@ describe('editorHub — the Add gallery accelerator', () => {
 });
 
 describe('editorHub — cross-document source delete dispatch', () => {
-  it('dispatches to the deleter registered for the source URI', async () => {
-    const seen: string[][] = [];
+  it('dispatches to the deleter registered for the source URI, and answers what it did', async () => {
+    const seen: unknown[][] = [];
     registerSourceDeleter('mem://src', (names) => {
       seen.push(names);
+      return { removed: true };
     });
     try {
-      await deleteFromSource('mem://src', ['A', 'B']);
+      await expect(deleteFromSource('mem://src', ['A', 'B'])).resolves.toEqual({ removed: true });
       expect(seen).toEqual([['A', 'B']]);
     } finally {
       unregisterSourceDeleter('mem://src');
     }
   });
 
-  it('is a no-op when no deleter is registered for the URI (source left intact)', async () => {
-    // Must not throw — a missing deleter leaves the source untouched rather than
-    // risking a wrong-format edit.
-    await expect(deleteFromSource('mem://unknown', ['A'])).resolves.toBeUndefined();
+  it('says the original was NOT removed when no deleter is registered (a cut whose tab was closed)', async () => {
+    // Still no throw, and still no wrong-format edit on the file — but no longer silent: a
+    // lazy cut's source can be closed before its paste, and then the move leaves the original
+    // behind, which the user has to be told.
+    await expect(deleteFromSource('mem://unknown', ['A'])).resolves.toEqual({
+      removed: false,
+      reason: 'its table is no longer open',
+    });
+  });
+
+  it('passes a deleter’s "not removed" through to the caller', async () => {
+    registerSourceDeleter('mem://refused', () => ({ removed: false, reason: 'the file has invalid JSON' }));
+    try {
+      await expect(deleteFromSource('mem://refused', ['A'])).resolves.toEqual({
+        removed: false,
+        reason: 'the file has invalid JSON',
+      });
+    } finally {
+      unregisterSourceDeleter('mem://refused');
+    }
+  });
+
+  it('does not read a deleter that answers nothing as a delete that happened', async () => {
+    registerSourceDeleter('mem://mute', (() => undefined) as any);
+    try {
+      const result = await deleteFromSource('mem://mute', ['A']);
+      expect(result.removed).toBe(false);
+    } finally {
+      unregisterSourceDeleter('mem://mute');
+    }
   });
 
   it('awaits an async deleter before resolving', async () => {
@@ -180,6 +236,7 @@ describe('editorHub — cross-document source delete dispatch', () => {
     registerSourceDeleter('mem://async', async () => {
       await new Promise((r) => setTimeout(r, 10));
       done = true;
+      return { removed: true };
     });
     try {
       await deleteFromSource('mem://async', ['A']);

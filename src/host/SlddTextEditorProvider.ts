@@ -54,7 +54,9 @@ import {
   broadcastDragState,
   deleteFromSource,
   type DeleteTarget,
+  type SourceDeleteResult,
 } from './editorHub.js';
+import { sourceKeptMessage } from './transfer.js';
 import { sectionRules } from './sectionRules.js';
 import {
   deleteEntry,
@@ -1595,7 +1597,11 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           // .sldd), a second native undo step — exactly a cut in one file + paste
           // in another. The hub dispatches to whichever provider owns the source.
           if (isCut && !sameDoc && clip.sourceDocUri && named.length) {
-            await deleteFromSource(clip.sourceDocUri, named);
+            const result = await deleteFromSource(clip.sourceDocUri, named);
+            if (!result.removed) {
+              const message = sourceKeptMessage(true, clip.sourceDocUri, named.length, result.reason);
+              webview.postMessage({ type: 'error', message });
+            }
           }
         } finally {
           // The cut is consumed by the paste that already succeeded above, so it
@@ -1859,7 +1865,11 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // a second native undo step — exactly like a cut in one file + paste in
         // another. The hub dispatches to whichever provider owns the source.
         if (isMove && !sameDoc) {
-          await deleteFromSource(drag.sourceDocUri, sourceTargets);
+          const result = await deleteFromSource(drag.sourceDocUri, sourceTargets);
+          if (!result.removed) {
+            const message = sourceKeptMessage(false, drag.sourceDocUri, sourceTargets.length, result.reason);
+            webview.postMessage({ type: 'error', message });
+          }
         }
       } catch (err) {
         paintedWrite = null;
@@ -1875,34 +1885,33 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       }
     };
 
-    // Remove named entries from a document that is NOT this webview's, for a
-    // cross-file move. Opens the target document (whether or not its table is
-    // open) and applies a full-text replace as one WorkspaceEdit.
+    // Remove named entries from THIS document on behalf of another document's paste or drop
+    // (a cross-file move). Opens the document (whether or not its table is still in front)
+    // and applies the removal as one WorkspaceEdit.
     //
     // The strict-JSON gate matters more here than on the paths that edit THIS
-    // document: the source is a different file, so nothing the user did in this
-    // table tells them what state it is in — it may be open in a text view with
+    // document from its own table: the gesture happened in another file, so nothing the user
+    // did there tells them what state this one is in — it may be open in a text view with
     // half-typed JSON, or have been left invalid by an external tool. The splice
     // is tolerant enough to still find and remove a span in that text, which
     // writes back a file that was already broken and is now missing an entry too
     // (and, because it is invalid, no longer openable as a table to see that).
     // Refusing leaves the source untouched; the move's paste half has already
     // succeeded, so the user is left with a copy rather than a mangled original.
-    const deleteFromSourceDocument = async (sourceUri: string, targets: DeleteTarget[]): Promise<void> => {
+    //
+    // Every outcome is ANSWERED, never posted: this view may be a background tab or already
+    // disposed, and the user is looking at the view the paste landed in, which reports it
+    // (editorHub's SourceDeleter). That includes VS Code refusing the edit, which used to be
+    // dropped — applyEdit answers false rather than throwing, and a move that ignored it left
+    // a silent duplicate.
+    const deleteFromSourceDocument = async (sourceUri: string, targets: DeleteTarget[]): Promise<SourceDeleteResult> => {
       const uri = vscode.Uri.parse(sourceUri);
       const srcDoc = await vscode.workspace.openTextDocument(uri);
       const srcText = srcDoc.getText();
-      if (!parsesAsJson(srcText)) {
-        webview.postMessage({
-          type: 'error',
-          message:
-            `Moved the entries here, but couldn't remove them from ${basename(uri.path)} — that file has invalid JSON. ` +
-            'Fix it, then delete the originals.',
-        });
-        return;
-      }
+      if (!parsesAsJson(srcText)) return { removed: false, reason: 'the file has invalid JSON' };
       const trimmed = deleteEntriesByName(srcText, targets);
-      if (trimmed === srcText) return;
+      // Renamed or deleted since the cut: nothing answers to those names any more.
+      if (trimmed === srcText) return { removed: false, reason: 'nothing in it answers to that name any more' };
       // Byte-scoped, for the same reason every write to THIS document is: the source may be
       // another 47.8 MB dictionary, and removing one entry from it should not rewrite it.
       const patch = minimalReplacement(srcText, trimmed);
@@ -1912,7 +1921,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         srcDoc.positionAt(patch.offset + patch.length),
       );
       edit.replace(uri, range, patch.text);
-      await vscode.workspace.applyEdit(edit);
+      const written = await vscode.workspace.applyEdit(edit);
+      return written
+        ? { removed: true }
+        : { removed: false, reason: 'the document rejected the edit (it may have changed on disk)' };
     };
 
     // --- Message wiring ---------------------------------------------------------
