@@ -22,8 +22,13 @@ const DICT_ROWS = () => [
   { ID: 'd/design/B', parent: 'section:design', Name: { label: 'B' }, _canCopy: true, _canDelete: true },
 ];
 
+// Painted open, whatever the cases before it left the expansion as: what a case drags over
+// has to be on screen.
 async function paint(over: Record<string, unknown> = {}): Promise<void> {
   send({ type: 'setRows', docUri: SLDD, rows: DICT_ROWS(), columns: ['Name'], columnLabels: { Name: 'Name' }, editable: true, ...over });
+  table._expandedIds = new Set(['section:design']);
+  table._visibleRowsCache = null;
+  table.requestUpdate();
   await table.updateComplete;
 }
 
@@ -264,5 +269,78 @@ describe('a full payload clears what it leaves stale', () => {
     repaint(DICT_ROWS(), { clipboard: false });
     repaint(DICT_ROWS());
     expect(pasteEnabled()).toBe(false);
+  });
+});
+
+// #9: every handler read its message as the protocol types it, so one malformed message — a
+// null, a field of the wrong shape — threw inside the listener, and a throw there is a table
+// that stops repainting without a word. Each now degrades: the row repaints ask for a full
+// payload (what they do when they cannot apply), and the state messages keep only what is
+// well-formed.
+describe('a malformed message does not take the table down', () => {
+  // happy-dom reports a listener's throw rather than propagating it to dispatchEvent, so the
+  // throw is caught where the window reports it.
+  function throwsOf(fn: () => void): unknown[] {
+    const errors: unknown[] = [];
+    const onError = (e: ErrorEvent) => {
+      errors.push(e.error ?? e.message);
+      e.preventDefault?.();
+    };
+    window.addEventListener('error', onError);
+    try {
+      fn();
+    } catch (err) {
+      errors.push(err);
+    } finally {
+      window.removeEventListener('error', onError);
+    }
+    return errors;
+  }
+
+  it('a message that is not an object is ignored', async () => {
+    await paint();
+    for (const data of [null, undefined, 42, 'setRows', true]) {
+      expect(throwsOf(() => send(data)), String(data)).toEqual([]);
+    }
+  });
+
+  it('a row repaint whose rows are not a list asks for a full payload instead', async () => {
+    await paint();
+    for (const type of ['updateEntryRows', 'insertEntryRows']) {
+      posted.length = 0;
+      const errors = throwsOf(() => send({ type, entryRowId: 'd/design/A', sectionRowId: 'section:design', rows: { not: 'a list' } }));
+      expect(errors, type).toEqual([]);
+      expect(sent('ready'), type).toEqual([{ type: 'ready' }]);
+      // And nothing was removed on the strength of it.
+      expect(table.rows.map((r: any) => r.ID), type).toEqual(DICT_ROWS().map((r) => r.ID));
+    }
+  });
+
+  it('a full payload whose rows are not a list shows an empty table', async () => {
+    expect(throwsOf(() => send({ type: 'setRows', docUri: SLDD, rows: 'oops', columns: ['Name'], columnLabels: {}, editable: true }))).toEqual([]);
+    expect(table.rows).toEqual([]);
+  });
+
+  it('an answer to a fetch whose rows are not a list is dropped', async () => {
+    await paint();
+    expect(throwsOf(() => send({ type: 'childRows', nodeId: 'd/design/A', rows: 7, truncated: 'many' }))).toEqual([]);
+    expect(table.rows.map((r: any) => r.ID)).toEqual(DICT_ROWS().map((r) => r.ID));
+  });
+
+  it('rules, clipboard items and a drag that are not well-formed keep only what is', async () => {
+    await paint();
+    const errors = throwsOf(() => {
+      send({ type: 'sectionRules', docUri: SLDD, rules: [null, 5, { sectionLabel: 'no name' }, { sectionName: 'design', sectionLabel: 'Design Data', isDerived: false, allowedTypes: 'all' }] });
+      send({ type: 'clipboardState', canPaste: true, mode: 'copy', items: [null, 'x', { className: 'Simulink.Bus', arrayClass: 'Simulink.Bus', kind: 'Bus', isMatlabVariable: false, isScalarNumeric: false }] });
+      send({ type: 'dragState', descriptor: { docUri: 'file:///fx/o.sldd', items: 'not a list' } });
+      table.selectedRowIds = ['d/design/A'];
+      table.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true, cancelable: true, composed: true }));
+      table.dispatchEvent(new CustomEvent('dex-table-context-menu', { detail: { rowId: 'd/design/A', x: 1, y: 1 } }));
+      dragOver('d/design/B');
+    });
+    expect(errors).toEqual([]);
+    // The one well-formed item, against the one well-formed rule (its bad list read as none).
+    expect(sent('paste')).toEqual([{ type: 'paste', rowId: 'd/design/A' }]);
+    (document.querySelector('dex-context-menu') as any).close();
   });
 });

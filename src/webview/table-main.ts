@@ -364,13 +364,35 @@ function installRows(rows: any[]): void {
   applyPendingRename();
 }
 
+// Whether a value read off a message is an object — the one shape every list element below
+// has to be before a field of it is read.
+function isRecord(x: unknown): x is Record<string, any> {
+  return typeof x === 'object' && x !== null;
+}
+
+// The well-formed rules of a `sectionRules` message. A rule with no section name answers no
+// row; an allow-list that is not a list is no restriction, as an absent one is.
+function wellFormedRules(rules: unknown): SectionRule[] {
+  if (!Array.isArray(rules)) return [];
+  return rules
+    .filter((r): r is SectionRule => isRecord(r) && typeof r.sectionName === 'string')
+    .map((r) => (Array.isArray(r.allowedTypes) ? r : { ...r, allowedTypes: [] }));
+}
+
+// Every handler below reads its message as the protocol types it (protocol.ts), but the
+// postMessage boundary is untyped, and a throw inside this listener is a table that stops
+// repainting without a word. So a message that is not an object is ignored, a row repaint it
+// cannot apply asks for the whole payload (as a splice that misses does), and the state
+// messages keep what is well-formed.
 window.addEventListener('message', (event: MessageEvent) => {
   const msg = event.data as HostToTableMessage;
+  if (!isRecord(msg)) return;
   if (msg.type === 'updateEntryRows') {
     // Entry-scoped repaint: splice this entry's rows over the run already on
     // screen. Nothing else about the view changes, so columns, banners, editable
     // and the section rules are all left exactly as the last setRows set them.
-    const spliced = spliceEntryRows((table.rows ?? []) as any[], msg.entryRowId, msg.rows ?? []);
+    // Rows that are not a list are not "no rows", which would remove the entry.
+    const spliced = Array.isArray(msg.rows) ? spliceEntryRows((table.rows ?? []) as any[], msg.entryRowId, msg.rows) : null;
     if (!spliced) {
       // The table doesn't hold the entry the host repainted, so the two are out of
       // step and a splice would silently drop the edit. Ask for a full payload
@@ -391,7 +413,9 @@ window.addEventListener('message', (event: MessageEvent) => {
     // Entry-scoped repaint for an entry the table does not hold yet — a paste, a
     // drop, or the undo of a delete. Same rules as the splice above; only finding
     // the place differs, and the host states it (see insertEntryRows).
-    const inserted = insertEntryRows((table.rows ?? []) as any[], msg.sectionRowId, msg.beforeRowId, msg.rows ?? []);
+    const inserted = Array.isArray(msg.rows)
+      ? insertEntryRows((table.rows ?? []) as any[], msg.sectionRowId, msg.beforeRowId, msg.rows)
+      : null;
     if (!inserted) {
       vscode.postMessage({ type: 'ready' });
       return;
@@ -404,7 +428,10 @@ window.addEventListener('message', (event: MessageEvent) => {
     // Merged in place, NOT installed as a new payload: the rest of the table is
     // untouched, so the banners, the columns, the selection and an open matrix grid all
     // stay as they are — this adds rows under one row the user just opened.
-    const merged = mergeChildRows((table.rows ?? []) as any[], msg.nodeId, msg.rows ?? []);
+    // Rows that are not a list are no answer at all — not "no children", which would
+    // unmark the row for good — so the message is dropped like a stale one.
+    if (!Array.isArray(msg.rows)) return;
+    const merged = mergeChildRows((table.rows ?? []) as any[], msg.nodeId, msg.rows);
     // No row by that id any more, so this answers a question the table has stopped
     // asking (a repaint rebuilt the tree while the fetch was in flight). Dropped, not
     // escalated to a full repaint: nothing is out of step, the answer is simply stale.
@@ -412,7 +439,7 @@ window.addEventListener('message', (event: MessageEvent) => {
     // The host could not fit all of this row's children. They have no row and no
     // twisty, so without this the short list reads as the whole list — and the file's
     // own banner cannot say it, because it was written before the user opened anything.
-    if (merged && msg.truncated > 0) {
+    if (merged && typeof msg.truncated === 'number' && msg.truncated > 0) {
       showError(
         `This item has more rows than one view can show: ${msg.truncated.toLocaleString('en-US')} ` +
           'of its contents are not listed.',
@@ -433,7 +460,7 @@ window.addEventListener('message', (event: MessageEvent) => {
       notice: typeof msg.notice === 'string' ? msg.notice : undefined,
       warnings: msg.warnings,
     });
-    const rows = msg.rows ?? [];
+    const rows = Array.isArray(msg.rows) ? msg.rows : [];
     editable = !!msg.editable;
     hasTextView = !!msg.hasTextView;
     hasClipboard = msg.clipboard !== false;
@@ -491,18 +518,21 @@ window.addEventListener('message', (event: MessageEvent) => {
     clipboardState = {
       canPaste: !!msg.canPaste,
       mode: msg.mode ?? null,
-      items: Array.isArray(msg.items) ? msg.items : [],
+      items: Array.isArray(msg.items) ? msg.items.filter(isRecord) : [],
       // Where the entries came from, when the host says: what lets Paste refuse a cut
       // pasted back into its own section (menuItems, isNoopMove).
       sourceDocUri: typeof msg.sourceDocUri === 'string' ? msg.sourceDocUri : undefined,
     };
   } else if (msg.type === 'sectionRules') {
     docUri = typeof msg.docUri === 'string' ? msg.docUri : docUri;
-    sectionRulesList = Array.isArray(msg.rules) ? msg.rules : [];
+    sectionRulesList = wellFormedRules(msg.rules);
   } else if (msg.type === 'dragState') {
     // The host broadcasts the in-flight drag (or null when it ends) to every
     // webview, so a drag started in another tab predicts correctly here.
-    dragDescriptor = msg.descriptor ?? null;
+    const d: unknown = msg.descriptor;
+    dragDescriptor = isRecord(d) && Array.isArray(d.items)
+      ? ({ ...d, items: d.items.filter(isRecord) } as DragDescriptor)
+      : null;
   } else if (msg.type === 'error') {
     hideLoading();
     showError(msg.message);
