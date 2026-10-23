@@ -185,9 +185,10 @@ suite('A refused paste or drop into a JSON .sldd', () => {
     await withTextTab('refused_drop.sldd', async (tab) => {
       const source = rowOf(tab.rows, ENTRY);
       const before = tab.doc.getText();
-      // Copied FIRST, for the paste at the end: a copy re-reads the document (applyCopy's
-      // refresh), so one made after the drop would repair the model itself and hide whether the
-      // drop did.
+      // Copied FIRST, for the paste at the end: that paste asks what the drop left in the model,
+      // so nothing between the two may touch it. (A copy reads the tree as it stands rather than
+      // re-reading the document, but one made after the drop would still be a step the question
+      // does not need.)
       tab.view.send({ type: 'copy', rowIds: [source.ID] });
       tab.view.send({ type: 'dragStart', rowIds: [source.ID] });
       await waitFor('the drag to start', () => getDrag() !== null);
