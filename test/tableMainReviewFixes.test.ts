@@ -88,3 +88,47 @@ describe('a drag the webview cannot predict is refused', () => {
     send({ type: 'dragState', descriptor: null });
   });
 });
+
+// #3: a by-name navigation means a top-level ENTRY first (see nameSelectTarget.test.ts), and
+// read "entry" as "parent is a section header" — which no MAT-file row is, since its variables
+// ARE its top level. So the entry pass found nothing there and the document-order fallback
+// picked a nested field that happened to share the variable's name.
+describe('a by-name selection in a table with no section rows prefers the top-level row', () => {
+  it('selects the variable, not an earlier field of the same name', async () => {
+    send({
+      type: 'setRows',
+      docUri: 'file:///fx/gains.mat',
+      rows: [
+        { ID: 'm/cfg', parent: null, Name: { label: 'cfg' } },
+        { ID: 'm/cfg/gain', parent: 'm/cfg', Name: { label: 'gain' } },
+        { ID: 'm/gain', parent: null, Name: { label: 'gain' } },
+      ],
+      columns: ['Name'],
+      columnLabels: { Name: 'Name' },
+      editable: true,
+    });
+    await table.updateComplete;
+    send({ type: 'selectByName', name: 'gain' });
+    expect(table.selectedRowIds).toEqual(['m/gain']);
+    expect(sent('select')).toEqual([{ type: 'select', rowIds: ['m/gain'] }]);
+  });
+
+  it('a dictionary is unchanged: its section headers are never the entry a name means', async () => {
+    send({
+      type: 'setRows',
+      docUri: SLDD,
+      rows: [
+        { ID: 'section:design', parent: null, Name: { label: 'A' } },
+        { ID: 'd/design/B', parent: 'section:design', Name: { label: 'B' } },
+        { ID: 'd/design/B/A', parent: 'd/design/B', Name: { label: 'A' } },
+        { ID: 'd/design/A', parent: 'section:design', Name: { label: 'A' } },
+      ],
+      columns: ['Name'],
+      columnLabels: { Name: 'Name' },
+      editable: true,
+    });
+    await table.updateComplete;
+    send({ type: 'selectByName', name: 'A' });
+    expect(table.selectedRowIds).toEqual(['d/design/A']);
+  });
+});

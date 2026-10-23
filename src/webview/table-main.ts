@@ -236,10 +236,13 @@ function applyPendingNameSelection(): void {
     Name?: { label?: string };
     _blockKey?: string;
   }[];
-  // A row that is a top-level ENTRY: its parent is a section header. Same reading of the
-  // row shape as operands.ts, through the same `section:` spelling.
-  const isEntry = (r: { parent?: string | null }): boolean =>
-    typeof r.parent === 'string' && isSectionRowId(r.parent);
+  // A row that is a top-level ENTRY: its parent is a section header, or — in a table with
+  // no section rows, a MAT-file's — it has no parent and is not a header itself, because
+  // there the variables ARE the top level. Same reading of the row shape as operands.ts,
+  // through the same `section:` spelling. A dictionary's top-level rows are all headers,
+  // so its answer is unchanged.
+  const isEntry = (r: { ID: string; parent?: string | null }): boolean =>
+    typeof r.parent === 'string' ? isSectionRowId(r.parent) : !isSectionRowId(r.ID);
   const named = (r: { Name?: { label?: string } }): boolean => r.Name?.label === pendingSelectName;
   // Two grammars share this one channel. A variable target (and a block in a file
   // written before SIDs existed) is a NAME and matches the Name label; a block
