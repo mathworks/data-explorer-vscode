@@ -55,12 +55,6 @@ export interface MenuInput {
   pasteTarget: PasteTarget | null;
   /** This document's uri, which a cut's `sourceDocUri` is compared with. */
   docUri?: string;
-  /**
-   * Whether this document's rows travel on the clipboard at all. Absent is true. False for a
-   * MAT-file (setRows' `clipboard`): Copy, Cut and Paste are left off its menu, not shown
-   * disabled, since nothing would ever enable them, and their chords find no item to run.
-   */
-  hasClipboard?: boolean;
 }
 
 // A display name short enough that the label fits the menu's max-width, with the whole
@@ -182,7 +176,6 @@ export function shouldOpenCellEditor(editable: boolean): boolean {
  */
 export function buildContextMenuItems(input: MenuInput): ContextMenuItem[] {
   const { rows, selectedRowIds, clipboard, editable, hasTextView, pasteTarget } = input;
-  const hasClipboard = input.hasClipboard !== false;
   const byId = new Map(rows.map((r) => [r.ID, r]));
   const ops = resolveOperands(selectedRowIds, rows);
   const entryNames = ops.entryIds.map((id) => displayName(byId.get(id)));
@@ -238,7 +231,7 @@ export function buildContextMenuItems(input: MenuInput): ContextMenuItem[] {
   // A selection with no data-row operands is a header selection (or nothing at all).
   // Row actions are OMITTED rather than disabled: a section can never be copied, so a
   // reason there would name nothing the user could change. See the spec's §4.3.
-  if (n === 0) return joinGroups([hasClipboard ? [pasteItem()] : [], undoRedo]);
+  if (n === 0) return joinGroups([[pasteItem()], undoRedo]);
 
   // --- The row actions -------------------------------------------------------------
   const entryRows = ops.entryIds.map((id) => byId.get(id));
@@ -315,7 +308,7 @@ export function buildContextMenuItems(input: MenuInput): ContextMenuItem[] {
       ]
     : [];
 
-  return joinGroups([hasClipboard ? [copy, cut, pasteItem()] : [], [addChild, del], locate, undoRedo]);
+  return joinGroups([[copy, cut, pasteItem()], [addChild, del], locate, undoRedo]);
 }
 
 // One separator between the groups that have anything in them — never a leading, a

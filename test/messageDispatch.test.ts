@@ -86,8 +86,8 @@ const ALWAYS = ['ready', 'select', 'navigate', 'requestMatrix'];
 // the webview is told it is read-only and does not offer the gestures; an EDITABLE one
 // has no excuse, and this is the list that had to be implemented three times — against a
 // TextDocument's edits, a re-zipped archive, and a MAT-file's tree. An editable view may
-// still decline one, as the MAT-file's declines the clipboard and row drags, but it has to
-// say so: a branch that answers, not a message that lands and does nothing.
+// still decline one, but it has to say so: a branch that answers, not a message that lands
+// and does nothing.
 const EDITING = [
   'edit',
   'delete',

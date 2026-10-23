@@ -61,10 +61,6 @@ let editable = false;
 // Whether the document has a plain-text view "Location in Text" can reveal a row
 // in (JSON .sldd yes, compressed-binary .sldd no). Gates that menu item + Cmd+L.
 let hasTextView = false;
-// Whether this document's rows travel on the clipboard and in row drags (setRows'
-// `clipboard`): false for a MAT-file. Gates the menu's Copy/Cut/Paste, their chords and
-// a row drag, all from this one flag.
-let hasClipboard = true;
 let clipboardState: ClipboardState = { canPaste: false, mode: null, items: [] };
 // The row id under the last right-click, relayed with the chosen action.
 let lastContextRowId: string | null = null;
@@ -83,10 +79,7 @@ let dragDescriptor: DragDescriptor | null = null;
 // posts a single rule for the whole file, under WHOLE_FILE_SECTION ('', the spelling host and
 // webview share — sectionRules.wholeFileRules). No dictionary posts one, so for every
 // dictionary this is null and nothing below changes.
-// Nor does a table whose rows do not travel (`clipboard: false`): the rule is only ever
-// about where a paste or a drop lands, and such a table offers neither.
 function wholeFileRule(): SectionRule | null {
-  if (!hasClipboard) return null;
   return sectionRulesList.find((r) => r.sectionName === WHOLE_FILE_SECTION) ?? null;
 }
 
@@ -124,7 +117,6 @@ function menuFor(anchorRowId: string | null, selection: string[] = selectedRowId
     clipboard: clipboardState,
     editable,
     hasTextView,
-    hasClipboard,
     // Paste's allow-check needs the target section's rules; without them the item is
     // offered only as far as "the clipboard is non-empty" can justify. The section's name
     // and this document's uri are what tell a cut pasted back where it came from.
@@ -492,10 +484,8 @@ window.addEventListener('message', (event: MessageEvent) => {
     const rows = Array.isArray(msg.rows) ? msg.rows : [];
     editable = !!msg.editable;
     hasTextView = !!msg.hasTextView;
-    hasClipboard = msg.clipboard !== false;
-    // A row drag is a structural edit, so it needs an editable document as well as rows that
-    // travel: a read-only view sends no `clipboard` at all, which reads as true.
-    table.rowDrag = editable && hasClipboard;
+    // A row drag is a structural edit, so it needs an editable document.
+    table.rowDrag = editable;
     // Every table gets setRows, including the read-only ones that never receive
     // sectionRules — so this is the assignment that lets a .slx or .prj view answer a link
     // into itself. Guarded so a provider that has not been updated leaves the old value
@@ -510,11 +500,11 @@ window.addEventListener('message', (event: MessageEvent) => {
     table.columns = msg.columns ?? null;
     table.columnLabels = msg.columnLabels ?? null;
     table.columnGroups = (msg.columnGroups as Record<string, string> | undefined) ?? null;
-    // A view whose rows no longer travel, or that is read-only now, has no drop rule left
-    // that is about it. Only then: an editable payload's rules are re-sent AFTER it (the
-    // providers post sectionRules behind setRows), so wiping them here would leave the
-    // view rule-less until the next message — or for good, from a host that posts first.
-    if (!editable || !hasClipboard) sectionRulesList = [];
+    // A view that is read-only now has no drop rule left that is about it. Only then: an
+    // editable payload's rules are re-sent AFTER it (the providers post sectionRules behind
+    // setRows), so wiping them here would leave the view rule-less until the next message —
+    // or for good, from a host that posts first.
+    if (!editable) sectionRulesList = [];
     // NOT the broadcast drag (dragDescriptor): it mirrors the host's drag register, which a
     // repaint does not end — the register keeps the rows it snapped at drag start, and the
     // host broadcasts the end itself (dragEnd, and after every drop). Cleared here, a repaint
@@ -730,10 +720,10 @@ table.dropPredictor = predictDrop;
 // Drag lifecycle → host. On drag start the host snapshots the dragged rows into
 // its drag register and broadcasts the descriptor; on end it clears + rebroad-
 // casts; on drop it completes the move/copy as paste (+ source delete). All
-// gated on an editable document whose rows travel (`clipboard`), the same two facts
-// table.rowDrag is set from, so a view without both never starts or takes one.
+// gated on an editable document, the fact table.rowDrag is set from, so a read-only
+// view never starts or takes one.
 table.addEventListener('dex-row-drag-start', (e: Event) => {
-  if (!editable || !hasClipboard) return;
+  if (!editable) return;
   const rowIds = (e as CustomEvent).detail?.rowIds ?? [];
   vscode.postMessage({ type: 'dragStart', rowIds });
 });
@@ -741,7 +731,7 @@ table.addEventListener('dex-row-drag-end', () => {
   vscode.postMessage({ type: 'dragEnd' });
 });
 table.addEventListener('dex-row-drop', (e: Event) => {
-  if (!editable || !hasClipboard) return;
+  if (!editable) return;
   const detail = (e as CustomEvent).detail;
   // '' is a drop on the empty body, which the predictor allows only into a one-target
   // document — the drag twin of a paste anchored at no row, and refused here on the same

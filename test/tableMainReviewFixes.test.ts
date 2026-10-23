@@ -305,10 +305,6 @@ describe('a full payload clears what it leaves stale', () => {
     repaint(DICT_ROWS(), { editable: false });
     repaint(DICT_ROWS());
     expect(pasteEnabled()).toBe(false);
-    send({ type: 'sectionRules', docUri: SLDD, rules });
-    repaint(DICT_ROWS(), { clipboard: false });
-    repaint(DICT_ROWS());
-    expect(pasteEnabled()).toBe(false);
   });
 });
 
