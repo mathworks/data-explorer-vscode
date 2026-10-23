@@ -1151,6 +1151,8 @@ export class DexTreeTable extends LitElement {
         color: var(--dex-color-text-secondary, #888);
         font-size: 13px;
         font-style: italic;
+        /* Focusable only to give the table the keyboard, like .table-container: no ring. */
+        outline: none;
       }
 
       /* Waiting for the first payload. This lives INSIDE the component, in the
@@ -3005,7 +3007,7 @@ export class DexTreeTable extends LitElement {
     const decision = this.dropPredictor('', mode);
     this._dropTargetId = null;
     this._dropPosition = null;
-    this._dropForbidden = !!decision && !decision.canDrop && !decision.noop;
+    this._dropForbidden = !!decision && !decision.canDrop;
     this._dropTooltip = decision?.tooltip ?? '';
     this._dropTooltipX = e.clientX;
     this._dropTooltipY = e.clientY;
