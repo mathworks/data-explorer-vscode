@@ -120,6 +120,20 @@ describe('a MAT-file string, which no tile makes', () => {
         expect([now.className, now.displayValue, now.icon]).toEqual(['string', '"abc"', 'wsString']);
       });
     });
+
+    it(`is typed back in ${file} to a number, which makes the variable a double again`, () => {
+      withMat(file, (mat) => {
+        DataModel.setActiveContext(mat);
+        const added: any = DataModel.addEntry('', 'MatlabVariable');
+        DataModel.setActive(mat, added);
+        expect(DataModel.editProperty(added.id, 'Value', '"abc"', String(added.displayValue))).toBe(true);
+        const str = mat.children.find((v: any) => v.name === added.name);
+        DataModel.setActive(mat, str);
+        expect(DataModel.editProperty(str.id, 'Value', '0', String(str.displayValue))).toBe(true);
+        const now = mat.children.find((v: any) => v.name === added.name);
+        expect([now.className, now.displayValue]).toEqual(['double', '0']);
+      });
+    });
   }
 });
 
