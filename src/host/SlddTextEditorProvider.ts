@@ -3,15 +3,8 @@ import * as vscode from 'vscode';
 import { renderTableWebview } from './webviewHtml.js';
 import { getModel, invalidate, findNode, peekModel, openSourceView, releaseSourceView } from './SlddModel.js';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
-import {
-  buildEntryRows,
-  clipMarkKey,
-  splitClipMarkKey,
-  COLUMNS,
-  COLUMN_LABELS,
-  COLUMN_GROUPS,
-  type ClipMark,
-} from './rowBuilder.js';
+import { buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
+import { clipMarkChange, clipMarkOfDoc as clipMarkOf } from './clipMarks.js';
 import { rowPlannerFor } from './rowPlanner.js';
 import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
 import { answerChildRequest } from './childRequest.js';
@@ -41,7 +34,7 @@ import {
   type KnownEdit,
   type RangeReplacement,
 } from './jsonEntrySync.js';
-import { getClipboard, clipboardState } from './clipboard.js';
+import { clipboardState } from './clipboard.js';
 import { setDrag, getDrag, clearDrag } from './dragState.js';
 import {
   registerWebview,
@@ -222,26 +215,14 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      */
     let modelInSync = false;
 
-    // If the clipboard's cut/copied entry lives in THIS document, the mark its source
-    // row should carry, so the table can render the cut (dimmed) / copied (dashed)
-    // affordance. Cleared automatically once the clipboard empties on paste.
+    // If the clipboard's cut/copied entries live in THIS document, the mark their source
+    // rows should carry (clipMarks.ts), so the table can render the cut (dimmed) / copied
+    // (dashed) affordance. Cleared automatically once the clipboard empties on paste.
     //
     // Shared by the full and entry-scoped repaints, so a cut affordance renders the same
     // way whichever one painted it: one that appeared or vanished depending on which
     // repaint the user happened to trigger would be a bug visible only after an edit.
-    // Every entry the clipboard holds carries the mark, each keyed by its OWN source
-    // section: a multi-row cut can span sections, so one shared section would dim the
-    // wrong rows.
-    const clipMarkOfDoc = (): ClipMark | undefined => {
-      const clip = getClipboard();
-      if (!clip || clip.sourceDocUri !== uriString) return undefined;
-      const keys = new Set<string>();
-      for (const it of clip.items) {
-        const name = it.payload.name;
-        if (typeof name === 'string' && name) keys.add(clipMarkKey(it.sourceSection, name));
-      }
-      return keys.size ? { keys, mode: clip.mode } : undefined;
-    };
+    const clipMarkOfDoc = (): ClipMark | undefined => clipMarkOf(uriString);
 
     /**
      * The tree for this document — the one already built when it still says what the text
@@ -765,23 +746,17 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * (see modelInSync), and only a full repaint can fix that.
      */
     let paintedMark: ClipMark | undefined;
-    // Order-independent: the same entries marked in a different order is the SAME mark,
-    // and repainting for it would be a repaint the user's rows do not need.
-    const markKey = (mark?: ClipMark): string =>
-      mark ? JSON.stringify([mark.mode, [...mark.keys].sort()]) : '';
     const repaintClipMark = (): void => {
       const next = clipMarkOfDoc();
-      if (markKey(paintedMark) === markKey(next)) return;
+      // Every entry either mark names (clipMarkChange), or none when they are the same mark.
+      const affected = clipMarkChange(paintedMark, next);
+      if (!affected) return;
       // The rows on screen are not what the text says, so painting two entries over them would
       // leave the rest stale — this is the wide repaint every broadcast used to be.
       if (!modelInSync) {
         void post();
         return;
       }
-      // Every entry either mark names: the ones losing the affordance and the ones
-      // gaining it. A key present in both yields one repaint (the `seen` guard below),
-      // as does a copy re-taken as a cut.
-      const affected = new Set<string>([...(paintedMark?.keys ?? []), ...(next?.keys ?? [])]);
       let model: any;
       try {
         model = liveModel();
@@ -795,8 +770,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       paintedMark = next;
       const ops: AppliedOp[] = [];
       const seen = new Set<string>();
-      for (const key of affected) {
-        const { section, name } = splitClipMarkKey(key);
+      for (const { section, name } of affected) {
         const entry = findEntryByName(model, section, name);
         if (!entry || seen.has(entry.id)) continue;
         seen.add(entry.id);
