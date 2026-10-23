@@ -8,20 +8,28 @@ interface RowLike {
 }
 
 /**
- * Decide which rows should be expanded after a `setRows`.
+ * Decide which rows should be expanded after a repaint.
  *
  * Every repaint — the initial load, a value edit, a structural edit, a text-view
- * edit, undo, AND redo — arrives as a fresh `setRows`. To avoid collapsing the
- * tree under the user on any of those, we PRESERVE the prior expansion: keep
- * whichever previously-expanded rows still exist in the new row set.
+ * edit, undo, AND redo — installs a fresh row set. To avoid collapsing the tree
+ * under the user on any of those, we PRESERVE the prior expansion: keep whichever
+ * previously-expanded rows still exist in the new row set. An EMPTY prior expansion
+ * is preserved too: it is the user's, who collapsed everything.
  *
- * On the first load (no prior expansion) we default to expanding the section
- * rows (parent === null) so entries are visible immediately — a data viewer
- * should not open fully collapsed.
+ * On the first load — `prev` null, which only the caller can say (table-main: no
+ * payload with rows has been shown yet) — we default to expanding the top-level rows
+ * (parent === null) so their contents are visible immediately: a data viewer should
+ * not open fully collapsed. In a dictionary those are the section rows, so its
+ * entries show; in a MAT-file they are the variables. It used to infer the first
+ * load from an empty `prev`, which reopened everything the user had collapsed.
+ *
+ * A top-level row whose children the payload held back (`_lazy`) is left closed:
+ * open, it would show a twisty over nothing that takes two clicks to fetch, where
+ * closed its first click fetches (dex-tree-table's _toggleExpand).
  */
 export function nextExpandedIds<T extends RowLike>(prev: Set<string> | null, rows: T[]): Set<string> {
-  if (!prev || prev.size === 0) {
-    return new Set(rows.filter((r) => r.parent === null).map((r) => r.ID));
+  if (!prev) {
+    return new Set(rows.filter((r) => r.parent === null && !r._lazy).map((r) => r.ID));
   }
   const existing = new Set(rows.map((r) => r.ID));
   return new Set([...prev].filter((id) => existing.has(id)));

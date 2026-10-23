@@ -301,6 +301,11 @@ function clearError(): void {
   renderError(table, undefined);
 }
 
+// Whether a payload with rows has been shown yet. Until then there is no expansion of the
+// user's to keep, so the next one opens the top level (rowUpdates.nextExpandedIds); after
+// it, an empty expansion is the user's own — they collapsed everything — and stays empty.
+let shownRows = false;
+
 // Hand a new row array to the table and re-derive everything that depends on it.
 //
 // Shared by the two repaint messages — the whole-table `setRows` and the
@@ -323,9 +328,10 @@ function installRows(rows: any[]): void {
       ? table._getVisibleRows().map((r: { ID: string }) => r.ID)
       : [];
   table.rows = rows;
-  // Preserve expansion (keep still-existing expanded ids); default to
-  // sections-only on first load. Never collapse the tree under the user.
-  table._expandedIds = nextExpandedIds(prevExpanded, rows);
+  // Preserve expansion (keep still-existing expanded ids); default to the top level on
+  // the first load. Never collapse the tree under the user, nor reopen what they closed.
+  table._expandedIds = nextExpandedIds(shownRows ? (prevExpanded ?? new Set()) : null, rows);
+  if (rows.length > 0) shownRows = true;
   // Preserve the filtered list: rows edited out of the active search stay until the
   // user searches again. pendingSelectIds — the rows the host wants selected after this
   // edit, so a renamed row under its new id, or the entries a paste added — are still

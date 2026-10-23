@@ -25,7 +25,26 @@ describe('nextExpandedIds — expansion preserved across setRows', () => {
 
   it('defaults to section rows (parent === null) on first load (no prior state)', () => {
     expect(nextExpandedIds(null, rows)).toEqual(new Set(['section:P', 'section:Q']));
-    expect(nextExpandedIds(new Set(), rows)).toEqual(new Set(['section:P', 'section:Q']));
+  });
+
+  it('keeps an EMPTY expansion empty: the user collapsed everything, and a repaint is not a first load', () => {
+    // Review #2. An empty set used to mean "first load" too, so collapsing every section
+    // and then editing anything re-expanded them all under the user. The first load is the
+    // caller's to say (null), not something to infer from the set being empty.
+    expect(nextExpandedIds(new Set(), rows)).toEqual(new Set());
+  });
+
+  it("on first load, leaves a top-level row whose children were held back collapsed", () => {
+    // A MAT-file's variables are its top-level rows, so the first load opens them, as it
+    // always has. One the payload deferred (`_lazy`) has nothing under it yet, and opening
+    // it that way shows an open twisty over nothing, which then takes two clicks to fetch
+    // (collapse, expand). Left collapsed, its first click fetches.
+    const mat: Row[] = [
+      { ID: 'm/cfg', parent: null },
+      { ID: 'm/cfg/gain', parent: 'm/cfg' },
+      { ID: 'm/big', parent: null, _lazy: true },
+    ];
+    expect(nextExpandedIds(null, mat)).toEqual(new Set(['m/cfg']));
   });
 
   it('preserves prior expansion (deep node stays expanded across a rebuild)', () => {
