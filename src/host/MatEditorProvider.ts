@@ -685,9 +685,12 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
 
     // Every row painted again from the tree, and then `message` shown. In that order, and only
     // once the paint is posted: a paint clears the error banner, and this one posts after its
-    // await, so a message sent beside it would be cleared as it arrived.
+    // await, so a message sent beside it would be cleared as it arrived. A view closed by then
+    // has nothing left to tell (postPayload.ts).
     const repaintAndReport = (message: string) => {
-      void post().then(() => webview.postMessage({ type: 'error', message }));
+      void post()
+        .then(() => webview.postMessage({ type: 'error', message }))
+        .catch(() => false);
     };
 
     // Put back what the table shows of `node`, from the tree, and then show `message`, if any:
