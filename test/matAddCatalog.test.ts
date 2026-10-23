@@ -4,16 +4,17 @@
 //
 // A MAT-file's gallery is not a catalog of its own: it is the dictionary catalog's Design Data
 // tiles of the classes core says the file can take a new variable of (MatNode.getAllowedTypes),
-// plus the tiles only a MAT-file has (a `string`). So what this holds is the same three claims a
-// dictionary tile makes, across the same boundary — for each tile the gallery shows a real file,
-// core creates the variable for real, and the class and the glyph that come back are the tile's —
-// and two of its own: the gallery shows a tile for every class core lists and for nothing else,
-// and the dictionary's gallery is exactly the one it was.
+// but the ones it leaves out on purpose (MAT_OMITTED: a `string`, which typing one into a
+// variable's Value makes). So what this holds is the same three claims a dictionary tile makes,
+// across the same boundary — for each tile the gallery shows a real file, core creates the
+// variable for real, and the class and the glyph that come back are the tile's — and two of its
+// own: the gallery shows a tile for every class core lists and is not told to leave out, and for
+// nothing else, and the dictionary's gallery is exactly the one it was.
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel, MAT_CREATABLE_CLASSES } from 'data-explorer-core';
-import { ADD_CATALOG, MAT_ONLY_TILES, allTiles, matCatalog } from '../src/common/addCatalog.js';
+import { ADD_CATALOG, MAT_OMITTED, allTiles, matCatalog } from '../src/common/addCatalog.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -65,6 +66,9 @@ function withMat<T>(file: string, run: (mat: any) => T): T {
   }
 }
 
+/** The classes of `classes` the gallery leaves out on purpose (MAT_OMITTED). */
+const omittedOf = (classes: readonly string[]): string[] => MAT_OMITTED.map((o) => o.className).filter((c) => classes.includes(c));
+
 // The class a MAT-file variable reports for a tile's: a plain variable is the double 0, a
 // structure a struct; every object is of the class itself.
 const STORED_CLASS_OF: Record<string, string> = { MatlabVariable: 'double', MatlabStruct: 'struct' };
@@ -79,8 +83,8 @@ describe('the MAT-file gallery agrees with core', () => {
         expect(classes).toEqual(expect.arrayContaining(['MatlabVariable', 'MatlabStruct', 'Simulink.Parameter', 'string']));
       });
 
-      it('shows one tile for every class core lists, and none for anything else', () => {
-        expect(tiles.map((t) => t.className).sort()).toEqual([...classes].sort());
+      it('shows one tile for every class core lists but those it leaves out, and none for anything else', () => {
+        expect([...tiles.map((t) => t.className), ...omittedOf(classes)].sort()).toEqual([...classes].sort());
       });
 
       for (const tile of tiles) {
@@ -104,10 +108,32 @@ describe('the MAT-file gallery agrees with core', () => {
   }
 });
 
+describe('a MAT-file string, which no tile makes', () => {
+  for (const file of Object.keys(FILES)) {
+    it(`is made in ${file} by adding a MATLAB Variable and typing a string into its Value`, () => {
+      withMat(file, (mat) => {
+        DataModel.setActiveContext(mat);
+        const added: any = DataModel.addEntry('', 'MatlabVariable');
+        DataModel.setActive(mat, added);
+        expect(DataModel.editProperty(added.id, 'Value', '"abc"', String(added.displayValue))).toBe(true);
+        const now = mat.children.find((v: any) => v.name === added.name);
+        expect([now.className, now.displayValue, now.icon]).toEqual(['string', '"abc"', 'wsString']);
+      });
+    });
+  }
+});
+
 describe("core's list of what an Add creates in a MAT-file", () => {
-  it('has a tile for every class in it, so the gallery can offer each where a file takes it', () => {
-    const offered = matCatalog(['MatlabVariable', 'MatlabStruct', ...MAT_CREATABLE_CLASSES]).flatMap((c) => c.tiles).map((t) => t.className);
-    expect([...offered].sort()).toEqual(['MatlabVariable', 'MatlabStruct', ...MAT_CREATABLE_CLASSES].sort());
+  it('has a tile for every class in it the gallery does not leave out, so it can offer each where a file takes it', () => {
+    const listed = ['MatlabVariable', 'MatlabStruct', ...MAT_CREATABLE_CLASSES];
+    const offered = matCatalog(listed).flatMap((c) => c.tiles).map((t) => t.className);
+    expect([...offered, ...omittedOf(listed)].sort()).toEqual([...listed].sort());
+  });
+
+  it('still creates each class the gallery leaves out, so no entry of MAT_OMITTED is stale', () => {
+    for (const o of MAT_OMITTED) {
+      expect(MAT_CREATABLE_CLASSES, o.className).toContain(o.className);
+    }
   });
 
   it('bounds what any file is told it can take: a plain variable, a struct, and those classes', () => {
@@ -133,7 +159,7 @@ describe('matCatalog', () => {
     const narrow = matCatalog(EVERY);
     expect(narrow.map((c) => c.title)).toEqual(['Parameters', 'Signals and Buses', 'Types']);
     expect(narrow.flatMap((c) => c.tiles).map((t) => t.label)).toEqual([
-      'MATLAB Variable', 'MATLAB Structure', 'MATLAB String', 'Simulink Parameter', 'LookUp Table', 'Breakpoint',
+      'MATLAB Variable', 'MATLAB Structure', 'Simulink Parameter', 'LookUp Table', 'Breakpoint',
       'Simulink Signal', 'Simulink Bus', 'Numeric Type', 'Alias Type', 'Value Type',
     ]);
     expect(narrow.every((c) => c.uniformSection === 'design')).toBe(true);
@@ -144,16 +170,13 @@ describe('matCatalog', () => {
     expect(without.flatMap((c) => c.tiles).map((t) => t.className)).not.toContain('Simulink.LookupTable');
     expect(without.flatMap((c) => c.tiles).map((t) => t.className)).not.toContain('Simulink.Breakpoint');
     expect(matCatalog(['MatlabVariable', 'MatlabStruct']).map((c) => c.title)).toEqual(['Parameters']);
-    expect(matCatalog(['string']).flatMap((c) => c.tiles).map((t) => t.label)).toEqual(['MATLAB String']);
     expect(matCatalog([])).toEqual([]);
   });
 
-  it("puts each MAT-file-only tile in its category, and never in a dictionary's gallery", () => {
-    for (const extra of MAT_ONLY_TILES) {
-      const cat = matCatalog(EVERY).find((c) => c.title === extra.category)!;
-      const labels = cat.tiles.map((t) => t.className);
-      expect(labels.indexOf(extra.tile.className)).toBe(labels.indexOf(extra.after) + 1);
-      expect(allTiles().some((t) => t.className === extra.tile.className)).toBe(false);
+  it('offers no tile of a class it leaves out, though core lists it', () => {
+    for (const o of MAT_OMITTED) {
+      expect(matCatalog([o.className]), o.className).toEqual([]);
+      expect(matCatalog(EVERY).flatMap((c) => c.tiles).map((t) => t.className), o.className).not.toContain(o.className);
     }
   });
 });

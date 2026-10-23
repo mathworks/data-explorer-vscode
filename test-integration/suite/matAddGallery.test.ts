@@ -244,6 +244,35 @@ suite('MAT-file editor: the Add gallery', () => {
     });
   }
 
+  // The way to a string the gallery has no tile for (MAT_OMITTED): a variable's Value typed as one.
+  test('a variable whose Value is typed "abc" becomes a string, which saves in its place, reopens as one, and undoes', async () => {
+    const o = await open('cases.mat', fixture('cases.mat'));
+    const order = (posts: any[]) => tableOf(posts).filter((r) => r.parent == null).map(nameOf);
+    const before = order(o.view.posts);
+    const row = topRow(o.view.posts, 'kp');
+    assert.notStrictEqual(row.Class, 'string');
+    o.view.send({ type: 'edit', rowId: row.ID, columnId: 'Value', oldValue: row.Value, newValue: '"abc"' });
+    await waitFor('kp a string', () => topRowOrNull(o.view.posts, 'kp')?.Class === 'string');
+    assert.strictEqual(topRow(o.view.posts, 'kp').Value, '"abc"');
+    assert.deepStrictEqual(order(o.view.posts), before, 'in its place in the table');
+    assert.strictEqual(o.events.length, 1, 'one edit reached VS Code');
+    await save(o);
+    assert.strictEqual(o.doc.edits.dirty, false);
+    keptUntouched(o.original, disk(o), ['kp']);
+    forGate(o.original, o.path, { edited: [{ var: 'kp', class: 'string' }] });
+    // Reopened from the disk: a string, where it was.
+    const again = await reopen(o.path);
+    assert.strictEqual(topRow(again.view.posts, 'kp').Class, 'string');
+    assert.strictEqual(topRow(again.view.posts, 'kp').Value, '"abc"');
+    assert.deepStrictEqual(order(again.view.posts), before, 'and in its place in the file');
+    // Undone, the variable is what it was, and the file saves as it was read.
+    await o.events[0].undo();
+    await waitFor('kp back as it was', () => topRowOrNull(o.view.posts, 'kp')?.Class === row.Class);
+    assert.strictEqual(topRow(o.view.posts, 'kp').Value, row.Value);
+    await save(o);
+    keptUntouched(o.original, disk(o), []);
+  });
+
   test('a variable added and deleted before a save, or added and undone, leaves the file byte for byte as it was', async () => {
     const o = await open('pv_basic.mat', fixture('pv_basic.mat'));
     add(o, 'Simulink.Parameter', false);
