@@ -281,6 +281,27 @@ suite('MAT-file editor: edit, undo, save', () => {
     assert.strictEqual(topRow(o.view.posts, 'scalarD').Status, '', 'not the Modified it built before the save');
   });
 
+  test('a variable typed over as another class is Modified, and one added since the save stays New', async () => {
+    // Core swaps a variable typed as another class for a new one of its name, in its place.
+    const o = await open('cases.mat');
+    const top = (name: string) => tableOf(o.view.posts).find((r) => r.parent == null && nameOf(r) === name);
+    const str = topRow(o.view.posts, 'strScalar');
+    o.view.send({ type: 'edit', rowId: str.ID, columnId: 'Value', oldValue: str.Value, newValue: '0' });
+    await waitFor('strScalar a double', () => top('strScalar')?.Class === 'double');
+    assert.strictEqual(top('strScalar').Status, 'Modified', 'the file holds a strScalar');
+    o.view.send({ type: 'addEntry', className: 'MatlabVariable', rename: false });
+    await waitFor('the added variable', () => !!top('var'));
+    const added = top('var');
+    o.view.send({ type: 'edit', rowId: added.ID, columnId: 'Value', oldValue: added.Value, newValue: '"abc"' });
+    await waitFor('var a string', () => top('var')?.Class === 'string');
+    assert.strictEqual(top('var').Status, 'New', 'the file holds no var');
+    await save(o);
+    const again = top('var');
+    o.view.send({ type: 'edit', rowId: again.ID, columnId: 'Value', oldValue: again.Value, newValue: '1' });
+    await waitFor('var a double', () => top('var')?.Class === 'double');
+    assert.strictEqual(top('var').Status, 'Modified', 'saved, the file holds it');
+  });
+
   test('a rename is the record with its new name; a delete leaves the rest as they were', async () => {
     const o = await open('cases.mat');
     edit(o, 'kp', 'Name', 'kpRenamed');

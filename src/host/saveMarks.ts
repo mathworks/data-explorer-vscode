@@ -16,6 +16,12 @@
 // one). Two edits that cancel each other out still mark it. Only a comparison of values could
 // tell, and a mark too many is the safe side.
 //
+// A variable can also be put in another's place: core retypes a variable whose Value is typed as
+// another class (a string over a double, a number over a string) by swapping in a new variable of
+// its name, which the session announces as the delete of the one and the add of the other. The
+// file holds the one it replaced, so the replacement is Modified, not New, unless the variable it
+// replaced is New itself (`replacementsIn`).
+//
 // vscode-free, so that the rule is unit-tested (test/saveMarks.test.ts).
 
 /** One edit, as the closures VS Code calls for it see it. */
@@ -32,6 +38,8 @@ export interface SaveSnapshot {
 interface Entry<T> {
   readonly touched: ReadonlySet<T>;
   readonly added: ReadonlySet<T>;
+  /** Each variable the edit put in another's place, and that one. */
+  readonly replaced: ReadonlyMap<T, T>;
   applied: boolean;
   atSave: boolean;
 }
@@ -43,11 +51,13 @@ export class SaveMarks<T> {
 
   /**
    * An edit was made, touching `touched`, of which `added` it added (a variable that joined the
-   * file, which the column calls New until the file is saved with it). An edit is never applied
-   * at the save before it, so it starts moved.
+   * file, which the column calls New until the file is saved with it), and `replaced` it put in
+   * another's place (`replacementsIn`), which is not one it added. An edit is never applied at the
+   * save before it, so it starts moved.
    */
-  push(touched: Iterable<T>, added: Iterable<T> = []): MarkedEdit {
-    const entry: Entry<T> = { touched: new Set(touched), added: new Set(added), applied: true, atSave: false };
+  push(touched: Iterable<T>, added: Iterable<T> = [], replaced: ReadonlyMap<T, T> = new Map()): MarkedEdit {
+    const joined = new Set([...added].filter((node) => !replaced.has(node)));
+    const entry: Entry<T> = { touched: new Set(touched), added: joined, replaced, applied: true, atSave: false };
     this.entries.push(entry);
     return {
       undone: () => {
@@ -98,6 +108,36 @@ export class SaveMarks<T> {
         else if (!marks.has(node)) marks.set(node, 'Modified');
       }
     }
+    // A replacement is New where the variable it replaced is: one added since the save, and so
+    // not in the file either. In the order the edits were made, so that a variable typed over
+    // twice follows the first replacement to the variable that was added.
+    for (const entry of this.entries) {
+      if (!entry.applied || entry.atSave) continue;
+      for (const [node, was] of entry.replaced) if (marks.get(was) === 'New') marks.set(node, 'New');
+    }
     return marks;
   }
+}
+
+/**
+ * Which of the variables a gesture added are put in the place of another: one whose id (the
+ * file's and its name) is a variable's that the gesture took out of the file (`before`, the
+ * variables before it, by id; `inFile`, whether one is still in it). Core's retype is the one
+ * gesture that does both, and the replacement it makes is of the name of the one it swaps out.
+ */
+export function replacementsIn<T>(
+  before: ReadonlyMap<T, string>,
+  added: Iterable<T>,
+  idOf: (node: T) => string,
+  inFile: (node: T) => boolean,
+): Map<T, T> {
+  const gone = new Map<string, T>();
+  for (const [node, id] of before) if (!inFile(node)) gone.set(id, node);
+  const replaced = new Map<T, T>();
+  if (gone.size === 0) return replaced;
+  for (const node of added) {
+    const was = gone.get(idOf(node));
+    if (was !== undefined && was !== node) replaced.set(node, was);
+  }
+  return replaced;
 }

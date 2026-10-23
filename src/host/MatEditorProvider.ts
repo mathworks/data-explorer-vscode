@@ -51,7 +51,7 @@ import { clearDrag, getDrag } from './dragState.js';
 import { broadcastDragState, registerAddGalleryView, unregisterAddGalleryView } from './editorHub.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, type FollowedDocument } from './diskFollow.js';
-import { SaveMarks, type SaveMark } from './saveMarks.js';
+import { SaveMarks, replacementsIn, type SaveMark } from './saveMarks.js';
 import { saveSettled } from './settledSave.js';
 import { sameFile, writeFileSafely } from './safeWrite.js';
 import { binaryEditSrcId } from '../common/srcId.js';
@@ -84,6 +84,11 @@ interface Observed {
   steps: number;
   touched: Set<any>;
   added: Set<any>;
+  /**
+   * Each of `added` that is put in the place of a variable the gesture took out, and that one:
+   * core's retype, a variable of another class swapped in under the same name (saveMarks.ts).
+   */
+  replaced: Map<any, any>;
   /** The variables before the gesture, each with the row id the table spells it by. */
   before: Map<any, string>;
   order: any[];
@@ -100,7 +105,7 @@ interface Observed {
 function observe(mat: any, srcId: string, run: () => void): Observed {
   const before = new Map<any, string>();
   for (const v of mat.children) before.set(v, v.id);
-  const observed: Observed = { steps: 0, touched: new Set(), added: new Set(), before, order: [...mat.children] };
+  const observed: Observed = { steps: 0, touched: new Set(), added: new Set(), replaced: new Map(), before, order: [...mat.children] };
   // The variable a node is or is under, while it is in the file; a variable just removed is
   // known by having been in it.
   const variableOf = (node: any): any => {
@@ -130,6 +135,7 @@ function observe(mat: any, srcId: string, run: () => void): Observed {
   } finally {
     for (const s of subs) s.remove();
   }
+  observed.replaced = replacementsIn(before, observed.added, (v) => v.id, (v) => v.parent === mat);
   return observed;
 }
 
@@ -289,7 +295,7 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
   pushEdit(label: string, observed: Observed, touched: Iterable<any> = []): void {
     const steps = observed.steps;
     const generation = this.generation;
-    const mark = this.marks.push([...observed.touched, ...touched], observed.added);
+    const mark = this.marks.push([...observed.touched, ...touched], observed.added, observed.replaced);
     this.version++;
     this.edits.pushed();
     this._onDidChange.fire({
