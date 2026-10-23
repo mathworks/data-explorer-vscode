@@ -41,7 +41,7 @@ import {
   type KnownEdit,
   type RangeReplacement,
 } from './jsonEntrySync.js';
-import { getClipboard, clearClipboard, clipboardState } from './clipboard.js';
+import { getClipboard, clipboardState } from './clipboard.js';
 import { setDrag, getDrag, clearDrag } from './dragState.js';
 import {
   registerWebview,
@@ -56,7 +56,8 @@ import {
   type DeleteTarget,
   type SourceDeleteResult,
 } from './editorHub.js';
-import { sourceKeptMessage } from './transfer.js';
+import { runTransfer, type TransferAdapter, type TransferDeps } from './transfer.js';
+import { clipboardRegister, dragRegister } from './transferRegisters.js';
 import { sectionRules } from './sectionRules.js';
 import {
   deleteEntry,
@@ -68,10 +69,12 @@ import {
   deleteEntriesByName,
   findOwningEntry,
   reselectAfterRemoval,
-  resolveSectionForPaste,
+  refuseDisallowedPaste,
   sectionByName,
+  sectionTarget,
   reserializeEntry,
   buildDragSnapshot,
+  type SectionTarget,
   type StructuralResult,
   type TextPatch,
 } from './structuralEdit.js';
@@ -1450,13 +1453,6 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       }
     };
 
-    // The target section of a paste or a drop, from the row that was clicked or dropped on —
-    // which may be a section HEADER (`section:<name>`), the only target an empty section has.
-    // findNode cannot resolve a header id, which is why these two paths resolve their own
-    // section rather than going through onStructuralTarget, whose node lookup would bail.
-    const targetSection = (model: any, rowId: string): any =>
-      resolveSectionForPaste(model, findNode(uriString, rowId), rowId);
-
     /**
      * A same-document move's REMOVALS, stated as ops and applied to the live model — or nothing,
      * which means this move cannot take the narrow path at all.
@@ -1481,155 +1477,116 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       }
     };
 
-    // Now that the clipboard carries N items, this body and applyDrop's are the same
-    // shape end to end — which is the point: a paste IS a drop whose source register is
-    // the clipboard rather than the drag register. Left as two functions for now; the
-    // duplication is noted here so the next reader knows it is seen, not missed.
-    const applyPaste = async (msg: { rowId: string }): Promise<void> => {
+    // --- Paste and drop: one transfer, two registers -------------------------------
+    //
+    // What a paste or a drop MEANS is transfer.ts's, shared with the binary editor: which
+    // register and when it is let go of, the target resolved before anything changes, the
+    // same-section no-op, a same-document move as ONE edit that removes the sources first so the
+    // pasted copies keep their names, a cross-document move as the paste here and then the
+    // delete in the source's own format (editorHub), and what each way of failing says. What is
+    // left here is what an edit IS in this format: the mid-edit JSON gate, the model changed and
+    // PAINTED before the WorkspaceEdit is written, the write told it is already on screen
+    // (paintedWrite), and the ops remembered beside it so its undo can be applied rather than
+    // discovered (remember).
+    //
+    // The target comes from the row that was clicked or dropped on — which may be a section
+    // HEADER (`section:<name>`), the only target an empty section has. findNode cannot resolve a
+    // header id, which is why these paths resolve their own section rather than going through
+    // onStructuralTarget, whose node lookup would bail.
+    //
+    // A fresh adapter per transfer, because onFailure has to know how far this one got: a
+    // structural paint cannot be taken back row by row — entries arrived, and a move's sources
+    // left — so a write that fails after it resyncs the whole view, while a refusal before it
+    // has only the tree to put back (refusedStructural).
+    const transferAdapter = (): TransferAdapter<SectionTarget> => {
       let painted = false;
-      try {
-        if (!ensureValidJson()) return;
-        const clip = getClipboard();
-        if (!clip) {
-          webview.postMessage({ type: 'error', message: 'Nothing to paste — the clipboard is empty.' });
-          return;
-        }
+      return {
+        docUri: uriString,
+        guard: ensureValidJson,
+        resolveTarget: (rowId) => sectionTarget(liveModel(), findNode(uriString, rowId), rowId),
+        validate: (target, payloads) => refuseDisallowedPaste(target.section, payloads),
+        commit: async ({ target, payloads, removeFirst }) => {
+          const docText = document.getText();
+          let section = target.section;
+          // What the edit amounts to in the model, and what it leaves to repaint: the removals a
+          // move makes, then the entries the paste attaches.
+          const pairs: EntryOpPair[] = [];
+          const applied: AppliedOp[] = [];
+          let narrow = true;
 
-        // Resolve the target section first, so we can detect a same-section cut
-        // (a no-op the same-document drag path also refuses) before any edit.
-        const docText = document.getText();
-        let model = liveModel();
-        let section = targetSection(model, msg.rowId);
-        if (!section) {
-          webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
-          return;
-        }
+          // A same-document move removes the sources first (in the same text) so the paste keeps
+          // their names, which makes the whole move ONE WorkspaceEdit = one undo step. And with it
+          // goes the paste's ability to name the region it changes: its patch is stated against
+          // this trimmed text, not against the document, so only the two texts together say what
+          // to write.
+          let workingText = docText;
+          let againstDocument = true;
+          if (removeFirst.length > 0) {
+            workingText = deleteEntriesByName(docText, removeFirst);
+            againstDocument = false;
+            const removals = moveRemovals(target.model, removeFirst);
+            if (removals) {
+              pairs.push(...removals.pairs);
+              applied.push(...removals.applied);
+            } else {
+              // See moveRemovals: the model has to be re-read from the trimmed text, or the paste
+              // renames the entries it is moving. The section is found again in that tree by NAME
+              // — the row may have been one of the entries just removed — and a tree without it
+              // is a failure the repair below answers, never a paste into the old tree's section.
+              narrow = false;
+              modelInSync = false;
+              invalidate(uriString);
+              section = sectionByName(getModel(uriString, name, workingText), target.sectionName);
+              if (!section) throw new Error('Could not resolve the target section.');
+            }
+          }
 
-        const isCut = clip.mode === 'cut';
-        const sameDoc = clip.sourceDocUri === uriString;
-        // Each cut entry's identity, carried on the payload the clipboard snapped at
-        // cut time — so the source-delete removes the entries the user actually cut,
-        // not same-named entries in another section's namespace.
-        const srcSelectors = clip.items.map((it) => entrySelectorOf(it.payload));
-        const named = srcSelectors.filter((s) => !!s.name);
-
-        // A cut pasted back into the very section every item came from is a no-op:
-        // deleting then re-adding the same entries would just churn the document. With
-        // mixed sources it is NOT a no-op — the items from elsewhere really do move —
-        // so the whole paste proceeds, and the same-section ones are removed and
-        // re-added under the names they already had.
-        if (isCut && sameDoc && clip.items.every((it) => it.sourceSection === section.name)) {
-          clearClipboard();
-          broadcastClipboardState();
-          return;
-        }
-
-        // What the edit amounts to in the model, and what it leaves to repaint: the removals a
-        // move makes, then the entries the paste attaches.
-        const pairs: EntryOpPair[] = [];
-        const applied: AppliedOp[] = [];
-        let narrow = true;
-
-        // A same-document cut is a MOVE: remove the source first (in the same
-        // text) so the paste keeps the original name. This makes the whole move ONE
-        // WorkspaceEdit = one undo step (mirrors the same-document drag-move).
-        //
-        // And with it goes the paste's ability to name the region it changes: its patch is stated
-        // against this trimmed text, not against the document, so only the two texts together say
-        // what to write.
-        let workingText = docText;
-        let againstDocument = true;
-        if (isCut && sameDoc && named.length) {
-          workingText = deleteEntriesByName(docText, named);
-          againstDocument = false;
-          const removals = moveRemovals(model, named);
-          if (removals) {
-            pairs.push(...removals.pairs);
-            applied.push(...removals.applied);
+          // Read AFTER any removal, because a move within one section shortens the very array the
+          // paste is about to append to. Everything from here on is what the paste added.
+          const addedFrom = (section.children as any[]).length;
+          const pasted = pasteEntries(workingText, section, payloads);
+          if (narrow) {
+            const added = opsOfPastedEntries(section, addedFrom);
+            pairs.push(...added.pairs);
+            applied.push(...added.applied);
+            // PAINT — the model already holds the pasted entries (prepareEntryForPaste attached
+            // them), so the rows go out now, ahead of the write.
+            painted = true;
+            repaintOps(applied);
           } else {
-            narrow = false;
+            // The tree registered above describes the trimmed text, not the document: the change
+            // event this write fires has to repaint the old way, from a re-parse.
             modelInSync = false;
-            invalidate(uriString);
-            model = getModel(uriString, name, workingText);
-            section = targetSection(model, msg.rowId);
-            if (!section) {
-              webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
-              return;
-            }
           }
-        }
+          if (pasted.selectIds.length) webview.postMessage({ type: 'selectRows', rowIds: pasted.selectIds });
 
-        // Read AFTER any removal, because a move within one section shortens the very array the
-        // paste is about to append to. Everything from here on is what the paste added.
-        const addedFrom = (section.children as any[]).length;
-        const pasted = pasteEntries(workingText, section, clip.items.map((it) => it.payload));
-        if (narrow) {
-          const added = opsOfPastedEntries(section, addedFrom);
-          pairs.push(...added.pairs);
-          applied.push(...added.applied);
-          // PAINT — the model already holds the pasted entry (prepareEntryForPaste attached it),
-          // so the rows go out now, ahead of the write.
-          painted = true;
-          repaintOps(applied);
-        } else {
-          // The tree registered above describes the trimmed text, not the document: the change
-          // event this write fires has to repaint the old way, from a re-parse.
-          modelInSync = false;
-        }
-        const selectIds = pasted.selectIds;
-        if (selectIds.length) webview.postMessage({ type: 'selectRows', rowIds: selectIds });
-
-        const patch = againstDocument ? patchFor(pasted, docText) : minimalReplacement(docText, pasted.newText);
-        const submitted = submittedOf(patch);
-        if (narrow) paintedWrite = submitted;
-        await writePatch(patch);
-        if (narrow) {
-          remember({
-            submitted,
-            replaced: docText.slice(patch.offset, patch.offset + patch.length),
-            patch: patchOfPairs(pairs),
-          });
-        }
-
-        try {
-          // A cross-document cut removes the source from ITS document via that
-          // document's own format-appropriate deleter (the source may be a binary
-          // .sldd), a second native undo step — exactly a cut in one file + paste
-          // in another. The hub dispatches to whichever provider owns the source.
-          if (isCut && !sameDoc && clip.sourceDocUri && named.length) {
-            const result = await deleteFromSource(clip.sourceDocUri, named);
-            if (!result.removed) {
-              const message = sourceKeptMessage(true, clip.sourceDocUri, named.length, result.reason);
-              webview.postMessage({ type: 'error', message });
-            }
+          const patch = againstDocument ? patchFor(pasted, docText) : minimalReplacement(docText, pasted.newText);
+          const submitted = submittedOf(patch);
+          if (narrow) paintedWrite = submitted;
+          await writePatch(patch);
+          if (narrow) {
+            remember({
+              submitted,
+              replaced: docText.slice(patch.offset, patch.offset + patch.length),
+              patch: patchOfPairs(pairs),
+            });
           }
-        } finally {
-          // The cut is consumed by the paste that already succeeded above, so it
-          // is cleared even if the source-delete throws — otherwise the clipboard
-          // keeps a live cut of an entry that now also exists here, and the next
-          // paste duplicates it again. deleteFromSourceDocument's invalid-JSON
-          // path already returns (rather than throws) and clears the clipboard,
-          // reporting a copy the user must finish by hand; a throw is the same
-          // situation and must not behave differently. A copy stays on the
-          // clipboard for re-paste.
-          //
-          // The broadcast's repaint costs this view nothing: the only row here the emptied
-          // clipboard could change is the cut source's, and a same-document cut has just removed
-          // it, so repaintClipMark finds nothing to un-dim.
-          if (isCut) {
-            clearClipboard();
-            broadcastClipboardState();
-          }
-        }
-      } catch (err) {
-        paintedWrite = null;
-        const message = `Failed to apply edit: ${(err as Error).message}`;
-        // Rows for entries that arrived or left cannot be put back one run at a time — the wide
-        // repaint is the repair, and it is only ever reached by an edit that did not happen.
-        if (painted) resyncWide(message);
-        else refusedStructural(message);
-      }
+        },
+        onFailure: (err) => {
+          paintedWrite = null;
+          const message = `Failed to apply edit: ${(err as Error).message}`;
+          // Rows for entries that arrived or left cannot be put back one run at a time — the wide
+          // repaint is the repair, and it is only ever reached by an edit that did not happen.
+          if (painted) resyncWide(message);
+          else refusedStructural(message);
+        },
+        report: (message) => void webview.postMessage({ type: 'error', message }),
+      };
     };
+    const transferDeps: TransferDeps = { deleteFromSource };
+
+    const applyPaste = (msg: { rowId: string }) =>
+      runTransfer({ rowId: msg.rowId }, clipboardRegister(broadcastClipboardState), transferAdapter(), transferDeps);
 
     /**
      * Create ONE new default entry from the Add gallery.
@@ -1765,125 +1722,11 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       broadcastDragState();
     };
 
-    // --- Drop: complete the drag as copy/cut + paste ----------------------------
-    // A drop is exactly the cut/copy-paste it mirrors: paste the dragged payloads
-    // into the target section; for a MOVE, first remove the sources (so names are
-    // preserved, just as cut-then-paste does). Same-document moves delete + paste
-    // in one text; a cross-document move deletes from the source document via its
-    // own edit. The target section is resolved from the dropped-on row, which may
-    // be a section header (an empty section's only drop target).
-    const applyDrop = async (msg: { rowId: string; mode: 'copy' | 'move' }): Promise<void> => {
-      let painted = false;
-      try {
-        if (!ensureValidJson()) return;
-        const drag = getDrag();
-        if (!drag || drag.items.length === 0) {
-          webview.postMessage({ type: 'error', message: 'Nothing to drop.' });
-          return;
-        }
-        const payloads = drag.items.map((it) => it.payload);
-        const isMove = msg.mode === 'move';
-        const sameDoc = drag.sourceDocUri === uriString;
-        // Selectors, not names: a multi-select move must remove the exact entries
-        // that were dragged, and one of them may share a name with an entry in a
-        // different namespace of the source document (see core's entrySelector.ts).
-        const sourceTargets = drag.items
-          .map((it) => entrySelectorOf(it.payload))
-          .filter((s) => s.name.length > 0);
-
-        const docText = document.getText();
-        let model = liveModel();
-        let section = targetSection(model, msg.rowId);
-        if (!section) {
-          webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
-          return;
-        }
-
-        const pairs: EntryOpPair[] = [];
-        const applied: AppliedOp[] = [];
-        let narrow = true;
-
-        // A same-document move removes the originals first so the pasted copies
-        // keep their names (mirrors cut-then-paste). A copy, or a cross-document
-        // move, leaves this document's originals untouched here.
-        //
-        // And with it goes the paste's ability to name the region it changes: its patch is
-        // stated against this trimmed text, not against the document.
-        let workingText = docText;
-        let againstDocument = true;
-        if (isMove && sameDoc) {
-          workingText = deleteEntriesByName(docText, sourceTargets);
-          againstDocument = false;
-          const removals = moveRemovals(model, sourceTargets);
-          if (removals) {
-            pairs.push(...removals.pairs);
-            applied.push(...removals.applied);
-          } else {
-            // See moveRemovals: the model has to be re-read from the trimmed text, or the paste
-            // renames the entries it is moving.
-            narrow = false;
-            modelInSync = false;
-            invalidate(uriString);
-            model = getModel(uriString, name, workingText);
-            section = targetSection(model, msg.rowId);
-            if (!section) {
-              webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
-              return;
-            }
-          }
-        }
-
-        // After the removals, for the same reason applyPaste reads it there.
-        const addedFrom = (section.children as any[]).length;
-        const dropped = pasteEntries(workingText, section, payloads);
-        if (narrow) {
-          const added = opsOfPastedEntries(section, addedFrom);
-          pairs.push(...added.pairs);
-          applied.push(...added.applied);
-          painted = true;
-          repaintOps(applied);
-        } else {
-          modelInSync = false;
-        }
-        const selectIds = dropped.selectIds;
-        if (selectIds.length) webview.postMessage({ type: 'selectRows', rowIds: selectIds });
-
-        const patch = againstDocument ? patchFor(dropped, docText) : minimalReplacement(docText, dropped.newText);
-        const submitted = submittedOf(patch);
-        if (narrow) paintedWrite = submitted;
-        await writePatch(patch);
-        if (narrow) {
-          remember({
-            submitted,
-            replaced: docText.slice(patch.offset, patch.offset + patch.length),
-            patch: patchOfPairs(pairs),
-          });
-        }
-
-        // Cross-document move: remove the originals from the SOURCE document via
-        // ITS OWN format-appropriate deleter (the source may be a binary .sldd),
-        // a second native undo step — exactly like a cut in one file + paste in
-        // another. The hub dispatches to whichever provider owns the source.
-        if (isMove && !sameDoc) {
-          const result = await deleteFromSource(drag.sourceDocUri, sourceTargets);
-          if (!result.removed) {
-            const message = sourceKeptMessage(false, drag.sourceDocUri, sourceTargets.length, result.reason);
-            webview.postMessage({ type: 'error', message });
-          }
-        }
-      } catch (err) {
-        paintedWrite = null;
-        const message = `Failed to apply edit: ${(err as Error).message}`;
-        if (painted) resyncWide(message);
-        else refusedStructural(message);
-      } finally {
-        // A drop ends the drag whatever became of it. Cleared only on success, a refused drop
-        // left every table predicting a drop that had already been tried and failed, until
-        // the source view's dragEnd came round to clear it.
-        clearDrag();
-        broadcastDragState();
-      }
-    };
+    // --- Drop: the drag register's transfer --------------------------------------
+    // The same transfer as a paste (above), read from the drag register — captured as the drop
+    // arrives, and let go of however the drop ends.
+    const applyDrop = (msg: { rowId: string; mode: 'copy' | 'move' }) =>
+      runTransfer({ rowId: msg.rowId }, dragRegister(msg.mode, broadcastDragState), transferAdapter(), transferDeps);
 
     // Remove named entries from THIS document on behalf of another document's paste or drop
     // (a cross-file move). Opens the document (whether or not its table is still in front)

@@ -403,8 +403,7 @@ describe('a drag is a no-op exactly where the same cut and paste is (V-002)', ()
   // from does nothing — and it is the rule for a paste AND a drop, because both providers hand
   // both gestures to runTransfer. So the oracle below is the function itself, and the providers
   // are read only to check that they still route both gestures through it.
-  const ADOPTED = ['BinarySlddEditorProvider'];
-  for (const provider of ADOPTED) {
+  for (const provider of ['SlddTextEditorProvider', 'BinarySlddEditorProvider']) {
     it(`${provider} pastes and drops through runTransfer`, () => {
       const text = blankCommentsAndKeepLines(
         readFileSync(fileURLToPath(new URL(`../src/host/${provider}.ts`, import.meta.url)), 'utf8'),
@@ -412,15 +411,6 @@ describe('a drag is a no-op exactly where the same cut and paste is (V-002)', ()
       expect(text).toMatch(/runTransfer\([^;]*clipboardRegister\(/);
       expect(text).toMatch(/runTransfer\([^;]*dragRegister\(/);
       expect(text, 'and no copy of the no-op rule of its own').not.toMatch(/\.every\(\(it\) => it\.sourceSection ===/);
-    });
-  }
-  const PASTE_RULE = 'isCut && sameDoc && clip.items.every((it) => it.sourceSection === section.name)';
-  for (const provider of ['SlddTextEditorProvider']) {
-    it(`${provider} still applies that rule to a cut`, () => {
-      const text = blankCommentsAndKeepLines(
-        readFileSync(fileURLToPath(new URL(`../src/host/${provider}.ts`, import.meta.url)), 'utf8'),
-      );
-      expect(text).toContain(PASTE_RULE);
     });
   }
 
