@@ -66,6 +66,12 @@ or from within VS Code via the Extensions view → **⋯** menu → **Install fr
 
 Visual Studio Code 1.106.0 or later. Nothing else — Simulink Data Explorer reads and writes these files directly.
 
+## Works alongside the MATLAB extension
+
+Simulink Data Explorer covers the data side of a Simulink project — models, data dictionaries, MAT-files and projects. For the code side, install [**MATLAB**](https://marketplace.visualstudio.com/items?itemName=MathWorks.language-matlab), also from MathWorks: editing, running and debugging `.m` files, with IntelliSense and a MATLAB terminal.
+
+The two are independent — neither requires the other, and installing both costs nothing extra. They draw the same line in the same place: the MATLAB extension reads and writes `.m` code with no MATLAB installed, but **running** that code needs MATLAB; Simulink Data Explorer views and manages a model's data with no Simulink installed, but **running** that model needs Simulink.
+
 ## Known Limitations
 
 - `.mat` support covers the Level 5 format only. **`-v7.3`** files, which are HDF5 and are what MATLAB requires for variables above 2 GB, are reported as unsupported rather than opened.
