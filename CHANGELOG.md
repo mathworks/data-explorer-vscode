@@ -2,6 +2,10 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## [1.44.3] — 2026-10-23
+
+- Typing a string such as `"abc"` into a MAT-file variable's value now makes it a string, so the Add gallery no longer has a separate String button.
+
 ## [1.44.2] — 2026-10-23
 
 - Security updates.
