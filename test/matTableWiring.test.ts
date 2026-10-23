@@ -16,9 +16,10 @@ import { allTiles } from '../src/common/addCatalog.js';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 // What a host says a MAT-file takes: a subset, in core's order, so the gallery's order is the
-// catalog's and not this list's (the String tile follows the Structure, its catalog place).
+// catalog's and not this list's; and `string`, which core lists and the gallery leaves out
+// (MAT_OMITTED: typing one into a variable's Value makes one).
 const CLASSES = ['Simulink.Bus', 'string', 'MatlabVariable', 'Simulink.Parameter', 'MatlabStruct'];
-const IN_CATALOG_ORDER = ['MatlabVariable', 'MatlabStruct', 'string', 'Simulink.Parameter', 'Simulink.Bus'];
+const IN_CATALOG_ORDER = ['MatlabVariable', 'MatlabStruct', 'Simulink.Parameter', 'Simulink.Bus'];
 
 const rowsOf = () => [
   { ID: 'm/x', parent: null, Name: { label: 'x', editable: true }, Value: '1', _canDelete: true, _canCopy: false },
@@ -75,9 +76,9 @@ describe('the MAT-file table, wired through the webview entry point', () => {
     await table.updateComplete;
     await popover().updateComplete;
     expect(tilesOf().map((t) => t.dataset.className)).toEqual(IN_CATALOG_ORDER);
-    expect(tilesOf().map((t) => t.getAttribute('aria-label'))).toEqual(['Add MATLAB Variable', 'Add MATLAB Structure', 'Add MATLAB String', 'Add Simulink Parameter', 'Add Simulink Bus']);
+    expect(tilesOf().map((t) => t.getAttribute('aria-label'))).toEqual(['Add MATLAB Variable', 'Add MATLAB Structure', 'Add Simulink Parameter', 'Add Simulink Bus']);
     expect(popover().shadowRoot.querySelectorAll('.tile-badge').length).toBe(0);
-    tilesOf()[3].click();
+    tilesOf()[2].click();
     await table.updateComplete;
     expect(addsOf()).toEqual([{ type: 'addEntry', section: '', className: 'Simulink.Parameter', rename: true }]);
     expect(popover(), 'an unpinned add closes the gallery').toBeNull();
