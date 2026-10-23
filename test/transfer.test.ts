@@ -82,17 +82,19 @@ function fakeAdapter(opts: {
   return { adapter, log };
 }
 
-/** A source delete that records its calls and answers `result` (or throws it). */
+/** A source delete that records its calls and answers `result` (or throws it), and a warn that records. */
 function fakeDeps(result: SourceDeleteResult | Error = { removed: true }) {
   const calls: { uri: string; selectors: unknown[] }[] = [];
+  const warnings: string[] = [];
   const deps: TransferDeps = {
     deleteFromSource: async (uri, selectors) => {
       calls.push({ uri, selectors });
       if (result instanceof Error) throw result;
       return result;
     },
+    warn: (message) => void warnings.push(message),
   };
-  return { deps, calls };
+  return { deps, calls, warnings };
 }
 
 let broadcasts = 0;
@@ -421,15 +423,48 @@ describe('a source delete that fails AFTER the paste landed', () => {
     it(`${name}: says exactly that, repairs nothing, and the cut is spent`, async () => {
       setClipboard([item('A', 'design')], 'cut', THERE);
       const { adapter, log } = fakeAdapter();
-      const out = await runTransfer(ROW, paste(), adapter, fakeDeps(result).deps);
+      const { deps, warnings } = fakeDeps(result);
+      const out = await runTransfer(ROW, paste(), adapter, deps);
       expect(out).toEqual({ kind: 'done', sourceKept: message });
       expect(log.reports).toEqual([message]);
+      expect(warnings, 'and where it stays until dismissed, not only in a banner a repaint clears').toEqual([message]);
       expect(log.failures).toEqual([]);
       expect(log.commits).toHaveLength(1);
       expect(getClipboard()).toBeNull();
       expect(broadcasts).toBe(1);
     });
   }
+
+  it('a drop that left its original warns too', async () => {
+    setDrag(THERE, [item('A', 'design')]);
+    const { deps, warnings } = fakeDeps({ removed: false, reason: 'its table is no longer open' });
+    await runTransfer(ROW, drop('move'), fakeAdapter().adapter, deps);
+    expect(warnings).toEqual([
+      'Moved here, but the original in my other.sldd could not be removed: its table is no longer open. Remove it there by hand.',
+    ]);
+  });
+
+  it('nothing else warns: not a landed move, a copy, a refusal or a failure', async () => {
+    const { deps, warnings } = fakeDeps();
+    setClipboard([item('A', 'design')], 'cut', THERE);
+    await runTransfer(ROW, paste(), fakeAdapter().adapter, deps);
+    setClipboard([item('A', 'design')], 'copy', THERE);
+    await runTransfer(ROW, paste(), fakeAdapter().adapter, deps);
+    setClipboard([item('A', 'design')], 'cut', THERE);
+    await runTransfer(ROW, paste(), fakeAdapter({ validate: () => { throw new TransferRefused('No.'); } }).adapter, deps);
+    await runTransfer(ROW, paste(), fakeAdapter({ commit: () => { throw new Error('boom'); } }).adapter, deps);
+    expect(warnings).toEqual([]);
+  });
+
+  it('a deps without warn still reports in the view', async () => {
+    setClipboard([item('A', 'design')], 'cut', THERE);
+    const { adapter, log } = fakeAdapter();
+    const out = await runTransfer(ROW, paste(), adapter, {
+      deleteFromSource: async () => ({ removed: false, reason: 'no' }),
+    });
+    expect(out.kind).toBe('done');
+    expect(log.reports).toHaveLength(1);
+  });
 
   it('a drop says Moved, and counts the originals', () => {
     expect(sourceKeptMessage(false, THERE, 2, 'it has invalid JSON')).toBe(

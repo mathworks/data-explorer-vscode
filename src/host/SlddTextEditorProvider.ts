@@ -1586,7 +1586,12 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         report: (message) => void webview.postMessage({ type: 'error', message }),
       };
     };
-    const transferDeps: TransferDeps = { deleteFromSource };
+    // A move that left its original behind is said where it stays, not only in the banner a row
+    // update clears: see TransferDeps.warn.
+    const transferDeps: TransferDeps = {
+      deleteFromSource,
+      warn: (message) => void vscode.window.showWarningMessage(message),
+    };
 
     const applyPaste = (msg: { rowId: string }) =>
       runTransfer({ rowId: msg.rowId }, clipboardRegister(broadcastClipboardState), transferAdapter(), transferDeps);

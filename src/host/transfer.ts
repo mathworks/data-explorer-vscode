@@ -142,6 +142,13 @@ export interface SourceDeleteResult {
 export interface TransferDeps {
   /** Take the moved entries out of the document they came from (editorHub.deleteFromSource). */
   deleteFromSource(sourceDocUri: string, selectors: EntrySelector[]): Promise<SourceDeleteResult>;
+  /**
+   * Say something the user must not miss, somewhere that stays until they dismiss it (the
+   * providers use `vscode.window.showWarningMessage`). Used for one thing: a move that landed
+   * here but left its original behind. The view's banner says it too, but the next row update
+   * clears a banner, and a duplicate the user never learned of is the outcome this exists for.
+   */
+  warn?(message: string): void;
 }
 
 export interface TransferRequest {
@@ -285,6 +292,7 @@ async function transfer<T extends TransferTarget>(
     if (result.removed) return { kind: 'done' };
     const message = sourceKeptMessage(isPaste, contents.sourceDocUri, selectors.length, result.reason);
     adapter.report(message);
+    deps.warn?.(message);
     return { kind: 'done', sourceKept: message };
   } finally {
     if (isPaste) register.broadcast();
