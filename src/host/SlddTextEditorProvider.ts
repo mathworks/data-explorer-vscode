@@ -1603,7 +1603,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * the model can no longer find; an add removes nothing, so there is no second text and
      * nothing to re-resolve.
      *
-     * Call it through `queueAddEntry`, never directly — see the note there.
+     * Call it through `queueStructural`, never directly — see the note there.
      */
     const applyAddEntry = async (msg: {
       section: string;
@@ -1663,30 +1663,40 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     };
 
     /**
-     * Adds, one document state at a time.
+     * Structural edits, one document state at a time.
      *
      * Every structural handler here reads `document.getText()` when it starts and applies its
-     * WorkspaceEdit at the end, which is safe for gestures a person can only make one at a
-     * time — a paste, a delete, a cell edit. The Add gallery's pin is different BY DESIGN: it
-     * exists so the user can click three tiles in a second, and each click posts its own
-     * message immediately. A second handler entered while the first was still inside
-     * `applyEdit` would read the text from before the first entry existed, compute its
-     * insertion offset there (`findEntriesArrayInsertion` answers the same offset for both),
-     * and write it — leaving the FILE listing the two entries in the opposite order from the
-     * MODEL, which is the narrow-vs-wide divergence the rows reorder under the user on the
-     * next full repaint. `test/addEntryHost.test.ts` pins that hazard.
+     * WorkspaceEdit at the end, with an await between the two — and with the paint, the
+     * paintedWrite flag and the remembered ops all keyed to that one write. Two handlers in
+     * flight at once break all of that: the second reads the text from before the first's
+     * write, computes its own offsets there, and writes over a document that has moved; the
+     * first's change event then spends the second's paintedWrite. The Add gallery's pin made
+     * that concrete first — it exists so the user can click three tiles in a second, and a
+     * second add entered inside the first's write computed the same insertion offset
+     * (`findEntriesArrayInsertion`) and left the FILE listing the two entries in the opposite
+     * order from the MODEL, the narrow-vs-wide divergence the rows reorder under on the next
+     * full repaint (`test/addEntryHost.test.ts` pins that hazard). A held-down Cmd+V is the same
+     * thing for a paste — the chord auto-repeats — and a Delete, an Add Child or a drop landing
+     * during a paste's write is the same race by hand.
      *
-     * So the click is never dropped or coalesced; it just waits for the write in front of it.
-     * The `catch` keeps one failed add from poisoning the chain and silently swallowing every
-     * add after it — `applyAddEntry` reports its own failures and the next one starts clean.
+     * So every structural gesture waits for the write in front of it; none is dropped or
+     * coalesced. The `catch` keeps one failed edit from poisoning the chain and silently
+     * swallowing every edit after it — each handler reports its own failures, and the next one
+     * starts clean. A cell edit is not queued: it is one span, typed by hand, and its echo has
+     * its own one-shot (hostEdit).
      *
-     * The compressed-binary provider needs none of this: its add is synchronous from
-     * `document.chunkXml` to `pushEdit`, so two messages cannot interleave at all.
+     * A drop reads its register when the message ARRIVES, not when its turn comes (applyDrop),
+     * because the source's dragEnd follows it at once and clears the register. A paste reads
+     * the clipboard when its turn comes, which is what makes the second of two queued pastes of
+     * one cut find the clipboard that cut left — empty — instead of pasting it again.
+     *
+     * The compressed-binary provider needs none of this: its edits are synchronous from
+     * `document.chunkXml` to `pushEdit`, so two messages cannot interleave around a write.
      */
-    let addChain: Promise<void> = Promise.resolve();
-    const queueAddEntry = (msg: { section: string; className: string; rename: boolean }): Promise<void> => {
-      addChain = addChain.catch(() => {}).then(() => applyAddEntry(msg));
-      return addChain;
+    let structuralChain: Promise<unknown> = Promise.resolve();
+    const queueStructural = (run: () => Promise<unknown>): Promise<unknown> => {
+      structuralChain = structuralChain.catch(() => {}).then(run);
+      return structuralChain;
     };
 
     // --- Drag start: snapshot the dragged rows into the host drag register ------
@@ -1729,8 +1739,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // --- Drop: the drag register's transfer --------------------------------------
     // The same transfer as a paste (above), read from the drag register — captured as the drop
     // arrives, and let go of however the drop ends.
-    const applyDrop = (msg: { rowId: string; mode: 'copy' | 'move' }) =>
-      runTransfer({ rowId: msg.rowId }, dragRegister(msg.mode, broadcastDragState), transferAdapter(), transferDeps);
+    const applyDrop = (msg: { rowId: string; mode: 'copy' | 'move' }) => {
+      const register = dragRegister(msg.mode, broadcastDragState);
+      return queueStructural(() => runTransfer({ rowId: msg.rowId }, register, transferAdapter(), transferDeps));
+    };
 
     // Remove named entries from THIS document on behalf of another document's paste or drop
     // (a cross-file move). Opens the document (whether or not its table is still in front)
@@ -1785,15 +1797,15 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       } else if (msg?.type === 'copy') {
         applyCopy(msg.rowIds, 'copy');
       } else if (msg?.type === 'delete') {
-        void applyDelete(msg);
+        void queueStructural(() => applyDelete(msg));
       } else if (msg?.type === 'addChild') {
-        void applyAddChild(msg);
+        void queueStructural(() => applyAddChild(msg));
       } else if (msg?.type === 'cut') {
         applyCut(msg.rowIds);
       } else if (msg?.type === 'paste') {
-        void applyPaste(msg);
+        void queueStructural(() => applyPaste(msg));
       } else if (msg?.type === 'addEntry') {
-        void queueAddEntry(msg);
+        void queueStructural(() => applyAddEntry(msg));
       } else if (msg?.type === 'dragStart') {
         applyDragStart(msg);
       } else if (msg?.type === 'dragEnd') {
