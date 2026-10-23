@@ -163,7 +163,10 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
    */
   generation = 0;
 
-  /** Moved by every change to the tree, so a paint that awaited can tell it is stale. */
+  /**
+   * Moved by every change to the tree, and by every save (which moves the Status column), so a
+   * paint that awaited can tell it is stale.
+   */
   version = 0;
 
   /** Which variables differ from the file as last saved, for the Status column. */
@@ -895,6 +898,8 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     document.inConflict = false;
     document.overwriteStamp = undefined;
     document.marks.commit(snapshot);
+    // The Status column moved with it, which a paint on its await built before: it builds again.
+    document.version++;
     document.repaintMarks(before);
   }
 

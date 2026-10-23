@@ -267,6 +267,20 @@ suite('MAT-file editor: edit, undo, save', () => {
     assert.strictEqual(o.doc.edits.dirty, false);
   });
 
+  test('a paint in flight across a save paints the Status the save left', async () => {
+    const o = await open('cases.mat');
+    edit(o, 'scalarD', 'Value', '42');
+    const version = o.doc.version;
+    // Which of the paint's await and the save's write ends first, the test host cannot order;
+    // what makes the paint build again whichever does is that the save moves the version.
+    const from = o.view.posts.length;
+    o.view.send({ type: 'ready' });
+    await save(o);
+    assert.ok(o.doc.version > version, 'the save moved the version a paint checks after its await');
+    await waitFor('the paint', () => o.view.posts.slice(from).some((p) => p.type === 'setRows'));
+    assert.strictEqual(topRow(o.view.posts, 'scalarD').Status, '', 'not the Modified it built before the save');
+  });
+
   test('a rename is the record with its new name; a delete leaves the rest as they were', async () => {
     const o = await open('cases.mat');
     edit(o, 'kp', 'Name', 'kpRenamed');
