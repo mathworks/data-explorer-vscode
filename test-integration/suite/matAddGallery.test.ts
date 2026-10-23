@@ -273,6 +273,31 @@ suite('MAT-file editor: the Add gallery', () => {
     keptUntouched(o.original, disk(o), []);
   });
 
+  test('a string variable whose Value is typed 0 becomes a double, which saves in its place and reopens as one', async () => {
+    const o = await open('cases.mat', fixture('cases.mat'));
+    const order = (posts: any[]) => tableOf(posts).filter((r) => r.parent == null).map(nameOf);
+    const before = order(o.view.posts);
+    const row = topRow(o.view.posts, 'strScalar');
+    assert.strictEqual(row.Class, 'string');
+    o.view.send({ type: 'edit', rowId: row.ID, columnId: 'Value', oldValue: row.Value, newValue: '0' });
+    await waitFor('strScalar a double', () => topRowOrNull(o.view.posts, 'strScalar')?.Class === 'double');
+    assert.strictEqual(topRow(o.view.posts, 'strScalar').Value, '0');
+    assert.deepStrictEqual(order(o.view.posts), before, 'in its place in the table');
+    await save(o);
+    keptUntouched(o.original, disk(o), ['strScalar']);
+    forGate(o.original, o.path, { edited: [{ var: 'strScalar', class: 'double' }] });
+    const again = await reopen(o.path);
+    assert.strictEqual(topRow(again.view.posts, 'strScalar').Class, 'double');
+    assert.strictEqual(topRow(again.view.posts, 'strScalar').Value, '0');
+    assert.deepStrictEqual(order(again.view.posts), before, 'and in its place in the file');
+    // Undone, the string is back, and the file saves as it was read.
+    await o.events[0].undo();
+    await waitFor('strScalar a string again', () => topRowOrNull(o.view.posts, 'strScalar')?.Class === 'string');
+    assert.strictEqual(topRow(o.view.posts, 'strScalar').Value, row.Value);
+    await save(o);
+    keptUntouched(o.original, disk(o), []);
+  });
+
   test('a variable added and deleted before a save, or added and undone, leaves the file byte for byte as it was', async () => {
     const o = await open('pv_basic.mat', fixture('pv_basic.mat'));
     add(o, 'Simulink.Parameter', false);
