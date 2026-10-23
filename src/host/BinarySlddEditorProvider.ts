@@ -64,10 +64,12 @@ import { sourceWarnings, warningBanner } from './parseWarnings.js';
 import { postOrReport } from './postPayload.js';
 import {
   findOwningEntry,
-  resolveSectionForPaste,
+  refuseDisallowedPaste,
   sectionByName,
+  sectionTarget,
   buildDragSnapshot,
   reselectAfterRemoval,
+  type SectionTarget,
 } from './structuralEdit.js';
 import { copyEntriesToClipboard } from './clipboardAction.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
@@ -107,7 +109,7 @@ import {
   type EntryRecord,
 } from './entryOps.js';
 import { buildSectionRowId } from '../common/sectionRowId.js';
-import { getClipboard, clearClipboard, clipboardState } from './clipboard.js';
+import { getClipboard, clipboardState } from './clipboard.js';
 import { setDrag, getDrag, clearDrag } from './dragState.js';
 import {
   registerWebview,
@@ -121,7 +123,8 @@ import {
   deleteFromSource,
 } from './editorHub.js';
 import { basename } from '../common/pathUtil.js';
-import { sourceKeptMessage } from './transfer.js';
+import { runTransfer, type TransferAdapter, type TransferDeps } from './transfer.js';
+import { clipboardRegister, dragRegister } from './transferRegisters.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { answerMatrixRequest } from './matrixRequest.js';
 import { binaryEditSrcId } from '../common/srcId.js';
@@ -1269,109 +1272,80 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       });
     };
 
-    const applyPaste = async (rowId: string) => {
-      try {
-        const clip = getClipboard();
-        if (!clip) {
-          webview.postMessage({ type: 'error', message: 'Nothing to paste — the clipboard is empty.' });
-          return;
-        }
-        const model = liveModel();
-        const node = findNode(rowId);
-        let section = resolveSectionForPaste(model, node, rowId);
-        if (!section) {
-          webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
-          return;
-        }
-        const isCut = clip.mode === 'cut';
-        const sameDoc = clip.sourceDocUri === uriString;
-        // Identity from the payloads the clipboard snapped at cut time, so the
-        // source-delete can't hit same-named entries in another namespace.
-        const srcSelectors = clip.items.map((it) => entrySelectorOf(it.payload));
-        const named = srcSelectors.filter((s) => !!s.name);
-
-        // A cut into the SAME section every item came from is a no-op move: just clear
-        // the mark. The broadcast repaints the rows that can carry one, and nothing else.
-        // With mixed sources it is NOT a no-op — the items from elsewhere really do move
-        // — so the whole paste proceeds.
-        if (isCut && sameDoc && clip.items.every((it) => it.sourceSection === section.name)) {
-          clearClipboard();
-          broadcastClipboardState();
-          return;
-        }
-
+    // --- Paste and drop: one transfer, two registers -------------------------------
+    //
+    // What a paste or a drop MEANS is transfer.ts's, shared with the JSON view: which register
+    // and when it is let go of, the target resolved before anything changes, the same-section
+    // no-op, a same-document move as ONE edit that removes the sources first so the pasted
+    // copies keep their names, a cross-document move as the paste here and then the delete in
+    // the source's own format (editorHub), and what each way of failing says. What is left here
+    // is what an edit IS in this format: XML splices folded into chunkXml, pushed as one edit
+    // with the entry ops that let its undo and redo skip the re-parse.
+    //
+    // A fresh adapter per transfer, though this one keeps no state of its own: the whole edit
+    // is synchronous from chunkXml to pushEdit, so nothing can land in between and there is no
+    // half-written state for onFailure to know about.
+    const transferAdapter = (): TransferAdapter<SectionTarget> => ({
+      docUri: uriString,
+      resolveTarget: (rowId) => sectionTarget(liveModel(), findNode(rowId), rowId),
+      validate: (target, payloads) => refuseDisallowedPaste(target.section, payloads),
+      commit: ({ target, payloads, removeFirst, label }) => {
+        let section = target.section;
         const before = document.chunkXml;
         let working = before;
         // The forward changes in the order they happen, each with its inverse.
         const pairs: EntryOpPair[] = [];
         const applied: AppliedOp[] = [];
         let narrow = true;
-        // A same-document cut removes the source first so the pasted copy can keep the
-        // source's name — from the text AND from the model, because the uniqueness check
-        // inside the paste reads the MODEL's namespace and a source still standing there
-        // would push the copy to `Name1`.
-        if (isCut && sameDoc && named.length) {
-          working = deleteEntriesByNameXml(working, named);
-          const removal = removalPairs(model, named);
+        // A same-document move removes the sources first so the pasted copies can keep their
+        // names — from the text AND from the model, because the uniqueness check inside the
+        // paste reads the MODEL's namespace and a source still standing there would push the
+        // copy to `Name1`.
+        if (removeFirst.length > 0) {
+          working = deleteEntriesByNameXml(working, removeFirst);
+          const removal = removalPairs(target.model, removeFirst);
           if (removal) {
             pairs.push(...removal.pairs);
             applied.push(...removal.applied);
           } else {
-            // The model cannot say which entry the clipboard means, so it catches up the
-            // old way — and the target section has to be re-resolved against the tree
-            // that just replaced it.
+            // The model cannot say which entries the selectors mean, so it catches up the old
+            // way, and the target section is found again in the tree that replaced it — by
+            // name, not through the row, which may have been one of the entries just removed.
             narrow = false;
-            const rebuilt = registerModel(working);
-            section = resolveSectionForPaste(rebuilt, findNode(rowId), rowId) ?? section;
+            section = sectionByName(registerModel(working), target.sectionName);
+            if (!section) throw new Error('Could not resolve the target section.');
           }
         }
-
-        // The fold attaches each new entry to the section itself (that is
-        // prepareEntryForPaste's job, and the uniqueness check needs it), APPENDING it —
-        // so whatever it added is the tail this count marks off.
-        const addedFrom = (section.children as any[]).length;
-        const { newText, selectIds } = pasteEntriesXml(working, section, clip.items.map((it) => it.payload));
-        // Indexing each new subtree and describing it for the undo stack is entryOps' job —
-        // the same call the JSON provider makes from its own paste and drop. The loop was
-        // written out here and in applyDrop instead, putting one rule in three places, and
-        // of those two copies only this one still said why the indexing is owed: a node id
-        // is a PATH, so an entry that joined the tree outside an op is in no index, and the
+        // The fold attaches each new entry to the section itself (that is prepareEntryForPaste's
+        // job, and the uniqueness check needs it), APPENDING it — so whatever it added is the
+        // tail this count marks off. Indexing each new subtree and describing it for the undo
+        // stack is entryOps' job (opsOfPastedEntries), the call the JSON view makes too: a node
+        // id is a PATH, so an entry that joined the tree outside an op is in no index, and the
         // row the paste selects would not resolve for the next edit.
+        const addedFrom = (section.children as any[]).length;
+        const { newText, selectIds } = pasteEntriesXml(working, section, payloads);
         const added = opsOfPastedEntries(section, addedFrom);
         pairs.push(...added.pairs);
         applied.push(...added.applied);
-        document.pushEdit('Paste', before, newText, narrow ? patchOfPairs(pairs) : undefined);
+        document.pushEdit(label, before, newText, narrow ? patchOfPairs(pairs) : undefined);
         if (narrow) document.repaintOps(applied);
         else document.repaintAll();
         if (selectIds.length) webview.postMessage({ type: 'selectRows', rowIds: selectIds });
-        try {
-          // A cross-document cut removes the source from ITS document via that
-          // document's own format-appropriate deleter (JSON or binary), a second
-          // native undo step — exactly a cut in one file + paste in another.
-          if (isCut && !sameDoc && clip.sourceDocUri && named.length) {
-            const result = await deleteFromSource(clip.sourceDocUri, named);
-            if (!result.removed) {
-              const message = sourceKeptMessage(true, clip.sourceDocUri, named.length, result.reason);
-              webview.postMessage({ type: 'error', message });
-            }
-          }
-        } finally {
-          // Cleared even if the source-delete throws: the paste above already
-          // succeeded, so leaving the cut live means the next paste duplicates the
-          // entry again. Matches the JSON provider.
-          if (isCut) {
-            clearClipboard();
-            broadcastClipboardState();
-          }
-        }
-      } catch (err) {
-        // A paste attaches its new node to the model before it can fail on the text, so
-        // the model may be a step ahead of chunkXml. Rebuild from the text, which is the
-        // state the user still has — first, because the repaint clears the banner.
+      },
+      // A paste attaches its new nodes to the model before it can fail on the text, and a move
+      // has taken its sources out, so the model may be a step ahead of chunkXml. Rebuild from
+      // the text, which is the state the user still has — first, because the repaint clears
+      // the banner.
+      onFailure: (err) => {
         document.repaintAll();
         webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
-      }
-    };
+      },
+      report: (message) => void webview.postMessage({ type: 'error', message }),
+    });
+    const transferDeps: TransferDeps = { deleteFromSource };
+
+    const applyPaste = (rowId: string) =>
+      runTransfer({ rowId }, clipboardRegister(broadcastClipboardState), transferAdapter(), transferDeps);
 
     /**
      * Create ONE new default entry from the Add gallery.
@@ -1397,7 +1371,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           return;
         }
         const before = document.chunkXml;
-        // Before the add: the mark the new tail is measured from (see applyPaste).
+        // Before the add: the mark the new tail is measured from (see the transfer commit).
         const addedFrom = (section.children as any[]).length;
         const { newText, selectId } = addNewEntryXml(before, section, msg.className);
         // Indexes the new subtree and states the insert for the undo — owed because the entry
@@ -1448,95 +1422,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       broadcastDragState();
     };
 
-    // --- Drop: complete the drag as copy/move + paste ---------------------------
-    // Identical in shape to SlddTextEditorProvider.applyDrop, using the XML
-    // transforms. A same-document move deletes the sources first (in the same
-    // text) so the pasted copies keep their names; a cross-document move pastes
-    // here, then deletes from the SOURCE document via the hub (which dispatches
-    // to the source's own format-appropriate deleter — JSON or binary).
-    const applyDrop = async (msg: { rowId: string; mode: 'copy' | 'move' }): Promise<void> => {
-      try {
-        const drag = getDrag();
-        if (!drag || drag.items.length === 0) {
-          webview.postMessage({ type: 'error', message: 'Nothing to drop.' });
-          return;
-        }
-        const payloads = drag.items.map((it) => it.payload);
-        const isMove = msg.mode === 'move';
-        const sameDoc = drag.sourceDocUri === uriString;
-        // Selectors, not bare names: a dragged entry's name is unique only within
-        // its namespace, so deleting by name alone could splice out a same-named
-        // entry in another section. See core's entrySelector.ts.
-        const sourceTargets = drag.items
-          .map((it) => entrySelectorOf(it.payload))
-          .filter((s) => s.name.length > 0);
-
-        const model = liveModel();
-        const before = document.chunkXml;
-        let working = before;
-        // The forward changes in the order they happen, each with its inverse.
-        const pairs: EntryOpPair[] = [];
-        const applied: AppliedOp[] = [];
-        let narrow = true;
-        let section = resolveSectionForPaste(model, findNode(msg.rowId), msg.rowId);
-        // A same-document move removes the originals first so the pasted copies keep
-        // their names — from the text and from the model, whose namespace the paste's
-        // uniqueness check reads. A copy, or a cross-document move, leaves this
-        // document's originals untouched here.
-        if (isMove && sameDoc && sourceTargets.length) {
-          working = deleteEntriesByNameXml(working, sourceTargets);
-          const removal = removalPairs(model, sourceTargets);
-          if (removal) {
-            pairs.push(...removal.pairs);
-            applied.push(...removal.applied);
-          } else {
-            // At least one source is not something the model can name unambiguously, so
-            // it catches up the old way and the target section is re-resolved against the
-            // tree that replaced it.
-            narrow = false;
-            const rebuilt = registerModel(working);
-            section = resolveSectionForPaste(rebuilt, findNode(msg.rowId), msg.rowId);
-          }
-        }
-        if (!section) {
-          webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
-          document.repaintAll();
-          return;
-        }
-
-        // The fold attaches each new entry to the section as it goes (see
-        // foldPasteEntries), appending — so what it added is the tail after this count.
-        const addedFrom = (section.children as any[]).length;
-        const { newText, selectIds } = pasteEntriesXml(working, section, payloads);
-        // Same call, and for the same reason, as applyPaste above.
-        const added = opsOfPastedEntries(section, addedFrom);
-        pairs.push(...added.pairs);
-        applied.push(...added.applied);
-        document.pushEdit(isMove ? 'Move' : 'Copy', before, newText, narrow ? patchOfPairs(pairs) : undefined);
-        if (narrow) document.repaintOps(applied);
-        else document.repaintAll();
-        if (selectIds.length) webview.postMessage({ type: 'selectRows', rowIds: selectIds });
-
-        // Cross-document move: remove the originals from the SOURCE document via
-        // its own deleter (a second native undo step on that document).
-        if (isMove && !sameDoc) {
-          const result = await deleteFromSource(drag.sourceDocUri, sourceTargets);
-          if (!result.removed) {
-            const message = sourceKeptMessage(false, drag.sourceDocUri, sourceTargets.length, result.reason);
-            webview.postMessage({ type: 'error', message });
-          }
-        }
-      } catch (err) {
-        // Same as applyPaste: the fold attaches nodes as it goes, so a failure part-way
-        // can leave the model ahead of chunkXml. Rebuild from the text.
-        document.repaintAll();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
-      } finally {
-        // A drop ends the drag whatever became of it — see SlddTextEditorProvider's applyDrop.
-        clearDrag();
-        broadcastDragState();
-      }
-    };
+    // --- Drop: the drag register's transfer --------------------------------------
+    // The same transfer as a paste (above), read from the drag register, which is captured
+    // as the drop arrives and let go of however the drop ends.
+    const applyDrop = (msg: { rowId: string; mode: 'copy' | 'move' }) =>
+      runTransfer({ rowId: msg.rowId }, dragRegister(msg.mode, broadcastDragState), transferAdapter(), transferDeps);
 
     const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
       if (msg?.type === 'ready') post();

@@ -33,6 +33,7 @@ import { buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../comm
 import type { DragRegisterItem } from './dragState.js';
 import type { ClipboardItem } from './clipboard.js';
 import { dropFactsOf } from './dropFacts.js';
+import { TransferRefused, type TransferTarget } from './transfer.js';
 
 // One byte-scoped replacement of a document's text, and the one applier — both now core's
 // (`src/edit/textPatch.ts`), because WHICH REGION a text edit covers is a property of the two
@@ -114,6 +115,46 @@ export function resolveSectionForPaste(model: any, node: any, rowId: string): an
     return sectionByName(model, sectionNameFromRowId(rowId)!);
   }
   return null;
+}
+
+/**
+ * Where a paste or a drop lands in a dictionary (transfer.ts): the section, and the model it is
+ * live in. The model travels with it because the JSON view re-parses whenever its tree is not
+ * in step with the text, so asking for "the model" twice can hand back two trees — the section
+ * has to be used in the one it was found in.
+ */
+export interface SectionTarget extends TransferTarget {
+  model: any;
+  section: any;
+}
+
+/**
+ * The target a paste or drop onto `rowId` lands in, or null. One answer for both dictionary
+ * formats, resolved before anything changes — and by NAME from then on: a same-document move
+ * that has to re-read its model after removing the sources finds the section again by its name
+ * (`sectionByName`), never through the row, which may have been one of the entries it moved.
+ */
+export function sectionTarget(model: any, node: any, rowId: string): SectionTarget | null {
+  const section = resolveSectionForPaste(model, node, rowId);
+  return section ? { sectionName: section.name, model, section } : null;
+}
+
+/**
+ * Refuse, before anything changes, a paste or drop the section's allow-list will not take.
+ *
+ * The same check foldPasteEntries makes for every payload before its fold, asked earlier: by
+ * then a same-document move has already taken its sources out of the model, so a refusal there
+ * has a tree to repair, and here it has none. Worded as it always was, so the message the user
+ * sees for a refused class does not depend on which of the two caught it.
+ */
+export function refuseDisallowedPaste(section: any, payloads: readonly Record<string, unknown>[]): void {
+  for (const payload of payloads) {
+    try {
+      assertTypeAllowed(section, payload);
+    } catch (err) {
+      throw new TransferRefused(`Failed to apply edit: ${(err as Error).message}`);
+    }
+  }
 }
 
 /**

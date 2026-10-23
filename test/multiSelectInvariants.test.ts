@@ -27,6 +27,7 @@ import { buildContextMenuItems, type MenuRow } from '../src/webview/menuItems.js
 import { dropDecision, rejectReason } from '../src/webview/dropDecision.js';
 import { buildSectionRowId } from '../src/common/sectionRowId.js';
 import { blankCommentsAndKeepLines } from './tools/moduleGraph.js';
+import { isNoopMove } from '../src/host/transfer.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -398,11 +399,23 @@ describe('a drag across two sections is a move, not a no-op (V-002)', () => {
 });
 
 describe('a drag is a no-op exactly where the same cut and paste is (V-002)', () => {
-  // The paste side's rule, as both providers spell it: a cut pasted into the section EVERY
-  // item came from does nothing. It is restated here as the oracle, so the providers are
-  // read to check that the restatement is still what they run.
+  // The host side's rule is transfer.ts's isNoopMove — a move into the section EVERY item came
+  // from does nothing — and it is the rule for a paste AND a drop, because both providers hand
+  // both gestures to runTransfer. So the oracle below is the function itself, and the providers
+  // are read only to check that they still route both gestures through it.
+  const ADOPTED = ['BinarySlddEditorProvider'];
+  for (const provider of ADOPTED) {
+    it(`${provider} pastes and drops through runTransfer`, () => {
+      const text = blankCommentsAndKeepLines(
+        readFileSync(fileURLToPath(new URL(`../src/host/${provider}.ts`, import.meta.url)), 'utf8'),
+      );
+      expect(text).toMatch(/runTransfer\([^;]*clipboardRegister\(/);
+      expect(text).toMatch(/runTransfer\([^;]*dragRegister\(/);
+      expect(text, 'and no copy of the no-op rule of its own').not.toMatch(/\.every\(\(it\) => it\.sourceSection ===/);
+    });
+  }
   const PASTE_RULE = 'isCut && sameDoc && clip.items.every((it) => it.sourceSection === section.name)';
-  for (const provider of ['SlddTextEditorProvider', 'BinarySlddEditorProvider']) {
+  for (const provider of ['SlddTextEditorProvider']) {
     it(`${provider} still applies that rule to a cut`, () => {
       const text = blankCommentsAndKeepLines(
         readFileSync(fileURLToPath(new URL(`../src/host/${provider}.ts`, import.meta.url)), 'utf8'),
@@ -426,7 +439,7 @@ describe('a drag is a no-op exactly where the same cut and paste is (V-002)', ()
       it(`${name} onto ${rule.sectionName}`, () => {
         const clip = buildClipboardSnapshot(sel, h.find);
         expect(clip.length, 'the selection names entries').toBeGreaterThan(0);
-        const pasteIsNoop = clip.every((it) => it.sourceSection === rule.sectionName);
+        const pasteIsNoop = isNoopMove({ items: clip, sourceDocUri: URI, move: true }, URI, rule.sectionName);
 
         const drop = dropDecision(descriptorOf(sel), { docUri: URI, ...rule }, 'move');
         expect(drop.noop, `paste no-op: ${pasteIsNoop}`).toBe(pasteIsNoop);
