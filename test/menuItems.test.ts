@@ -495,3 +495,33 @@ describe('a view with no clipboard', () => {
     for (const id of ['copy', 'cut', 'paste']) expect(byId(items, id)).toBeUndefined();
   });
 });
+
+// A section-less table (a MAT-file) pastes into the file wherever it is right-clicked: its
+// host posts one rule for section '' and table-main resolves every row, and no row, to it.
+describe('a section-less table: one paste target', () => {
+  const MAT_ROWS: MenuRow[] = [
+    { ID: 'm/x', parent: null, Name: { label: 'x' }, _canCopy: true, _canDelete: true },
+    { ID: 'm/cfg', parent: null, Name: { label: 'cfg' }, _canCopy: true, _canDelete: true, _canAddChild: true },
+    { ID: 'm/cfg/gain', parent: 'm/cfg', Name: { label: 'gain' }, _canCopy: true, _canDelete: true },
+  ];
+  const FILE: PasteTarget = { sectionLabel: 'gains.mat', isDerived: false, allowedTypes: ['MatlabVariable', 'Simulink.Bus'] };
+  const mat = (over: Partial<MenuInput>) =>
+    menu({ rows: MAT_ROWS, clipboard: BUS_CLIP, pasteTarget: FILE, hasTextView: false, ...over });
+
+  it('a selection over several variables offers one enabled Paste', () => {
+    const paste = byId(mat({ selectedRowIds: ['m/x', 'm/cfg/gain'], anchorRowId: 'm/x' }), 'paste')!;
+    expect(paste.disabled).toBeFalsy();
+    expect(paste.reason).toBeUndefined();
+  });
+
+  it('nothing selected, nothing anchored: Paste and Undo/Redo, Paste enabled', () => {
+    const items = mat({ selectedRowIds: [], anchorRowId: null });
+    expect(items.filter((i) => !i.separator).map((i) => i.id)).toEqual(['paste', 'undo', 'redo']);
+    expect(byId(items, 'paste')!.disabled).toBeFalsy();
+  });
+
+  it("refuses what the file's rule does not admit, naming the file", () => {
+    const items = mat({ selectedRowIds: [], anchorRowId: null, pasteTarget: { ...FILE, allowedTypes: ['MatlabVariable'] } });
+    expect(byId(items, 'paste')).toMatchObject({ disabled: true, reason: 'Bus cannot be in gains.mat' });
+  });
+});

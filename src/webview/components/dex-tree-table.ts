@@ -2750,8 +2750,20 @@ export class DexTreeTable extends LitElement {
     }
   }
 
+  // A right-click on space that holds no row — under the last row, or the "No data" of an
+  // empty table. Reported with no row, and the glue (table-main) decides whether there is a
+  // menu: only a document that is ONE target (a MAT-file, whose host posts a rule for the whole
+  // file) has one there, offering Paste. A row's own handler stops its event, so this never
+  // answers a right-click on a row a second time.
   private _onContainerContextMenu(e: MouseEvent): void {
     e.preventDefault();
+    this.dispatchEvent(
+      new CustomEvent('dex-table-context-menu', {
+        detail: { x: e.clientX, y: e.clientY, rowId: null },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private _onRowContextMenu(rowId: string, e: MouseEvent): void {
@@ -2955,6 +2967,62 @@ export class DexTreeTable extends LitElement {
     this._dropPosition = 'on';
     this._dropForbidden = false;
     this._dropTooltip = '';
+  }
+
+  // Whether a drag event over the table body came from a row or the header, which answer it
+  // themselves (_onRowDragOver/_onRowDrop, the column reorder). Both bubble to the body.
+  private _isRowOrHeaderEvent(e: Event): boolean {
+    const target = e.target as Element | null;
+    return !!target?.closest?.('tr.data-row, thead');
+  }
+
+  // A row drag over space that holds no row: under the last row, or an empty table's "No
+  // data". The same question a row asks the predictor, about no row ('') — which the glue
+  // answers only for a document that is ONE target (a MAT-file's whole-file rule), so an empty
+  // MAT-file can still be dropped on. Elsewhere the answer is null and the drop is refused, as
+  // the body always refused it. No predictor, no target: unlike a row, the body has nothing to
+  // report to a host that did not say what it takes.
+  private _onBodyDragOver(e: DragEvent): void {
+    if (this._isRowOrHeaderEvent(e) || this._dragColId) return;
+    if (!this.rowDrag || !this.dropPredictor) {
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+      return;
+    }
+    const mode = this._dragModeFrom(e);
+    this._lastDragMode = mode;
+    const decision = this.dropPredictor('', mode);
+    this._dropTargetId = null;
+    this._dropPosition = null;
+    this._dropForbidden = !!decision && !decision.canDrop && !decision.noop;
+    this._dropTooltip = decision?.tooltip ?? '';
+    this._dropTooltipX = e.clientX;
+    this._dropTooltipY = e.clientY;
+    if (decision?.canDrop) {
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = decision.cursor === 'copy' ? 'copy' : 'move';
+    } else if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'none';
+    }
+  }
+
+  private _onBodyDrop(e: DragEvent): void {
+    if (this._isRowOrHeaderEvent(e) || this._dragColId) return;
+    e.preventDefault();
+    const mode = this._lastDragMode;
+    const decision = this.rowDrag && this.dropPredictor ? this.dropPredictor('', mode) : null;
+    this._dragSourceId = null;
+    this._dropTargetId = null;
+    this._dropPosition = null;
+    this._dropForbidden = false;
+    this._dropTooltip = '';
+    if (!decision?.canDrop) return;
+    this.dispatchEvent(
+      new CustomEvent('dex-row-drop', {
+        detail: { targetRowId: '', mode },
+        bubbles: true,
+        composed: true,
+      }),
+    );
   }
 
   private _onRowDragLeave(_e: DragEvent): void {
@@ -3904,7 +3972,16 @@ export class DexTreeTable extends LitElement {
         </div>
       `;
     }
-    return html`<div class="empty-state">No data</div>`;
+    // Focusable (out of the tab order) so a click here gives the table the keyboard: Cmd+V
+    // on an empty MAT-file pastes into it. A target for a right-click and a drop, like the
+    // blank space under a table's rows (_onContainerContextMenu, _onBodyDragOver).
+    return html`<div
+      class="empty-state"
+      tabindex="-1"
+      @contextmenu=${this._onContainerContextMenu}
+      @dragover=${this._onBodyDragOver}
+      @drop=${this._onBodyDrop}
+    >No data</div>`;
   }
 
   private _renderTable(allVisible: TreeTableRow[], totalRows: number, visibleCols: string[]) {
@@ -3937,6 +4014,8 @@ export class DexTreeTable extends LitElement {
         @scroll=${this._onScroll}
         @keydown=${this._onTableKeyDown}
         @contextmenu=${this._onContainerContextMenu}
+        @dragover=${this._onBodyDragOver}
+        @drop=${this._onBodyDrop}
       >
         <div class="virtual-spacer" style="height: ${totalHeight + headerHeight}px;">
           <table>

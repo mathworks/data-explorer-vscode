@@ -398,6 +398,12 @@ export interface DeleteMessage {
 }
 export interface PasteMessage {
   type: 'paste';
+  /**
+   * The row the paste is anchored at, whose section it lands in. '' is no row — the
+   * document itself — sent only by a table whose document is ONE target (a MAT-file, whose
+   * host posted a whole-file `sectionRules` rule): a right-click on its empty body, or Cmd+V
+   * with nothing selected. A dictionary posts no such rule, so it is never sent ''.
+   */
   rowId: string;
 }
 export interface AddChildMessage {
@@ -460,6 +466,11 @@ export interface DragEndMessage {
 /** Drop completed: apply the move/copy against the target row. */
 export interface DropMessage {
   type: 'drop';
+  /**
+   * The row dropped on. '' is the table's empty body, for the reason `PasteMessage.rowId`
+   * can be '': only a one-target document's table allows a drop there, which is how an empty
+   * MAT-file takes one.
+   */
   rowId: string;
   mode: 'copy' | 'move';
 }

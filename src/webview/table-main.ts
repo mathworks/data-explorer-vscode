@@ -79,13 +79,29 @@ let sectionRulesList: SectionRule[] = [];
 // dataTransfer — is the authoritative source of what is being dragged.
 let dragDescriptor: DragDescriptor | null = null;
 
+// The rule of a document that is ONE target: a MAT-file has no section layer, so its host
+// posts a single rule for the whole file, under section '' (sectionRules.wholeFileRules).
+// No dictionary posts one, so for every dictionary this is null and nothing below changes.
+// Nor does a table whose rows do not travel (`clipboard: false`): the rule is only ever
+// about where a paste or a drop lands, and such a table offers neither.
+const WHOLE_FILE_SECTION = '';
+function wholeFileRule(): SectionRule | null {
+  if (!hasClipboard) return null;
+  return sectionRulesList.find((r) => r.sectionName === WHOLE_FILE_SECTION) ?? null;
+}
+
 // Resolve the section a row belongs to, at any depth — the rule a paste into it or a drop
 // on it has to satisfy. The walk lives in operands.ts because that is where the host's own
 // walk is mirrored and tested; a one-level lookup here used to answer null for a nested
 // child, which now reads as "no destination" and would refuse a paste the host accepts.
-function sectionRuleForRow(rowId: string): SectionRule | null {
-  const sectionRowId = sectionRowIdOf(rowId, (table.rows ?? []) as MenuRow[]);
-  const sectionName = sectionRowId == null ? null : sectionNameFromRowId(sectionRowId);
+//
+// A row with no section ancestor — a MAT-file's variable, or anything under one — and no
+// row at all (null, or '' from a drop on the empty body) resolve to the whole-file rule,
+// which is the document's one target when it has one, and null when it does not.
+function sectionRuleForRow(rowId: string | null): SectionRule | null {
+  const sectionRowId = rowId ? sectionRowIdOf(rowId, (table.rows ?? []) as MenuRow[]) : null;
+  if (sectionRowId == null) return wholeFileRule();
+  const sectionName = sectionNameFromRowId(sectionRowId);
   if (sectionName == null) return null;
   return sectionRulesList.find((r) => r.sectionName === sectionName) ?? null;
 }
@@ -96,11 +112,14 @@ function sectionRuleForRow(rowId: string): SectionRule | null {
 // Both triggers go through here so they cannot disagree — the keyboard does not re-derive
 // enablement, it builds this and reads the item. That is what makes "a shortcut can never
 // do something the menu wouldn't" true rather than commented.
-function menuFor(anchorRowId: string | null): ContextMenuItem[] {
-  const rule = anchorRowId ? sectionRuleForRow(anchorRowId) : null;
+//
+// `selection` is the current one but for a right-click on no row, which is a gesture on the
+// document rather than on what is selected: its menu is the one a selection of nothing gets.
+function menuFor(anchorRowId: string | null, selection: string[] = selectedRowIds()): ContextMenuItem[] {
+  const rule = sectionRuleForRow(anchorRowId);
   return buildContextMenuItems({
     rows: (table.rows ?? []) as MenuRow[],
-    selectedRowIds: selectedRowIds(),
+    selectedRowIds: selection,
     anchorRowId,
     clipboard: clipboardState,
     editable,
@@ -132,14 +151,19 @@ function postAction(actionId: string, anchorRowId: string | null): void {
     vscode.postMessage({ type: actionId, rowIds: selectedRowIds() });
     return;
   }
-  if (!anchorRowId) return;
+  if (!anchorRowId) {
+    // A paste anchored at no row targets the document itself, which only a one-target
+    // document's menu offers (wholeFileRule); '' is how the host is told so.
+    if (actionId === 'paste') vscode.postMessage({ type: 'paste', rowId: '' });
+    return;
+  }
   vscode.postMessage({ type: actionId, rowId: anchorRowId });
 }
 
-// The predictor injected into the table: given the row under the cursor and the
-// drag mode, run the pure dropDecision against the broadcast drag descriptor and
-// this document's section rules. Returns null when there's no active drag or the
-// target section can't be resolved, so the table falls back to default behavior.
+// The predictor injected into the table: given the row under the cursor ('' for the
+// empty body) and the drag mode, run the pure dropDecision against the broadcast drag
+// descriptor and this document's section rules. Returns null when there's no active drag or
+// the target section can't be resolved, so the table falls back to default behavior.
 function predictDrop(
   targetRowId: string,
   mode: DragMode,
@@ -555,9 +579,11 @@ table.addEventListener(
     if (isTypingInField(ev)) return;
 
     // The primary selection anchors the gesture, the same way the right-clicked row
-    // does: it is what a paste targets the section of.
+    // does: it is what a paste targets the section of. With nothing selected the anchor is
+    // no row, and the menu for that offers only Paste — enabled only where the document is
+    // one target (an empty MAT-file pastes into the file), so a dictionary's Cmd+V with
+    // nothing selected still does nothing.
     const anchorRowId = selectedRowIds()[0] ?? null;
-    if (!anchorRowId) return;
     // Absent (a section selection offers no Copy at all) or disabled → do nothing, and
     // let the key through rather than swallowing it.
     const item = menuFor(anchorRowId).find((i) => i.id === action);
@@ -574,11 +600,19 @@ table.addEventListener(
 // the clicked row, then show it. The table component has already settled the
 // selection (a click outside it replaces it) and prevented the native browser menu.
 table.addEventListener('dex-table-context-menu', (e: Event) => {
-  // Read-only documents (.mat/.slx/.prj, binary/zip .sldd) have no menu at all:
-  // no cell editor and no right-click actions.
+  // Read-only views (.slx/.mdl/.prj, a MAT-file shown read-only, a JSON .sldd too large to
+  // edit) have no menu at all: no cell editor and no right-click actions.
   if (!shouldShowContextMenu(editable)) return;
   const detail = (e as CustomEvent).detail;
   lastContextRowId = detail.rowId ?? null;
+  if (lastContextRowId === null) {
+    // A right-click on no row (the space under the rows, or an empty table) is a gesture
+    // on the document. Only a one-target document has a menu there — Paste into the file,
+    // Undo/Redo — so a dictionary's empty space stays inert, as it always was.
+    if (!wholeFileRule()) return;
+    contextMenu.show(detail.x, detail.y, menuFor(null, []));
+    return;
+  }
   contextMenu.show(detail.x, detail.y, menuFor(lastContextRowId));
 });
 
@@ -606,7 +640,9 @@ table.addEventListener('dex-row-drag-end', () => {
 table.addEventListener('dex-row-drop', (e: Event) => {
   if (!editable || !hasClipboard) return;
   const detail = (e as CustomEvent).detail;
-  vscode.postMessage({ type: 'drop', rowId: detail.targetRowId, mode: detail.mode });
+  // '' is a drop on the empty body, which the predictor allows only into a one-target
+  // document — the drag twin of a paste anchored at no row.
+  vscode.postMessage({ type: 'drop', rowId: detail.targetRowId ?? '', mode: detail.mode });
 });
 
 // A row whose children the payload held back was opened: ask the host for them. The
