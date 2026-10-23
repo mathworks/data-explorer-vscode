@@ -51,7 +51,7 @@ import { clearDrag, getDrag } from './dragState.js';
 import { broadcastDragState, registerAddGalleryView, unregisterAddGalleryView } from './editorHub.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, type FollowedDocument } from './diskFollow.js';
-import { SaveMarks, replacementsIn, type SaveMark } from './saveMarks.js';
+import { SaveMarks, replacementsIn, type SaveMark, type SaveSnapshot } from './saveMarks.js';
 import { saveSettled } from './settledSave.js';
 import { sameFile, writeFileSafely } from './safeWrite.js';
 import { binaryEditSrcId } from '../common/srcId.js';
@@ -937,7 +937,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
   private async writeDocument(document: MatDocument): Promise<void> {
     document.saving = true;
     const before = document.marks.marks();
-    let snapshot: ReturnType<SaveMarks<any>['snapshot']>;
+    let snapshot: SaveSnapshot | undefined;
     try {
       // Before the first await, so the bytes are the document the save was asked for.
       const bytes = document.serialize();
@@ -948,6 +948,10 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       // for this one. The watcher's event for this write then finds the disk matching.
       document.stamp = (await this.write(document.uri, bytes)) ?? (await stampOf(document.uri));
       document.onDisk = bytes;
+    } catch (err) {
+      // Nothing was written, so what the snapshot held is never what the file holds.
+      if (snapshot) document.marks.release(snapshot);
+      throw err;
     } finally {
       document.saving = false;
     }
