@@ -146,3 +146,26 @@ describe('sectionRowIdOf', () => {
     expect(sectionRowIdOf('lone', [{ ID: 'lone', parent: 'missing' }])).toBeNull();
   });
 });
+
+// A MAT-file's table has no section header rows: its variables are top-level rows (parent
+// null). The walks above then answer "no section", and table-main reads that as the file's
+// one whole-file rule — so nothing here has to know which format it is looking at.
+describe('a section-less table (a MAT-file)', () => {
+  const MAT_ROWS: OperandRow[] = [
+    { ID: 'm/x', parent: null, _canCopy: true, _canDelete: true },
+    { ID: 'm/cfg', parent: null, _canCopy: true, _canDelete: true },
+    { ID: 'm/cfg/gain', parent: 'm/cfg', _canCopy: true, _canDelete: true },
+  ];
+
+  it('a variable is its own entry, and a field resolves to its variable', () => {
+    expect(resolveOperands(['m/x', 'm/cfg/gain'], MAT_ROWS)).toEqual({
+      deleteIds: ['m/x', 'm/cfg/gain'],
+      entryIds: ['m/x', 'm/cfg'],
+      sections: [],
+    });
+  });
+
+  it('no row has a section header, so none can split a paste across sections', () => {
+    for (const id of ['m/x', 'm/cfg', 'm/cfg/gain']) expect(sectionRowIdOf(id, MAT_ROWS), id).toBeNull();
+  });
+});

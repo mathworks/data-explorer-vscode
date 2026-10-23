@@ -8,20 +8,28 @@ interface RowLike {
 }
 
 /**
- * Decide which rows should be expanded after a `setRows`.
+ * Decide which rows should be expanded after a repaint.
  *
  * Every repaint — the initial load, a value edit, a structural edit, a text-view
- * edit, undo, AND redo — arrives as a fresh `setRows`. To avoid collapsing the
- * tree under the user on any of those, we PRESERVE the prior expansion: keep
- * whichever previously-expanded rows still exist in the new row set.
+ * edit, undo, AND redo — installs a fresh row set. To avoid collapsing the tree
+ * under the user on any of those, we PRESERVE the prior expansion: keep whichever
+ * previously-expanded rows still exist in the new row set. An EMPTY prior expansion
+ * is preserved too: it is the user's, who collapsed everything.
  *
- * On the first load (no prior expansion) we default to expanding the section
- * rows (parent === null) so entries are visible immediately — a data viewer
- * should not open fully collapsed.
+ * On the first load — `prev` null, which only the caller can say (table-main: no
+ * payload with rows has been shown yet) — we default to expanding the top-level rows
+ * (parent === null) so their contents are visible immediately: a data viewer should
+ * not open fully collapsed. In a dictionary those are the section rows, so its
+ * entries show; in a MAT-file they are the variables. It used to infer the first
+ * load from an empty `prev`, which reopened everything the user had collapsed.
+ *
+ * A top-level row whose children the payload held back (`_lazy`) is left closed:
+ * open, it would show a twisty over nothing that takes two clicks to fetch, where
+ * closed its first click fetches (dex-tree-table's _toggleExpand).
  */
 export function nextExpandedIds<T extends RowLike>(prev: Set<string> | null, rows: T[]): Set<string> {
-  if (!prev || prev.size === 0) {
-    return new Set(rows.filter((r) => r.parent === null).map((r) => r.ID));
+  if (!prev) {
+    return new Set(rows.filter((r) => r.parent === null && !r._lazy).map((r) => r.ID));
   }
   const existing = new Set(rows.map((r) => r.ID));
   return new Set([...prev].filter((id) => existing.has(id)));
@@ -147,29 +155,6 @@ export function spliceEntryRows<T extends RowLike>(
 }
 
 /**
- * Insert ONE new entry's rows into a section, returning a new array (or null when
- * the position can't be located).
- *
- * The counterpart of spliceEntryRows for an entry the table does not hold yet: a
- * paste, a drop, or the undo of a delete. Where a splice finds its place by the run
- * it replaces, an insert has to be TOLD the place, and the two forms of it are the
- * two the host can produce:
- *
- *  - `beforeRowId` given → immediately before that entry's row (the undo of a
- *    delete, which must put the entry back where it was).
- *  - absent → after the section's last row, which is where a pasted entry lands.
- *
- * "The section's last row" is found by walking forward from the section header while
- * rows keep belonging to it. `buildRows` emits a section's rows contiguously and
- * every following section header carries `parent === null`, so the first row with a
- * null parent ends the section — and a section that is the table's last needs no
- * terminator beyond the array's end.
- *
- * Returns null rather than guessing when the section row is absent (or the named
- * `beforeRowId` isn't in it), so the caller can ask for a full repaint instead of
- * dropping the new entry or filing it under the wrong section.
- */
-/**
  * Add the fetched children of ONE deferred row, returning a new array (or null when
  * the row they belong under isn't present).
  *
@@ -207,6 +192,34 @@ export function mergeChildRows<T extends RowLike>(rows: T[], nodeId: string, chi
   return [...rows.slice(0, at), parent, ...fresh, ...rows.slice(at + 1)];
 }
 
+/**
+ * Insert ONE new entry's rows into a section, returning a new array (or null when
+ * the position can't be located).
+ *
+ * The counterpart of spliceEntryRows for an entry the table does not hold yet: a
+ * paste, a drop, or the undo of a delete. Where a splice finds its place by the run
+ * it replaces, an insert has to be TOLD the place, and the two forms of it are the
+ * two the host can produce:
+ *
+ *  - `beforeRowId` given → immediately before that entry's row (the undo of a
+ *    delete, which must put the entry back where it was).
+ *  - absent → after the section's last row, which is where a pasted entry lands.
+ *
+ * "The section's last row" is found by walking forward from the section header while
+ * rows keep belonging to it. `buildRows` emits a section's rows contiguously and
+ * every following section header carries `parent === null`, so the first row with a
+ * null parent ends the section — and a section that is the table's last needs no
+ * terminator beyond the array's end.
+ *
+ * A row whose id the table already holds is DROPPED, as mergeChildRows drops one: the
+ * insert can arrive after a full repaint that already carried the entry (a `setRows`
+ * racing a paste's insert), and a duplicate id is not a duplicate row — it is two rows
+ * the tree walk files under one parent and the search counts twice.
+ *
+ * Returns null rather than guessing when the section row is absent (or the named
+ * `beforeRowId` isn't in it), so the caller can ask for a full repaint instead of
+ * dropping the new entry or filing it under the wrong section.
+ */
 export function insertEntryRows<T extends RowLike>(
   rows: T[],
   sectionRowId: string,
@@ -225,5 +238,7 @@ export function insertEntryRows<T extends RowLike>(
     if (beforeAt <= sectionAt || beforeAt >= end) return null;
     at = beforeAt;
   }
-  return [...rows.slice(0, at), ...addition, ...rows.slice(at)];
+  const present = new Set(rows.map((r) => r.ID));
+  const fresh = addition.filter((r) => !present.has(r.ID));
+  return [...rows.slice(0, at), ...fresh, ...rows.slice(at)];
 }

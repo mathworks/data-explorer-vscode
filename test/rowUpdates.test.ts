@@ -25,7 +25,26 @@ describe('nextExpandedIds — expansion preserved across setRows', () => {
 
   it('defaults to section rows (parent === null) on first load (no prior state)', () => {
     expect(nextExpandedIds(null, rows)).toEqual(new Set(['section:P', 'section:Q']));
-    expect(nextExpandedIds(new Set(), rows)).toEqual(new Set(['section:P', 'section:Q']));
+  });
+
+  it('keeps an EMPTY expansion empty: the user collapsed everything, and a repaint is not a first load', () => {
+    // Review #2. An empty set used to mean "first load" too, so collapsing every section
+    // and then editing anything re-expanded them all under the user. The first load is the
+    // caller's to say (null), not something to infer from the set being empty.
+    expect(nextExpandedIds(new Set(), rows)).toEqual(new Set());
+  });
+
+  it("on first load, leaves a top-level row whose children were held back collapsed", () => {
+    // A MAT-file's variables are its top-level rows, so the first load opens them, as it
+    // always has. One the payload deferred (`_lazy`) has nothing under it yet, and opening
+    // it that way shows an open twisty over nothing, which then takes two clicks to fetch
+    // (collapse, expand). Left collapsed, its first click fetches.
+    const mat: Row[] = [
+      { ID: 'm/cfg', parent: null },
+      { ID: 'm/cfg/gain', parent: 'm/cfg' },
+      { ID: 'm/big', parent: null, _lazy: true },
+    ];
+    expect(nextExpandedIds(null, mat)).toEqual(new Set(['m/cfg']));
   });
 
   it('preserves prior expansion (deep node stays expanded across a rebuild)', () => {
@@ -238,6 +257,22 @@ describe('insertEntryRows — add one new entry to a section', () => {
     const before = rows();
     insertEntryRows(before, 'section:P', undefined, addition);
     expect(before).toEqual(rows());
+  });
+
+  it('drops a row whose id the table already holds, rather than holding it twice', () => {
+    // Review #5. The insert can arrive after a full repaint that already carried the entry
+    // (a setRows racing a paste's insertEntryRows), and a duplicate id is not a duplicate
+    // row: it is two rows the tree walk files under one parent and the search counts twice.
+    const once = insertEntryRows(rows(), 'section:P', undefined, addition)!;
+    const twice = insertEntryRows(once, 'section:P', undefined, addition)!;
+    expect(twice.map((r) => r.ID)).toEqual(once.map((r) => r.ID));
+    // Only the rows already present are dropped; the rest still go in.
+    const more = [...addition, { ID: 'section:P/New/kid2', parent: 'section:P/New' }];
+    expect(insertEntryRows(once, 'section:P', undefined, more)!.filter((r) => r.ID.startsWith('section:P/New')).map((r) => r.ID)).toEqual([
+      'section:P/New',
+      'section:P/New/kid',
+      'section:P/New/kid2',
+    ]);
   });
 });
 

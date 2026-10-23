@@ -1,12 +1,12 @@
 // Copyright 2026 The MathWorks, Inc.
 import type { ContextMenuItem } from './components/dex-context-menu.js';
-import { rejectReason, type DragItem, type DropTarget } from './dropDecision.js';
+import { isNoopMove, rejectReason, type DragItem, type DropTarget } from './dropDecision.js';
 import { resolveOperands, type OperandRow } from './operands.js';
 import { isSectionRowId } from '../common/sectionRowId.js';
 
 // The subset of row data the menu builder needs. The host attaches the capability
-// flags in rowBuilder.buildEntryRows; section rows lack them (all falsy), and are
-// dropped during operand resolution rather than shown a menu of dead items.
+// flags in rowStamp.stampRow, for both row builders; section rows lack them (all falsy),
+// and are dropped during operand resolution rather than shown a menu of dead items.
 export interface MenuRow extends OperandRow {
   /** The Name cell, whose `label` is the display name a label quotes. */
   Name?: { label?: string } | string;
@@ -23,10 +23,19 @@ export interface ClipboardState {
    * the menu and a dragover answer "can this land here" from one function.
    */
   items: DragItem[];
+  /**
+   * The document the entries were copied or cut from, when the host says (with each item's
+   * `sectionName`). With both, a cut pasted back into the section it came from is known to be
+   * the no-op it is (isNoopMove); without them Paste stays offered and the host no-ops it.
+   */
+  sourceDocUri?: string;
 }
 
-/** The section a paste would land in — a DropTarget minus the parts paste cannot use. */
-export type PasteTarget = Pick<DropTarget, 'sectionLabel' | 'isDerived' | 'allowedTypes'>;
+/**
+ * The section a paste would land in — a DropTarget minus the parts paste cannot use.
+ * `sectionName` ('' for a MAT-file) is what tells a cut pasted back where it came from.
+ */
+export type PasteTarget = Pick<DropTarget, 'sectionLabel' | 'isDerived' | 'allowedTypes'> & { sectionName?: string };
 
 /**
  * Everything the menu is built from. A bag rather than positional arguments because
@@ -44,6 +53,8 @@ export interface MenuInput {
   hasTextView: boolean;
   /** The anchor's section rule, or null when it cannot be resolved. */
   pasteTarget: PasteTarget | null;
+  /** This document's uri, which a cut's `sourceDocUri` is compared with. */
+  docUri?: string;
   /**
    * Whether this document's rows travel on the clipboard at all. Absent is true. False for a
    * MAT-file (setRows' `clipboard`): Copy, Cut and Paste are left off its menu, not shown
@@ -125,14 +136,14 @@ export function resolveShortcutAction(e: KeyboardEvent): ShortcutAction | null {
 // Document-level (table) readonly controls the editor and the context menu.
 // It is DISTINCT from the row-level `Name.editable` flag, which only controls
 // cell text color (gray for derived array-child names like `Var(1)`, normal
-// otherwise). Read-only documents — .mat/.slx/.prj, and a JSON .sldd too large
-// for VS Code to mirror as a TextDocument — have no write-back path, so both
-// interactions below are suppressed. Per-row coloring must stay intact, so we
-// never touch the row-level flags.
+// otherwise). Read-only documents — .slx/.mdl/.prj, a MAT-file laid out in a way a
+// save could not keep, and a JSON .sldd too large for VS Code to mirror as a
+// TextDocument — have no write-back path, so both interactions below are suppressed.
+// Per-row coloring must stay intact, so we never touch the row-level flags.
 //
 // BOTH .sldd formats are editable and send `editable: true`: JSON via the
-// text-backed provider, compressed-binary via its own writable custom editor.
-// What separates them is `hasTextView`, not editability.
+// text-backed provider, compressed-binary via its own writable custom editor. So is
+// a MAT-file, through its own. What separates them is `hasTextView`, not editability.
 
 /**
  * Whether a right-click should open the context menu at all. Read-only
@@ -203,8 +214,17 @@ export function buildContextMenuItems(input: MenuInput): ContextMenuItem[] {
       return { ...base, disabled: true, reason: 'Select rows in one section to paste' };
     }
     if (!pasteTarget) return { ...base, disabled: true };
+    // A cut back into the section every item came from: the same no-op a drop of it is, in
+    // dropDecision's order (before the class check, which entries already there pass anyway).
+    // An older host names no source document (so '' never matches); a caller that resolved
+    // no section name can ask nothing of this rule, so it is not asked.
+    const target: DropTarget = { docUri: input.docUri ?? '', ...pasteTarget, sectionName: pasteTarget.sectionName ?? '' };
+    const source = { docUri: clipboard.sourceDocUri ?? '', items: clipboard.items };
+    if (clipboard.mode === 'cut' && pasteTarget.sectionName !== undefined && isNoopMove(source, target, 'move')) {
+      return { ...base, disabled: true, reason: `Already in ${pasteTarget.sectionLabel}` };
+    }
     for (const item of clipboard.items) {
-      const reason = rejectReason({ docUri: '', sectionName: '', ...pasteTarget }, item);
+      const reason = rejectReason(target, item);
       if (reason) return { ...base, disabled: true, reason };
     }
     return base;
