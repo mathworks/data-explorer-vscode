@@ -585,22 +585,31 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     // gallery again (gesture, below).
     let lastClasses: readonly string[] = [];
 
-    const post = async (): Promise<void> => {
-      let mat: any;
+    // The document's tree, or null once the view has been told why there is none.
+    const treeOrError = (): any => {
       try {
-        mat = document.model();
+        return document.model();
       } catch (err) {
         webview.postMessage({ type: 'error', message: `Failed to parse ${name}: ${document.describe(err)}` });
-        return;
+        return null;
       }
+    };
+
+    const post = async (): Promise<void> => {
+      let mat = treeOrError();
+      if (!mat) return;
       try {
         let built = build(mat);
         // The Usage column, as the read-only view fills it. Awaited only here: an edit's repaint
         // fills it from the graph this built (annotateDataRowsNow).
         await annotateDataRows(uriString, built.planned.rows).catch(() => false);
         if (document.disposed) return;
-        // An edit landed while the graph was being built: these rows are from before it.
+        // The document moved while the graph was being built: these rows are from before it. A
+        // reload (replace) moves it onto another tree altogether, so the tree is asked for again,
+        // and the rows, the notice and the gallery's classes below are all of the one it holds.
         if (built.version !== document.version) {
+          mat = treeOrError();
+          if (!mat) return;
           built = build(mat);
           annotateDataRowsNow(uriString, built.planned.rows);
         }
@@ -660,13 +669,8 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
      * offers nothing either; this is the lock behind the door).
      */
     const gesture = (label: string, run: (mat: any) => void, touched: () => Iterable<any> = () => []): Observed | null => {
-      let mat: any;
-      try {
-        mat = document.model();
-      } catch (err) {
-        webview.postMessage({ type: 'error', message: `Failed to parse ${name}: ${document.describe(err)}` });
-        return null;
-      }
+      const mat = treeOrError();
+      if (!mat) return null;
       if (mat.readOnly) {
         webview.postMessage({ type: 'error', message: readOnlyNotice(mat) ?? `${name} is read-only.` });
         return null;

@@ -409,6 +409,22 @@ suite('MAT-file editor: edit, undo, save', () => {
     assert.ok(!tableOf(o.view.posts).some((r) => nameOf(r) === 'scalarD'));
   });
 
+  test('a paint that awaited the usage graph across a reload paints the tree the reload put in', async () => {
+    const o = await open('cases.mat');
+    const from = o.view.posts.length;
+    // A paint, now on its one await; the reload lands on it, and paints again itself.
+    o.view.send({ type: 'ready' });
+    const other = fixture('pv_basic.mat');
+    o.doc.replace({ stamp: undefined, bytes: other.buffer.slice(other.byteOffset, other.byteOffset + other.byteLength) });
+    const paints = () => o.view.posts.slice(from).filter((p) => p.type === 'setRows');
+    await waitFor('both paints', () => paints().length >= 2);
+    for (const paint of paints()) {
+      const names = paint.rows.filter((r: any) => r.parent == null).map(nameOf);
+      assert.ok(names.includes('p'), 'the reloaded file’s variables');
+      assert.ok(!names.includes('scalarD'), 'and none of the tree the reload replaced');
+    }
+  });
+
   test('revert reads the disk, and an edit from before it is not undone on the new tree', async () => {
     const replaced: string[] = [];
     provider.onReplaced = (uri) => replaced.push(uri);
