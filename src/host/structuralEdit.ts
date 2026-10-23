@@ -33,6 +33,8 @@ import { buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../comm
 import type { DragRegisterItem } from './dragState.js';
 import type { ClipboardItem } from './clipboard.js';
 import { dropFactsOf } from './dropFacts.js';
+import { TransferRefused, type TransferTarget } from './transfer.js';
+import { recordCopy } from './entryOps.js';
 
 // One byte-scoped replacement of a document's text, and the one applier — both now core's
 // (`src/edit/textPatch.ts`), because WHICH REGION a text edit covers is a property of the two
@@ -114,6 +116,46 @@ export function resolveSectionForPaste(model: any, node: any, rowId: string): an
     return sectionByName(model, sectionNameFromRowId(rowId)!);
   }
   return null;
+}
+
+/**
+ * Where a paste or a drop lands in a dictionary (transfer.ts): the section, and the model it is
+ * live in. The model travels with it because the JSON view re-parses whenever its tree is not
+ * in step with the text, so asking for "the model" twice can hand back two trees — the section
+ * has to be used in the one it was found in.
+ */
+export interface SectionTarget extends TransferTarget {
+  model: any;
+  section: any;
+}
+
+/**
+ * The target a paste or drop onto `rowId` lands in, or null. One answer for both dictionary
+ * formats, resolved before anything changes — and by NAME from then on: a same-document move
+ * that has to re-read its model after removing the sources finds the section again by its name
+ * (`sectionByName`), never through the row, which may have been one of the entries it moved.
+ */
+export function sectionTarget(model: any, node: any, rowId: string): SectionTarget | null {
+  const section = resolveSectionForPaste(model, node, rowId);
+  return section ? { sectionName: section.name, model, section } : null;
+}
+
+/**
+ * Refuse, before anything changes, a paste or drop the section's allow-list will not take.
+ *
+ * The same check foldPasteEntries makes for every payload before its fold, asked earlier: by
+ * then a same-document move has already taken its sources out of the model, so a refusal there
+ * has a tree to repair, and here it has none. Worded as it always was, so the message the user
+ * sees for a refused class does not depend on which of the two caught it.
+ */
+export function refuseDisallowedPaste(section: any, payloads: readonly Record<string, unknown>[]): void {
+  for (const payload of payloads) {
+    try {
+      assertTypeAllowed(section, payload);
+    } catch (err) {
+      throw new TransferRefused(`Failed to apply edit: ${(err as Error).message}`);
+    }
+  }
 }
 
 /**
@@ -199,8 +241,65 @@ export function buildClipboardSnapshot(
 // levels down in all of them, but it made the element's first line and its remaining lines
 // two separate accounts of one depth, and only one of them was derived from the file.
 export function reserializeEntry(entry: any, indent: string, elementIndent = indent.repeat(5)): string {
-  const lines = JSON.stringify(entry.serialize(), null, indent).split('\n');
+  return recordText(entry.serialize(), indent, elementIndent);
+}
+
+// The text of one serialized record, laid out as reserializeEntry lays out an entry's.
+function recordText(record: unknown, indent: string, elementIndent: string): string {
+  const lines = JSON.stringify(record, null, indent).split('\n');
   return lines.map((line, i) => (i === 0 ? line : elementIndent + line)).join('\n');
+}
+
+/**
+ * Where in a serialized value a number sits that JSON.stringify writes as `null` — an Inf, a
+ * -Inf or a NaN — as the names leading to it ([] for the value itself), or null when there is
+ * none. `_dimensions` is passed by: a text dictionary's own dims can hold the infinity JSON.parse
+ * makes of an overflowing extent, which its save writes as it always has, and a pasted one is
+ * refused by core before it gets here (MatWriter.textDictionaryForm).
+ */
+function unwrittenNumberIn(value: unknown, path: string[] = []): { value: number; path: string[] } | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? null : { value, path };
+  if (!value || typeof value !== 'object') return null;
+  if (Array.isArray(value)) {
+    for (const element of value) {
+      const found = unwrittenNumberIn(element, path);
+      if (found) return found;
+    }
+    return null;
+  }
+  for (const [key, member] of Object.entries(value)) {
+    if (key === '_dimensions') continue;
+    // A bag's own keys (`_elements`, `_properties`) are not names a user knows the value by.
+    const found = unwrittenNumberIn(member, key.startsWith('_') ? path : [...path, key]);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * Refuse to write a NEW entry into a JSON dictionary with a `null` where its value holds a number.
+ *
+ * A binary dictionary, and a MAT-file, hold a scalar Inf, -Inf or NaN as the bare number — an
+ * entry's value, a struct's field, an object's property — and so does the record a copy of one
+ * carries. A text dictionary spells such a number as text (`{"_type": "double", "_value":
+ * "Inf"}`, as MATLAB writes one, and as core writes an edited one), but the paste hands the
+ * record to core as it is (SectionNode.parseEntry), whose text form today leaves a bare number
+ * bare, and this writer is JSON.stringify, which writes it as null. The pasted entry then
+ * re-read as another value, and saved as one, with nothing said. Until core spells it on the
+ * way in, the paste is refused instead, naming the entry and what it holds; nothing is written.
+ * When core does, the record arrives here already spelled and this never refuses.
+ *
+ * New entries only (a paste, a drop, an Add): the file's own entries are written as they read.
+ */
+function refuseUnwrittenNumber(newNode: any, record: any): void {
+  const found = unwrittenNumberIn(record?.value);
+  if (!found) return;
+  const spelled = Number.isNaN(found.value) ? 'NaN' : found.value > 0 ? 'Inf' : '-Inf';
+  const where = found.path.length ? ` (in ${found.path.join('.')})` : '';
+  throw new Error(
+    `Cannot paste "${newNode?.name}" into a text dictionary: it holds ${spelled}${where}, ` +
+      'which this version cannot write there yet. Nothing was pasted.',
+  );
 }
 
 // Replace the owning entry's text in-place with its reserialized form — the
@@ -376,9 +475,15 @@ export function addChild(text: string, node: any): StructuralResult {
   return spliceEntry(text, entry, selectId);
 }
 
-/** Deep-clone a clipboard payload so repeated pastes don't alias the same object. */
+/**
+ * Deep-clone a clipboard payload so repeated pastes don't alias the same object.
+ *
+ * Through entryOps' recordCopy, which the undo records share, and not a JSON round trip: a
+ * binary dictionary's payload holds an Inf, a NaN or a -0 as the bare number, which the round
+ * trip turned into null or 0, so the pasted entry was another value.
+ */
 export function cloneForPaste(payload: Record<string, unknown>): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(payload));
+  return recordCopy(payload) as Record<string, unknown>;
 }
 
 /** The Simulink class name of a serialized entry payload, or '' if none. */
@@ -552,7 +657,9 @@ export function createEntry(section: any, className: string): any {
 function insertNewEntry(text: string, newNode: any): StructuralResult {
   const insertion = findEntriesArrayInsertion(text);
   if (!insertion) throw new Error('Could not locate the entries array.');
-  const entryText = reserializeEntry(newNode, detectIndent(text), insertion.elementIndent);
+  const record = newNode.serialize();
+  refuseUnwrittenNumber(newNode, record);
+  const entryText = recordText(record, detectIndent(text), insertion.elementIndent);
 
   // The line break is unconditional: an element always starts its own line, whether it
   // follows a sibling or opens an empty array. Omitting it in the empty case left the first

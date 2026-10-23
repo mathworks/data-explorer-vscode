@@ -38,7 +38,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { unzipSync } from 'fflate';
-import { SC_PART_XML } from 'data-explorer-core';
+import { DataModel, SC_PART_XML } from 'data-explorer-core';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 import {
@@ -556,5 +556,71 @@ suite('The same two gestures, on a compressed-binary .sldd', () => {
       await archMember(SC_PART_XML),
       'and left the pass-through part alone',
     );
+  }).timeout(60000);
+});
+
+// --- and its undo ------------------------------------------------------------------------
+//
+// This format's undo is the provider's own: the delete pushes the chunk and a patch of entry
+// ops, and undo applies the inverse ops to the model in place, without re-reading the chunk.
+// Those inverses are inserts, each naming the index its entry held — and the binary delete
+// used to capture them for every entry BEFORE removing any, then replay them reversed, which
+// puts the rightmost entry back first at an index counted past a gap nothing has filled yet:
+// [P, Q, R] with P and Q deleted came back as [P, R, Q]. The chunk was right (it is restored
+// as a string), so the file was fine and only the model and the rows on screen were wrong —
+// until a save, a re-read or the next edit built on them.
+//
+// The params dictionary is the MATLAB-written one, whose Design Data section has the three
+// neighbours this needs.
+suite('Undo of a multi-entry delete, on a compressed-binary .sldd', () => {
+  suiteSetup(async () => {
+    await vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.activate();
+  });
+
+  test('puts the entries back in the order they had, in the model it already holds', async () => {
+    const fixture = vscode.Uri.joinPath(ws(), '..', '..', '..', 'test', 'parity', 'artifacts', 'binary', 'params.sldd');
+    const uri = vscode.Uri.joinPath(ws(), '..', 'bin_delete_undo_order.sldd');
+    await vscode.workspace.fs.copy(fixture, uri, { overwrite: true });
+    const provider = new BinarySlddEditorProvider(ctx());
+    const edits: vscode.CustomDocumentEditEvent<vscode.CustomDocument>[] = [];
+    const sub = provider.onDidChangeCustomDocument((e) => edits.push(e as any));
+    const doc: any = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
+    const view = fakePanel();
+    try {
+      await provider.resolveCustomEditor(doc, view.panel, token());
+      view.send({ type: 'ready' });
+      const model: any = DataModel.getDataSource(doc.srcId);
+      assert.ok(model, 'the first paint registered the model');
+      const inventory = () => (model.children as any[]).map((s: any) => (s.children as any[]).map((e: any) => e.name));
+      const section = (model.children as any[]).find((s: any) => s.children.length >= 3);
+      assert.ok(section, 'a section with three neighbours');
+      const [p, q, r] = (section.children as any[]).slice(0, 3);
+      const before = inventory();
+      const chunkBefore = doc.chunkXml as string;
+
+      view.posts.length = 0;
+      view.send({ type: 'delete', rowIds: [p.id, q.id] });
+      assert.deepStrictEqual(
+        view.posts.filter((m) => m.type === 'error'),
+        [],
+        'the delete is applied',
+      );
+      assert.strictEqual(edits.length, 1, 'as one edit');
+      assert.strictEqual(section.children[0], r, `${p.name} and ${q.name} left, so ${r.name} leads`);
+
+      await edits[0].undo();
+      assert.strictEqual(doc.chunkXml, chunkBefore, 'the undo restores the chunk');
+      assert.strictEqual(DataModel.getDataSource(doc.srcId), model, 'from the ops, not by re-reading it');
+      assert.deepStrictEqual(inventory(), before, `and ${p.name}, ${q.name}, ${r.name} are back in that order`);
+
+      // And the redo takes the same two out again.
+      await edits[0].redo();
+      assert.strictEqual(section.children[0], r, 'the redo removes them again');
+    } finally {
+      view.close();
+      sub.dispose();
+      doc.dispose();
+      await vscode.workspace.fs.delete(uri);
+    }
   }).timeout(60000);
 });
