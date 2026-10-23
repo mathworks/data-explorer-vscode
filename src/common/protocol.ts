@@ -12,7 +12,7 @@
 // strict send-side type would fight without any behavior benefit.
 //
 // `rows` / `groups` / `columns` are intentionally loose (`any[]` / `unknown`):
-// they flow into the vendored table/inspector components (typed `any`) and are
+// they flow into the table/inspector components (typed `any`) and are
 // mapped with narrower callbacks, so a stricter element type would introduce new
 // contravariant-callback errors rather than catch real bugs.
 
@@ -34,8 +34,8 @@ export interface SetRowsMessage {
    * The uri of the document these rows came from, so the webview can answer a link into
    * itself without a host round-trip (see webview/linkRoute.ts).
    *
-   * On `setRows` rather than `sectionRules` because only the two EDITABLE providers post
-   * that one — it carries drop rules, which a read-only .slx/.mat view has none of. Hang
+   * On `setRows` rather than `sectionRules` because only the EDITABLE providers post
+   * that one — it carries drop rules, which a read-only .slx/.mdl/.prj view has none of. Hang
    * the uri off it and a read-only table never learns its own identity, so its links take
    * the host path while a dictionary's take the local one: the same rule behaving two ways
    * depending on which provider had drop rules to send.
@@ -92,8 +92,8 @@ export interface SetRowsMessage {
  * dictionary plus every row, which on a real customer .sldd is seconds of latency
  * and a ~67 MB payload to express a one-cell change.
  *
- * `rows` is `buildEntryRows` output — the entry row first, then its flattened
- * descendants — and an empty array removes the subtree.
+ * `rows` is `buildEntryRows` output (a MAT-file's: `buildMatVariableRows`) — the entry
+ * row first, then its flattened descendants — and an empty array removes the subtree.
  */
 export interface UpdateEntryRowsMessage {
   type: 'updateEntryRows';

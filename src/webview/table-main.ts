@@ -468,7 +468,7 @@ window.addEventListener('message', (event: MessageEvent) => {
     // travel: a read-only view sends no `clipboard` at all, which reads as true.
     table.rowDrag = editable && hasClipboard;
     // Every table gets setRows, including the read-only ones that never receive
-    // sectionRules — so this is the assignment that lets a .slx or .mat view answer a link
+    // sectionRules — so this is the assignment that lets a .slx or .prj view answer a link
     // into itself. Guarded so a provider that has not been updated leaves the old value
     // rather than blanking it.
     docUri = typeof msg.docUri === 'string' ? msg.docUri : docUri;
@@ -562,7 +562,7 @@ function isTypingInField(ev: KeyboardEvent): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !!active?.isContentEditable;
 }
 
-// Read-only documents never open the inline cell editor. The vendored table
+// Read-only documents never open the inline cell editor. The table component
 // opens it on double-click and on Enter, gating only on per-row flags (which we
 // keep intact for cell coloring). Intercept both gestures in the CAPTURE phase
 // — before they reach the component's shadow-internal handlers — and swallow
@@ -581,9 +581,10 @@ table.addEventListener(
     const ev = e as KeyboardEvent;
     // Only Enter on the GRID is the cell-editor gesture this gate exists for. Enter in a
     // FIELD belongs to that field: the search box commits a search with it and the
-    // column-filter popup applies with it. Without this exemption, a read-only view
-    // (.slx, .mdl, .mat, .prj) had a search box that did nothing at all — the keystroke
-    // died here, one element above the box, and .sldd looked fine because it is editable.
+    // column-filter popup applies with it. Without this exemption, a read-only view (.slx,
+    // .mdl, .prj, a read-only MAT-file) had a search box that did nothing at all — the
+    // keystroke died here, one element above the box, and .sldd looked fine because it is
+    // editable.
     if (ev.key === 'Enter' && !isTypingInField(ev) && !shouldOpenCellEditor(editable)) {
       e.stopPropagation();
     }
@@ -695,7 +696,8 @@ table.dropPredictor = predictDrop;
 // Drag lifecycle → host. On drag start the host snapshots the dragged rows into
 // its drag register and broadcasts the descriptor; on end it clears + rebroad-
 // casts; on drop it completes the move/copy as paste (+ source delete). All
-// gated on editable so read-only views never initiate a structural drag.
+// gated on an editable document whose rows travel (`clipboard`), the same two facts
+// table.rowDrag is set from, so a view without both never starts or takes one.
 table.addEventListener('dex-row-drag-start', (e: Event) => {
   if (!editable || !hasClipboard) return;
   const rowIds = (e as CustomEvent).detail?.rowIds ?? [];
@@ -715,7 +717,7 @@ table.addEventListener('dex-row-drop', (e: Event) => {
 // A row whose children the payload held back was opened: ask the host for them. The
 // table has already marked the row as asked-about, so a second click does not re-ask,
 // and the answer arrives as `childRows` above. Not gated on `editable` — this is how a
-// read-only .mat view is navigated at all.
+// read-only view of a large file (a .slx, a MAT-file opened read-only) is navigated at all.
 table.addEventListener('dex-request-children', (e: Event) => {
   const nodeId = (e as CustomEvent).detail?.nodeId;
   if (typeof nodeId === 'string' && nodeId !== '') vscode.postMessage({ type: 'requestChildren', nodeId });
@@ -729,8 +731,8 @@ table.addEventListener('dex-row-selected', (e: Event) => {
 
 // A link was clicked. Most targets name a row in ANOTHER tab, so they go to the host,
 // which opens the referenced file and selects the row there (see navigate.ts) —
-// cross-tab navigation is host-mediated because each table is its own webview (unlike
-// the vendored dex-app's in-page nav).
+// cross-tab navigation is host-mediated because each table is its own webview, with no
+// page around it to navigate within.
 //
 // A Data Type link is the exception: core built its target from the source the entry
 // lives in, so the row is already in this table. The host path would still work — it

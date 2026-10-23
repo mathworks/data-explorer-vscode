@@ -5,8 +5,8 @@ import { resolveOperands, type OperandRow } from './operands.js';
 import { isSectionRowId } from '../common/sectionRowId.js';
 
 // The subset of row data the menu builder needs. The host attaches the capability
-// flags in rowBuilder.buildEntryRows; section rows lack them (all falsy), and are
-// dropped during operand resolution rather than shown a menu of dead items.
+// flags in rowStamp.stampRow, for both row builders; section rows lack them (all falsy),
+// and are dropped during operand resolution rather than shown a menu of dead items.
 export interface MenuRow extends OperandRow {
   /** The Name cell, whose `label` is the display name a label quotes. */
   Name?: { label?: string } | string;
@@ -136,14 +136,14 @@ export function resolveShortcutAction(e: KeyboardEvent): ShortcutAction | null {
 // Document-level (table) readonly controls the editor and the context menu.
 // It is DISTINCT from the row-level `Name.editable` flag, which only controls
 // cell text color (gray for derived array-child names like `Var(1)`, normal
-// otherwise). Read-only documents — .mat/.slx/.prj, and a JSON .sldd too large
-// for VS Code to mirror as a TextDocument — have no write-back path, so both
-// interactions below are suppressed. Per-row coloring must stay intact, so we
-// never touch the row-level flags.
+// otherwise). Read-only documents — .slx/.mdl/.prj, a MAT-file laid out in a way a
+// save could not keep, and a JSON .sldd too large for VS Code to mirror as a
+// TextDocument — have no write-back path, so both interactions below are suppressed.
+// Per-row coloring must stay intact, so we never touch the row-level flags.
 //
 // BOTH .sldd formats are editable and send `editable: true`: JSON via the
-// text-backed provider, compressed-binary via its own writable custom editor.
-// What separates them is `hasTextView`, not editability.
+// text-backed provider, compressed-binary via its own writable custom editor. So is
+// a MAT-file, through its own. What separates them is `hasTextView`, not editability.
 
 /**
  * Whether a right-click should open the context menu at all. Read-only
