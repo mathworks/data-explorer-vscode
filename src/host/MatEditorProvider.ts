@@ -145,12 +145,14 @@ function variablesMoved(mat: any, observed: Observed): boolean {
   return now.length !== observed.order.length || now.some((v, i) => v !== observed.order[i]);
 }
 
-/** One open view of a document: the two ways the document asks it to repaint. */
+/** One open view of a document: the ways the document asks it to repaint. */
 interface DocumentView {
   /** Every row, from the tree as it stands. */
   repaintAll(): void;
   /** The rows of these variables, each spliced over the run the table holds by `before`'s id. */
   repaintVariables(variables: Iterable<any>, before?: ReadonlyMap<any, string>): void;
+  /** Every row again, if the classes the gallery was last told the file takes are no longer core's. */
+  refreshGallery(): void;
 }
 
 class MatDocument implements vscode.CustomDocument, FollowedDocument {
@@ -349,7 +351,12 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
     }
     if (variablesMoved(mat, observed)) return this.repaintAll();
     const present = [...observed.touched].filter((v) => v.parent === mat);
-    for (const view of [...this.views]) view.repaintVariables(present, observed.before);
+    for (const view of [...this.views]) {
+      view.repaintVariables(present, observed.before);
+      // An edit can change what core says the file takes a new variable of, and so can its undo
+      // and its redo, which come through here as the gesture does.
+      view.refreshGallery();
+    }
   }
 
   /** Repaint the variables whose Status changed between two answers of `marks`. */
@@ -590,8 +597,8 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
 
     // The classes the gallery was last told the file can take a new variable of. Core's answer
     // (MatNode.getAllowedTypes) can change with the file — a reload, a subsystem a save no longer
-    // writes as read — so a gesture that changes it repaints the whole table, which tells the
-    // gallery again (gesture, below).
+    // writes as read — so an edit that changes it, or the undo or redo of one, repaints the whole
+    // table, which tells the gallery again (refreshGallery, below).
     let lastClasses: readonly string[] = [];
 
     // The document's tree, or null once the view has been told why there is none.
@@ -667,7 +674,17 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       }
     };
 
-    const view: DocumentView = { repaintAll: () => void post(), repaintVariables };
+    const refreshGallery = () => {
+      let mat: any;
+      try {
+        mat = document.model();
+      } catch {
+        return;
+      }
+      if (!sameList(allowedClasses(mat), lastClasses)) void post();
+    };
+
+    const view: DocumentView = { repaintAll: () => void post(), repaintVariables, refreshGallery };
     document.views.add(view);
 
     /**
@@ -695,8 +712,8 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
         webview.postMessage({ type: 'error', message: `Failed to apply edit: ${document.describe(observed.error)}` });
         return null;
       }
+      // Its rows, and the gallery's classes where the edit moved them.
       document.repaint(observed);
-      if (!sameList(allowedClasses(mat), lastClasses)) void post();
       return observed;
     };
 

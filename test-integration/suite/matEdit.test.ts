@@ -302,6 +302,26 @@ suite('MAT-file editor: edit, undo, save', () => {
     assert.strictEqual(top('var').Status, 'Modified', 'saved, the file holds it');
   });
 
+  test('an undo or a redo that moves the classes core offers tells the gallery, as a gesture does', async () => {
+    const o = await open('cases.mat');
+    edit(o, 'scalarD', 'Value', '42');
+    const classes = () => [...o.view.posts].reverse().find((p) => p.type === 'setRows').add.classes as string[];
+    const offered = classes();
+    assert.ok(offered.length > 1, 'the file takes more than a plain variable');
+    // Core's answer, moved by the undo: stood in for, as no edit of this file moves it.
+    const mat: any = DataModel.getDataSource(o.doc.srcId);
+    mat.getAllowedTypes = () => ['MatlabVariable'];
+    try {
+      await o.events[0].undo();
+      await waitFor('the gallery told of the undo', () => classes().length === 1);
+      delete mat.getAllowedTypes;
+      await o.events[0].redo();
+      await waitFor('and of the redo', () => classes().length === offered.length);
+    } finally {
+      delete mat.getAllowedTypes;
+    }
+  });
+
   test('a rename is the record with its new name; a delete leaves the rest as they were', async () => {
     const o = await open('cases.mat');
     edit(o, 'kp', 'Name', 'kpRenamed');
