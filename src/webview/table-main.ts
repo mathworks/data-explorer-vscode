@@ -165,7 +165,8 @@ function postAction(actionId: string, anchorRowId: string | null): void {
 // The predictor injected into the table: given the row under the cursor ('' for the
 // empty body) and the drag mode, run the pure dropDecision against the broadcast drag
 // descriptor and this document's section rules. Returns null when there's no active drag or
-// the target section can't be resolved, so the table falls back to default behavior.
+// the target section can't be resolved, which the table reads as a refusal: a drag the host
+// never announced (a file from the OS, text from another app) is not one this table takes.
 function predictDrop(
   targetRowId: string,
   mode: DragMode,
@@ -419,7 +420,9 @@ window.addEventListener('message', (event: MessageEvent) => {
     editable = !!msg.editable;
     hasTextView = !!msg.hasTextView;
     hasClipboard = msg.clipboard !== false;
-    table.rowDrag = hasClipboard;
+    // A row drag is a structural edit, so it needs an editable document as well as rows that
+    // travel: a read-only view sends no `clipboard` at all, which reads as true.
+    table.rowDrag = editable && hasClipboard;
     // Every table gets setRows, including the read-only ones that never receive
     // sectionRules — so this is the assignment that lets a .slx or .mat view answer a link
     // into itself. Guarded so a provider that has not been updated leaves the old value

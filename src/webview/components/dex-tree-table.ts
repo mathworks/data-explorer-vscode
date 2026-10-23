@@ -1523,10 +1523,11 @@ export class DexTreeTable extends LitElement {
   // the completed action in sync with the "Move"/"Copy" the tooltip showed.
   private _lastDragMode: 'copy' | 'move' = 'move';
 
-  // Predicts a drop for the row under the cursor, injected by the host-side glue
-  // (table-main) and backed by the pure dropDecision. Returns null when there is
-  // no active drag or the target can't be resolved, in which case the table
-  // falls back to its built-in permissive drag behavior.
+  // Predicts a drop for the row under the cursor ('' for the empty body), injected by the
+  // host-side glue (table-main) and backed by the pure dropDecision. Returns null when it
+  // cannot predict — no drag it was told about, or a target with no rule — and null REFUSES:
+  // with glue present, "cannot say" is not "yes". Only a table with no predictor at all
+  // falls back to the built-in permissive drag behavior, so it is usable without the glue.
   @property({ attribute: false }) dropPredictor:
     | ((
         targetRowId: string,
@@ -2936,11 +2937,21 @@ export class DexTreeTable extends LitElement {
     // Remember the mode from this dragover; the drop event can't read it reliably.
     this._lastDragMode = mode;
 
-    // Ask the injected predictor whether this drop is allowed and what to show.
-    // With no predictor (or no active drag it recognizes), fall back to the
-    // built-in permissive behavior so drag still works without the host glue.
-    const decision = this.dropPredictor ? this.dropPredictor(rowId, mode) : null;
-    if (decision) {
+    // Ask the injected predictor whether this drop is allowed and what to show. With no
+    // predictor, fall back to the built-in permissive behavior so drag still works without
+    // the host glue; a predictor that has no answer refuses (see dropPredictor).
+    if (this.dropPredictor) {
+      const decision = this.dropPredictor(rowId, mode);
+      if (!decision) {
+        // Nothing to predict with (see dropPredictor): refuse, and mark no row — there is
+        // no verdict to show, and a forbidden highlight would claim one.
+        this._dropTargetId = null;
+        this._dropPosition = null;
+        this._dropForbidden = false;
+        this._dropTooltip = '';
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'none';
+        return;
+      }
       this._dropTargetId = rowId;
       this._dropPosition = 'on';
       this._dropForbidden = !decision.canDrop;
@@ -3041,8 +3052,8 @@ export class DexTreeTable extends LitElement {
     // downgrade a Cmd-drag Copy to a Move. dragover tracked it correctly.
     const mode = this._lastDragMode;
 
-    // Respect the predictor: never complete a rejected or no-op drop. The drag
-    // may have started in ANOTHER webview, so the source rows come from the host
+    // Respect the predictor: never complete a rejected, no-op or unpredictable drop. The
+    // drag may have started in ANOTHER webview, so the source rows come from the host
     // drag register, not local dataTransfer (which doesn't cross the boundary) —
     // the drop event only needs to carry the target + mode.
     const decision = this.dropPredictor ? this.dropPredictor(targetRowId, mode) : null;
@@ -3053,7 +3064,7 @@ export class DexTreeTable extends LitElement {
     this._dropForbidden = false;
     this._dropTooltip = '';
 
-    if (decision && !decision.canDrop) return;
+    if (this.dropPredictor && !decision?.canDrop) return;
 
     this.dispatchEvent(
       new CustomEvent('dex-row-drop', {
