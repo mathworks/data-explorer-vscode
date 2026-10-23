@@ -108,6 +108,18 @@ const topRow = (posts: any[], name: string): any => {
   return row;
 };
 
+/**
+ * Whether `posts` (what a gesture sent) paint the table and then say an error after the last of
+ * the paints, which clear the banner it is shown in (a whole `setRows` and an entry's
+ * `updateEntryRows` alike), so that it is seen.
+ */
+const saidAfterPaint = (posts: any[]): boolean => {
+  const last = (type: string) => posts.map((p) => p.type).lastIndexOf(type);
+  const error = last('error');
+  const paint = Math.max(last('setRows'), last('updateEntryRows'));
+  return paint >= 0 && error > paint;
+};
+
 /** Write the file as another program would, with an mtime later than any the view has seen. */
 function writeOutside(path: string, bytes: Uint8Array): void {
   const before = statSync(path).mtimeMs;
@@ -533,6 +545,7 @@ suite('MAT-file editor: edit, undo, save', () => {
     edit(o, 'scalarD', 'Value', '42');
     const vec = topRow(o.view.posts, 'rowVec');
     const kids = tableOf(o.view.posts).filter((r) => r.parent === vec.ID);
+    const from = o.view.posts.length;
     // The second of the gesture's two steps throws, after core recorded the first.
     const session = DataModel as any;
     const real = session.deleteNodeById;
@@ -547,14 +560,57 @@ suite('MAT-file editor: edit, undo, save', () => {
       session.deleteNodeById = real;
     }
     assert.strictEqual(o.events.length, 2, 'the step core recorded is an edit VS Code knows of');
-    assert.match(o.view.posts.filter((p) => p.type === 'error').pop().message, /the second step failed/);
     await waitFor('the rows as core left them', () => topRow(o.view.posts, 'rowVec').Value === '[2 3]');
+    await waitFor('the error, after the paint, which clears the banner', () => saidAfterPaint(o.view.posts.slice(from)));
+    assert.match(o.view.posts.filter((p) => p.type === 'error').pop().message, /the second step failed/);
     await o.events[1].undo();
     await waitFor('the delete undone', () => topRow(o.view.posts, 'rowVec').Value === '[1 2 3]');
     assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, '42', 'and only the delete');
     await o.events[0].undo();
     assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, '3.141592653589793');
     assert.strictEqual(o.doc.edits.dirty, false);
+  });
+
+  test('an edit that does not land puts the cell back, then says why; so does a message that throws', async () => {
+    const o = await open('cases.mat');
+    const session = DataModel as any;
+    // A row the tree no longer holds: every row painted again, then the error.
+    const scalar = topRow(o.view.posts, 'scalarD');
+    let from = o.view.posts.length;
+    o.view.send({ type: 'edit', rowId: scalar.ID + '-gone', columnId: 'Value', oldValue: scalar.Value, newValue: '42' });
+    await waitFor('every row painted, then the error', () => saidAfterPaint(o.view.posts.slice(from)));
+    assert.match(o.view.posts.filter((p) => p.type === 'error').pop().message, /Could not locate/);
+    // An edit core neither takes nor refuses with a reason: its variable repainted, then the error.
+    const real = session.editProperty;
+    session.editProperty = () => false;
+    from = o.view.posts.length;
+    try {
+      o.view.send({ type: 'edit', rowId: scalar.ID, columnId: 'Value', oldValue: scalar.Value, newValue: '42' });
+    } finally {
+      session.editProperty = real;
+    }
+    const after = o.view.posts.slice(from);
+    assert.deepStrictEqual(
+      after.map((p) => p.type),
+      ['updateEntryRows', 'error'],
+      'the variable put back as the tree holds it, and then the error',
+    );
+    assert.strictEqual(after[0].entryRowId, scalar.ID);
+    assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, scalar.Value);
+    assert.strictEqual(o.events.length, 0, 'and no edit');
+    // A message whose handling throws: said, over every row painted again.
+    const find = session.findNodeById;
+    session.findNodeById = () => {
+      throw new Error('the lookup failed');
+    };
+    from = o.view.posts.length;
+    try {
+      o.view.send({ type: 'edit', rowId: scalar.ID, columnId: 'Value', oldValue: scalar.Value, newValue: '42' });
+    } finally {
+      session.findNodeById = find;
+    }
+    await waitFor('the error', () => saidAfterPaint(o.view.posts.slice(from)));
+    assert.match(o.view.posts.filter((p) => p.type === 'error').pop().message, /the lookup failed/);
   });
 
   test('Save As onto the file itself is a save', async () => {

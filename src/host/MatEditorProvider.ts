@@ -679,9 +679,28 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
           webview.postMessage({ type: 'updateEntryRows', entryRowId: before?.get(v) ?? v.id, rows });
         }
       } catch (err) {
-        void post();
-        webview.postMessage({ type: 'error', message: `Failed to update the row: ${document.describe(err)}` });
+        repaintAndReport(`Failed to update the row: ${document.describe(err)}`);
       }
+    };
+
+    // Every row painted again from the tree, and then `message` shown. In that order, and only
+    // once the paint is posted: a paint clears the error banner, and this one posts after its
+    // await, so a message sent beside it would be cleared as it arrived.
+    const repaintAndReport = (message: string) => {
+      void post().then(() => webview.postMessage({ type: 'error', message }));
+    };
+
+    // Put back what the table shows of `node`, from the tree, and then show `message`, if any:
+    // how a cell that shows what was typed is told what the tree holds, where the tree took
+    // nothing. The rows of the variable `node` is or is under; every row, where it is under none.
+    const putBack = (node: any, message?: string) => {
+      const mat = treeOrError();
+      if (!mat) return;
+      let v = node;
+      while (v && v.parent !== mat) v = v.parent;
+      if (!v) return message ? repaintAndReport(message) : void post();
+      repaintVariables([v]);
+      if (message) webview.postMessage({ type: 'error', message });
     };
 
     const refreshGallery = () => {
@@ -718,8 +737,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       if (observed.error) {
         // Whatever core did before it threw is in the tree, and the table is shown it whole.
         document.version++;
-        void post();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${document.describe(observed.error)}` });
+        repaintAndReport(`Failed to apply edit: ${document.describe(observed.error)}`);
         return null;
       }
       // Its rows, and the gallery's classes where the edit moved them.
@@ -729,11 +747,12 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
 
     // A value edit or a rename: core's editProperty, as the Property Inspector of core's own app
     // makes one, with the node selected. A refusal comes back as the cell's validation error, and
-    // the variable is repainted from the tree, which the refusal left as it was.
+    // the variable is repainted from the tree, which the refusal left as it was; so is every edit
+    // that did not land, since the table shows what was typed until it is told otherwise.
     const applyEdit = (msg: { rowId: string; columnId: string; oldValue: string; newValue: string }) => {
       const node = findNode(msg.rowId);
       if (!node) {
-        webview.postMessage({ type: 'error', message: 'Could not locate the edited item in the model.' });
+        repaintAndReport('Could not locate the edited item in the model.');
         return;
       }
       let result: unknown;
@@ -750,17 +769,11 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
           invalidValue: msg.newValue,
           previousValue: msg.oldValue,
         });
-        // Put the cell back: the table shows what was typed until it is told otherwise.
-        for (let v = node; v; v = v.parent) {
-          if (v.parent === document.model()) {
-            repaintVariables([v]);
-            break;
-          }
-        }
+        putBack(node);
         return;
       }
       if (refused === false) {
-        webview.postMessage({ type: 'error', message: `Could not edit ${msg.columnId} of this item.` });
+        putBack(node, `Could not edit ${msg.columnId} of this item.`);
         return;
       }
       if (msg.columnId === 'Name') webview.postMessage({ type: 'selectRows', rowIds: [node.id] });
@@ -857,7 +870,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     const noClipboard = (what: string) =>
       webview.postMessage({ type: 'error', message: `${what} is not available in a MAT-file.` });
 
-    const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
+    const handle = (msg: TableToHostMessage) => {
       if (msg?.type === 'ready') void post();
       else if (msg?.type === 'select') this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
       else if (msg?.type === 'edit') applyEdit(msg);
@@ -882,6 +895,16 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       } else if (msg?.type === 'requestChildren') {
         void answerChildRequest(webview, uriString, msg.nodeId, name, annotateDataRows, planner);
       } else if (msg?.type === 'undo' || msg?.type === 'redo') void vscode.commands.executeCommand(msg.type);
+    };
+
+    // A message that throws is said, as a gesture's throw is, over every row painted again from
+    // the tree: whatever it did before it threw is in it, and a cell may still show what was typed.
+    const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
+      try {
+        handle(msg);
+      } catch (err) {
+        repaintAndReport(`Failed to handle ${String(msg?.type)} in ${name}: ${document.describe(err)}`);
+      }
     });
 
     // The keyboard's Add (dataExplorer.addEntry): the webview adds a variable at once.
