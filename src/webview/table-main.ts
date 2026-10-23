@@ -454,7 +454,19 @@ window.addEventListener('message', (event: MessageEvent) => {
     table.columns = msg.columns ?? null;
     table.columnLabels = msg.columnLabels ?? null;
     table.columnGroups = (msg.columnGroups as Record<string, string> | undefined) ?? null;
+    // A view whose rows no longer travel, or that is read-only now, has no drop rule left
+    // that is about it. Only then: an editable payload's rules are re-sent AFTER it (the
+    // providers post sectionRules behind setRows), so wiping them here would leave the
+    // view rule-less until the next message — or for good, from a host that posts first.
+    if (!editable || !hasClipboard) sectionRulesList = [];
+    // A drag broadcast from before this payload is about rows it replaced.
+    dragDescriptor = null;
     installRows(rows);
+    // AFTER the install, which is the requests' one chance at this payload: a full payload
+    // holds every row it is going to, so a selection or a rename still waiting now would
+    // otherwise land on whatever row next takes that id — after an undo, another entry.
+    pendingSelectIds = [];
+    pendingRenameId = null;
   } else if (msg.type === 'selectByName') {
     // Cross-tab navigation: select the row whose name matches (block or
     // variable). Apply now if present, else hold until the next setRows.

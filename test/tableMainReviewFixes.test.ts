@@ -181,3 +181,88 @@ describe('a selection whose rows all vanished', () => {
     expect(sent('select')).toEqual([{ type: 'select', rowIds: [] }]);
   });
 });
+
+// #8: what a full payload leaves stale. A selection or a rename still waiting for its row
+// after a `setRows` has none in it — and a full payload holds every row it is going to —
+// so holding the request would let it land on whatever row next takes that id (after an
+// undo, a different entry). The broadcast drag is cleared with it, and a document's drop
+// rules when the payload says its rows no longer travel.
+describe('a full payload clears what it leaves stale', () => {
+  const NEW = 'd/design/New';
+  const withNew = () => [...DICT_ROWS(), { ID: NEW, parent: 'section:design', Name: { label: 'New' } }];
+  const repaint = (rows: any[], over: Record<string, unknown> = {}) =>
+    send({ type: 'setRows', docUri: SLDD, rows, columns: ['Name'], columnLabels: {}, editable: true, ...over });
+
+  it('a rename whose row the payload lacks is dropped, not opened on a later row of that id', async () => {
+    await paint();
+    const renamed: string[] = [];
+    const real = table.beginRename;
+    table.beginRename = (id: string) => renamed.push(id);
+    try {
+      send({ type: 'beginRename', rowId: NEW });
+      repaint(DICT_ROWS());
+      repaint(withNew());
+      expect(renamed).toEqual([]);
+    } finally {
+      table.beginRename = real;
+    }
+  });
+
+  it('a rename whose row the payload carries still opens', async () => {
+    await paint();
+    const renamed: string[] = [];
+    const real = table.beginRename;
+    table.beginRename = (id: string) => renamed.push(id);
+    try {
+      send({ type: 'beginRename', rowId: NEW });
+      repaint(withNew());
+      expect(renamed).toEqual([NEW]);
+    } finally {
+      table.beginRename = real;
+    }
+  });
+
+  it('a selection whose rows the payload lacks is dropped too', async () => {
+    await paint();
+    table.selectedRowIds = ['d/design/A'];
+    send({ type: 'selectRows', rowIds: [NEW] });
+    repaint(DICT_ROWS());
+    repaint(withNew());
+    expect(table.selectedRowIds).toEqual(['d/design/A']);
+  });
+
+  it('the broadcast drag does not outlive the payload', async () => {
+    await paint();
+    send({ type: 'sectionRules', docUri: SLDD, rules: [{ sectionName: 'design', sectionLabel: 'Design Data', isDerived: false, allowedTypes: [] }] });
+    send({ type: 'dragState', descriptor: { docUri: 'file:///fx/other.sldd', items: [{ className: 'Simulink.Bus', arrayClass: 'Simulink.Bus', kind: 'Bus', isMatlabVariable: false, isScalarNumeric: false, sectionName: 'design' }] } });
+    expect(dragOver('d/design/B').defaultPrevented).toBe(true);
+    repaint(DICT_ROWS());
+    await table.updateComplete;
+    expect(dragOver('d/design/B').defaultPrevented).toBe(false);
+  });
+
+  it("a payload whose rows do not travel drops the document's rules; one whose rows do keeps them", async () => {
+    const rules = [{ sectionName: 'design', sectionLabel: 'Design Data', isDerived: false, allowedTypes: [] }];
+    send({ type: 'clipboardState', canPaste: true, mode: 'copy', items: [{ className: 'Simulink.Bus', arrayClass: 'Simulink.Bus', kind: 'Bus', isMatlabVariable: false, isScalarNumeric: false }] });
+    const pasteEnabled = () => {
+      table.selectedRowIds = ['d/design/A'];
+      posted.length = 0;
+      table.dispatchEvent(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true, cancelable: true, composed: true }));
+      return sent('paste').length > 0;
+    };
+    // Rules are posted after the payload they belong to, and survive the next editable one,
+    // whichever order a host sends them in.
+    repaint(DICT_ROWS());
+    send({ type: 'sectionRules', docUri: SLDD, rules });
+    repaint(DICT_ROWS());
+    expect(pasteEnabled()).toBe(true);
+    // A read-only payload: no rule is about this view any more.
+    repaint(DICT_ROWS(), { editable: false });
+    repaint(DICT_ROWS());
+    expect(pasteEnabled()).toBe(false);
+    send({ type: 'sectionRules', docUri: SLDD, rules });
+    repaint(DICT_ROWS(), { clipboard: false });
+    repaint(DICT_ROWS());
+    expect(pasteEnabled()).toBe(false);
+  });
+});
