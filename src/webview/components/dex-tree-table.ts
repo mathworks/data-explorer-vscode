@@ -1467,8 +1467,9 @@ export class DexTreeTable extends LitElement {
   @property({ attribute: false }) addClasses: readonly string[] | null = null;
 
   // Whether a row can be dragged, or a dragged row let go over one. False where rows have no form
-  // to travel in (setRows' `clipboard: false`, a MAT-file): no row is draggable, and a drag from
-  // another table draws no drop target here.
+  // to travel in (setRows' `clipboard: false`, a MAT-file today) or the document is read-only
+  // (table-main sets it from both): no row is draggable, and a drag from another table draws no
+  // drop target here, on a row or on the empty body.
   @property({ type: Boolean }) rowDrag = true;
 
   get selectedRowId(): string {
