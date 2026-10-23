@@ -154,9 +154,12 @@ function postAction(actionId: string, anchorRowId: string | null): void {
     return;
   }
   if (!anchorRowId) {
-    // A paste anchored at no row targets the document itself, which only a one-target
-    // document's menu offers (wholeFileRule); '' is how the host is told so.
-    if (actionId === 'paste') vscode.postMessage({ type: 'paste', rowId: '' });
+    // A paste anchored at no row targets the document itself; '' is how the host is told
+    // so. Only a one-target document can be that target (wholeFileRule). Its menu is the
+    // only one that offers it, and this says so again here rather than trusting every
+    // path that reaches postAction to have asked: a dictionary's host has no section to
+    // put a row-less paste in.
+    if (actionId === 'paste' && wholeFileRule()) vscode.postMessage({ type: 'paste', rowId: '' });
     return;
   }
   vscode.postMessage({ type: actionId, rowId: anchorRowId });
@@ -713,8 +716,11 @@ table.addEventListener('dex-row-drop', (e: Event) => {
   if (!editable || !hasClipboard) return;
   const detail = (e as CustomEvent).detail;
   // '' is a drop on the empty body, which the predictor allows only into a one-target
-  // document — the drag twin of a paste anchored at no row.
-  vscode.postMessage({ type: 'drop', rowId: detail.targetRowId ?? '', mode: detail.mode });
+  // document — the drag twin of a paste anchored at no row, and refused here on the same
+  // terms as that paste (postAction).
+  const rowId = typeof detail?.targetRowId === 'string' ? detail.targetRowId : '';
+  if (rowId === '' && !wholeFileRule()) return;
+  vscode.postMessage({ type: 'drop', rowId, mode: detail.mode });
 });
 
 // A row whose children the payload held back was opened: ask the host for them. The

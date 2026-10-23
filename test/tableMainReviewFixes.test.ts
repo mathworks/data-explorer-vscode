@@ -350,3 +350,44 @@ describe('a malformed message does not take the table down', () => {
     (document.querySelector('dex-context-menu') as any).close();
   });
 });
+
+// rowId '' means "the document itself", which only a document that posted a whole-file rule
+// (a MAT-file) can be a target as. The menu and the predictor already offer it nowhere else;
+// this pins that the POST is refused locally too, so no path that reaches postAction or the
+// drop listener with no row can hand a dictionary's host a paste or a drop it cannot place.
+describe("a paste or drop with no row is posted only by a one-target document", () => {
+  const contextMenu = () => document.querySelector('dex-context-menu') as any;
+
+  it('a dictionary posts no paste for a menu action anchored at no row', async () => {
+    await paint();
+    send({ type: 'sectionRules', docUri: SLDD, rules: [{ sectionName: 'design', sectionLabel: 'Design Data', isDerived: false, allowedTypes: [] }] });
+    send({ type: 'clipboardState', canPaste: true, mode: 'copy', items: [{ className: 'Simulink.Bus', arrayClass: 'Simulink.Bus', kind: 'Bus', isMatlabVariable: false, isScalarNumeric: false }] });
+    // A right-click on no row: the dictionary shows no menu, but it is what leaves the
+    // menu's anchor at no row, so an action arriving now would be anchored there.
+    table.dispatchEvent(new CustomEvent('dex-table-context-menu', { detail: { rowId: null, x: 1, y: 1 } }));
+    posted.length = 0;
+    contextMenu().dispatchEvent(new CustomEvent('dex-action', { detail: { actionId: 'paste' } }));
+    expect(sent('paste')).toEqual([]);
+  });
+
+  it('a dictionary posts no drop on its empty body', async () => {
+    await paint();
+    posted.length = 0;
+    table.dispatchEvent(new CustomEvent('dex-row-drop', { detail: { targetRowId: '', mode: 'move' } }));
+    table.dispatchEvent(new CustomEvent('dex-row-drop', { detail: { mode: 'move' } }));
+    expect(sent('drop')).toEqual([]);
+  });
+
+  it('a MAT-file with its whole-file rule posts both', async () => {
+    send({ type: 'setRows', docUri: 'file:///fx/gains.mat', rows: [{ ID: 'm/x', parent: null, Name: { label: 'x' } }], columns: ['Name'], columnLabels: {}, editable: true });
+    send({ type: 'sectionRules', docUri: 'file:///fx/gains.mat', rules: [{ sectionName: '', sectionLabel: 'gains.mat', isDerived: false, allowedTypes: [] }] });
+    await table.updateComplete;
+    table.dispatchEvent(new CustomEvent('dex-table-context-menu', { detail: { rowId: null, x: 1, y: 1 } }));
+    posted.length = 0;
+    contextMenu().dispatchEvent(new CustomEvent('dex-action', { detail: { actionId: 'paste' } }));
+    table.dispatchEvent(new CustomEvent('dex-row-drop', { detail: { targetRowId: '', mode: 'copy' } }));
+    expect(sent('paste')).toEqual([{ type: 'paste', rowId: '' }]);
+    expect(sent('drop')).toEqual([{ type: 'drop', rowId: '', mode: 'copy' }]);
+    contextMenu().close();
+  });
+});
