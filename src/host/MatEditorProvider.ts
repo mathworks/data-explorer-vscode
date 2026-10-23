@@ -361,12 +361,22 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
 
   /** Repaint the variables whose Status changed between two answers of `marks`. */
   repaintMarks(before: ReadonlyMap<any, SaveMark>): void {
+    let mat: any;
+    try {
+      mat = this.model();
+    } catch {
+      return;
+    }
     const after = this.marks.marks();
     const changed = new Set<any>();
     for (const [v, m] of before) if (after.get(v) !== m) changed.add(v);
     for (const [v, m] of after) if (before.get(v) !== m) changed.add(v);
-    if (changed.size === 0) return;
-    for (const view of [...this.views]) view.repaintVariables(changed);
+    // Of the variables in the file only. One an edit took out of it is marked all the same, and
+    // has no rows: a splice of rows the table does not hold has the webview ask for every row
+    // again, which resets its banners.
+    const present = [...changed].filter((v) => v.parent === mat);
+    if (present.length === 0) return;
+    for (const view of [...this.views]) view.repaintVariables(present);
   }
 
   repaintAll(): void {

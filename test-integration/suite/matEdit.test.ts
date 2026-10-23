@@ -322,6 +322,24 @@ suite('MAT-file editor: edit, undo, save', () => {
     }
   });
 
+  test('a save repaints the Status of the variables in the file, and not of one deleted from it', async () => {
+    const o = await open('cases.mat');
+    edit(o, 'scalarD', 'Value', '42');
+    o.view.send({ type: 'delete', rowIds: [topRow(o.view.posts, 'negD').ID] });
+    await waitFor('the deleted variable to leave the table', () => !tableOf(o.view.posts).some((r) => nameOf(r) === 'negD'));
+    const from = o.view.posts.length;
+    const held = new Set(tableOf(o.view.posts).map((r) => r.ID));
+    await save(o);
+    const spliced = o.view.posts.slice(from).filter((p) => p.type === 'updateEntryRows');
+    assert.deepStrictEqual(
+      spliced.map((p) => p.entryRowId),
+      [topRow(o.view.posts, 'scalarD').ID],
+      'the one variable whose Status the save cleared, and no rows the table does not hold',
+    );
+    assert.ok(spliced.every((p) => held.has(p.entryRowId)));
+    assert.strictEqual(topRow(o.view.posts, 'scalarD').Status, '');
+  });
+
   test('a rename is the record with its new name; a delete leaves the rest as they were', async () => {
     const o = await open('cases.mat');
     edit(o, 'kp', 'Name', 'kpRenamed');
