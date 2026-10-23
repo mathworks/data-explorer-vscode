@@ -170,6 +170,26 @@ describe('the target is resolved before anything changes', () => {
   });
 });
 
+describe('the row the gesture landed on', () => {
+  // A whole-file document (a MAT-file) has no row to aim at when its table is empty, and a
+  // paste there arrives with `rowId: ''`, meaning "the document itself". That is the adapter's
+  // to read — the policy passes the row through and never takes '' for "no row".
+  it("passes '' through to the adapter, which may resolve it", async () => {
+    setClipboard([item('Kp', 'design')], 'copy', THERE);
+    const asked: string[] = [];
+    const { adapter, log } = fakeAdapter({ section: '' });
+    const resolve = adapter.resolveTarget;
+    adapter.resolveTarget = (rowId) => {
+      asked.push(rowId);
+      return resolve(rowId);
+    };
+    const out = await runTransfer({ rowId: '' }, paste(), adapter, fakeDeps().deps);
+    expect(asked).toEqual(['']);
+    expect(out).toEqual({ kind: 'done' });
+    expect(log.commits[0].target).toEqual({ sectionName: '' });
+  });
+});
+
 describe('a move back into the section it came from', () => {
   it('a cut pasted there is a no-op that spends the cut', async () => {
     setClipboard([item('A', 'design'), item('B', 'design')], 'cut', HERE);

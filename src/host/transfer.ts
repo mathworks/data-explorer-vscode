@@ -111,7 +111,10 @@ export interface TransferAdapter<T extends TransferTarget = TransferTarget> {
    * its own refusal and answers false to stop the transfer.
    */
   guard?(): boolean;
-  /** The target the row names, or null when it names none. Must change nothing. May throw TransferRefused. */
+  /**
+   * The target the row names (`''` = the document itself), or null when it names none. Must
+   * change nothing. May throw TransferRefused.
+   */
   resolveTarget(rowId: string): T | null;
   /**
    * Refuse, BEFORE anything changes, what the target will not take — by throwing TransferRefused.
@@ -142,7 +145,11 @@ export interface TransferDeps {
 }
 
 export interface TransferRequest {
-  /** The row pasted or dropped on — a section header row for an empty section. */
+  /**
+   * The row pasted or dropped on — a section header row for an empty section, or `''` for the
+   * document itself (a whole-file document such as a MAT-file, whose empty table has no row to
+   * aim at). Passed to the adapter as it is: `''` is a target to resolve, not a missing one.
+   */
   rowId: string;
 }
 

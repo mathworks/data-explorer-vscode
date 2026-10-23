@@ -67,21 +67,32 @@ export function canPaste(): boolean {
  * `items` is the payload-FREE strip, exactly as `dragDescriptor()` strips the drag
  * register: the webview needs the drop facts to predict whether a paste may land here
  * (dropDecision), and must never be shipped the entry records.
+ *
+ * Where the cut came from travels too — the document, and each item's section, in the
+ * shape the drag descriptor spells them (`docUri` there, `sectionName` per item) — so the
+ * menu can say what the host decides (transfer.ts's isNoopMove): a cut pasted back into the
+ * section every item came from, in the document it came from, does nothing, and a Paste
+ * offered over it would be a menu item that does nothing when clicked.
  */
 export function clipboardState(): {
   canPaste: boolean;
   mode: ClipboardMode | null;
-  items: DropFacts[];
+  sourceDocUri: string | undefined;
+  items: (DropFacts & { sectionName: string })[];
 } {
   return {
     canPaste: current !== null,
     mode: current ? current.mode : null,
-    items: (current?.items ?? []).map(({ className, arrayClass, kind, isMatlabVariable, isScalarNumeric }) => ({
-      className,
-      arrayClass,
-      kind,
-      isMatlabVariable,
-      isScalarNumeric,
-    })),
+    sourceDocUri: current?.sourceDocUri,
+    items: (current?.items ?? []).map(
+      ({ sourceSection, className, arrayClass, kind, isMatlabVariable, isScalarNumeric }) => ({
+        sectionName: sourceSection,
+        className,
+        arrayClass,
+        kind,
+        isMatlabVariable,
+        isScalarNumeric,
+      }),
+    ),
   };
 }
