@@ -758,8 +758,11 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
         // "no restriction" (sectionRules.wholeFileRules), so it posts no rule at all.
         webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: notice ? [] : wholeFileRules(mat, name) });
         webview.postMessage({ type: 'clipboardState', ...clipboardState() });
-        // The mark these rows CARRY, which a copy made while they were in flight is not.
+        // The mark these rows CARRY. A copy or a cut that landed while they were being built
+        // repainted the rows it marked at once, ahead of these, which have just landed over that
+        // with the mark from before: so the rows that moved are painted again, after them.
         paintedMark = built.clipMark;
+        repaintClipMark();
         drainNavigateSelect(webview, uriString);
       } catch (err) {
         webview.postMessage({ type: 'error', message: `Failed to show ${name}: ${document.describe(err)}` });

@@ -323,10 +323,12 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
             // a drop (dropDecision) live on dragover without a host round-trip.
             webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
             webview.postMessage({ type: 'clipboardState', ...clipboardState() });
-            // The mark these rows CARRY, not the one the clipboard holds now: a copy that
-            // happened while the rows were in flight is behind them in the webview's queue, so
-            // what is on screen is `clipMark`, and the next broadcast has to see the difference.
+            // The mark these rows CARRY, not the one the clipboard holds now. A copy or a cut that
+            // landed while they waited on the Usage column repainted the entries it marked at
+            // once, ahead of these, which have just landed over that with the mark from before:
+            // so the entries that moved are painted again, after them (clipMarks.ts).
             paintedMark = clipMark;
+            repaintClipMark();
             drainNavigateSelect(webview, uriString);
           });
       } catch (err) {

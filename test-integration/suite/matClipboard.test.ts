@@ -199,6 +199,28 @@ suite('MAT-file clipboard and row drags, within one file', () => {
     assert.strictEqual(state.sourceDocUri, j.uri.toString(), "this view was told what the clipboard holds now");
   });
 
+  // A whole repaint builds its rows and then waits on the Usage column; a copy landing in that
+  // wait repaints the rows it marks at once, ahead of the older rows, which then land over them.
+  // The table must end up showing the mark the clipboard holds, in either format.
+  test('a copy made while the rows are on their way is marked once they land, in a MAT-file and a dictionary', async () => {
+    const m = await openMat(opened, dir, 'gains.mat', matFixture('pv_basic.mat'));
+    const x = variableRow(m.view.posts, 'x').ID;
+    m.view.posts.length = 0;
+    m.view.send({ type: 'ready' });
+    m.view.send({ type: 'copy', rowIds: [x] });
+    await waitFor('the repaint', () => m.view.posts.some((p) => p.type === 'setRows'));
+    await waitFor('the mark on the copied row', () => tableOf(m.view.posts).find((r) => r.ID === x)?.Name?.clipboardMode === 'copy');
+
+    const j = await openJson(opened, dir, 'marks.sldd');
+    const gravity = entryRow(j.view.posts, 'gravity').ID;
+    j.view.posts.length = 0;
+    j.view.send({ type: 'ready' });
+    j.view.send({ type: 'cut', rowIds: [gravity] });
+    await waitFor('the repaint', () => j.view.posts.some((p) => p.type === 'setRows'));
+    await waitFor('the mark on the cut entry', () => tableOf(j.view.posts).find((r) => r.ID === gravity)?.Name?.clipboardMode === 'cut');
+    await waitFor("the MAT-file's copy unmarked", () => tableOf(m.view.posts).find((r) => r.ID === x)?.Name?.clipboardMode === undefined);
+  });
+
   test('a paste into an EMPTY MAT-file, aimed at no row, lands', async () => {
     const source = await openMat(opened, dir, 'gains.mat', matFixture('pv_basic.mat'));
     const m = await openMat(opened, dir, 'empty.mat', emptyMat());
