@@ -20,9 +20,10 @@
 // is stamped, though the file's read leaves both missing. So a keystroke that removes or renames
 // an entry's "lastmod" key — or any keystroke in an entry of a text dictionary written without
 // one, as two of the fixtures here are — repaints that entry's Last Modified as now, where a
-// re-parse of the same text shows none. Pinned as an `it.fails` at the end. In the fuzz, only
-// that row's `lastModified` / `lastModifiedBy`, and only for a keystroke whose record lacks the
-// key, is set aside, so any other difference still fails. Remove both once core reads an asRead
+// re-parse of the same text shows none. Pinned at the end by a test that asserts today's wrong
+// value, so it FAILS when core is fixed. In the fuzz, only that row's `lastModified` /
+// `lastModifiedBy`, and only for a keystroke whose record lacks the key, is set aside
+// (setAsideKnownBug), so any other difference still fails. Remove both once core reads an asRead
 // record's metadata as the file's read does.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -139,24 +140,45 @@ describe('a planned keystroke repaints exactly what a re-parse would', () => {
 describe('KNOWN BUG: a re-read entry with no lastmod is stamped with the current time', () => {
   // See the header. Deleting the "lastmod" line of an entry in the text view is one keystroke
   // (a line delete) that the narrow path takes, and its repaint should be the re-parse's.
-  it.fails('deleting an entry’s "lastmod" line repaints the Last Modified a re-parse shows', () => {
+  //
+  // Plain tests, not an `it.fails`: an it.fails passes on ANY throw, so a fixture that stopped
+  // holding a "lastmod" line, or a delete that stopped being planned narrow, would have kept it
+  // green after core was fixed. Every step it depends on is asserted as a step instead.
+  function deleteLastmodLine() {
     const base = read('parity/artifacts/text/params.sldd');
     const uri = 'test://json-sync-lastmod.sldd';
-    const line = /\n\t*"lastmod": "[^"]*",/.exec(base)!;
-    const after = base.slice(0, line.index) + base.slice(line.index + line[0].length);
+    const line = /\n\t*"lastmod": "[^"]*",/.exec(base);
+    expect(line, 'the fixture holds a "lastmod" line').not.toBeNull();
+    const after = base.slice(0, line!.index) + base.slice(line!.index + line![0].length);
     invalidate(uri);
     const live = getModel(uri, 'params.sldd', base);
-    const plan = planEntrySync(live, after, { rangeOffset: line.index, text: '' });
+    const plan = planEntrySync(live, after, { rangeOffset: line!.index, text: '' });
     expect(plan, 'the delete is planned narrow').not.toBeNull();
-    const [applied] = applyEntryOps(live, [
+    expect((plan!.record as any).metadata?.lastmod, 'the record it re-reads has no lastmod').toBeUndefined();
+    const applied = applyEntryOps(live, [
       { kind: 'replace', rowId: plan!.entry.id, record: plan!.record, fromDocumentText: true },
     ]) as any[];
-    const narrow = (buildRows(live) as any[]).find((r) => r.ID === applied.entry.id);
+    expect(applied).toHaveLength(1);
+    const rowId = applied[0].entry.id;
+    const narrow = (buildRows(live) as any[]).find((r) => r.ID === rowId);
     invalidate(uri);
-    const wide = (buildRows(getModel(uri, 'params.sldd', after)) as any[]).find((r) => r.ID === applied.entry.id);
+    const wide = (buildRows(getModel(uri, 'params.sldd', after)) as any[]).find((r) => r.ID === rowId);
     invalidate(uri);
+    expect(narrow, 'the narrow repaint has the entry’s row').toBeDefined();
+    expect(wide, 'the re-parse has the entry’s row').toBeDefined();
+    return { narrow, wide };
+  }
+
+  it('(preconditions) the delete is planned narrow, and a re-parse shows no Last Modified', () => {
+    const { wide } = deleteLastmodLine();
     expect(wide.lastModified).toBe('');
-    // Fails today: the narrow row shows the time of the keystroke.
-    expect(narrow.lastModified).toBe(wide.lastModified);
+  });
+
+  it('TODAY the narrow repaint shows the time of the keystroke — when this fails, core fixed the asRead lastmod stamp: delete setAsideKnownBug and this test', () => {
+    const { narrow, wide } = deleteLastmodLine();
+    // The wrong value: a timestamp the text does not hold, where the re-parse shows none.
+    expect(narrow.lastModified).not.toBe('');
+    expect(narrow.lastModified).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    expect(narrow.lastModified).not.toBe(wide.lastModified);
   });
 });
