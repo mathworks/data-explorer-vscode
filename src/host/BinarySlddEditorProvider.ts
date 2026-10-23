@@ -92,11 +92,12 @@ import {
   applyEntryOps,
   entryRecord,
   findEntryByName,
-  findEntryBySelector,
   insertOp,
   mutateEntry,
   opsOfPastedEntries,
   patchOfPairs,
+  removalPairs,
+  removeEntries,
   removeOp,
   replaceOp,
   type AppliedOp,
@@ -943,23 +944,16 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       if (after === before) return;
       // The model half of the delete, narrowly when every target resolves to exactly
       // one live entry. Deliberately keyed on the SAME targets the text splice used, so
-      // the two halves cannot remove different entries.
-      const patch = attempt<EntryPatch>(() => {
-        const model = liveModel();
-        const entries = targets.map((t) => findEntryBySelector(model, t));
-        if (entries.some((e) => !e)) return undefined;
-        return {
-          // Reversed, because undo applies the inverses in reverse order — see
-          // applyEntryOps.
-          undo: entries.map((e) => insertOp(e)).reverse(),
-          redo: entries.map((e) => removeOp(e.id)),
-        };
-      });
-      document.pushEdit('Move (remove source)', before, after, patch);
-      // Applied through the document (not directly) so the model change happens once
-      // and every view of it repaints — this deleter runs on behalf of ANOTHER
-      // document's drop, so the view it belongs to is not the one being interacted with.
-      document.applyOps(patch?.redo);
+      // the two halves cannot remove different entries. removalPairs refuses before it
+      // removes anything, so a target it cannot settle costs the narrow path and no more:
+      // the wide repaint below rebuilds from the chunk that is already right.
+      const removal = attempt(() => removalPairs(liveModel(), targets) ?? undefined);
+      document.pushEdit('Move (remove source)', before, after, removal ? patchOfPairs(removal.pairs) : undefined);
+      // Repainted through the document (not this view) so every view of it repaints —
+      // this deleter runs on behalf of ANOTHER document's drop, so the view it belongs to
+      // is not the one being interacted with.
+      if (removal) document.repaintOps(removal.applied);
+      else document.repaintAll();
     });
 
     /**
@@ -1076,9 +1070,6 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       }
       // Read off the live tree, before anything leaves it.
       const selectors = plan.entries.map((entry) => entrySelectorOf(entry));
-      const entryPairs = attempt<EntryOpPair[]>(() =>
-        plan.entries.map((entry) => ({ redo: removeOp(entry.id), undo: insertOp(entry) })),
-      );
       const doomed = new Set<any>(plan.entries);
       const lastEntry = plan.entries[plan.entries.length - 1];
       const entrySelectId = lastEntry
@@ -1107,13 +1098,21 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         }
         working = deleteEntriesByNameXml(working, selectors);
 
+        // The entries leave the model through the one removal every path shares, whose undo
+        // ops are captured interleaved with the removals — captured up front, as they were
+        // here, an undo of [P, Q] out of [P, Q, R] put them back as [P, R, Q]. It refuses
+        // before removing anything, and a refusal costs only the narrow undo: the entries
+        // still leave, by plain ops, as a single delete's do when its record will not serialize.
+        const entryRemoval = attempt(() => removeEntries(model, plan.entries));
+        if (entryRemoval) applied.push(...entryRemoval.applied);
+        else applied.push(...applyEntryOps(model, plan.entries.map((entry) => removeOp(entry.id))));
+
         // The op list is all-or-nothing: a group whose record would not serialize left no
         // pair, and a patch missing one op would restore a partial state. No patch means
         // both directions repaint wide, which is merely slow (see `attempt`).
-        const complete = !!entryPairs && childPairs.length === plan.childGroups.length;
-        const patch = complete ? patchOfPairs([...childPairs, ...entryPairs]) : undefined;
+        const complete = !!entryRemoval && childPairs.length === plan.childGroups.length;
+        const patch = complete ? patchOfPairs([...childPairs, ...entryRemoval!.pairs]) : undefined;
 
-        applied.push(...applyEntryOps(model, (entryPairs ?? []).map((p) => p.redo)));
         document.pushEdit('Delete', before, working, patch);
         document.repaintOps(applied);
         const landing = entrySelectId ?? childSelectId;
@@ -1296,18 +1295,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // would push the copy to `Name1`.
         if (isCut && sameDoc && named.length) {
           working = deleteEntriesByNameXml(working, named);
-          const sources = named.map((t) => findEntryBySelector(model, t));
-          if (sources.every((e) => !!e)) {
-            const seen = new Set<string>();
-            for (const src of sources) {
-              // Two clipboard items can resolve to ONE model entry when their selectors
-              // name no distinguishing namespace, and removing it twice would throw on
-              // the second op — the same reason deleteEntriesByNameXml re-finds each span.
-              if (seen.has(src.id)) continue;
-              seen.add(src.id);
-              pairs.push({ redo: removeOp(src.id), undo: insertOp(src) });
-              applied.push(...applyEntryOps(model, [removeOp(src.id)]));
-            }
+          const removal = removalPairs(model, named);
+          if (removal) {
+            pairs.push(...removal.pairs);
+            applied.push(...removal.applied);
           } else {
             // The model cannot say which entry the clipboard means, so it catches up the
             // old way — and the target section has to be re-resolved against the tree
@@ -1473,18 +1464,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // document's originals untouched here.
         if (isMove && sameDoc && sourceTargets.length) {
           working = deleteEntriesByNameXml(working, sourceTargets);
-          const sources = sourceTargets.map((t) => findEntryBySelector(model, t));
-          if (sources.every((e) => !!e)) {
-            const seen = new Set<string>();
-            for (const src of sources) {
-              // A multi-select drag can list the same entry twice (two selected rows of
-              // one entry), and removing it twice would throw on the second op — the same
-              // reason deleteEntriesByNameXml re-finds each span.
-              if (seen.has(src.id)) continue;
-              seen.add(src.id);
-              pairs.push({ redo: removeOp(src.id), undo: insertOp(src) });
-              applied.push(...applyEntryOps(model, [removeOp(src.id)]));
-            }
+          const removal = removalPairs(model, sourceTargets);
+          if (removal) {
+            pairs.push(...removal.pairs);
+            applied.push(...removal.applied);
           } else {
             // At least one source is not something the model can name unambiguously, so
             // it catches up the old way and the target section is re-resolved against the

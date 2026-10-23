@@ -44,6 +44,9 @@ import {
   insertAnchorOf,
   insertOp,
   opsOfPastedEntries,
+  patchOfPairs,
+  removalPairs,
+  removeEntries,
   removeOp,
   type EntryOp,
 } from '../src/host/entryOps.js';
@@ -314,6 +317,112 @@ describe('the ops that do resolve still apply', () => {
     expect(applied[0]).toMatchObject({ kind: 'insert' });
     expect(d.inventory()).toEqual(before);
     expect((DataModel as any).findNodeById(rowId)).toBeTruthy();
+    d.dispose();
+  });
+});
+
+// ------------------------------------------------------------- removeEntries ---
+
+// Several entries out at once: a multi-row delete, a same-document move's sources, a
+// cross-document move's originals. Each used to capture its undo ops its own way, and the
+// binary delete's way put entries back in the wrong order.
+describe('removeEntries — the one way several entries leave a model', () => {
+  /** Three neighbours in one section, by name, in file order. */
+  function threeInARow(d: ReturnType<typeof openModel>): any[] {
+    const section = (d.model.children as any[]).find((s: any) => s.children.length >= 3);
+    expect(section, 'the fixture has a section with three entries').toBeTruthy();
+    return section.children.slice(0, 3);
+  }
+
+  it('undoes a removal of [P, Q] from [P, Q, R] back to [P, Q, R]', () => {
+    const d = openModel('test://ops-remove-order.sldd');
+    const [p, q] = threeInARow(d);
+    const before = d.inventory();
+    const removal = removeEntries(d.model, [p, q]);
+    expect(removal.applied.map((a) => a.kind)).toEqual(['remove', 'remove']);
+    expect(d.inventory()).not.toEqual(before);
+
+    applyEntryOps(d.model, patchOfPairs(removal.pairs).undo);
+    expect(d.inventory()).toEqual(before);
+    d.dispose();
+  });
+
+  it('and in either selection order', () => {
+    const d = openModel('test://ops-remove-order-reversed.sldd');
+    const [p, q, r] = threeInARow(d);
+    const before = d.inventory();
+    const removal = removeEntries(d.model, [r, p]);
+    applyEntryOps(d.model, patchOfPairs(removal.pairs).undo);
+    expect(d.inventory()).toEqual(before);
+    expect(q.parent, 'the entry left alone stays').toBeTruthy();
+    d.dispose();
+  });
+
+  // The control: the fixture and the replay above CAN see the bug. Ops captured for every
+  // entry before any is removed — what the binary delete and its source deleter did — put the
+  // rightmost back first, at an index counted past a gap nothing has filled yet.
+  it('(control) ops captured up front would have restored [P, R, Q]', () => {
+    const d = openModel('test://ops-remove-order-control.sldd');
+    const [p, q] = threeInARow(d);
+    const before = d.inventory();
+    const upFront = [p, q].map((e) => ({ redo: removeOp(e.id), undo: insertOp(e) }));
+    applyEntryOps(d.model, upFront.map((pair) => pair.redo));
+    applyEntryOps(d.model, patchOfPairs(upFront).undo);
+    expect(d.inventory()).not.toEqual(before);
+    d.dispose();
+  });
+
+  it('removes an entry named twice once', () => {
+    const d = openModel('test://ops-remove-dedupe.sldd');
+    const [p] = threeInARow(d);
+    const before = d.inventory();
+    const removal = removeEntries(d.model, [p, p]);
+    expect(removal.pairs).toHaveLength(1);
+    applyEntryOps(d.model, patchOfPairs(removal.pairs).undo);
+    expect(d.inventory()).toEqual(before);
+    d.dispose();
+  });
+
+  it('refuses before removing anything when one record will not serialize', () => {
+    const d = openModel('test://ops-remove-fail-first.sldd');
+    const [p, q] = threeInARow(d);
+    const before = d.inventory();
+    q.serialize = () => {
+      throw new Error('will not write');
+    };
+    expect(() => removeEntries(d.model, [p, q])).toThrow('will not write');
+    expect(d.inventory(), 'P was not removed ahead of the refusal').toEqual(before);
+    d.dispose();
+  });
+
+  it('refuses before removing anything when one entry is no longer in the model', () => {
+    const d = openModel('test://ops-remove-detached.sldd');
+    const [p, q] = threeInARow(d);
+    applyEntryOps(d.model, [removeOp(q.id)]);
+    const before = d.inventory();
+    expect(() => removeEntries(d.model, [p, q])).toThrow();
+    expect(d.inventory()).toEqual(before);
+    d.dispose();
+  });
+});
+
+describe('removalPairs — removeEntries by clipboard or drag selector', () => {
+  it('removes what the selectors name, and undoes in order', () => {
+    const d = openModel('test://ops-removal-pairs.sldd');
+    const before = d.inventory();
+    const removal = removalPairs(d.model, ['gravity', { name: 'MyAlias' }]);
+    expect(removal).not.toBeNull();
+    expect(d.entryNamed('gravity')).toBeUndefined();
+    applyEntryOps(d.model, patchOfPairs(removal!.pairs).undo);
+    expect(d.inventory()).toEqual(before);
+    d.dispose();
+  });
+
+  it('answers null, having removed nothing, when one selector names no entry', () => {
+    const d = openModel('test://ops-removal-pairs-miss.sldd');
+    const before = d.inventory();
+    expect(removalPairs(d.model, ['gravity', 'noSuchEntry'])).toBeNull();
+    expect(d.inventory()).toEqual(before);
     d.dispose();
   });
 });

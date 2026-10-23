@@ -173,14 +173,17 @@ export function replaceOp(entry: any, rowId: string): EntryOp {
  * `place` is the entry node itself, held only for the bytes it was read from: an entry
  * rebuilt from a fragment takes its place in the file (see EntryFragment). It is never read
  * for anything the record says.
+ *
+ * `record` is for a caller that captured it earlier (removeEntries does, so a record that will
+ * not serialize refuses before anything is removed); the position is read now either way.
  */
-export function insertOp(entry: any): EntryOp {
+export function insertOp(entry: any, record: EntryRecord = entryRecord(entry)): EntryOp {
   const section = entry.parent;
   return {
     kind: 'insert',
     sectionName: section?.name ?? '',
     index: section ? section.children.indexOf(entry) : -1,
-    record: entryRecord(entry),
+    record,
     place: entry,
   };
 }
@@ -245,6 +248,74 @@ export function findEntryBySelector(model: any, target: string | EntrySelector):
 export function findEntryByName(model: any, sectionName: string, entryName: string): any {
   const section = ((model?.children ?? []) as any[]).find((s) => s.name === sectionName);
   return ((section?.children ?? []) as any[]).find((e) => e.name === entryName) ?? null;
+}
+
+/** Entries taken out of a model: the pairs an undo replays, and the rows to drop. */
+export interface Removal {
+  /** One per removed entry, in removal order — hand them to `patchOfPairs`. */
+  pairs: EntryOpPair[];
+  applied: AppliedOp[];
+}
+
+/**
+ * Take `entries` out of `model`, stated as ops an undo can replay. The ONE way this host
+ * removes several entries at once: a multi-row delete, a same-document move's sources, and a
+ * cross-document move's originals all come through here.
+ *
+ * It used to be three techniques for one rule, and one of them was wrong. An insert op names
+ * the index its entry held WHEN IT WAS CAPTURED, and `patchOfPairs` replays the inverses
+ * reversed — so ops captured for every entry up front, then replayed reversed, put the
+ * rightmost entry back first, counting its index past a gap no earlier insert had filled yet:
+ * a section [P, Q, R] with P and Q deleted came back as [P, R, Q]. One path sorted descending
+ * to dodge that, one interleaved, the binary delete did neither. Here every undo op is
+ * captured against the model as it stands at that moment, then applied: [P,Q,R], remove P
+ * (captures 0), remove Q (captures 0, it slid down), and the reversed replay inserts Q at 0
+ * then P at 0 — [P,Q,R].
+ *
+ * FAIL BEFORE MUTATE. Everything that can refuse is asked before the first removal: each entry
+ * must be the live node the index hands out for its id in THIS model, and each record must
+ * serialize (captured up front — a record does not depend on order, only the index does). So a
+ * throw from here has changed nothing, and the caller's fallback starts from the model it had.
+ *
+ * Deduped by node: two selected rows of one entry, or two selectors without a namespace to tell
+ * them apart, name one entry, and removing it twice would throw on the second op.
+ */
+export function removeEntries(model: any, entries: readonly any[]): Removal {
+  const unique: any[] = [];
+  const seen = new Set<any>();
+  for (const entry of entries) {
+    if (!entry || seen.has(entry)) continue;
+    seen.add(entry);
+    unique.push(entry);
+  }
+  for (const entry of unique) {
+    if (liveEntry(model, entry.id) !== entry) throw new Error(`Entry "${entry.id}" is not the one indexed under its id.`);
+  }
+  const records = unique.map((entry) => entryRecord(entry));
+  const pairs: EntryOpPair[] = [];
+  const applied: AppliedOp[] = [];
+  unique.forEach((entry, i) => {
+    const rowId = entry.id;
+    pairs.push({ redo: removeOp(rowId), undo: insertOp(entry, records[i]) });
+    applied.push(removeEntry(model, { rowId }));
+  });
+  return { pairs, applied };
+}
+
+/**
+ * `removeEntries` for entries named by clipboard or drag selectors — or null, having changed
+ * nothing, when any selector does not settle on one live entry (findEntryBySelector). Every
+ * selector is resolved before anything is removed, so a move that names one entry the model
+ * cannot find is answered whole by the caller's fallback, never half-applied.
+ */
+export function removalPairs(model: any, targets: readonly (string | EntrySelector)[]): Removal | null {
+  const entries: any[] = [];
+  for (const target of targets) {
+    const entry = findEntryBySelector(model, target);
+    if (!entry) return null;
+    entries.push(entry);
+  }
+  return removeEntries(model, entries);
 }
 
 /**

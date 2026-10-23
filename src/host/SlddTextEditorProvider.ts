@@ -19,15 +19,17 @@ import { captureBaseline, computeModified, isEntryModified, clearBaseline } from
 import {
   applyEntryOps,
   findEntryByName,
-  findEntryBySelector,
   insertOp,
   mutateEntry,
   opsOfPastedEntries,
   patchOfPairs,
+  removalPairs,
+  removeEntries,
   removeOp,
   replaceOp,
   type AppliedOp,
   type EntryOpPair,
+  type Removal,
 } from './entryOps.js';
 import {
   isEchoOfEdit,
@@ -1312,22 +1314,6 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
         // Read off the live tree, before anything leaves it.
         const selectors = plan.entries.map((entry) => entrySelectorOf(entry));
-        // LAST ENTRY FIRST, not selection order. An insert op names the index its entry held
-        // while every other one was still there (insertOp), and `patchOfPairs` replays the
-        // inverses REVERSED — so the pairs go descending and the undo gets its inserts
-        // left-to-right, each landing in a section where everything before it is already
-        // back. Ascending pairs would hand the undo the rightmost entry first, counting its
-        // index past a gap no earlier insert has filled yet, and it would land a slot out.
-        // The removals themselves name a row id, so their own order is free.
-        const positionOf = (entry: any): number =>
-          ((entry.parent?.children ?? []) as any[]).indexOf(entry);
-        const entryPairs: EntryOpPair[] = [...plan.entries]
-          .sort((a, b) => positionOf(b) - positionOf(a))
-          .map((entry) => ({ redo: removeOp(entry.id), undo: insertOp(entry) }));
-        // What gets REMEMBERED is these plus one pair per child group (below). What gets
-        // applied to the model now is only the entry removals — the child removals have
-        // already happened, inside deleteChildren.
-        const pairs: EntryOpPair[] = [...entryPairs];
         // Where the selection lands: the last entry removal's neighbour — and a neighbour
         // that is ITSELF being deleted is not a place to leave the selection, so the doomed
         // siblings come out of the list first. `.filter` preserves order, so the surviving
@@ -1342,6 +1328,14 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
               buildSectionRowId(lastEntry.parent?.name ?? ''),
             )
           : null;
+
+        // MODEL, the whole entries first: removeEntries refuses (a record that will not
+        // serialize, an entry the index has lost) before it removes anything, so going first
+        // is what keeps a refusal from leaving the child groups below half-done. Its pairs are
+        // captured interleaved with the removals, which is what puts an undo back in order.
+        const entryRemoval = removeEntries(model, plan.entries);
+        // What gets REMEMBERED is these plus one pair per child group (below).
+        const pairs: EntryOpPair[] = [...entryRemoval.pairs];
 
         // TEXT — children first, each group one splice; then the whole entries, by selector.
         let working = currentText;
@@ -1362,8 +1356,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         }
         working = deleteEntriesByName(working, selectors);
 
-        // MODEL, then PAINT — in this run, before the write.
-        const applied = [...childApplied, ...applyEntryOps(model, entryPairs.map((p) => p.redo))];
+        // PAINT — in this run, before the write.
+        const applied = [...childApplied, ...entryRemoval.applied];
         painted = true;
         repaintOps(applied);
         const landing = selectId ?? childSelectId;
@@ -1381,8 +1375,11 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       } catch (err) {
         paintedWrite = null;
         const message = 'Failed to apply edit: ' + (err as Error).message;
+        // Unpainted, the rows still say what the text says, but the tree may not: the entries
+        // leave it first, then each child group, and a group that throws leaves the ones before
+        // it done. The text is the truth in this format, so the tree is re-read from it.
         if (painted) resyncWide(message);
-        else webview.postMessage({ type: 'error', message });
+        else refusedStructural(message);
       }
     };
 
@@ -1469,38 +1466,17 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * so a source still standing there pushes the copy to "PI1" and the move renames what it
      * moved.
      *
-     * Narrow for ANY number of sources. An undo replays the inverse ops in reverse order
-     * (patchOfPairs) and each insert names the index its entry held when it was taken out, not
-     * before the others — which is why the capture below is interleaved with the removals rather
-     * than done up front. The binary provider's drop has always removed N this way.
+     * Narrow for ANY number of sources, in an order an undo can replay — entryOps' removalPairs,
+     * the one removal every path in both providers shares.
      */
-    const moveRemovals = (
-      model: any,
-      targets: readonly EntrySelector[],
-    ): { pairs: EntryOpPair[]; applied: AppliedOp[] } | null => {
-      const pairs: EntryOpPair[] = [];
-      const applied: AppliedOp[] = [];
+    const moveRemovals = (model: any, targets: readonly EntrySelector[]): Removal | null => {
       try {
-        // INTERLEAVED on purpose: each undo op is captured against the model as it
-        // stands at that moment, then applied. `insertOp` reads the entry's index at
-        // call time and `patchOfPairs` REVERSES the undo list, so the inverses replay
-        // last-removed-first — each insert restoring into the section it was taken
-        // from. Worked through: [P,Q,R], remove P then Q -> insertOp(P) captures 0,
-        // insertOp(Q) captures 0 (Q slid down), and the reverse replay inserts Q at 0
-        // then P at 0, yielding [P,Q,R]. Capturing all the ops up front is what would
-        // be wrong here.
-        for (const target of targets) {
-          const source = findEntryBySelector(model, target);
-          if (!source) return null;
-          const pair: EntryOpPair = { redo: removeOp(source.id), undo: insertOp(source) };
-          pairs.push(pair);
-          applied.push(...applyEntryOps(model, [pair.redo]));
-        }
+        return removalPairs(model, targets);
       } catch {
-        // Half-applied at worst, and the caller's re-read discards it whole.
+        // Nothing was removed (removalPairs refuses before it mutates), and the caller's re-read
+        // answers this the same way as a source it could not find.
         return null;
       }
-      return { pairs, applied };
     };
 
     // Now that the clipboard carries N items, this body and applyDrop's are the same
