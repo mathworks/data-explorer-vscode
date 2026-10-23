@@ -156,10 +156,50 @@ export function patchOfPairs(pairs: EntryOpPair[]): EntryPatch {
  * DEEP-COPIED on purpose. `serialize()` shares sub-objects with the node it came from
  * (the stored value bag is copied one level), and a record captured for the undo stack
  * has to describe the entry as it was at capture time no matter what later edits do to
- * that node — the same reason a paste clones its clipboard payload.
+ * that node — the same reason a paste clones its clipboard payload. Through recordCopy,
+ * which a paste's clone shares, and not a JSON round trip: see there.
  */
 export function entryRecord(entry: any): EntryRecord {
-  return JSON.parse(JSON.stringify(entry.serialize())) as EntryRecord;
+  return recordCopy(entry.serialize()) as EntryRecord;
+}
+
+/**
+ * A deep copy of a serialized entry record, as a JSON round trip would make it — except that
+ * every number is kept as the number it is.
+ *
+ * A binary dictionary's reader holds a scalar double as a bare JS number: a scalar entry's
+ * value, a struct's field, an object's property. So an Inf, a NaN or a -0 is one in the record,
+ * and JSON has no spelling for any of them — the round trip both copies used turned Infinity,
+ * -Infinity and NaN into null and -0 into 0. A pasted entry, and an entry an undo rebuilt from
+ * its record, came back as another value, with nothing said.
+ *
+ * Everything else is what the round trip did, on purpose, so that the only change is the one
+ * that was a loss: an undefined, a function or a symbol is dropped from an object and is null
+ * in an array, a `toJSON` is asked (a Date is its text), and a `__proto__` key stays a key.
+ * structuredClone would be the other answer, and it keeps `undefined` members a writer would
+ * then meet, and throws on a function.
+ */
+export function recordCopy(value: unknown): unknown {
+  if (typeof value === 'number') return value;
+  if (value === undefined || typeof value === 'function' || typeof value === 'symbol') return undefined;
+  if (value === null || typeof value !== 'object') return value;
+  const asJson = (value as { toJSON?: () => unknown }).toJSON;
+  if (typeof asJson === 'function') return recordCopy(asJson.call(value));
+  if (Array.isArray(value)) {
+    return value.map((element) => {
+      const copy = recordCopy(element);
+      return copy === undefined ? null : copy;
+    });
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, member] of Object.entries(value)) {
+    const copy = recordCopy(member);
+    if (copy === undefined) continue;
+    // Defined, not assigned: assigning `__proto__` would set the copy's prototype, where a
+    // JSON.parse makes it an own key like any other.
+    Object.defineProperty(out, key, { value: copy, enumerable: true, writable: true, configurable: true });
+  }
+  return out;
 }
 
 /** The op that restores `entry` as it stands now, over the row id the table shows. */

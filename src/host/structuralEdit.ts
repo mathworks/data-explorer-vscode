@@ -34,6 +34,7 @@ import type { DragRegisterItem } from './dragState.js';
 import type { ClipboardItem } from './clipboard.js';
 import { dropFactsOf } from './dropFacts.js';
 import { TransferRefused, type TransferTarget } from './transfer.js';
+import { recordCopy } from './entryOps.js';
 
 // One byte-scoped replacement of a document's text, and the one applier — both now core's
 // (`src/edit/textPatch.ts`), because WHICH REGION a text edit covers is a property of the two
@@ -417,9 +418,15 @@ export function addChild(text: string, node: any): StructuralResult {
   return spliceEntry(text, entry, selectId);
 }
 
-/** Deep-clone a clipboard payload so repeated pastes don't alias the same object. */
+/**
+ * Deep-clone a clipboard payload so repeated pastes don't alias the same object.
+ *
+ * Through entryOps' recordCopy, which the undo records share, and not a JSON round trip: a
+ * binary dictionary's payload holds an Inf, a NaN or a -0 as the bare number, which the round
+ * trip turned into null or 0, so the pasted entry was another value.
+ */
 export function cloneForPaste(payload: Record<string, unknown>): Record<string, unknown> {
-  return JSON.parse(JSON.stringify(payload));
+  return recordCopy(payload) as Record<string, unknown>;
 }
 
 /** The Simulink class name of a serialized entry payload, or '' if none. */

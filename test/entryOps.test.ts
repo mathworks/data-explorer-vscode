@@ -45,6 +45,7 @@ import {
   insertOp,
   opsOfPastedEntries,
   patchOfPairs,
+  recordCopy,
   removalPairs,
   removeEntries,
   removeOp,
@@ -424,5 +425,37 @@ describe('removalPairs — removeEntries by clipboard or drag selector', () => {
     expect(removalPairs(d.model, ['gravity', 'noSuchEntry'])).toBeNull();
     expect(d.inventory()).toEqual(before);
     d.dispose();
+  });
+});
+
+describe('recordCopy — a JSON round trip that keeps every number', () => {
+  it('keeps Inf, -Inf, NaN and -0, at any depth', () => {
+    const copy = recordCopy({ a: Infinity, b: [-Infinity, NaN], c: { d: -0 } }) as any;
+    expect(copy.a).toBe(Infinity);
+    expect(copy.b[0]).toBe(-Infinity);
+    expect(copy.b[1]).toBeNaN();
+    expect(Object.is(copy.c.d, -0)).toBe(true);
+  });
+
+  it('is otherwise what JSON.parse(JSON.stringify(x)) makes', () => {
+    const when = new Date('2026-10-23T12:00:00Z');
+    const input: any = { keep: 'x', gone: undefined, fn: () => 1, list: [1, undefined, () => 2], when, nested: { n: null, t: true } };
+    expect(recordCopy(input)).toEqual(JSON.parse(JSON.stringify(input)));
+    expect(Object.keys(recordCopy(input) as object)).toEqual(['keep', 'list', 'when', 'nested']);
+  });
+
+  it('copies, so nothing in the copy is the original', () => {
+    const inner = { v: 1 };
+    const copy = recordCopy({ inner, list: [inner] }) as any;
+    expect(copy.inner).not.toBe(inner);
+    expect(copy.list[0]).not.toBe(inner);
+  });
+
+  it('keeps a "__proto__" key a key, as JSON.parse does', () => {
+    const parsed = JSON.parse('{"__proto__": {"x": 1}, "y": 2}');
+    const copy = recordCopy(parsed) as any;
+    expect(Object.getPrototypeOf(copy)).toBe(Object.prototype);
+    expect(Object.prototype.hasOwnProperty.call(copy, '__proto__')).toBe(true);
+    expect(copy.y).toBe(2);
   });
 });
