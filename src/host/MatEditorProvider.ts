@@ -701,7 +701,11 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       if (!mat) return;
       let v = node;
       while (v && v.parent !== mat) v = v.parent;
-      if (!v) return message ? repaintAndReport(message) : void post();
+      if (!v) {
+        if (message) repaintAndReport(message);
+        else void post();
+        return;
+      }
       repaintVariables([v]);
       if (message) webview.postMessage({ type: 'error', message });
     };

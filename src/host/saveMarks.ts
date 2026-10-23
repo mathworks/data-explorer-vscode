@@ -142,7 +142,8 @@ export class SaveMarks<T> {
         this.hold(entry);
       }
     }
-    this.entries = this.entries.filter((e) => (e.held = e.applied !== e.atSave));
+    for (const entry of this.entries) entry.held = entry.applied !== entry.atSave;
+    this.entries = this.entries.filter((e) => e.held);
   }
 
   /** The save of `snapshot` wrote nothing: it is never committed. */
