@@ -1,9 +1,9 @@
 // Copyright 2026 The MathWorks, Inc.
 
-import { ModelBlockNode, RowCellPool, schemaColumnLabels } from 'data-explorer-core';
+import { ModelBlockNode, RowCellPool, owningEntryOf, schemaColumnLabels } from 'data-explorer-core';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 import { planRows, type PlannedRow, type RowPlan } from './lazyRows.js';
-import { stampRow, type ClipMark, type EntryStamp } from './rowStamp.js';
+import { sharedIdTest, stampRow, type ClipMark, type EntryStamp } from './rowStamp.js';
 
 // Columns shown across the dictionary tree (union that fits all sections), in
 // display order: the ungrouped core columns first, then the grouped columns
@@ -128,6 +128,9 @@ export function buildRowsPlanned(
   }
   const headroom = budget === Infinity ? Infinity : Math.max(1, budget - sections.length);
   const plan = planRows(entries, headroom);
+  // Whether each entry's rows copy (sharedIdTest), asked once per entry, not once per row.
+  const sharesId = sharedIdTest();
+  const copies: boolean[] = [];
 
   // The plan is pre-order over the roots IN ORDER, so its rows are contiguous and
   // ascending by `root` — which is section order. One cursor therefore walks the whole
@@ -153,7 +156,7 @@ export function buildRowsPlanned(
     const pastLastRoot = firstRoot + ((section.children || []) as any[]).length;
     while (at < plan.planned.length && plan.planned[at].root < pastLastRoot) {
       const p = plan.planned[at++];
-      const row = plannedRow(p, entries[p.root], section.name, modifiedNames, clipMark, pool);
+      const row = plannedRow(p, entries[p.root], section.name, modifiedNames, clipMark, pool, (copies[p.root] ??= !sharesId(entries[p.root])));
       if (row) rows.push(row);
     }
     firstRoot = pastLastRoot;
@@ -190,8 +193,10 @@ export function buildRows(sldd: any, modifiedNames?: Set<string>, clipMark?: Cli
 export function buildChildRows(node: any, budget: number = Infinity): SectionedRows {
   const rows: any[] = [];
   const plan = planRows((node?.children ?? []) as any[], budget);
+  // Every row under `node` belongs to its entry.
+  const copies = !sharedIdTest()(owningEntryOf(node));
   for (const p of plan.planned) {
-    const row = plannedRow(p, null, '', undefined, undefined, undefined);
+    const row = plannedRow(p, null, '', undefined, undefined, undefined, copies);
     if (row) rows.push(row);
   }
   return { rows, plan };
@@ -223,8 +228,9 @@ export function buildEntryRows(
 ): any[] {
   const out: any[] = [];
   const plan = planRows([entry], budget);
+  const copies = !sharedIdTest()(entry);
   for (const p of plan.planned) {
-    const row = plannedRow(p, entry, sectionName, modifiedNames, clipMark, pool);
+    const row = plannedRow(p, entry, sectionName, modifiedNames, clipMark, pool, copies);
     if (row) out.push(row);
   }
   return out;
@@ -256,6 +262,7 @@ function plannedRow(
   modifiedNames?: Set<string>,
   clipMark?: ClipMark,
   pool?: RowCellPool,
+  canCopy = true,
 ): any | null {
   const n = p.node;
   let row: any;
@@ -291,8 +298,10 @@ function plannedRow(
       entryStamp = { section: sectionName, name: entry.name, status: modifiedStatus(entry.name, row.Status, modifiedNames), clipMark };
     }
   }
-  // Every row of a dictionary, model or project copies: Copy acts on the owning entry.
-  return stampRow(row, n, { canCopy: true, entry: entryStamp, deferred: p.deferred, pool });
+  // Every row of a dictionary, model or project copies: Copy acts on the owning entry — but
+  // for an entry that shares its id with another (sharedIdTest, asked by the caller once per
+  // entry), which nothing can address.
+  return stampRow(row, n, { canCopy, entry: entryStamp, deferred: p.deferred, pool });
 }
 
 /**

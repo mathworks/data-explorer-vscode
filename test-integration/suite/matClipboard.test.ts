@@ -566,12 +566,20 @@ suite('MAT-file pastes and drops refused', () => {
     assert.ok(j.names().includes('charStr'), 'the refused move left its source alone');
   });
 
-  test('a variable whose name its file holds twice is neither copied nor cut; the file says why, and the others travel', async () => {
+  test('a variable whose name its file holds twice offers no Copy or Cut; the file says why, and the others travel', async () => {
     const d = await openMat(opened, dir, 'twice.mat', twiceNamedMat());
     assert.deepStrictEqual(d.names(), ['x', 'str', 'x']);
     const set = d.view.posts.find((p) => p.type === 'setRows');
     assert.match(JSON.stringify(set.warnings), /Two entries in twice\.mat are named 'x'/, 'the banner names the file, not its srcId');
     const [x, str] = [variableRow(d.view.posts, 'x').ID, variableRow(d.view.posts, 'str').ID];
+    // Its rows offer no Copy (and so no Cut): the menu says so before anything is clicked.
+    const rows = d.view.posts.find((p) => p.type === 'setRows').rows as any[];
+    assert.deepStrictEqual(rows.filter((r) => r.parent == null).map((r) => [r.Name.label, r._canCopy]), [
+      ['x', false],
+      ['str', true],
+      ['x', false],
+    ]);
+    // And a chord or a stale menu that sends one anyway is answered, not acted on.
     for (const mode of ['copy', 'cut'] as const) {
       d.view.posts.length = 0;
       d.view.send({ type: mode, rowIds: [x] });

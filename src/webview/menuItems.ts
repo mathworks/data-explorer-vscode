@@ -247,18 +247,20 @@ export function buildContextMenuItems(input: MenuInput): ContextMenuItem[] {
     ...operandLabel('Copy', 'Entries', entryNames),
   };
 
-  // Cut reads the ENTRY's flag, not the clicked row's: it is a copy plus a deferred
+  // Cut reads the ENTRY's flags, not the clicked row's: it is a copy plus a deferred
   // delete of the entry it copied, so "may this child leave its container" is a
   // different question and answering Cut with it would wrongly disable Cut "A" for a
-  // struct-array field. Delete below is the item that correctly reads the row's flag.
+  // struct-array field. Delete below is the item that correctly reads the row's flag. And
+  // being a copy, it is never offered where Copy is not.
+  const uncuttableEntry = undeletableEntry ?? ops.entryIds.find((id) => !byId.get(id)?._canCopy);
   const cut: ContextMenuItem = {
     id: 'cut',
     icon: 'cut',
     shortcut: `${MOD}X`,
-    disabled: !editable || !!undeletableEntry,
+    disabled: !editable || !!uncuttableEntry,
     ...operandLabel('Cut', 'Entries', entryNames),
-    ...(undeletableEntry
-      ? { reason: `"${shortName(displayName(byId.get(undeletableEntry)))}" can't be cut` }
+    ...(uncuttableEntry
+      ? { reason: `"${shortName(displayName(byId.get(uncuttableEntry)))}" can't be cut` }
       : {}),
   };
 
