@@ -279,11 +279,14 @@ function openBinary(fixtureName = 'arch_binary.sldd') {
 // ---------------------------------------------------------------------------
 
 // The gate, which is the same sentence in both providers: WHICH renames carry. It has to
-// be read before the mutation (the catalog is keyed by the old name) and it has to be
-// scoped to top-level entries (the catalog only lists those).
+// be read before the mutation (the catalog is keyed by the old name), it has to be scoped
+// to top-level entries (the catalog only lists those), and to the entries of the Design
+// namespace (the only ones it names — see test/scCatalogScope.test.ts).
 describe('the renames that reach the catalog', () => {
+  const arch = { name: 'arch' };
+
   it('carries a top-level entry rename', () => {
-    const entry = { name: 'StructType' };
+    const entry = { name: 'StructType', parent: arch };
     expect(catalogRenameOf('Name', 'Wheel', entry, entry)).toEqual({ oldName: 'StructType', newName: 'Wheel' });
   });
 
@@ -291,20 +294,37 @@ describe('the renames that reach the catalog', () => {
     // A bus element named after the value type it references — which is how System
     // Composer writes a bus of value types, and is not a definition of anything. Moving
     // the catalog under it would strip the entry that really is called `ValueType`.
-    const entry = { name: 'DataInterface' };
+    const entry = { name: 'DataInterface', parent: arch };
     const element = { name: 'ValueType' };
     expect(catalogRenameOf('Name', 'Speed', element, entry)).toBeNull();
   });
 
   it('does not carry an edit to any other column', () => {
-    const entry = { name: 'StructType' };
+    const entry = { name: 'StructType', parent: arch };
     expect(catalogRenameOf('Description', 'a note', entry, entry)).toBeNull();
     expect(catalogRenameOf('Value', '42', entry, entry)).toBeNull();
   });
 
   it('does not carry a rename that renames nothing', () => {
-    const entry = { name: 'StructType' };
+    const entry = { name: 'StructType', parent: arch };
     expect(catalogRenameOf('Name', 'StructType', entry, entry)).toBeNull();
+  });
+
+  it('carries only an entry of the Design namespace: Design Data and Architectural Data', () => {
+    // A name is unique only within a namespace, and the catalog names the Design namespace's
+    // definitions: an Other Data or Configurations entry that shares a definition's name is
+    // not that definition, and renaming it must leave the catalog alone.
+    for (const section of ['design', 'arch']) {
+      const entry = { name: 'StructType', parent: { name: section } };
+      expect(catalogRenameOf('Name', 'Wheel', entry, entry), section).toEqual({ oldName: 'StructType', newName: 'Wheel' });
+    }
+    for (const section of ['other', 'config']) {
+      const entry = { name: 'StructType', parent: { name: section } };
+      expect(catalogRenameOf('Name', 'Wheel', entry, entry), section).toBeNull();
+    }
+    // And an entry in no section at all is in no namespace.
+    const loose = { name: 'StructType' };
+    expect(catalogRenameOf('Name', 'Wheel', loose, loose)).toBeNull();
   });
 });
 
@@ -542,7 +562,8 @@ const STEPS: [label: string, steps: Step[]][] = [
 ];
 
 describe('the function renames that reach the catalog', () => {
-  const entry = { name: 'ServiceInterface', className: 'Simulink.ServiceBus' };
+  // In Architectural Data, where a service interface is — which the entry gate asks too.
+  const entry = { name: 'ServiceInterface', className: 'Simulink.ServiceBus', parent: { name: 'arch' } };
   const fn = { name: 'f', className: 'Simulink.FunctionElement', parent: entry };
 
   it('carries a function of a top-level service interface, keyed by the interface', () => {

@@ -8,6 +8,7 @@
 // bundles it into each importer.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+import { insertEntryRows, spliceEntryRows } from '../../../src/webview/rowUpdates';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -143,6 +144,62 @@ export function fakePanel(): {
       onMessage!(msg);
     },
     close: () => onDispose?.(),
+  };
+}
+
+/**
+ * A stand-in panel that also keeps the rows a real table would be SHOWING — what `fakePanel`'s
+ * message list cannot say on its own once a repaint has been spliced over an older one.
+ *
+ * Each message is applied as it is posted, which is the order a webview receives them in, and
+ * through the webview's own splice and insert (rowUpdates): a whole `setRows` replaces the
+ * rows, an `updateEntryRows` splices one entry's run, an `insertEntryRows` places a new one. A
+ * repaint the rows cannot place is what the real table answers by asking for the whole payload
+ * again (`ready`, see table-main), so this does the same — after the host's post returns, as a
+ * reply would — and counts it: a round trip the host should never have needed is a bug the rows
+ * alone would hide, because the payload it brings back repairs them.
+ *
+ * `onPost` sees each message after it is applied, for a test that has to act at an exact point
+ * in the host's sequence (a webview reloading between a paint and its write, say).
+ */
+export function fakeTable(): ReturnType<typeof fakePanel> & {
+  rows: () => any[];
+  readyAsks: () => number;
+  onPost: (hook: (msg: any) => void) => void;
+} {
+  const view = fakePanel();
+  let rows: any[] = [];
+  let asks = 0;
+  const hooks: ((msg: any) => void)[] = [];
+  const posted = view.panel.webview.postMessage.bind(view.panel.webview);
+  const apply = (msg: any): void => {
+    if (msg?.type === 'setRows') {
+      rows = msg.rows;
+      return;
+    }
+    if (msg?.type !== 'updateEntryRows' && msg?.type !== 'insertEntryRows') return;
+    const next =
+      msg.type === 'updateEntryRows'
+        ? spliceEntryRows(rows, msg.entryRowId, msg.rows)
+        : insertEntryRows(rows, msg.sectionRowId, msg.beforeRowId, msg.rows);
+    if (next) {
+      rows = next;
+      return;
+    }
+    asks++;
+    queueMicrotask(() => view.send({ type: 'ready' }));
+  };
+  (view.panel.webview as any).postMessage = (msg: any) => {
+    const answer = posted(msg);
+    apply(msg);
+    for (const hook of hooks) hook(msg);
+    return answer;
+  };
+  return {
+    ...view,
+    rows: () => rows,
+    readyAsks: () => asks,
+    onPost: (hook) => void hooks.push(hook),
   };
 }
 

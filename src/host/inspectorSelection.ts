@@ -9,8 +9,8 @@
 // undo or a redo rebuilds it from the record it restores (entryOps), and a save, a revert or a
 // reload re-registers the whole tree. The table repaints from the new nodes; an inspector that
 // kept the one it was handed went on showing the value from before the edit, the undo or the
-// revert, until the user clicked another row. So each editor says when its tree changed (the
-// binary .sldd editor's and the MAT-file editor's `onChanged`), and every one of them is
+// revert, until the user clicked another row. So each editor says when its tree changed (the two
+// .sldd editors' and the MAT-file editor's `onChanged`), and every one of them is
 // answered by `refresh`, one rule (wired once in extension.ts).
 //
 // vscode-free, so that the rule is unit-tested (test/inspectorSelection.test.ts): the inspector

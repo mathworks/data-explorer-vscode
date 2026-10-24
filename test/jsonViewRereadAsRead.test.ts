@@ -94,8 +94,8 @@ describe('the plans built from the document text say so', () => {
     const live = d.entry();
     const hint: HostEdit = {
       entryId: live.id,
-      rowId: live.id,
       submitted: { rangeOffset: d.span.offset, rangeLength: d.span.length, text: d.element },
+      epoch: 0,
     };
     const plan = planOwnEdit([hint.submitted], hint);
     expect(plan).not.toBeNull();
