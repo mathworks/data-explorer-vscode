@@ -10,6 +10,9 @@
 //     program changed since;
 //   - Save As onto the file itself, by its own name or another link to it, is a save, and moves
 //     the stamp and the dirty flag as one does;
+//   - a revert that cannot read the file (gone, or a zip with no dictionary in it) fails, and
+//     puts the document back to the file as it last read or wrote it, since VS Code shows it
+//     clean whatever the revert does.
 //
 // Every file here is a copy of the workspace fixture in a fresh tmpdir, as in
 // binarySlddOutsideChange.test.ts, so a listing of the directory is a listing of what the save
@@ -68,7 +71,7 @@ function writeOutside(at: string, bytes: Uint8Array): void {
   utimesSync(at, later, later);
 }
 
-suite('Binary .sldd: a save over the user’s file', () => {
+suite('Binary .sldd: a save, a backup and a revert of the user’s file', () => {
   let dir: string;
   let path: string;
   let uri: vscode.Uri;
@@ -268,5 +271,41 @@ suite('Binary .sldd: a save over the user’s file', () => {
     assert.ok(chunkOnDisk(other).includes('>Ki<'), 'the copy holds the edit');
     assert.ok(same(new Uint8Array(readFileSync(path)), FIXTURE), 'the document’s own file is as it was');
     assert.deepStrictEqual(doc.stamp, stamp, 'and so is the stamp it is held to');
+  });
+
+  const revert = (doc: any) => provider.revertCustomDocument(doc, token());
+  /** The names the latest paint of `doc`'s view shows. */
+  const shown = (doc: any): string[] => {
+    const paint = [...viewOf(doc).posts].reverse().find((p) => p.type === 'setRows');
+    return ((paint?.rows ?? []) as any[]).filter((r) => String(r.parent ?? '').startsWith('section:')).map((r) => r.Name?.label);
+  };
+
+  test('a revert that cannot read the disk fails, and puts the document back to the file as last saved', async () => {
+    const doc = await openDoc();
+    edit(doc, 'Ki');
+    await save(doc);
+    edit(doc, 'Kd', 'Ki');
+    rmSync(path);
+    await assert.rejects(revert(doc));
+    // VS Code shows the document clean, so it must hold no edit the revert dropped.
+    assert.strictEqual(doc.edits.dirty, false);
+    assert.ok(chunk(doc).includes('>Ki<') && !chunk(doc).includes('>Kd<'), 'the document is the file as saved');
+    assert.ok(shown(doc).includes('Ki') && !shown(doc).includes('Kd'), 'and so is the table');
+  });
+
+  test('a revert onto a zip with no dictionary in it is refused, and puts the document back to the file as last read', async () => {
+    const doc = await openDoc();
+    const read = chunk(doc);
+    edit(doc, 'Ki');
+    const stamp = doc.stamp;
+    const zip = unzipSync(FIXTURE);
+    delete zip[CHUNK];
+    writeOutside(path, zipSync(zip));
+    await assert.rejects(revert(doc), /data\/chunk0\.xml/, 'refused, naming what is missing');
+    assert.strictEqual(doc.edits.dirty, false);
+    assert.strictEqual(chunk(doc), read, 'the document is the file as it was read');
+    assert.ok(shown(doc).includes('Kp') && !shown(doc).includes('Ki'), 'and so is the table');
+    assert.deepStrictEqual(doc.stamp, stamp, 'still held to the version it read, so a save asks about this one');
+    await assert.rejects(save(doc), isCancellation, 'and a save is refused rather than writing over it');
   });
 });

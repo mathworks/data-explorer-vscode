@@ -335,4 +335,26 @@ suite('Architectural rename carries into the System Composer catalog', () => {
     doc.dispose();
     await vscode.workspace.fs.delete(uri);
   });
+
+  test('a revert that cannot read the disk puts the catalog back as last read too, not just the chunk', async () => {
+    // VS Code shows the document clean whatever the revert does, so a revert that fails puts the
+    // document back to the file as it last read it — and, for the reason above, the catalog with
+    // the chunk.
+    const uri = await workingCopy('arch_rename_revert_unread.sldd');
+    const original = await partsOnDisk(uri);
+
+    const { doc } = await open(provider, uri);
+    renameEntry(doc, DataModel.getDataSource((doc as any).srcId), 'StructType', 'Wheel');
+    await vscode.workspace.fs.delete(uri);
+
+    await assert.rejects(provider.revertCustomDocument(doc, token()));
+    assert.strictEqual((doc as any).chunkXml, original.chunkXml, 'the chunk as last read');
+    assert.deepStrictEqual(
+      (doc as any).zipMeta[SC_PART_XML],
+      original.zipMeta[SC_PART_XML],
+      'and the pass-through catalog with it',
+    );
+
+    doc.dispose();
+  });
 });
