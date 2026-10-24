@@ -19,13 +19,9 @@
 // architecture fixture plus an Other Data and a Configurations entry named after two of its
 // definitions (the same two entries core's own test of the rule adds).
 //
-// The full agreement waits on the core pin. The scope was added to core after the version this
-// repo pins (v1.45.4), which still classifies and renames by bare name in every section — so the
-// host, now scoped, disagrees with it on exactly the two outside entries, and the test is marked
-// as failing. It FLIPS to a plain `it` when the pin moves to a core with the scope: the test then
-// passes, `it.fails` reports that as a failure, and the flip is owed. The half that holds on both
-// cores — the Design-namespace entries, where the two always agreed — runs as a plain test, so the
-// fixture and the comparison are proven to work today.
+// Core scopes the catalog the same way from the pin this repo now holds; before it, core still
+// classified and renamed by bare name in every section, and the two paths disagreed on exactly the
+// two outside entries.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -128,8 +124,7 @@ describe('the host and core agree on which entries the System Composer catalog n
     }
   });
 
-  // Flip to `it` when the pinned core scopes the catalog to the Design namespace (see header).
-  it.fails('agree on every entry, outside the Design namespace too (needs a core pin with the scope)', () => {
+  it('agree on every entry, outside the Design namespace too', () => {
     for (const v of verdicts()) {
       expect({ ...v, coreClassifies: v.host, coreRenames: v.host }, v.where).toEqual(v);
     }
