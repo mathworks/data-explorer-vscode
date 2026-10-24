@@ -353,58 +353,6 @@ function recordText(record: unknown, indent: string, elementIndent: string): str
   return lines.map((line, i) => (i === 0 ? line : elementIndent + line)).join('\n');
 }
 
-/**
- * Where in a serialized value a number sits that JSON.stringify writes as `null` — an Inf, a
- * -Inf or a NaN — as the names leading to it ([] for the value itself), or null when there is
- * none. `_dimensions` is passed by: a text dictionary's own dims can hold the infinity JSON.parse
- * makes of an overflowing extent, which its save writes as it always has, and a pasted one is
- * refused by core before it gets here (MatWriter.textDictionaryForm).
- */
-function unwrittenNumberIn(value: unknown, path: string[] = []): { value: number; path: string[] } | null {
-  if (typeof value === 'number') return Number.isFinite(value) ? null : { value, path };
-  if (!value || typeof value !== 'object') return null;
-  if (Array.isArray(value)) {
-    for (const element of value) {
-      const found = unwrittenNumberIn(element, path);
-      if (found) return found;
-    }
-    return null;
-  }
-  for (const [key, member] of Object.entries(value)) {
-    if (key === '_dimensions') continue;
-    // A bag's own keys (`_elements`, `_properties`) are not names a user knows the value by.
-    const found = unwrittenNumberIn(member, key.startsWith('_') ? path : [...path, key]);
-    if (found) return found;
-  }
-  return null;
-}
-
-/**
- * Refuse to write a NEW entry into a JSON dictionary with a `null` where its value holds a number.
- *
- * A binary dictionary, and a MAT-file, hold a scalar Inf, -Inf or NaN as the bare number — an
- * entry's value, a struct's field, an object's property — and so does the record a copy of one
- * carries. A text dictionary spells such a number as text (`{"_type": "double", "_value":
- * "Inf"}`, as MATLAB writes one, and as core writes an edited one), but the paste hands the
- * record to core as it is (SectionNode.parseEntry), whose text form today leaves a bare number
- * bare, and this writer is JSON.stringify, which writes it as null. The pasted entry then
- * re-read as another value, and saved as one, with nothing said. Until core spells it on the
- * way in, the paste is refused instead, naming the entry and what it holds; nothing is written.
- * When core does, the record arrives here already spelled and this never refuses.
- *
- * New entries only (a paste, a drop, an Add): the file's own entries are written as they read.
- */
-function refuseUnwrittenNumber(newNode: any, record: any): void {
-  const found = unwrittenNumberIn(record?.value);
-  if (!found) return;
-  const spelled = Number.isNaN(found.value) ? 'NaN' : found.value > 0 ? 'Inf' : '-Inf';
-  const where = found.path.length ? ` (in ${found.path.join('.')})` : '';
-  throw new Error(
-    `Cannot paste "${newNode?.name}" into a text dictionary: it holds ${spelled}${where}, ` +
-      'which this version cannot write there yet. Nothing was pasted.',
-  );
-}
-
 // Replace the owning entry's text in-place with its reserialized form — the
 // within-entry edit shape described at the top of this file. Both callers below
 // had this same four-step body (detect indent, reserialize, find span, splice),
@@ -760,8 +708,10 @@ export function createEntry(section: any, className: string): any {
 function insertNewEntry(text: string, newNode: any): StructuralResult {
   const insertion = findEntriesArrayInsertion(text);
   if (!insertion) throw new Error('Could not locate the entries array.');
+  // Core spells what JSON has no number for (an Inf, a NaN copied out of a binary dictionary
+  // or a MAT-file) as a text dictionary does, `{"_type": "double", "_value": "Inf"}`, as it
+  // takes the entry in (parseEntry), so the record is written as it is.
   const record = newNode.serialize();
-  refuseUnwrittenNumber(newNode, record);
   const entryText = recordText(record, detectIndent(text), insertion.elementIndent);
 
   // The line break is unconditional: an element always starts its own line, whether it
