@@ -2,6 +2,7 @@
 import * as vscode from 'vscode';
 import { SectionsTreeProvider } from './host/SectionsTreeProvider.js';
 import { PropertiesViewProvider } from './host/PropertiesViewProvider.js';
+import { InspectorSelection } from './host/inspectorSelection.js';
 import { BinaryEditorProvider } from './host/BinaryEditorProvider.js';
 import { SlddTextEditorProvider } from './host/SlddTextEditorProvider.js';
 import { BinarySlddEditorProvider } from './host/BinarySlddEditorProvider.js';
@@ -21,7 +22,6 @@ import {
   removeFile,
   invalidate as invalidateNameIndex,
 } from './host/nameIndex.js';
-import { isSectionRowId } from './common/sectionRowId.js';
 import { isSupportedPath, SUPPORTED_GLOB } from './common/fileTypes.js';
 import { isMatFile, isSlddFile, isTomlProjectFile } from 'data-explorer-core';
 
@@ -92,22 +92,15 @@ export function activate(context: vscode.ExtensionContext): void {
   const provider = new SectionsTreeProvider(context.extensionUri);
   const piProvider = new PropertiesViewProvider(context.extensionUri);
 
-  // Resolve a selection (from table or tree) into a node and push it to the PI.
-  // Section rows (id `section:<key>`) have no properties, so clear the PI.
-  // The selection the inspector was last asked to show, so a view whose tree is replaced (a
-  // MAT-file reverted or reloaded from disk) can have its node shown again from the new tree.
-  let lastSelection: { uriString: string; rowIds: string[] } | undefined;
-  const showSelection = (uriString: string, rowIds: string[]): void => {
-    lastSelection = { uriString, rowIds };
-    const first = rowIds && rowIds.length > 0 ? rowIds[0] : undefined;
-    if (!first || isSectionRowId(first)) {
-      piProvider.clear();
-      return;
-    }
-    const node = findNode(uriString, first);
-    if (node) piProvider.showNode(node, uriString);
-    else piProvider.clear();
-  };
+  // Resolve a table's selection into a node and push it to the PI (inspectorSelection.ts).
+  // Section rows (id `section:<key>`) have no properties, so they clear the PI.
+  const inspector = new InspectorSelection(piProvider, findNode);
+  const showSelection = (uriString: string, rowIds: string[]): void => inspector.show(uriString, rowIds);
+  // A document's tree changed under the inspector: an edit, an undo or a redo, a save, a revert
+  // or a reload rebuilt its nodes under the same ids. Node ids are paths, so the node the
+  // inspector shows is found again in the tree as it now is, and never goes on showing one the
+  // table no longer does. One answer for every editor that says so.
+  const refreshInspector = (uriString: string): void => inspector.refresh(uriString);
 
   // Usage-column link click: open the referenced file (opened non-preview so the
   // navigated-to tab persists) and select the target row there. Shared by both
@@ -135,17 +128,14 @@ export function activate(context: vscode.ExtensionContext): void {
   const binarySlddProvider = new BinarySlddEditorProvider(context);
   binarySlddProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
   binarySlddProvider.onNavigate = navigate;
+  binarySlddProvider.onChanged = refreshInspector;
 
   // A MAT-file opens in this writable provider (edits through core's session, save
   // through core's writer). Shares the selection→PI and navigate wiring.
   const matProvider = new MatEditorProvider(context);
   matProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
   matProvider.onNavigate = navigate;
-  // Node ids are paths, so the node the inspector shows is found again in the new tree, or the
-  // inspector is cleared if it is gone; it never goes on showing a node of the tree that left.
-  matProvider.onReplaced = (uriString) => {
-    if (lastSelection?.uriString === uriString) showSelection(uriString, lastSelection.rowIds);
-  };
+  matProvider.onReplaced = refreshInspector;
 
   // Health badges/colors on tree rows (missing/cycle/modified). The tree
   // encodes each row's state into its resourceUri; this provider renders it.

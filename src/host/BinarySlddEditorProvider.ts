@@ -41,8 +41,8 @@ import { rowPlannerFor } from './rowPlanner.js';
 import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
 import { answerChildRequest } from './childRequest.js';
 import { sectionRules } from './sectionRules.js';
-// DATA_PART_XML is core's name for the one zip member holding the entries, and the four
-// sites below are three roles of one rule: two lookups, the exclusion in
+// DATA_PART_XML is core's name for the one zip member holding the entries, and the three
+// sites below are three roles of one rule: the lookup in `chunkOf`, the exclusion in
 // `passThroughParts`, and the re-insert in `writeTo`. Drift between them does not throw —
 // see `passThroughParts` — so they take the name core's own reader looks up.
 import {
@@ -132,7 +132,9 @@ import { binaryEditSrcId } from '../common/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { saveSettled } from './settledSave.js';
-import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, type FollowedDocument } from './diskFollow.js';
+import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, writeUserFile, type FollowedDocument } from './diskFollow.js';
+import { backupId, backupSource } from './backupId.js';
+import { sameFile } from './safeWrite.js';
 
 // viewType of the default byte-backed view (BinaryEditorProvider), which owns the rule
 // that picks an editor from a .sldd's bytes. A constant here rather than an import,
@@ -189,6 +191,19 @@ interface ParsedChunk {
   warnings: ParseWarning[];
 }
 
+/** What one `writeTo` did. */
+interface Wrote {
+  /** The save gate's read, which a save re-baselines from; null for a backup, which gates nothing. */
+  gated: ParsedChunk | null;
+  /**
+   * The written file's mtime+size, read off the write itself where it could be (writeUserFile);
+   * none for a backup, which is not the user's file.
+   */
+  stamp: DiskStamp | undefined;
+  /** The pass-through parts the write zipped beside the chunk. */
+  parts: Record<string, Uint8Array>;
+}
+
 /**
  * The zip members a document carries through untouched: every member except the one its
  * entries live in, which this editor holds as `chunkXml` and re-inserts on save.
@@ -227,13 +242,32 @@ function passThroughParts(zip: Record<string, Uint8Array>): Record<string, Uint8
  */
 interface DiskRead {
   stamp: DiskStamp | undefined;
-  zip: Record<string, Uint8Array>;
+  /** The dictionary's data part, decoded (`chunkOf`). */
+  chunkXml: string;
+  /** Every other member (`passThroughParts`). */
+  parts: Record<string, Uint8Array>;
 }
 
+/**
+ * Read the file to replace an open document with: a revert, or the watcher's reload. A file that
+ * does not read as a dictionary (not a zip, or one with no data part) is a failed read, so the
+ * two callers answer it alike: a revert fails and puts the document back (revertCustomDocument),
+ * and a reload leaves the document as it is, still held to the stamp it had, so its next save asks.
+ */
 async function readDisk(uri: vscode.Uri): Promise<DiskRead> {
   const stamp = await stampOf(uri);
-  const bytes = await vscode.workspace.fs.readFile(uri);
-  return { stamp, zip: unzipSync(bytes) };
+  const zip = unzipSync(await vscode.workspace.fs.readFile(uri));
+  return { stamp, chunkXml: chunkOf(zip), parts: passThroughParts(zip) };
+}
+
+/**
+ * The data part of a dictionary's zip, decoded, or a refusal: the one rule by which an open and
+ * every read that replaces an open document tell a dictionary from a zip that holds none.
+ */
+function chunkOf(zip: Record<string, Uint8Array>): string {
+  const chunk = zip[DATA_PART_XML];
+  if (!chunk) throw new Error(`Missing ${DATA_PART_XML} in binary SLDD`);
+  return new TextDecoder().decode(chunk);
 }
 
 const recordName = (record: EntryRecord): string => String(record.name ?? '');
@@ -315,6 +349,14 @@ class BinarySlddDocument implements vscode.CustomDocument, FollowedDocument {
    * made in another session, and nothing is left that could check them.
    */
   saved: SavedChunk;
+
+  /**
+   * The pass-through parts as this document last read or wrote them, beside `saved`: what a
+   * revert that cannot read the disk puts back with the chunk (revertCustomDocument). A copy of
+   * the record, not of the bytes: an edit swaps a member of `zipMeta` for another array, and
+   * never writes into one.
+   */
+  savedParts: Record<string, Uint8Array>;
 
   /**
    * The entries the edits since `saved` have changed, by entryKey: every entry not in here must
@@ -404,6 +446,7 @@ class BinarySlddDocument implements vscode.CustomDocument, FollowedDocument {
     this.chunkXml = chunkXml;
     this.saved = new SavedChunk(chunkXml);
     this.zipMeta = zipMeta;
+    this.savedParts = { ...zipMeta };
     this.misrouted = misrouted;
     // VS Code reports a document restored from a hot-exit backup as dirty, though it has no
     // edits, until it is saved or reverted.
@@ -516,30 +559,27 @@ class BinarySlddDocument implements vscode.CustomDocument, FollowedDocument {
 
   /**
    * Make this document hold what `read` found on disk: the chunk, the pass-through parts, and
-   * the stamp they were read under. Shared by a revert and by the watcher's reload, so both
-   * replace the document the same way.
+   * the stamp they were read under. Shared by a revert, by the watcher's reload, and by a revert
+   * that could not read the disk (which hands in the document as last read or written, under the
+   * stamp it already holds), so all three replace the document the same way.
    */
   applyDisk(read: DiskRead): void {
-    const chunk = read.zip[DATA_PART_XML];
-    if (chunk) {
-      this.chunkXml = new TextDecoder().decode(chunk);
-      // What a save is held to from now on, and nothing yet edited against it.
-      this.saved = new SavedChunk(this.chunkXml);
-      this.edited = new Set();
-      this.unchecked = new Map();
-      // The parts too, and for the same reason: an edit can have patched one of them (a
-      // rename carried into the System Composer catalog), and a revert that restored only
-      // the chunk would leave the entry named as the file spells it beside a catalog that
-      // no longer classifies it — then write that pair out on the next save.
-      this.resetParts(read.zip);
-      // Only when the content was replaced. A file with no chunk left the document as it
-      // was, so the next save must still treat the disk as changed.
-      this.stamp = read.stamp;
-      // The document now holds what is on disk, so there is nothing left to be in conflict
-      // with.
-      this.inConflict = false;
-      this.overwriteStamp = undefined;
-    }
+    this.chunkXml = read.chunkXml;
+    // What a save is held to from now on, and nothing yet edited against it.
+    this.saved = new SavedChunk(read.chunkXml);
+    this.savedParts = { ...read.parts };
+    this.edited = new Set();
+    this.unchecked = new Map();
+    // The parts too, and for the same reason: an edit can have patched one of them (a
+    // rename carried into the System Composer catalog), and a revert that restored only
+    // the chunk would leave the entry named as the file spells it beside a catalog that
+    // no longer classifies it — then write that pair out on the next save.
+    this.resetParts(read.parts);
+    this.stamp = read.stamp;
+    // The document now holds what is on disk, so there is nothing left to be in conflict
+    // with.
+    this.inConflict = false;
+    this.overwriteStamp = undefined;
     // Wide on purpose: a revert replaces the whole document, so there is no narrower
     // truth to tell the table than "everything you are showing came from elsewhere".
     this.repaintAll();
@@ -587,11 +627,25 @@ class BinarySlddDocument implements vscode.CustomDocument, FollowedDocument {
     // Copied because a repaint can dispose a view (an error path re-registers), and a
     // Set mutated mid-iteration is how one view's failure silently skips another's.
     for (const view of [...this.views]) view.repaintAll(from);
+    this.onChanged?.();
   }
 
   repaintOps(applied: AppliedOp[]): void {
     for (const view of [...this.views]) view.repaintOps(applied);
+    this.onChanged?.();
   }
+
+  /**
+   * Called after every repaint of this document, once whatever views it has are painted: the
+   * provider's, which shows the Property Inspector's node again from the tree as it now is.
+   *
+   * Here, at the two repaints, because every change to the document ends in one of them: each
+   * edit, its undo and redo (applyOps), a save (re-registered), a revert and a reload
+   * (applyDisk), and every error path that rebuilds from the text. The views have re-registered
+   * the tree by then, when a wide repaint does that, so what the inspector resolves is the tree
+   * the table shows.
+   */
+  onChanged?: () => void;
 
   dispose(): void {
     this.disposed = true;
@@ -608,6 +662,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   public onSelect?: (uriString: string, rowIds: string[]) => void;
   // Handle a Usage-column link click (wired in extension.ts).
   public onNavigate?: (target: string, referrer?: string) => void;
+  // A document's tree changed: an edit, an undo or a redo, a save, a revert or a reload (wired in
+  // extension.ts, which shows the Property Inspector's node again from the tree, if it is this
+  // document's).
+  public onChanged?: (uriString: string) => void;
 
   private readonly _onDidChangeCustomDocument =
     new vscode.EventEmitter<vscode.CustomDocumentEditEvent<BinarySlddDocument>>();
@@ -630,10 +688,20 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     openContext: vscode.CustomDocumentOpenContext,
     _token: vscode.CancellationToken,
   ): Promise<BinarySlddDocument> {
-    const source = openContext.backupId ? vscode.Uri.parse(openContext.backupId) : uri;
-    // The FILE's stamp, even when the content comes from a backup, because the file is
-    // what a save will write over. Taken before the read, for the reason given at readDisk.
-    const stamp = await stampOf(uri);
+    // A hot-exit backup is a whole .sldd (backupCustomDocument), so a restore opens it as the
+    // document. Its stamp is the one the backup recorded, of the file the edits were made over
+    // (backupId.ts): the file now may be another program's since, and a save has to ask before
+    // writing over it. Otherwise the file's own, taken before the read for the reason given at
+    // readDisk.
+    let source = uri;
+    let stamp: DiskStamp | undefined;
+    if (openContext.backupId) {
+      const backup = backupSource(openContext.backupId);
+      source = vscode.Uri.parse(backup.uri);
+      stamp = backup.stamp;
+    } else {
+      stamp = await stampOf(uri);
+    }
     const bytes = await vscode.workspace.fs.readFile(source);
     // A custom editor's selector is a filename glob, and the two .sldd formats are not
     // distinguishable by name — so "Reopen Editor With…" offers THIS view for every
@@ -652,11 +720,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // so a backup takes the normal path.
     if (!isZipBytes(bytes)) return new BinarySlddDocument(uri, '', {}, true);
     const zip = unzipSync(bytes);
-    const chunk = zip[DATA_PART_XML];
-    if (!chunk) throw new Error(`Missing ${DATA_PART_XML} in binary SLDD`);
-    const chunkXml = new TextDecoder().decode(chunk);
-    const doc = new BinarySlddDocument(uri, chunkXml, passThroughParts(zip), false, !!openContext.backupId);
+    const doc = new BinarySlddDocument(uri, chunkOf(zip), passThroughParts(zip), false, !!openContext.backupId);
     doc.stamp = stamp;
+    doc.onChanged = () => this.onChanged?.(uri.toString());
     // Relay the document's edit events to the provider-level emitter VS Code listens on.
     doc.onDidChangeCustomDocument((e) => this._onDidChangeCustomDocument.fire(e));
     doc.track(this.watchDisk(doc));
@@ -1491,13 +1557,19 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       );
       document.edited = new Set();
       document.unchecked = new Map();
-      gated = await writing;
+      const wrote = await writing;
+      gated = wrote.gated;
       // What the next save is held to: the text this one wrote, not chunkXml, which an edit
       // on the write's await may have moved on.
-      if (gated) document.saved = new SavedChunk(gated.chunkXml);
-      // What a later save and the watcher compare the disk with. The watcher's event for
-      // this write then finds the disk matching, and ignores it.
-      document.stamp = await stampOf(document.uri);
+      if (gated) {
+        document.saved = new SavedChunk(gated.chunkXml);
+        document.savedParts = wrote.parts;
+      }
+      // What a later save and the watcher compare the disk with, read off the written file
+      // itself where the write could: a stat after it would take an outside write landing just
+      // after for this one, and the next save would write over that without asking. The
+      // watcher's event for this write then finds the disk matching, and ignores it.
+      document.stamp = wrote.stamp;
     } catch (err) {
       for (const key of edited) document.edited.add(key);
       document.markUnchecked(new Set(unchecked.values()));
@@ -1521,19 +1593,38 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   async saveCustomDocumentAs(
     document: BinarySlddDocument,
     dest: vscode.Uri,
-    _token: vscode.CancellationToken,
+    token: vscode.CancellationToken,
   ): Promise<void> {
+    // Onto the file itself, by its own name or another link to it: that is a save, and has to
+    // move the stamp, the save gate's chunk and the dirty flag as one does, or the next save
+    // would take its own write for an outside one. As the MAT-file editor's Save As.
+    if (dest.toString() === document.uri.toString() || (await sameFile(dest, document.uri))) {
+      return this.saveCustomDocument(document, token);
+    }
     await this.writeTo(document, dest);
   }
 
   async revertCustomDocument(document: BinarySlddDocument, _token: vscode.CancellationToken): Promise<void> {
-    // VS Code marks the document clean as it asks for this, without waiting for it, so the
-    // dirty-flag copy is clean from here too. A revert also ends a save conflict, as it does
-    // for a text file, whether or not the read below succeeds.
+    // VS Code marks the document clean as it asks for this, without waiting for it. The read
+    // comes first, so that the watcher, which reads the dirty-flag copy, does not reload over
+    // a revert still reading; the copy is marked clean once the read is in, either way. As the
+    // MAT-file editor's revert. A revert also ends a save conflict, as it does for a text file,
+    // whether or not its read succeeds: both paths end in applyDisk, which ends it.
+    let read: DiskRead;
+    try {
+      read = await readDisk(document.uri);
+    } catch (err) {
+      // The file is gone, or is no dictionary (readDisk). VS Code shows the document clean, so it
+      // must not go on holding the edits it dropped: it is put back to the file as it last read
+      // or wrote it, the chunk the save gate holds a save to and the parts beside it, under the
+      // stamp it already holds, so that a save still asks about a file that changed. A document
+      // restored from a backup last read the backup. The error says why to VS Code, which shows it.
+      document.edits.reverted();
+      document.applyDisk({ stamp: document.stamp, chunkXml: document.saved.xml, parts: document.savedParts });
+      throw err;
+    }
     document.edits.reverted();
-    document.inConflict = false;
-    document.overwriteStamp = undefined;
-    document.applyDisk(await readDisk(document.uri));
+    document.applyDisk(read);
   }
 
   async backupCustomDocument(
@@ -1556,7 +1647,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // is touched.
     await this.writeTo(document, ctx.destination, 'backup');
     return {
-      id: ctx.destination.toString(),
+      // With the stamp of the file these edits were made over, which a restore's first save
+      // compares the file with (backupId.ts).
+      id: backupId(ctx.destination.toString(), document.stamp),
       delete: async () => {
         try {
           await vscode.workspace.fs.delete(ctx.destination);
@@ -1627,6 +1720,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   // after a save needs exactly it: a second read of the same string is seconds of work for
   // an answer already in hand. 'backup' gates nothing, so it has nothing to return.
   //
+  // 'save' writes the user's file through writeUserFile, which replaces it whole where the file
+  // system lets it (safeWrite.ts) rather than cutting it to nothing and writing it again, so a
+  // crash or a full disk part-way through leaves the dictionary the user had, and which answers
+  // the stamp the write left. A dictionary is a zip, and a zip cut short is a file MATLAB cannot
+  // open. 'backup' writes VS Code's scratch copy plainly.
+  //
   // `beforeWrite` runs after the zip and before the write, and a throw from it means nothing
   // is written. A save passes its disk check here. Everything up to that call is synchronous,
   // so the text gated and zipped is the text the document held when the save was called.
@@ -1636,7 +1735,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     dest: vscode.Uri,
     mode: 'save' | 'backup' = 'save',
     beforeWrite?: () => Promise<void>,
-  ): Promise<ParsedChunk | null> {
+  ): Promise<Wrote> {
     let gated: ParsedChunk | null = null;
     if (mode === 'save') {
       try {
@@ -1655,11 +1754,14 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       );
       if (refusal) throw new Error(refusal);
     }
-    const zipEntries: Record<string, Uint8Array> = { ...document.zipMeta };
-    zipEntries[DATA_PART_XML] = new TextEncoder().encode(document.chunkXml);
+    const parts: Record<string, Uint8Array> = { ...document.zipMeta };
+    const zipEntries: Record<string, Uint8Array> = { ...parts, [DATA_PART_XML]: new TextEncoder().encode(document.chunkXml) };
     const zipped = zipSync(zipEntries, { level: mode === 'save' ? 6 : 1 });
     if (beforeWrite) await beforeWrite();
-    await vscode.workspace.fs.writeFile(dest, zipped);
-    return gated;
+    if (mode === 'backup') {
+      await vscode.workspace.fs.writeFile(dest, zipped);
+      return { gated, stamp: undefined, parts };
+    }
+    return { gated, stamp: await writeUserFile(dest, zipped), parts };
   }
 }

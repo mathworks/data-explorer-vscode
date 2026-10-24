@@ -158,22 +158,28 @@ describe('every host that answers requestMatrix answers it from here', () => {
   // resolves its own node and calls `matrixCellsMessage`. A second envelope written
   // there would be a panel that says something different about the same failure, in
   // the pane most likely to be open beside the table.
+  //
+  // Each host as [the file with its `requestMatrix` branch, the file that answers it]. The
+  // inspector's answer is its page's (inspectorPage.ts), which holds the node on display and
+  // what the page was sent.
   const HOSTS = [
-    'src/host/SlddTextEditorProvider.ts',
-    'src/host/BinarySlddEditorProvider.ts',
-    'src/host/BinaryEditorProvider.ts',
-    'src/host/PropertiesViewProvider.ts',
+    ['src/host/SlddTextEditorProvider.ts'],
+    ['src/host/BinarySlddEditorProvider.ts'],
+    ['src/host/BinaryEditorProvider.ts'],
+    ['src/host/PropertiesViewProvider.ts', 'src/host/inspectorPage.ts'],
   ];
+  const source = (file: string) => readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), 'utf8');
 
-  for (const file of HOSTS) {
-    it(`${file.replace('src/host/', '')} builds no matrixCells envelope of its own`, () => {
-      const src = readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), 'utf8');
-      expect(src).toMatch(/msg\??\.type === 'requestMatrix'/);
-      expect(src).toMatch(/answerMatrixRequest|matrixCellsMessage/);
+  for (const files of HOSTS) {
+    it(`${files[0].replace('src/host/', '')} builds no matrixCells envelope of its own`, () => {
+      expect(source(files[0])).toMatch(/msg\??\.type === 'requestMatrix'/);
+      expect(source(files[files.length - 1])).toMatch(/answerMatrixRequest|matrixCellsMessage/);
       // The literal, nowhere but here. A host that writes `{ type: 'matrixCells' ... }`
       // itself has started a second rule, whatever it happens to say today.
-      const own = [...src.matchAll(/'matrixCells'/g)].length;
-      expect(own, `${file} spells the matrixCells envelope itself`).toBe(0);
+      for (const file of files) {
+        const own = [...source(file).matchAll(/'matrixCells'/g)].length;
+        expect(own, `${file} spells the matrixCells envelope itself`).toBe(0);
+      }
     });
   }
 
