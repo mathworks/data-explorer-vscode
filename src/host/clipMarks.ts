@@ -23,6 +23,11 @@ import { clipMarkKey, splitClipMarkKey, type ClipMark } from './rowStamp.js';
  * document, each keyed by its OWN source section (a multi-row cut can span sections, so one
  * shared section would dim the wrong rows; a MAT-file's variables carry '', its one section).
  * Undefined when the clipboard is empty or its entries came from another document.
+ *
+ * A view asks it for its whole paint and for every entry-scoped repaint alike, so a cut
+ * affordance renders the same way whichever one painted it: one that appeared or vanished
+ * depending on which repaint the user happened to trigger would be a bug visible only after an
+ * edit.
  */
 export function clipMarkOfDoc(docUri: string): ClipMark | undefined {
   const clip = getClipboard();

@@ -34,7 +34,7 @@ const matRows = () => [
   { ID: 'm/cfg/gain', parent: 'm/cfg', Name: { label: 'gain' }, _canCopy: true, _canDelete: true },
 ];
 
-/** A MAT-file payload as its host will send it once it offers the clipboard. */
+/** A MAT-file payload as its host sends it. */
 function paintMat(rows: any[] = matRows()): void {
   send({ type: 'setRows', docUri: MAT, rows, columns: ['Name'], columnLabels: { Name: 'Name' }, editable: true });
   send({

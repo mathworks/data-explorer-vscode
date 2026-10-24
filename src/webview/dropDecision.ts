@@ -38,9 +38,9 @@ export interface DragItem {
   // sourceSection. Only the no-op check reads it, and an item without one is never
   // part of a no-op (the host completes that drop as a delete and paste).
   sectionName?: string;
-  // Another entry of its document answers to the name a move would delete it by (a MAT-file
-  // variable whose name the file holds twice): it can be copied, never moved — the host's
-  // transfer refuses the move (transfer.ts), and so does the prediction.
+  // Another entry of its document answers to the name a move would delete it by (a dictionary
+  // entry with no uuid whose name another section holds): it can be copied, never moved — the
+  // host's transfer refuses the move (transfer.ts), and so does the prediction.
   sharedName?: boolean;
 }
 

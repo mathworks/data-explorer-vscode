@@ -19,8 +19,8 @@
 //     entries keep their names (`removeFirst`), and a cross-document move made as the paste
 //     here and then the delete over there (`deleteFromSource`);
 //   - a move of an entry its document cannot tell apart by the selector the delete uses (a
-//     MAT-file variable whose name the file holds twice) refused before anything changes: a
-//     copy of it is fine, a move would take out the wrong original;
+//     dictionary entry with no uuid whose name another section holds) refused before anything
+//     changes: a copy of it is fine, a move would take out the wrong original;
 //   - what each way of failing says. A refusal that changed nothing (`TransferRefused`) is a
 //     message; anything else thrown before the edit landed is the adapter's to repair
 //     (`onFailure`); a source delete that fails AFTER the edit landed is neither — the paste

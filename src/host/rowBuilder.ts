@@ -130,7 +130,8 @@ export function buildRowsPlanned(
   const plan = planRows(entries, headroom);
   // Whether each entry shares its id (sharedIdTest), asked once per entry, not once per row.
   const sharesId = sharedIdTest();
-  const shared: boolean[] = [];
+  const rootShared: boolean[] = [];
+  const shared = (root: number): boolean => (rootShared[root] ??= sharesId(entries[root]));
 
   // The plan is pre-order over the roots IN ORDER, so its rows are contiguous and
   // ascending by `root` — which is section order. One cursor therefore walks the whole
@@ -156,7 +157,7 @@ export function buildRowsPlanned(
     const pastLastRoot = firstRoot + ((section.children || []) as any[]).length;
     while (at < plan.planned.length && plan.planned[at].root < pastLastRoot) {
       const p = plan.planned[at++];
-      const row = plannedRow(p, entries[p.root], section.name, modifiedNames, clipMark, pool, (shared[p.root] ??= sharesId(entries[p.root])));
+      const row = plannedRow(p, entries[p.root], section.name, modifiedNames, clipMark, pool, shared(p.root));
       if (row) rows.push(row);
     }
     firstRoot = pastLastRoot;

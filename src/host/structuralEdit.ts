@@ -191,9 +191,8 @@ function owningEntriesOf(rowIds: unknown, findNode: (rowId: string) => any): any
 
 /**
  * A copy, a cut or a drag refused before anything reached its register: an entry that cannot
- * travel (core's copyRefusal), or a cut of one its document cannot tell apart from another.
- * The message names the entry and is shown as it is, never behind a "Failed to" prefix: it is
- * a reason, not a failure.
+ * travel (core's copyRefusal). The message names the entry and is shown as it is, never behind
+ * a "Failed to" prefix: it is a reason, not a failure.
  */
 export class CopyRefused extends Error {
   constructor(message: string) {
@@ -301,11 +300,10 @@ function registerItemsOf(rowIds: unknown, findNode: (rowId: string) => any): Cli
 /**
  * Snapshot the rows a drag started on into the drag-register shape.
  *
- * Shared by BOTH table providers (SlddTextEditorProvider and
- * BinarySlddEditorProvider): the two formats differ only in how they get a live
- * model, never in what a dragged row means, so this ran as two near-identical
- * 35-line copies. A divergence between them would show up as a drag from one
- * .sldd format predicting a different drop than the same drag from the other.
+ * Shared by every table provider, through clipboardAction's dragEntries: the formats
+ * differ only in how they get a live model, never in what a dragged row means, so this
+ * ran as two near-identical 35-line copies. A divergence between them would show up as a
+ * drag from one .sldd format predicting a different drop than the same drag from the other.
  *
  * `findNode` is injected because that IS the per-format difference. Which rows become
  * which entries — the dedupe by owning entry, and the rows that contribute nothing — is

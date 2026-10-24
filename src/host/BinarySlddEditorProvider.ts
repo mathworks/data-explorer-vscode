@@ -36,7 +36,7 @@ import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
 import { renderTableWebview } from './webviewHtml.js';
 import { buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
-import { clipMarkChange, clipMarkOfDoc as clipMarkOf } from './clipMarks.js';
+import { clipMarkChange, clipMarkOfDoc } from './clipMarks.js';
 import { rowPlannerFor } from './rowPlanner.js';
 import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
 import { answerChildRequest } from './childRequest.js';
@@ -739,11 +739,6 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       return found ?? null;
     };
 
-    // The clipboard mark this document's rows should carry, if any (clipMarks.ts). Shared by
-    // the full and entry-scoped repaints so a cut/copied entry renders its affordance the
-    // same way whichever one painted it.
-    const clipMarkOfDoc = (): ClipMark | undefined => clipMarkOf(uriString);
-
     const post = (from: ModelSource = 'chunk') => {
       try {
         // 'registered' is only ever passed by a caller that has just registered a tree
@@ -756,7 +751,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           document.baselineCaptured = true;
         }
         const modified = computeModified(uriString, node);
-        const clipMark = clipMarkOfDoc();
+        const clipMark = clipMarkOfDoc(uriString);
         const planned = planner.payload(node, LAZY_ROW_BUDGET, { modifiedNames: modified, clipMark });
         const rows = planned.rows;
         // Through postOrReport, and NOT awaited: the postMessage itself (and the
@@ -786,7 +781,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         );
         webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
         webview.postMessage({ type: 'clipboardState', ...clipboardState() });
-        paintedMark = clipMarkOfDoc();
+        paintedMark = clipMark;
         drainNavigateSelect(webview, uriString);
       } catch (err) {
         webview.postMessage({ type: 'error', message: `Failed to parse ${name}: ${(err as Error).message}` });
@@ -808,7 +803,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       // Planned to the same budget the payload used, so a repaint of one huge entry
       // cannot post more than the RPC carries — see the note at the sibling call site in
       // SlddTextEditorProvider.
-      return buildEntryRows(entry, section.name, modified, clipMarkOfDoc(), undefined, LAZY_ROW_BUDGET);
+      return buildEntryRows(entry, section.name, modified, clipMarkOfDoc(uriString), undefined, LAZY_ROW_BUDGET);
     };
 
     /**
@@ -879,7 +874,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
      */
     let paintedMark: ClipMark | undefined;
     const repaintClipMark = () => {
-      const next = clipMarkOfDoc();
+      const next = clipMarkOfDoc(uriString);
       // Every entry either mark names (clipMarkChange), or none when they are the same mark.
       const affected = clipMarkChange(paintedMark, next);
       if (!affected) return;

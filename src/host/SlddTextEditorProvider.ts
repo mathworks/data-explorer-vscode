@@ -4,7 +4,7 @@ import { renderTableWebview } from './webviewHtml.js';
 import { getModel, invalidate, findNode, peekModel, openSourceView, releaseSourceView } from './SlddModel.js';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
 import { buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
-import { clipMarkChange, clipMarkOfDoc as clipMarkOf } from './clipMarks.js';
+import { clipMarkChange, clipMarkOfDoc } from './clipMarks.js';
 import { rowPlannerFor } from './rowPlanner.js';
 import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
 import { answerChildRequest } from './childRequest.js';
@@ -214,15 +214,6 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      */
     let modelInSync = false;
 
-    // If the clipboard's cut/copied entries live in THIS document, the mark their source
-    // rows should carry (clipMarks.ts), so the table can render the cut (dimmed) / copied
-    // (dashed) affordance. Cleared automatically once the clipboard empties on paste.
-    //
-    // Shared by the full and entry-scoped repaints, so a cut affordance renders the same
-    // way whichever one painted it: one that appeared or vanished depending on which
-    // repaint the user happened to trigger would be a bug visible only after an edit.
-    const clipMarkOfDoc = (): ClipMark | undefined => clipMarkOf(uriString);
-
     /**
      * The tree for this document — the one already built when it still says what the text
      * says, a fresh parse when it does not.
@@ -280,7 +271,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           docState.baselineCaptured = true;
         }
         const modified = computeModified(uriString, node);
-        const clipMark = clipMarkOfDoc();
+        const clipMark = clipMarkOfDoc(uriString);
         const planned = planner.payload(node, LAZY_ROW_BUDGET, { modifiedNames: modified, clipMark });
         const rows = planned.rows;
         // Every row below is built from `node`, which getModel just parsed from the live
@@ -360,7 +351,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         entry,
         entry.parent?.name ?? '',
         modified,
-        clipMarkOfDoc(),
+        clipMarkOfDoc(uriString),
         undefined,
         LAZY_ROW_BUDGET,
       );
@@ -748,7 +739,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      */
     let paintedMark: ClipMark | undefined;
     const repaintClipMark = (): void => {
-      const next = clipMarkOfDoc();
+      const next = clipMarkOfDoc(uriString);
       // Every entry either mark names (clipMarkChange), or none when they are the same mark.
       const affected = clipMarkChange(paintedMark, next);
       if (!affected) return;

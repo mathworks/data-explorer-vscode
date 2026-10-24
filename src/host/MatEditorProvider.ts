@@ -866,6 +866,18 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     const view: DocumentView = { repaintAll: () => void post(), repaintVariables, refreshGallery };
     document.views.add(view);
 
+    // The document's tree when it takes an edit, or null once the view has been told why not:
+    // there is no tree, or core opened the file read-only.
+    const editableTree = (): any => {
+      const mat = treeOrError();
+      if (!mat) return null;
+      if (mat.readOnly) {
+        webview.postMessage({ type: 'error', message: readOnlyNotice(mat) ?? `${name} is read-only.` });
+        return null;
+      }
+      return mat;
+    };
+
     /**
      * Run one gesture through the session, and push what it recorded as one VS Code edit.
      *
@@ -874,12 +886,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
      * offers nothing either; this is the lock behind the door).
      */
     const gesture = (label: string, run: (mat: any) => void, touched: () => Iterable<any> = () => []): Observed | null => {
-      const mat = treeOrError();
-      if (!mat) return null;
-      if (mat.readOnly) {
-        webview.postMessage({ type: 'error', message: readOnlyNotice(mat) ?? `${name} is read-only.` });
-        return null;
-      }
+      if (!editableTree()) return null;
       const observed = document.record(label, run, touched);
       if (observed.error) {
         // Whatever core did before it threw is in the tree, and the table is shown it whole.
@@ -1026,14 +1033,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     // takes no edit could never be completed — its original could not be taken out — so it is
     // refused here, as every edit of one is.
     const applyCopy = (rowIds: readonly string[], mode: 'cut' | 'copy') => {
-      if (mode === 'cut') {
-        const mat = treeOrError();
-        if (!mat) return;
-        if (mat.readOnly) {
-          webview.postMessage({ type: 'error', message: readOnlyNotice(mat) ?? `${name} is read-only.` });
-          return;
-        }
-      }
+      if (mode === 'cut' && !editableTree()) return;
       copyEntriesToClipboard(rowIds, mode, uriString, copyDeps(broadcastClipboardState));
     };
 

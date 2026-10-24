@@ -29,9 +29,9 @@ export interface DropFacts {
    */
   isScalarNumeric: boolean;
   /**
-   * Another entry of its document answers to the selector a move deletes it by (a MAT-file
-   * variable of a name the file holds twice, say), so it can be copied and never moved.
-   * Computed over the whole document where both registers are filled (structuralEdit's
+   * Another entry of its document answers to the selector a move deletes it by (a dictionary
+   * entry with no uuid whose name another section holds, say), so it can be copied and never
+   * moved. Computed over the whole document where both registers are filled (structuralEdit's
    * registerItemsOf), not here, and set only where true.
    */
   sharedName?: boolean;
