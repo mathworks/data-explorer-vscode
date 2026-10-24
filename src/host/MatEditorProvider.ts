@@ -355,6 +355,8 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
     if (observed.steps > 0) this.pushEdit(label, observed, touched());
     if (observed.error) {
       this.version++;
+      // Whatever core did before it threw is in the tree, which the caller paints again.
+      this.onChanged?.();
       return observed;
     }
     // Its rows, and the gallery's classes where the edit moved them.
@@ -478,6 +480,7 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
       // and its redo, which come through here as the gesture does.
       view.refreshGallery();
     }
+    this.onChanged?.();
   }
 
   /** Repaint the variables whose Status changed between two answers of `marks`. */
@@ -502,6 +505,7 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
 
   repaintAll(): void {
     for (const view of [...this.views]) view.repaintAll();
+    this.onChanged?.();
   }
 
   /**
@@ -531,11 +535,20 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
       /* reported by the paint */
     }
     this.repaintAll();
-    this.onReplaced?.();
   }
 
-  /** Called after `replace`: the provider's, which refreshes the Property Inspector. */
-  onReplaced?: () => void;
+  /**
+   * Called after every repaint of this document's tree, once its views are told: the provider's,
+   * which shows the Property Inspector's node again from the tree as it now is.
+   *
+   * Here, at the two repaints (`repaint`, `repaintAll`), because every change to the tree ends in
+   * one of them: each gesture of a view (an edit, an Add, a delete, a paste) and the delete a move
+   * into another document asks of this one (`record`), each undo and redo (`replay`), and a revert
+   * or a reload (`replace`), whose new tree is registered first, so the inspector resolves the
+   * tree the table shows. The binary .sldd editor's hook, the same rule. A save changes no node
+   * here (the tree is kept), so it repaints only the Status column, and says nothing.
+   */
+  onChanged?: () => void;
 
   /**
    * The last hot-exit backup this document wrote, which a backup that cannot be written keeps
@@ -653,9 +666,10 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
   public onSelect?: (uriString: string, rowIds: string[]) => void;
   // Handle a Usage-column link click (wired in extension.ts).
   public onNavigate?: (target: string, referrer?: string) => void;
-  // A document's tree was replaced from disk (wired in extension.ts, which shows the Property
-  // Inspector's node again from the new tree, if it is this document's).
-  public onReplaced?: (uriString: string) => void;
+  // A document's tree changed: a gesture, a move out of it, an undo or a redo, a revert or a reload
+  // (wired in extension.ts, which shows the Property Inspector's node again from the tree, if it
+  // is this document's).
+  public onChanged?: (uriString: string) => void;
 
   private readonly _onDidChangeCustomDocument = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<MatDocument>>();
   readonly onDidChangeCustomDocument = this._onDidChangeCustomDocument.event;
@@ -687,7 +701,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     const bytes = toArrayBuffer(await vscode.workspace.fs.readFile(source));
     const doc = new MatDocument(uri, bytes, !!openContext.backupId);
     doc.stamp = stamp;
-    doc.onReplaced = () => this.onReplaced?.(uri.toString());
+    doc.onChanged = () => this.onChanged?.(uri.toString());
     doc.onDidChangeCustomDocument((e) => this._onDidChangeCustomDocument.fire(e));
     doc.track(watchDisk(doc, () => followDisk(doc, () => readDisk(doc.uri), (read) => doc.replace(read))));
     return doc;

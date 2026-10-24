@@ -512,14 +512,15 @@ suite('MAT-file editor: edit, undo, save', () => {
   });
 
   test('revert reads the disk, and an edit from before it is not undone on the new tree', async () => {
-    const replaced: string[] = [];
-    provider.onReplaced = (uri) => replaced.push(uri);
+    const changed: string[] = [];
+    provider.onChanged = (uri) => changed.push(uri);
     const o = await open('cases.mat');
     edit(o, 'scalarD', 'Value', '42');
     await save(o);
     edit(o, 'negD', 'Value', '7');
+    changed.length = 0;
     await provider.revertCustomDocument(o.doc, token());
-    assert.deepStrictEqual(replaced, [o.uri.toString()], 'the Property Inspector is told the tree changed');
+    assert.deepStrictEqual(changed, [o.uri.toString()], 'the Property Inspector is told the tree changed, once');
     await waitFor('the reverted rows', () => topRow(o.view.posts, 'negD').Value === '-2.5');
     assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, '42', 'the disk holds the save');
     await o.events[0].undo();

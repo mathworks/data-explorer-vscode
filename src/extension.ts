@@ -135,7 +135,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const matProvider = new MatEditorProvider(context);
   matProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
   matProvider.onNavigate = navigate;
-  matProvider.onReplaced = refreshInspector;
+  matProvider.onChanged = refreshInspector;
 
   // Health badges/colors on tree rows (missing/cycle/modified). The tree
   // encodes each row's state into its resourceUri; this provider renders it.
