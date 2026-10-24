@@ -122,6 +122,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const textProvider = new SlddTextEditorProvider(context);
   textProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
   textProvider.onNavigate = navigate;
+  textProvider.onChanged = refreshInspector;
 
   // Compressed-binary .sldd opens in this writable provider (table editing +
   // re-zip on save). Shares the selection→PI and navigate wiring.

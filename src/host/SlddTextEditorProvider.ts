@@ -195,6 +195,18 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
   // target row there (wired in extension.ts to the shared navigate handler).
   public onNavigate?: (target: string, referrer?: string) => void;
 
+  /**
+   * Called after every repaint of a document, wide or narrow, once the rows are posted: the
+   * Property Inspector's node is found again in the tree as it now is (wired in extension.ts to
+   * the same refresh the other two editors' hooks call).
+   *
+   * At the repaints, because every change to the document ends in one: a table edit (its paint),
+   * its echo, an undo or a redo, a keystroke in the text view, a save, a revert and a reload. That
+   * is keystroke rate, and it is meant to be: the inspector's page is sent a node only when it
+   * changes what the page shows (inspectorPage.ts), so a keystroke elsewhere costs it nothing.
+   */
+  public onChanged?: (uriString: string) => void;
+
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   async resolveCustomTextEditor(
@@ -302,6 +314,13 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       if (disposed) return;
       rowsTouched++;
       void webview.postMessage(msg);
+      this.onChanged?.(uriString);
+    };
+
+    // A failure's banner, posted after the repaint that clears the way for it — which a closed
+    // view does not get, so neither does the banner.
+    const postBanner = (message: string): void => {
+      if (!disposed) void webview.postMessage({ type: 'error', message });
     };
 
     // The rows or the tree no longer match the text (see modelInSync) — said through here by
@@ -466,6 +485,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
             paintedMark = clipMark;
             repaintClipMark();
             drainNavigateSelect(webview, uriString);
+            this.onChanged?.(uriString);
           });
       } catch (err) {
         invalidate(uriString);
@@ -592,9 +612,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // The model change has already landed, so the table must not be left showing the rows
         // from before it. Repaint wide, then say so — after, because fresh rows are how the
         // webview learns a failure is over and would wipe a banner posted first.
-        void repaintStale().then(() =>
-          webview.postMessage({ type: 'error', message: `Failed to update the row: ${(err as Error).message}` }),
-        );
+        void repaintStale().then(() => postBanner(`Failed to update the row: ${(err as Error).message}`));
       }
     };
 
@@ -1016,18 +1034,18 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      */
     const undoPaint = (painted: PaintedRun, message: string): void => {
       if (painted.epoch !== wideEpoch) {
-        void latestPost.then(() => webview.postMessage({ type: 'error', message }));
+        void latestPost.then(() => postBanner(message));
         return;
       }
       rebuildModel();
       const fresh = findNode(uriString, painted.fileRowId);
       if (fresh) {
-        void postEntryRows(painted.rowId, fresh).then(() => webview.postMessage({ type: 'error', message }));
+        void postEntryRows(painted.rowId, fresh).then(() => postBanner(message));
       } else {
         // The re-read cannot find what was painted — pathological (the write that failed is the
         // reason the entry is still spelled the way the rows say), and the one case where
         // correcting the screen is worth the ~700 ms a full repaint costs on a big dictionary.
-        void repaintStale().then(() => webview.postMessage({ type: 'error', message }));
+        void repaintStale().then(() => postBanner(message));
       }
     };
 
@@ -1284,7 +1302,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // have left the table or arrived in it — so a write that fails resyncs the whole view instead.
     // That is the old cost, paid only when an edit did not happen.
     const resyncWide = (message: string): void => {
-      void repaintStale().then(() => webview.postMessage({ type: 'error', message }));
+      void repaintStale().then(() => postBanner(message));
     };
 
     /**
