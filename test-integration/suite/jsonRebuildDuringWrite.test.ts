@@ -22,7 +22,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
-import { findNode } from '../../src/host/SlddModel';
+import { findNode, peekModel } from '../../src/host/SlddModel';
 import { invalidateUsageGraph } from '../../src/host/usageGraph';
 import { ctx, entryNames, fakeTable, isEntryRow, nameOf, quiet, rowNamed, token, waitFor, wsUri } from './tools/hostHarness';
 
@@ -136,6 +136,41 @@ suite('A JSON .sldd table keeps a structural edit a wide repaint overtook', () =
     } finally {
       left.close();
       right.close();
+      await vscode.workspace.fs.delete(uri);
+    }
+  }).timeout(60000);
+
+  test('a full repaint still in flight when the last tab closes leaves nothing behind it', async () => {
+    // The repaint waits for the usage graph, and a text that moved meanwhile makes it read the
+    // document again — which registered a fresh tree of it (tens of MB on a real dictionary)
+    // after the close had released it, with no tab left to release it again, and posted to a
+    // panel that was gone.
+    const uri = wsUri('json_rebuild_after_close_copy.sldd');
+    await vscode.workspace.fs.copy(wsUri('data.sldd'), uri, { overwrite: true });
+    const table = fakeTable();
+    try {
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await new SlddTextEditorProvider(ctx()).resolveCustomTextEditor(doc, table.panel, token());
+      table.send({ type: 'ready' });
+      await waitFor('the first paint', () => table.posts.some((m) => m.type === 'setRows'));
+
+      invalidateUsageGraph();
+      table.send({ type: 'ready' });
+      table.close();
+      const posted = table.posts.length;
+      assert.ok(peekModel(uri.toString()) === null, 'the close released the tree');
+      const edit = new vscode.WorkspaceEdit();
+      edit.insert(uri, new vscode.Position(0, 0), ' ');
+      assert.ok(await vscode.workspace.applyEdit(edit), 'the text moved under the repaint');
+      await quiet(1500, 'the repaint in flight landing, or reading the text again');
+
+      assert.ok(peekModel(uri.toString()) === null, 'no tree is registered for a document no tab shows');
+      assert.deepStrictEqual(
+        table.posts.slice(posted).map((m) => m.type),
+        [],
+        'and nothing was posted to the closed panel',
+      );
+    } finally {
       await vscode.workspace.fs.delete(uri);
     }
   }).timeout(60000);

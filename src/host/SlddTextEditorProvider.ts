@@ -278,9 +278,19 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      */
     let rowsTouched = 0;
 
+    /**
+     * This view's panel has closed. Set FIRST in onDidDispose, and asked by everything that can
+     * still be running when it is: a wide repaint waits seconds for the usage graph, and the disk
+     * reads below wait on the file system. A wide repaint that woke after the last tab closed and
+     * read the text again registered a fresh tree of it — tens of MB on a real dictionary — that
+     * the close had just released and no tab was left to release again.
+     */
+    let disposed = false;
+
     // A narrow repaint: one entry's run of rows replaced, removed or added. Counted, because a
     // wide repaint in flight read its text before this and would paint over it (wideLanding).
     const postRowPatch = (msg: Record<string, unknown>): void => {
+      if (disposed) return;
       rowsTouched++;
       void webview.postMessage(msg);
     };
@@ -363,6 +373,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // that has to outlive a repaint has to be posted after it. A repaint whose rows are dropped
     // (see wideLanding) returns when the rows that replace them are.
     const post = (): Promise<void> => {
+      // A closed view repaints nothing — and must not register the tree a repaint parses.
+      if (disposed) return Promise.resolve();
       // Counted before the text is read: a write painted before this point is never again taken
       // for one whose rows are on screen (isPaintedEcho), and a repaint begun before it is no
       // longer the newest (wideLanding).
@@ -401,6 +413,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         return annotateDataRows(uriString, rows)
           .catch(() => false)
           .then((): Promise<void> | void => {
+            // Closed while the graph was awaited: nothing to post to, and no re-read (see disposed).
+            if (disposed) return;
             // Only if these rows are still the answer: the newest repaint, over the text they
             // were built from, with nothing painted or put out of step behind them. A newer
             // repaint lands for this one; anything else that moved while the graph was awaited
@@ -1966,7 +1980,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       } catch {
         return;
       }
-      if (document.isDirty || document.version !== version) return;
+      if (disposed || document.isDirty || document.version !== version) return;
       if (docState.baseline.version === version) return;
       if (new TextDecoder().decode(bytes) !== document.getText()) return;
       noteClean();
@@ -1979,16 +1993,24 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      */
     const baselineFromDisk = async (): Promise<void> => {
       docState.baseline.pending = true;
+      let bytes: Uint8Array | null = null;
+      try {
+        bytes = await vscode.workspace.fs.readFile(document.uri);
+      } catch {
+        bytes = null;
+      }
+      docState.baseline.pending = false;
+      // The DOCUMENT's read, not this view's: a tab that closed meanwhile leaves it to the tabs
+      // still open (repaintAll reaches only those). Only the last one closing ends it — before the
+      // parse, since a baseline then would outlive the document — as does a baseline a save has
+      // already taken, which is the file as well.
+      if (openDocs.get(uriString) !== docState || docState.baseline.captured) return;
       let tree: any = null;
       try {
-        tree = parseDetached(name, new TextDecoder().decode(await vscode.workspace.fs.readFile(document.uri)));
+        tree = bytes ? parseDetached(name, new TextDecoder().decode(bytes)) : null;
       } catch {
         tree = null;
       }
-      docState.baseline.pending = false;
-      // Closed meanwhile (a baseline now would outlive the document), or already baselined by a
-      // save, which is the file as well.
-      if (openDocs.get(uriString) !== docState || docState.baseline.captured) return;
       if (tree) {
         captureBaseline(uriString, tree);
         docState.baseline.captured = true;
@@ -2124,6 +2146,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
     webview.html = this.getHtml(webview, distRoot);
     webviewPanel.onDidDispose(() => {
+      // First, so nothing still in flight acts for this view from here on.
+      disposed = true;
       unregisterWebview(webview);
       unregisterAddGalleryView(webviewPanel);
       // If a drag originated from this now-closing view, drop it so a stale
