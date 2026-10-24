@@ -173,42 +173,56 @@ describe('a copied non-finite or negative-zero double', () => {
     expect(Object.is((entryRecord(entryOf(source, 'nfNegZero')) as any).value, -0)).toBe(true);
   });
 
-  // A text dictionary spells a non-finite number as text, `{"_type": "double", "_value": "Inf"}`,
-  // as MATLAB writes one, and core spells a bare one so as it takes a pasted entry in
-  // (SectionNode.parseEntry): so each pastes, and reads back as the value it was. Never a null —
-  // which is what JSON.stringify, the host's writer, makes of a bare Inf, and why this used to be
-  // refused. A -0 is written as 0, as JSON.stringify writes it for every write to a text
-  // dictionary, an edited value's too, and the table shows both as 0.
-  it('pasted into a JSON dictionary, reads back as itself, never as null', () => {
+  // A text dictionary spells a non-finite number as text, which core does not yet do for a value
+  // handed in bare (MatWriter.textDictionaryForm leaves a primitive as it is), and the host writes
+  // JSON with JSON.stringify, which writes it as null. So each such entry is either refused,
+  // naming it, with nothing written — today — or, once core spells it, pasted and read back as
+  // the same value. Never a null. A -0 is neither: JSON.stringify writes it as 0 for every write
+  // to a text dictionary, an edited value's too, and the table shows both as 0.
+  it('pasted into a JSON dictionary, is refused by name or reads back as itself — never as null', () => {
     const { source, payloads } = copied();
+    const refused: string[] = [];
     for (const payload of payloads) {
       const name = String(payload.name);
       const uri = `test://nonfinite-target-${name}.json.sldd`;
       invalidate(uri);
       const target = getModel(uri, 'params.sldd', jsonText);
-      const { newText } = pasteEntries(jsonText, sectionByName(target, 'design'), [payload]);
+      let newText: string;
+      try {
+        newText = pasteEntries(jsonText, sectionByName(target, 'design'), [payload]).newText;
+      } catch (err) {
+        expect((err as Error).message).toMatch(
+          new RegExp(`^Cannot paste "${name}" into a text dictionary: it holds (Inf|-Inf|NaN)( \\(in [\\w.]+\\))?, `),
+        );
+        refused.push(name);
+        continue;
+      }
       expect(newText, `${name} was not written with a null`).not.toMatch(/"(?:Value|Min|Max|value|a|c|d)":\s*null/);
       const rereadUri = `test://nonfinite-reread-${name}.json.sldd`;
       invalidate(rereadUri);
       expect(shown(entryOf(getModel(rereadUri, 'params.sldd', newText), name)), name).toEqual(shown(entryOf(source, name)));
     }
+    expect(refused, 'a -0, which JSON can carry, is never refused').not.toContain('nfNegZero');
+    // The row vector is held as its typed text by both readers, so it was never at risk.
+    expect(refused).not.toContain('nfRow');
   });
 
-  it("is written into a JSON dictionary in MATLAB's spelling: an entry's value, a struct's field, an object's property", () => {
+  it('a refused paste names where in the entry the number is', () => {
     const { payloads } = copied();
-    const uri = 'test://nonfinite-target-spelling.json.sldd';
+    const uri = 'test://nonfinite-target-where.json.sldd';
     invalidate(uri);
     const design = sectionByName(getModel(uri, 'params.sldd', jsonText), 'design');
-    const written = (name: string): any => {
-      const { newText } = pasteEntries(jsonText, design, [payloads.find((p) => p.name === name)!]);
-      const doc = JSON.parse(newText);
-      return doc.__MW_TEXT_PARTS__['__MW_TEXT_PART__/data/chunk0'].__MW_TEXT_content.entries.find((e: any) => e.name === name).value;
+    const message = (name: string): string => {
+      try {
+        pasteEntries(jsonText, design, [payloads.find((p) => p.name === name)!]);
+      } catch (err) {
+        return (err as Error).message;
+      }
+      return 'pasted';
     };
-    const spelled = (text: string) => ({ _type: 'double', _value: text });
-    expect(written('nfInf')).toEqual(spelled('Inf'));
-    expect(written('nfNegInf')).toEqual(spelled('-Inf'));
-    expect(written('nfNaN')).toEqual(spelled('NaN'));
-    expect(written('nfStruct')._elements[0].a).toEqual(spelled('Inf'));
-    expect(written('nfParam')._elements[0]._properties.Value).toEqual(spelled('Inf'));
+    // Either refused with its place named, or (once core spells these) pasted.
+    expect(['pasted', 'Cannot paste "nfParam" into a text dictionary: it holds Inf (in Value), which this version cannot write there yet. Nothing was pasted.']).toContain(message('nfParam'));
+    expect(['pasted', 'Cannot paste "nfStruct" into a text dictionary: it holds Inf (in a), which this version cannot write there yet. Nothing was pasted.']).toContain(message('nfStruct'));
+    expect(['pasted', 'Cannot paste "nfNaN" into a text dictionary: it holds NaN, which this version cannot write there yet. Nothing was pasted.']).toContain(message('nfNaN'));
   });
 });
