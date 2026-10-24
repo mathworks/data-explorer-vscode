@@ -371,6 +371,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       }
     };
 
+    // The newest wide repaint, for an older one whose rows it replaces to resolve with.
+    let latestPost: Promise<void> = Promise.resolve();
+
     // Rebuild the model from the live TextDocument text and push rows to the
     // webview. Called on open, on every text change that is not a single entry's
     // (see syncOneEntry), and on save. The Usage column is filled asynchronously
@@ -395,9 +398,6 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       latestPost = paintWide(epoch);
       return latestPost;
     };
-
-    // The newest wide repaint, for an older one whose rows it replaces to resolve with.
-    let latestPost: Promise<void> = Promise.resolve();
 
     /**
      * The wide repaint as a REPAIR: for rows already known not to say what the text does — a
@@ -1973,11 +1973,24 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       }
     };
 
+    // The file's bytes, or null when they cannot be had.
+    const readDisk = async (): Promise<Uint8Array | null> => {
+      try {
+        return await vscode.workspace.fs.readFile(document.uri);
+      } catch {
+        return null;
+      }
+    };
+
+    // The document still reads clean at `version` — the one text a stat or a read begun there
+    // can speak for.
+    const stillCleanAt = (version: number): boolean => !document.isDirty && document.version === version;
+
     // Taken whenever the document is known to read what the file does; kept only if it still
     // does by the time the stat answers.
     const stampDisk = (version: number): void => {
       void statDisk().then((stamp) => {
-        if (stamp && !document.isDirty && document.version === version) docState.diskStamp = stamp;
+        if (stamp && stillCleanAt(version)) docState.diskStamp = stamp;
       });
     };
 
@@ -1986,8 +1999,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       docState.baseline.cleanAt = document.version;
       if (stamp) docState.diskStamp = stamp;
       else stampDisk(document.version);
-      if (docState.baseline.version === document.version) return;
-      repaintAll();
+      if (docState.baseline.version !== document.version) repaintAll();
     };
 
     /**
@@ -2004,15 +2016,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      */
     const checkAgainstDisk = async (version: number): Promise<void> => {
       const stamp = await statDisk();
-      if (!stamp || disposed || document.isDirty || document.version !== version) return;
+      if (!stamp || disposed || !stillCleanAt(version)) return;
       if (docState.baseline.version === version || sameDiskStamp(docState.diskStamp, stamp)) return;
-      let bytes: Uint8Array;
-      try {
-        bytes = await vscode.workspace.fs.readFile(document.uri);
-      } catch {
-        return;
-      }
-      if (disposed || document.isDirty || document.version !== version) return;
+      const bytes = await readDisk();
+      if (!bytes || disposed || !stillCleanAt(version)) return;
       if (new TextDecoder().decode(bytes) !== document.getText()) return;
       noteClean(stamp);
     };
@@ -2025,12 +2032,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     const baselineFromDisk = async (): Promise<void> => {
       docState.baseline.pending = true;
       const cleanAtBefore = docState.baseline.cleanAt;
-      let bytes: Uint8Array | null = null;
-      try {
-        bytes = await vscode.workspace.fs.readFile(document.uri);
-      } catch {
-        bytes = null;
-      }
+      const bytes = await readDisk();
       docState.baseline.pending = false;
       // The DOCUMENT's read, not this view's: a tab that closed meanwhile leaves it to the tabs
       // still open (repaintAll reaches only those). Only the last one closing ends it — before the
@@ -2059,7 +2061,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     if (!document.isDirty) {
       docState.baseline.cleanAt = document.version;
       stampDisk(document.version);
-    } else if (!docState.baseline.captured && !docState.baseline.pending) void baselineFromDisk();
+    } else if (!docState.baseline.captured && !docState.baseline.pending) {
+      void baselineFromDisk();
+    }
 
     // --- Message wiring ---------------------------------------------------------
     const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {

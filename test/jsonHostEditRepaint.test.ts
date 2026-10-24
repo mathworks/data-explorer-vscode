@@ -615,7 +615,7 @@ describe('isPaintedEcho / hintFor — an echo is trusted only while its paint is
   });
 
   it('drops a cell edit’s hint the same way, and keeps it while its paint stands', () => {
-    const hint = { entryId: 'doc/design/A', rowId: 'doc/design/A', submitted, epoch: 3 };
+    const hint = { entryId: 'doc/design/A', submitted, epoch: 3 };
     expect(hintFor(hint, 3)).toBe(hint);
     expect(hintFor(hint, 4)).toBeNull();
     expect(hintFor(null, 3)).toBeNull();
