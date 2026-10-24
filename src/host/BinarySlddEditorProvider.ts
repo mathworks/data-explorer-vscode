@@ -130,6 +130,7 @@ import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { answerMatrixRequest } from './matrixRequest.js';
 import { binaryEditSrcId } from '../common/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
+import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { saveSettled } from './settledSave.js';
 import { followDisk, readForOpen, readStamped, refuseIfChangedOnDisk, watchDisk, writeUserFile, type FollowedDocument } from './diskFollow.js';
@@ -1452,10 +1453,28 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     const applyDrop = (msg: { rowId: string; mode: 'copy' | 'move' }) =>
       runTransfer({ rowId: msg.rowId }, dragRegister(msg.mode, broadcastDragState), transferAdapter(), transferDeps);
 
+    // The messages every table view answers alike (tableDispatch.ts), keyed by message type.
+    const common: CommonHandlers = {
+      ready: () => post(),
+      select: (rowIds) => this.onSelect?.(uriString, rowIds),
+      navigate: (target) => this.onNavigate?.(target, uriString),
+      // A Variable Editor panel is opening: send its cells. One shared answer for all four
+      // webview hosts — see matrixRequest.ts.
+      requestMatrix: (nodeId) => answerMatrixRequest(webview, uriString, nodeId),
+      // A row the payload deferred is being opened: send the rows under it (childRequest.ts).
+      // The filler is a no-op because THIS view's payload fills no Usage column either — a
+      // fetched row has to match its siblings, and matching means empty here. `uriString`
+      // resolves because findNode prefers the global registry, which is keyed by the node id
+      // this provider's prefixed srcId is embedded in; that is the same lookup the Property
+      // Inspector's selection uses.
+      requestChildren: (nodeId) => void answerChildRequest(webview, uriString, nodeId, name, async () => false, planner),
+      undo: () => void vscode.commands.executeCommand('undo'),
+      redo: () => void vscode.commands.executeCommand('redo'),
+    };
+
     const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
-      if (msg?.type === 'ready') post();
-      else if (msg?.type === 'select') this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
-      else if (msg?.type === 'edit') applyEdit(msg);
+      if (dispatchCommon(msg, common)) return;
+      if (msg?.type === 'edit') applyEdit(msg);
       else if (msg?.type === 'copy') applyCopy(msg.rowIds, 'copy');
       else if (msg?.type === 'cut') applyCopy(msg.rowIds, 'cut');
       else if (msg?.type === 'delete') applyDelete(msg.rowIds);
@@ -1465,21 +1484,6 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       else if (msg?.type === 'dragStart') applyDragStart(msg);
       else if (msg?.type === 'dragEnd') applyDragEnd();
       else if (msg?.type === 'drop') void applyDrop(msg);
-      else if (msg?.type === 'navigate') {
-        if (typeof msg.target === 'string') this.onNavigate?.(msg.target, uriString);
-      } else if (msg?.type === 'requestMatrix') {
-        // A Variable Editor panel is opening: send its cells. One shared answer for
-        // all four webview hosts — see matrixRequest.ts.
-        answerMatrixRequest(webview, uriString, msg.nodeId);
-      } else if (msg?.type === 'requestChildren') {
-        // A row the payload deferred is being opened: send the rows under it
-        // (childRequest.ts). The filler is a no-op because THIS view's payload fills no
-        // Usage column either — a fetched row has to match its siblings, and matching
-        // means empty here. `uriString` resolves because findNode prefers the global
-        // registry, which is keyed by the node id this provider's prefixed srcId is
-        // embedded in; that is the same lookup the Property Inspector's selection uses.
-        void answerChildRequest(webview, uriString, msg.nodeId, name, async () => false, planner);
-      } else if (msg?.type === 'undo' || msg?.type === 'redo') void vscode.commands.executeCommand(msg.type);
     });
 
     const navSub = wireNavigateSelect(webview, uriString);

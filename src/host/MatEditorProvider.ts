@@ -79,6 +79,7 @@ import { binaryEditSrcId } from '../common/srcId.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
+import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 import { matCatalog } from '../common/addCatalog.js';
 
 /** One read of the file behind a document, with the stamp it was read under (diskFollow.readStamped). */
@@ -1124,10 +1125,21 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     const applyDrop = (msg: { rowId: string; mode: 'copy' | 'move' }) =>
       transferred(runTransfer({ rowId: msg.rowId }, dragRegister(msg.mode, broadcastDragState), transferAdapter(), transferDeps));
 
+    // The messages every table view answers alike (tableDispatch.ts), keyed by message type.
+    const common: CommonHandlers = {
+      ready: () => void post(),
+      select: (rowIds) => this.onSelect?.(uriString, rowIds),
+      navigate: (target) => this.onNavigate?.(target, uriString),
+      requestMatrix: (nodeId) => answerMatrixRequest(webview, uriString, nodeId),
+      // Stamped as the payload was, so a fetched row's menu offers what its siblings' does.
+      requestChildren: (nodeId) => void answerChildRequest(webview, uriString, nodeId, name, annotateDataRows, planner, stamps()),
+      undo: () => void vscode.commands.executeCommand('undo'),
+      redo: () => void vscode.commands.executeCommand('redo'),
+    };
+
+    // This editor's own: its edits, the clipboard and row drags.
     const handle = (msg: TableToHostMessage) => {
-      if (msg?.type === 'ready') void post();
-      else if (msg?.type === 'select') this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
-      else if (msg?.type === 'edit') applyEdit(msg);
+      if (msg?.type === 'edit') applyEdit(msg);
       else if (msg?.type === 'delete') applyDelete(msg.rowIds);
       else if (msg?.type === 'addEntry') applyAddEntry(msg);
       else if (msg?.type === 'addChild') applyAddChild(msg.rowId);
@@ -1137,21 +1149,13 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       else if (msg?.type === 'dragStart') applyDragStart(msg.rowIds);
       else if (msg?.type === 'dragEnd') applyDragEnd();
       else if (msg?.type === 'drop') applyDrop(msg);
-      else if (msg?.type === 'navigate') {
-        if (typeof msg.target === 'string') this.onNavigate?.(msg.target, uriString);
-      } else if (msg?.type === 'requestMatrix') {
-        answerMatrixRequest(webview, uriString, msg.nodeId);
-      } else if (msg?.type === 'requestChildren') {
-        // Stamped as the payload was, so a fetched row's menu offers what its siblings' does.
-        void answerChildRequest(webview, uriString, msg.nodeId, name, annotateDataRows, planner, stamps());
-      } else if (msg?.type === 'undo' || msg?.type === 'redo') void vscode.commands.executeCommand(msg.type);
     };
 
     // A message that throws is said, as a gesture's throw is, over every row painted again from
     // the tree: whatever it did before it threw is in it, and a cell may still show what was typed.
     const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
       try {
-        handle(msg);
+        if (!dispatchCommon(msg, common)) handle(msg);
       } catch (err) {
         repaintAndReport(`Failed to handle ${String(msg?.type)} in ${name}: ${document.describe(err)}`);
       }
