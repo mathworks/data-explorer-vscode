@@ -60,7 +60,7 @@ import { findEntrySpan, detectIndent } from '../src/host/entrySplice.js';
 import { indexEntries } from '../src/host/jsonEntryScan.js';
 import { reserializeEntry } from '../src/host/structuralEdit.js';
 import { mutateEntry, applyEntryOps } from '../src/host/entryOps.js';
-import { planEntrySync, isEchoOfEdit, planOwnEdit } from '../src/host/jsonEntrySync.js';
+import { planEntrySync, isEchoOfEdit, isPaintedEcho, hintFor, planOwnEdit } from '../src/host/jsonEntrySync.js';
 import { catalogRenameOf, scJsonRenameEdits } from '../src/host/scRename.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -300,7 +300,7 @@ function editInPlace(uri: string, label: string, text: string, pair: Pair): Edit
   // multi-change event is not an echo of one span): if the narrow rows are right there too,
   // the fallback is a choice about latency and not about correctness.
   const submitted = { rangeOffset: span!.offset, rangeLength: span!.length, text: entryText };
-  const plan = planOwnEdit([{ ...submitted }], { entryId: entry.id, rowId: rowIdOnScreen, submitted });
+  const plan = planOwnEdit([{ ...submitted }], { entryId: entry.id, rowId: rowIdOnScreen, submitted, epoch: 0 });
   expect(plan, `the host recognises its own edit (${pair.columnId} on "${pair.nodeId}")`).not.toBeNull();
   expect(plan!.entryRowId, 'and repaints over the run the table is showing').toBe(rowIdOnScreen);
   const applied = applyEntryOps(model, [plan!.op]);
@@ -585,10 +585,38 @@ describe('isEchoOfEdit — spending the repaint token only on the edit that made
   });
 });
 
+describe('isPaintedEcho / hintFor — an echo is trusted only while its paint is still on screen', () => {
+  // A paint goes out before its write, and a wide repaint begun before the write lands reads the
+  // text from BEFORE it — rebuilding the rows and the tree as if the edit had not happened. The
+  // echo of such a write is then the one change that would repair both, so it must not be
+  // skipped (a structural edit) or planned against rows the repaint replaced (a cell edit's hint).
+  const submitted = { rangeOffset: 120, rangeLength: 45, text: '{ "name": "A" }' };
+
+  it('skips the echo of a painted write while no wide repaint has begun since', () => {
+    expect(isPaintedEcho([{ ...submitted }], { submitted, epoch: 3 }, 3)).toBe(true);
+  });
+
+  it('refuses it once a wide repaint has begun, however exactly the bytes match', () => {
+    expect(isPaintedEcho([{ ...submitted }], { submitted, epoch: 3 }, 4)).toBe(false);
+  });
+
+  it('still asks the bytes first: a change that is not the write is never skipped', () => {
+    expect(isPaintedEcho([{ ...submitted, rangeOffset: 121 }], { submitted, epoch: 3 }, 3)).toBe(false);
+    expect(isPaintedEcho([], { submitted, epoch: 3 }, 3)).toBe(false);
+  });
+
+  it('drops a cell edit’s hint the same way, and keeps it while its paint stands', () => {
+    const hint = { entryId: 'doc/design/A', rowId: 'doc/design/A', submitted, epoch: 3 };
+    expect(hintFor(hint, 3)).toBe(hint);
+    expect(hintFor(hint, 4)).toBeNull();
+    expect(hintFor(null, 3)).toBeNull();
+  });
+});
+
 describe('planOwnEdit — the entry the host wrote, read back out of what it wrote', () => {
   const entryText = '{\n  "name": "Gain_renamed",\n  "value": 42\n}';
   const submitted = { rangeOffset: 200, rangeLength: 38, text: entryText };
-  const hint = { entryId: 'doc/design/Gain_renamed', rowId: 'doc/design/Gain', submitted };
+  const hint = { entryId: 'doc/design/Gain_renamed', rowId: 'doc/design/Gain', submitted, epoch: 0 };
 
   it('replaces the entry the MODEL names, over the row the TABLE shows', () => {
     const plan = planOwnEdit([{ ...submitted }], hint);

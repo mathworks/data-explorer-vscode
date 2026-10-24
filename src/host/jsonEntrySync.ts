@@ -91,6 +91,42 @@ export function isEchoOfEdit(changes: readonly RangeReplacement[], submitted: Ra
 }
 
 /**
+ * A write the host painted AHEAD of: its rows went out before a byte was written, so the change
+ * event the write fires has nothing left to repaint — as long as those rows are still the ones
+ * on screen.
+ *
+ * `epoch` is what says they are. It counts the wide repaints the view has begun, read when the
+ * paint went out; a wide repaint begun since has replaced every row, and it read the text as it
+ * was before this write landed, because nothing waits for a write. See isPaintedEcho.
+ */
+export interface PaintedWrite {
+  /** The range replacement handed to the document. */
+  submitted: RangeReplacement;
+  /** How many wide repaints the view had begun when this write's rows were painted. */
+  epoch: number;
+}
+
+/**
+ * Whether a change event is the echo of a write whose rows are still on screen — the one case
+ * where the event can be skipped.
+ *
+ * Byte for byte, as isEchoOfEdit asks, AND with no wide repaint begun since the paint. A save, a
+ * webview asking for its rows (`ready`) and a clipboard broadcast over rows out of step each
+ * repaint the whole table without waiting for a write in flight, and each reads the text as it
+ * stands, which until the write lands is the text from BEFORE the edit: the screen goes back to
+ * the old rows and the model is rebuilt from the old text. Skipped then, the echo left both
+ * saying what the file no longer does. Refused, it is a change like any other, applied to the
+ * tree that repaint built — the price is the repaint, never a wrong row.
+ */
+export function isPaintedEcho(
+  changes: readonly RangeReplacement[],
+  painted: PaintedWrite,
+  epoch: number,
+): boolean {
+  return painted.epoch === epoch && isEchoOfEdit(changes, painted.submitted);
+}
+
+/**
  * An edit the host wrote, kept AFTER its own event has come and gone — because VS Code can
  * hand it back again, in either direction, whenever the user asks.
  *
@@ -125,6 +161,24 @@ export interface HostEdit {
   rowId: string;
   /** The range replacement handed to the document. */
   submitted: RangeReplacement;
+  /**
+   * How many wide repaints the view had begun when this was set — the same stamp, for the same
+   * reason, as PaintedWrite's: a wide repaint begun since has replaced the rows `rowId` names
+   * (see hintFor).
+   */
+  epoch: number;
+}
+
+/**
+ * The expectation a change event may use, or null.
+ *
+ * The hint names the rows the edit painted and the entry as the edit left the model. A wide
+ * repaint begun since has rebuilt both from the text before the write landed, so neither is
+ * true any more, and the event is a change like any other to the tree that repaint built —
+ * which the recovery path plans by itself (planEntrySync), from the rows that are on screen.
+ */
+export function hintFor(hint: HostEdit | null, epoch: number): HostEdit | null {
+  return hint && hint.epoch === epoch ? hint : null;
 }
 
 /** The op the host's own edit amounts to, and the run of rows to paint it over. */

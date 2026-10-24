@@ -32,13 +32,15 @@ import {
   type Removal,
 } from './entryOps.js';
 import {
-  isEchoOfEdit,
+  hintFor,
+  isPaintedEcho,
   planEntrySync,
   planKnownChange,
   planKnownOps,
   planOwnEdit,
   type HostEdit,
   type KnownEdit,
+  type PaintedWrite,
   type RangeReplacement,
 } from './jsonEntrySync.js';
 import { getClipboard, clipboardState } from './clipboard.js';
@@ -222,6 +224,19 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      */
     let modelInSync = false;
 
+    /**
+     * How many wide repaints this view has begun — the stamp a write painted ahead of its echo
+     * carries (PaintedWrite, HostEdit), and the reason that echo can be trusted.
+     *
+     * A paint goes out before its write, so for the length of the write the screen is ahead of
+     * the text. Nothing about a wide repaint waits for that write: a save, a webview asking for
+     * its rows, a clipboard broadcast over stale rows all read the text as it stands, which is
+     * the text from before the edit, and rebuild the tree and every row from it. An echo
+     * stamped before such a repaint is an echo of a paint that is no longer on screen, so it is
+     * treated as the change it is (isPaintedEcho, hintFor).
+     */
+    let wideEpoch = 0;
+
     // If the clipboard's cut/copied entry lives in THIS document, the mark its source
     // row should carry, so the table can render the cut (dimmed) / copied (dashed)
     // affordance. Cleared automatically once the clipboard empties on paste.
@@ -292,6 +307,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // Returns when the rows are on the wire, for the same reason postEntryRows does: a banner
     // that has to outlive a repaint has to be posted after it.
     const post = (): Promise<void> => {
+      // Counted before the text is read, so a write painted before this point is never again
+      // taken for one whose rows are on screen.
+      wideEpoch++;
       try {
         invalidate(uriString);
         const node = getModel(uriString, name, document.getText());
@@ -509,9 +527,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * by the very next change event, and honoured only if that event is this write byte for byte
      * (isEchoOfEdit). A write whose event never arrives leaves the flag behind, and the next
      * change — a keystroke in the text view, an undo — cannot match it, so it costs a repaint
-     * rather than skipping one.
+     * rather than skipping one. And honoured only while its rows are still on screen: a wide
+     * repaint begun in the meantime read the text from before the write (see wideEpoch).
      */
-    let paintedWrite: RangeReplacement | null = null;
+    let paintedWrite: PaintedWrite | null = null;
 
     /**
      * The edits this host has written to this document, newest last — kept PAST their own
@@ -1070,7 +1089,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         hostEdit =
           scEdits.length > 0
             ? null
-            : { entryId: entry.id, rowId: entryRowIdOnScreen, submitted };
+            : { entryId: entry.id, rowId: entryRowIdOnScreen, submitted, epoch: wideEpoch };
         // Awaited but no longer waited ON: the table was painted before this line and the echo
         // this fires only confirms it (syncOwnEdit). What the await is still for is the answer —
         // VS Code refuses a WorkspaceEdit whose document moved under it, and a refusal is a
@@ -1237,7 +1256,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         const submitted = submittedOf(patch);
         // Set immediately before the write, so the event this write fires is the one that spends
         // it (see hostEdit).
-        hostEdit = { entryId: entry.id, rowId: entryRowId, submitted };
+        hostEdit = { entryId: entry.id, rowId: entryRowId, submitted, epoch: wideEpoch };
         await writePatch(patch);
         remember({ submitted, replaced: currentText.slice(patch.offset, patch.offset + patch.length) });
       } catch (err) {
@@ -1280,7 +1299,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // The rows are already on screen, and the bytes this writes — an element and the comma
         // that held it, gone — are not an element anything can read back. Both facts are what the
         // change event needs to be told (paintedWrite), and what its undo needs (the ops).
-        paintedWrite = submitted;
+        paintedWrite = { submitted, epoch: wideEpoch };
         await writePatch(patch);
         remember({
           submitted,
@@ -1374,7 +1393,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
         const patch = minimalReplacement(currentText, working);
         const submitted = submittedOf(patch);
-        paintedWrite = submitted;
+        paintedWrite = { submitted, epoch: wideEpoch };
         await writePatch(patch);
         remember({
           submitted,
@@ -1566,7 +1585,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
           const patch = againstDocument ? patchFor(pasted, docText) : minimalReplacement(docText, pasted.newText);
           const submitted = submittedOf(patch);
-          if (narrow) paintedWrite = submitted;
+          if (narrow) paintedWrite = { submitted, epoch: wideEpoch };
           await writePatch(patch);
           if (narrow) {
             remember({
@@ -1646,7 +1665,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
         const patch = patchFor(result, currentText);
         const submitted = submittedOf(patch);
-        paintedWrite = submitted;
+        paintedWrite = { submitted, epoch: wideEpoch };
         await writePatch(patch);
         remember({
           submitted,
@@ -1859,14 +1878,15 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       if (e.contentChanges.length === 0) return;
       // Spent or dropped here, exactly once, whichever branch the event takes: an expectation
       // that survived its own event must not be waiting for the next one.
-      const hint = hostEdit;
+      const hint = hintFor(hostEdit, wideEpoch);
       hostEdit = null;
       // Spent on the same terms, and first: a structural edit painted its own rows before it
       // wrote, so if this event is that write there is nothing left to do. Checked before
       // anything that reads the document, since being sure costs three comparisons.
       const painted = paintedWrite;
       paintedWrite = null;
-      if (painted && isEchoOfEdit(changesOf(e), painted)) return;
+      // And only while the rows it painted are still the ones on screen (isPaintedEcho).
+      if (painted && isPaintedEcho(changesOf(e), painted, wideEpoch)) return;
       // The host's own edit first, since it is the one case that needs no discovery at all.
       if (syncOwnEdit(e, hint)) return;
       // Then an undo or a redo of an edit it wrote earlier: the other change it needs no
