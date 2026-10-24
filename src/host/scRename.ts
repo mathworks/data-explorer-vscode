@@ -32,6 +32,14 @@
 // writes a bus of value types) would otherwise drag the catalog off the entry that
 // really carries that name.
 //
+// And of an entry of the DESIGN NAMESPACE (catalogNamesSection). The catalog names Design and
+// Architectural Data's definitions, and a name is unique only within a namespace: an Other Data
+// or Configurations entry sharing a definition's name is not that definition. Carried anyway,
+// renaming such an entry renamed the definition in the file, and the architectural entry that
+// really holds the name read back unclassified. Core asks the catalog for the same namespace
+// alone, when it reads an entry and when one is renamed; test/scCatalogScope.test.ts holds the
+// two to one answer.
+//
 // A service interface's FUNCTION is the one row below an entry that the catalog also spells:
 // it keeps its own copy of each function under the interface's definition (`p_Name`, and
 // `p_FunctionPrototype`, which declares the function by name). Core renames the data part's
@@ -46,6 +54,7 @@
 import {
   SC_PART_XML,
   applyScEdits,
+  getSectionMetadata,
   scFunctionRenameEdits,
   scRenameEdits,
   scanScJsonFunctions,
@@ -62,6 +71,19 @@ export interface CatalogRename {
   newName: string;
 }
 
+// The namespace the catalog names, in core's own words: Design Data's, which Architectural Data
+// shares (getSectionMetadata is core's section-to-namespace table).
+const CATALOG_NAMESPACE = getSectionMetadata('design').namespace;
+
+/**
+ * Whether the System Composer catalog names the entries of this section: those of the Design
+ * namespace — Design Data and Architectural Data — and no other. A section core does not know is
+ * in no namespace the catalog names.
+ */
+export function catalogNamesSection(sectionName: string): boolean {
+  return getSectionMetadata(sectionName).namespace === CATALOG_NAMESPACE;
+}
+
 /**
  * The rename this cell edit carries into the catalog, or null if it carries none.
  *
@@ -72,9 +94,12 @@ export function catalogRenameOf(
   columnId: string,
   newValue: string,
   node: { name: string },
-  entry: { name: string },
+  entry: { name: string; parent?: { name?: unknown } | null },
 ): CatalogRename | null {
   if (columnId !== 'Name' || node !== entry) {
+    return null;
+  }
+  if (!catalogNamesSection(String(entry.parent?.name ?? ''))) {
     return null;
   }
   if (!node.name || node.name === newValue) {
