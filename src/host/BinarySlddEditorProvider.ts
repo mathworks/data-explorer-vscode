@@ -132,7 +132,7 @@ import { binaryEditSrcId } from '../common/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { saveSettled } from './settledSave.js';
-import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, type FollowedDocument } from './diskFollow.js';
+import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, writeUserFile, type FollowedDocument } from './diskFollow.js';
 
 // viewType of the default byte-backed view (BinaryEditorProvider), which owns the rule
 // that picks an editor from a .sldd's bytes. A constant here rather than an import,
@@ -187,6 +187,17 @@ interface ParsedChunk {
   chunkXml: string;
   content: Record<string, unknown>;
   warnings: ParseWarning[];
+}
+
+/** What one `writeTo` did. */
+interface Wrote {
+  /** The save gate's read, which a save re-baselines from; null for a backup, which gates nothing. */
+  gated: ParsedChunk | null;
+  /**
+   * The written file's mtime+size, read off the write itself where it could be (writeUserFile);
+   * none for a backup, which is not the user's file.
+   */
+  stamp: DiskStamp | undefined;
 }
 
 /**
@@ -1519,13 +1530,16 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       );
       document.edited = new Set();
       document.unchecked = new Map();
-      gated = await writing;
+      const wrote = await writing;
+      gated = wrote.gated;
       // What the next save is held to: the text this one wrote, not chunkXml, which an edit
       // on the write's await may have moved on.
       if (gated) document.saved = new SavedChunk(gated.chunkXml);
-      // What a later save and the watcher compare the disk with. The watcher's event for
-      // this write then finds the disk matching, and ignores it.
-      document.stamp = await stampOf(document.uri);
+      // What a later save and the watcher compare the disk with, read off the written file
+      // itself where the write could: a stat after it would take an outside write landing just
+      // after for this one, and the next save would write over that without asking. The
+      // watcher's event for this write then finds the disk matching, and ignores it.
+      document.stamp = wrote.stamp;
     } catch (err) {
       for (const key of edited) document.edited.add(key);
       document.markUnchecked(new Set(unchecked.values()));
@@ -1655,6 +1669,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   // after a save needs exactly it: a second read of the same string is seconds of work for
   // an answer already in hand. 'backup' gates nothing, so it has nothing to return.
   //
+  // 'save' writes the user's file through writeUserFile, which replaces it whole where the file
+  // system lets it (safeWrite.ts) rather than cutting it to nothing and writing it again, so a
+  // crash or a full disk part-way through leaves the dictionary the user had, and which answers
+  // the stamp the write left. A dictionary is a zip, and a zip cut short is a file MATLAB cannot
+  // open. 'backup' writes VS Code's scratch copy plainly.
+  //
   // `beforeWrite` runs after the zip and before the write, and a throw from it means nothing
   // is written. A save passes its disk check here. Everything up to that call is synchronous,
   // so the text gated and zipped is the text the document held when the save was called.
@@ -1664,7 +1684,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     dest: vscode.Uri,
     mode: 'save' | 'backup' = 'save',
     beforeWrite?: () => Promise<void>,
-  ): Promise<ParsedChunk | null> {
+  ): Promise<Wrote> {
     let gated: ParsedChunk | null = null;
     if (mode === 'save') {
       try {
@@ -1687,7 +1707,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     zipEntries[DATA_PART_XML] = new TextEncoder().encode(document.chunkXml);
     const zipped = zipSync(zipEntries, { level: mode === 'save' ? 6 : 1 });
     if (beforeWrite) await beforeWrite();
-    await vscode.workspace.fs.writeFile(dest, zipped);
-    return gated;
+    if (mode === 'backup') {
+      await vscode.workspace.fs.writeFile(dest, zipped);
+      return { gated, stamp: undefined };
+    }
+    return { gated, stamp: await writeUserFile(dest, zipped) };
   }
 }

@@ -16,6 +16,7 @@
 // provider: the two are handed in as `read` and `apply`.
 import * as vscode from 'vscode';
 import { basename } from '../common/pathUtil.js';
+import { writeAndStamp } from './safeWrite.js';
 import {
   changedOnDisk,
   checksSaveConflicts,
@@ -35,6 +36,15 @@ export async function stampOf(uri: vscode.Uri): Promise<DiskStamp | undefined> {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * Write the user's file, replaced whole where the file system lets us (safeWrite.ts), and answer
+ * the stamp the write left, which a save records as the document's `stamp`. Every write of a
+ * user's own file both byte-backed editors make, a save and a Save As, goes through here.
+ */
+export function writeUserFile(uri: vscode.Uri, bytes: Uint8Array): Promise<DiskStamp | undefined> {
+  return writeAndStamp(uri, bytes, { write: () => vscode.workspace.fs.writeFile(uri, bytes), stat: () => stampOf(uri) });
 }
 
 /** What a document keeps to follow its file. Both writable byte-backed documents are one. */

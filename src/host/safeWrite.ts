@@ -81,6 +81,34 @@ export async function writeFileSafely(
   return { mode: 'in-place' };
 }
 
+/** What a write of the user's file asks of the provider, where Node's fs does not make it. */
+export interface ProviderWrite {
+  /** Write the bytes over the file: `workspace.fs.writeFile`. */
+  write(): PromiseLike<void>;
+  /** The file's mtime+size, as `workspace.fs.stat` reports them, or undefined. */
+  stat(): PromiseLike<{ mtime: number; size: number } | undefined>;
+}
+
+/**
+ * Write the user's own file through `writeFileSafely`, and answer its mtime+size as this write
+ * left them: what a save records, so that the watcher's event for the save's own write, and the
+ * next save's check, find the disk matching.
+ *
+ * Read off the written file itself wherever the write could. A stat after the write would take an
+ * outside write landing in between for this one, and the next save would then write over that
+ * without asking. Only a write through the provider, which reads no stamp, is stat'd after it.
+ *
+ * Both byte-backed editors save through this, by way of diskFollow's `writeUserFile`; a hot-exit
+ * backup is a scratch copy, not the user's file, and is written plainly.
+ */
+export async function writeAndStamp(
+  uri: { readonly scheme: string; readonly fsPath: string },
+  bytes: Uint8Array,
+  provider: ProviderWrite,
+): Promise<{ mtime: number; size: number } | undefined> {
+  return (await writeFileSafely(uri, bytes, () => provider.write())).stamp ?? (await provider.stat());
+}
+
 /**
  * Whether two `file:` uris name one file (one path, or two hard links to it). False where it
  * cannot be told.
