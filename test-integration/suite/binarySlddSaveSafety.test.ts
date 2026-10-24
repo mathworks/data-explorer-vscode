@@ -23,6 +23,7 @@ import {
   chmodSync,
   closeSync,
   linkSync,
+  mkdirSync,
   mkdtempSync,
   openSync,
   readdirSync,
@@ -173,6 +174,19 @@ suite('Binary .sldd: a save, a backup and a revert of the user’s file', () => 
     await save(doc);
     assert.ok(chunkOnDisk(path).includes('>Kd<'));
     assert.deepStrictEqual(asked, [], 'and nothing was asked');
+  });
+
+  test('a file whose folder was deleted under the view is saved, folder and all, as VS Code’s save does', async () => {
+    const folder = join(dir, 'project');
+    const at = join(folder, 'params.sldd');
+    mkdirSync(folder);
+    writeFileSync(at, FIXTURE);
+    const doc = await openDoc(vscode.Uri.file(at));
+    edit(doc, 'Ki');
+    rmSync(folder, { recursive: true });
+    await save(doc);
+    assert.ok(chunkOnDisk(at).includes('>Ki<'), 'the edit is on disk, in the folder made again');
+    assert.deepStrictEqual(readdirSync(folder), ['params.sldd'], 'and nothing beside it');
   });
 
   test('a read-only file is refused, and left as it was', async () => {

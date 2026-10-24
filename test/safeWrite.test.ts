@@ -9,6 +9,7 @@ import {
   chmodSync,
   linkSync,
   lstatSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -195,6 +196,25 @@ describe('replaceFile', () => {
     expect(readFileSync(path, 'utf8')).toBe('new');
   });
 
+  it('writes a file whose folder is gone through the provider, which makes the folder, as VS Code’s save does', async () => {
+    const gone = join(dir, 'sub');
+    const at = join(gone, 'data.mat');
+    let wrote = 0;
+    const written = await writeFileSafely({ scheme: 'file', fsPath: at }, bytes('new'), async () => {
+      wrote++;
+      mkdirSync(gone, { recursive: true });
+      writeFileSync(at, 'new');
+    });
+    expect(written).toEqual({ mode: 'in-place' });
+    expect(wrote).toBe(1);
+    expect(readFileSync(at, 'utf8')).toBe('new');
+    expect(readdirSync(gone)).toEqual(['data.mat']);
+  });
+
+  it('with no provider to hand it to, a file whose folder is gone is refused', async () => {
+    await expect(replaceFile(fs, join(dir, 'sub', 'data.mat'), bytes('new'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('removes the temporary file a crashed save left, and not one another save is writing', async () => {
     const stale = join(dir, '.data.mat.0123456789abcdef.dex-tmp');
     const fresh = join(dir, '.data.mat.fedcba9876543210.dex-tmp');
@@ -270,6 +290,21 @@ describe('writeAndStamp', () => {
     expect(calls).toEqual(['write', 'stat']);
     expect(stamp).toEqual({ mtime: 7, size: 3 });
     expect(readFileSync(path, 'utf8')).toBe('old bytes');
+  });
+
+  it('stats a file whose folder was gone, which the provider wrote', async () => {
+    const at = join(dir, 'sub', 'params.sldd');
+    const calls: string[] = [];
+    const stamp = await writeAndStamp({ scheme: 'file', fsPath: at }, bytes('new'), {
+      write: async () => {
+        calls.push('write');
+        mkdirSync(join(dir, 'sub'));
+        writeFileSync(at, 'new');
+      },
+      stat: async () => (calls.push('stat'), { mtime: 7, size: 3 }),
+    });
+    expect(calls).toEqual(['write', 'stat']);
+    expect(stamp).toEqual({ mtime: 7, size: 3 });
   });
 
   it('a write that fails answers nothing and stats nothing', async () => {

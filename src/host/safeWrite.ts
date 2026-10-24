@@ -39,6 +39,10 @@
 // (EPERM, EBUSY, EXDEV, EACCES, ENOTSUP: OneDrive or a virus scanner holding the file on
 // Windows, a bind-mounted file in a container, some network and FUSE mounts).
 //
+// A file whose folder is gone (deleted or renamed since the file was opened) has nowhere for a
+// temporary file, nor for itself: it is written through the provider (`workspace.fs.writeFile`),
+// which makes the folders a file needs, so the save recreates it where it was, as VS Code's does.
+//
 // A temporary file a crash leaves behind (`.<name>.<random>.dex-tmp`, beside the file) is removed
 // by the next save of the same file.
 //
@@ -76,7 +80,7 @@ export async function writeFileSafely(
   writeInPlace: () => PromiseLike<void>,
 ): Promise<Written> {
   const fs = uri.scheme === 'file' ? await nodeFs() : undefined;
-  if (fs) return replaceFile(fs, uri.fsPath, bytes);
+  if (fs) return replaceFile(fs, uri.fsPath, bytes, writeInPlace);
   await writeInPlace();
   return { mode: 'in-place' };
 }
@@ -234,9 +238,14 @@ async function keepsAccess(handle: Fs.FileHandle, original: { mode: number; uid:
 
 /**
  * The replace itself, on Node's fs: exported for the unit tests, which run it against a real
- * temporary directory.
+ * temporary directory. `provider` is the provider's write, for a file whose folder is gone.
  */
-export async function replaceFile(fs: typeof Fs, path: string, bytes: Uint8Array): Promise<Written> {
+export async function replaceFile(
+  fs: typeof Fs,
+  path: string,
+  bytes: Uint8Array,
+  provider?: () => PromiseLike<void>,
+): Promise<Written> {
   let target = path;
   // What of the original the replace carries over (and whether it has other names).
   let stat: { mode: number; uid: number; gid: number; nlink: number } | undefined;
@@ -264,6 +273,11 @@ export async function replaceFile(fs: typeof Fs, path: string, bytes: Uint8Array
     handle = await fs.open(temp, 'wx', stat ? stat.mode & 0o7777 : 0o666);
   } catch (err) {
     if (stat && NO_TEMP.has(errorCode(err) ?? '')) return writeInPlace(fs, target, bytes);
+    // The folder is gone: the provider's write makes it (see the header).
+    if (errorCode(err) === 'ENOENT' && provider) {
+      await provider();
+      return { mode: 'in-place' };
+    }
     throw err;
   }
   let written: Written['stamp'];
