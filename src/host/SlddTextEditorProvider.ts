@@ -400,13 +400,25 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       // modelInSync is NOT set here, only when these rows land — which can be seconds away (the
       // usage graph, below). Until then the flag says what it said: rows in step stay in step
       // through the narrow repaints, each of which this repaint then reads again for
-      // (wideLanding), and rows out of step stay withdrawn from them.
+      // (wideLanding), and rows out of step stay withdrawn from them — which is what a repair
+      // declares before it begins (repaintStale).
       latestPost = paintWide(epoch);
       return latestPost;
     };
 
     // The newest wide repaint, for an older one whose rows it replaces to resolve with.
     let latestPost: Promise<void> = Promise.resolve();
+
+    /**
+     * The wide repaint as a REPAIR: for rows already known not to say what the text does — a
+     * change nothing narrow could plan, a narrow repaint that threw, a paint the file never took.
+     * Out of step from the moment that is known rather than from when the repair lands, so no
+     * change in between is spliced narrowly into rows the repair is about to replace.
+     */
+    const repaintStale = (): Promise<void> => {
+      leaveStep();
+      return post();
+    };
 
     const paintWide = (epoch: number): Promise<void> => {
       try {
@@ -607,7 +619,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // The model change has already landed, so the table must not be left showing the rows
         // from before it. Repaint wide, then say so — after, because fresh rows are how the
         // webview learns a failure is over and would wipe a banner posted first.
-        void post().then(() =>
+        void repaintStale().then(() =>
           webview.postMessage({ type: 'error', message: `Failed to update the row: ${(err as Error).message}` }),
         );
       }
@@ -1049,7 +1061,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // The re-read cannot find what was painted — pathological (the write that failed is the
         // reason the entry is still spelled the way the rows say), and the one case where
         // correcting the screen is worth the ~700 ms a full repaint costs on a big dictionary.
-        void post().then(() => webview.postMessage({ type: 'error', message }));
+        void repaintStale().then(() => webview.postMessage({ type: 'error', message }));
       }
     };
 
@@ -1306,7 +1318,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // have left the table or arrived in it — so a write that fails resyncs the whole view instead.
     // That is the old cost, paid only when an edit did not happen.
     const resyncWide = (message: string): void => {
-      void post().then(() => webview.postMessage({ type: 'error', message }));
+      void repaintStale().then(() => webview.postMessage({ type: 'error', message }));
     };
 
     /**
@@ -2172,7 +2184,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       if (syncKnownOps(e)) return;
       if (syncKnownChange(e)) return;
       if (syncOneEntry(e)) return;
-      void post();
+      void repaintStale();
     });
 
     // On save the text IS the file, so the marks clear: the next repaint takes it as the baseline
