@@ -649,6 +649,30 @@ suite('MAT-file editor: edit, undo, save', () => {
     await backup.delete();
   });
 
+  // The id is the shared backupId.ts's, which the binary .sldd editor writes too; one that is a
+  // bare uri (that editor's id before it carried a stamp) restores here as well, with no stamp.
+  test('a backup id that is a bare uri still restores the backed-up edits', async () => {
+    const o = await open('cases.mat');
+    edit(o, 'scalarD', 'Value', '42');
+    const destination = vscode.Uri.file(join(dir, 'backup.bin'));
+    const backup = await provider.backupCustomDocument(o.doc, { destination } as vscode.CustomDocumentBackupContext, token());
+    assert.deepStrictEqual(JSON.parse(backup.id), { backup: destination.toString(), stamp: o.doc.stamp }, 'the id names the backup and the stamp');
+    o.view.close();
+    o.doc.dispose();
+    opened.splice(opened.findIndex((x) => x.doc === o.doc), 1);
+    const restored: any = await provider.openCustomDocument(o.uri, { backupId: destination.toString() } as vscode.CustomDocumentOpenContext, token());
+    const view = fakePanel();
+    opened.push({ doc: restored, view });
+    await provider.resolveCustomEditor(restored, view.panel, token());
+    view.send({ type: 'ready' });
+    await waitFor('the restored rows', () => view.posts.some((p) => p.type === 'setRows'));
+    assert.strictEqual(topRow(view.posts, 'scalarD').Value, '42', 'the restore holds the backed-up edit');
+    assert.strictEqual(restored.stamp, undefined, 'and no stamp, which no id of that shape carries');
+    await provider.saveCustomDocument(restored, token());
+    assert.strictEqual(valuesOf(disk(o)).get('scalarD').Value, '42');
+    await backup.delete();
+  });
+
   test('a backup core refuses keeps the last one that could be written standing', async () => {
     const o = await open('cases.mat');
     edit(o, 'scalarD', 'Value', '42');

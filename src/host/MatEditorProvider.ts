@@ -74,6 +74,7 @@ import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, writeUserFile, t
 import { SaveMarks, replacementsIn, type SaveMark, type SaveSnapshot } from './saveMarks.js';
 import { saveSettled } from './settledSave.js';
 import { sameFile } from './safeWrite.js';
+import { backupId, backupSource } from './backupId.js';
 import { binaryEditSrcId } from '../common/srcId.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
@@ -618,30 +619,6 @@ class SharedBackup {
 }
 
 /**
- * A backup's id: where it is, and the stamp of the file the document was last read or saved as.
- * A restore compares the file with that stamp at its first save, so an outside change between the
- * backup and the restore is asked about rather than overwritten. Read back by `backupSource`.
- */
-function backupId(destination: vscode.Uri, stamp: DiskStamp | undefined): string {
-  return JSON.stringify({ backup: destination.toString(), stamp: stamp ?? null });
-}
-
-/** Where a backup id points, and its stamp, or none for an id this editor did not write. */
-function backupSource(id: string): { uri: vscode.Uri; stamp: DiskStamp | undefined } {
-  try {
-    const parsed = JSON.parse(id) as { backup?: unknown; stamp?: { mtime?: unknown; size?: unknown } | null };
-    if (typeof parsed?.backup === 'string') {
-      const s = parsed.stamp;
-      const stamp = s && typeof s.mtime === 'number' && typeof s.size === 'number' ? { mtime: s.mtime, size: s.size } : undefined;
-      return { uri: vscode.Uri.parse(parsed.backup), stamp };
-    }
-  } catch {
-    /* a bare uri */
-  }
-  return { uri: vscode.Uri.parse(id), stamp: undefined };
-}
-
-/**
  * The classes `mat` can take a new variable of, as core lists them (MatNode.getAllowedTypes): a
  * plain variable and a struct, and the classes of MATLAB's own default objects where the file's
  * objects can be added to. A core without the list adds a plain variable only, as it always has.
@@ -689,12 +666,15 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     _token: vscode.CancellationToken,
   ): Promise<MatDocument> {
     // A hot-exit backup is a whole MAT-file (backupCustomDocument), so a restore opens it as the
-    // document. Its stamp is the one the backup recorded, of the file the edits were made over:
-    // the file now may be another program's since, and a save has to ask before writing over it.
+    // document. Its stamp is the one the backup recorded, of the file the edits were made over
+    // (backupId.ts, the binary .sldd editor's format too): the file now may be another program's
+    // since, and a save has to ask before writing over it.
     let source = uri;
     let stamp: DiskStamp | undefined;
     if (openContext.backupId) {
-      ({ uri: source, stamp } = backupSource(openContext.backupId));
+      const backup = backupSource(openContext.backupId);
+      source = vscode.Uri.parse(backup.uri);
+      stamp = backup.stamp;
     } else {
       stamp = await stampOf(uri);
     }
@@ -1325,7 +1305,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     }
     await vscode.workspace.fs.writeFile(ctx.destination, bytes);
     document.backupRefusalShown = false;
-    document.lastBackup = new SharedBackup(backupId(ctx.destination, document.stamp), ctx.destination);
+    document.lastBackup = new SharedBackup(backupId(ctx.destination.toString(), document.stamp), ctx.destination);
     return document.lastBackup.handle();
   }
 
