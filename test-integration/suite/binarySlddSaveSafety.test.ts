@@ -5,16 +5,30 @@
 //
 //   - the save replaces the file whole (src/host/safeWrite.ts) rather than cutting it to nothing
 //     and writing it again, and the stamp it records is the one its write left;
+//   - a document restored from a hot-exit backup holds the stamp of the file its edits were made
+//     over (src/host/backupId.ts), so its first save asks before writing over a file another
+//     program changed since;
 //
 // Every file here is a copy of the workspace fixture in a fresh tmpdir, as in
 // binarySlddOutsideChange.test.ts, so a listing of the directory is a listing of what the save
 // left there.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { chmodSync, closeSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
+import {
+  chmodSync,
+  closeSync,
+  mkdtempSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { unzipSync } from 'fflate';
+import { unzipSync, zipSync } from 'fflate';
 import { DataModel } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 import { ctx, fakePanel, quiet, token, waitFor, wsUri } from './tools/hostHarness';
@@ -32,6 +46,24 @@ const chunk = (doc: unknown): string => (doc as { chunkXml: string }).chunkXml;
 const posix = process.platform !== 'win32';
 /** Byte-equal, said as one boolean: a failing deepStrictEqual of two whole files prints every byte. */
 const same = (a: Uint8Array, b: Uint8Array): boolean => Buffer.compare(Buffer.from(a), Buffer.from(b)) === 0;
+const isCancellation = (err: unknown): boolean => err instanceof vscode.CancellationError;
+
+/** The fixture with one entry renamed: a write by another program. */
+function renamedTo(name: string): Uint8Array {
+  const zip = unzipSync(FIXTURE);
+  const xml = decode(zip[CHUNK]);
+  assert.ok(xml.includes('>Kp<'), 'the fixture spells the entry this suite renames');
+  zip[CHUNK] = new TextEncoder().encode(xml.replace('>Kp<', `>${name}<`));
+  return zipSync(zip, { level: 6 });
+}
+
+/** Write the file as another program would, with an mtime later than any the view has seen. */
+function writeOutside(at: string, bytes: Uint8Array): void {
+  const before = statSync(at).mtimeMs;
+  writeFileSync(at, bytes);
+  const later = new Date(Math.max(Date.now(), before) + 2000);
+  utimesSync(at, later, later);
+}
 
 suite('Binary .sldd: a save over the user’s file', () => {
   let dir: string;
@@ -145,5 +177,52 @@ suite('Binary .sldd: a save over the user’s file', () => {
     await assert.rejects(save(doc), /read-only/);
     assert.ok(same(new Uint8Array(readFileSync(path)), FIXTURE), 'the file is as it was');
     assert.strictEqual(doc.edits.dirty, true, 'and the edit is still unsaved');
+  });
+
+  /** A hot-exit backup of `doc` in this test's directory, as VS Code asks for one. */
+  const backUp = (doc: any, name = 'backup.bin') =>
+    provider.backupCustomDocument(doc, { destination: vscode.Uri.file(join(dir, name)) } as vscode.CustomDocumentBackupContext, token());
+
+  test('a restored backup asks before writing over a file changed since the backup', async () => {
+    const doc = await openDoc();
+    edit(doc, 'Ki');
+    const backup = await backUp(doc);
+    close(doc);
+    // Another program writes the file while VS Code is closed.
+    const outside = renamedTo('Kp_matlab');
+    writeOutside(path, outside);
+    const restored = await openDoc(uri, { backupId: backup.id } as vscode.CustomDocumentOpenContext);
+    assert.ok(chunk(restored).includes('>Ki<'), 'the restore holds the backed-up edit');
+    await assert.rejects(save(restored), isCancellation, 'the save is refused');
+    await waitFor('the conflict prompt', () => asked.length === 1);
+    assert.ok(same(new Uint8Array(readFileSync(path)), outside), 'the other program’s file is still the file');
+    assert.ok(chunk(restored).includes('>Ki<'), 'and the restored edit is still there');
+    await backup.delete();
+  });
+
+  test('a restored backup of a file nobody changed since saves without asking', async () => {
+    const doc = await openDoc();
+    edit(doc, 'Ki');
+    const backup = await backUp(doc);
+    close(doc);
+    const restored = await openDoc(uri, { backupId: backup.id } as vscode.CustomDocumentOpenContext);
+    assert.strictEqual(restored.edits.dirty, true, 'a restored backup is unsaved');
+    await save(restored);
+    assert.ok(chunkOnDisk(path).includes('>Ki<'), 'the restored edit is on disk');
+    assert.deepStrictEqual(asked, []);
+    await backup.delete();
+  });
+
+  test('a backup id from before the id carried a stamp (a bare uri) still restores the edits', async () => {
+    const doc = await openDoc();
+    edit(doc, 'Ki');
+    const destination = vscode.Uri.file(join(dir, 'backup.bin'));
+    const backup = await backUp(doc);
+    close(doc);
+    const restored = await openDoc(uri, { backupId: destination.toString() } as vscode.CustomDocumentOpenContext);
+    assert.ok(chunk(restored).includes('>Ki<'), 'the restore holds the backed-up edit');
+    await save(restored);
+    assert.ok(chunkOnDisk(path).includes('>Ki<'));
+    await backup.delete();
   });
 });

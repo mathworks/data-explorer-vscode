@@ -133,6 +133,7 @@ import type { TableToHostMessage } from '../common/protocol.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { saveSettled } from './settledSave.js';
 import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, writeUserFile, type FollowedDocument } from './diskFollow.js';
+import { backupId, backupSource } from './backupId.js';
 
 // viewType of the default byte-backed view (BinaryEditorProvider), which owns the rule
 // that picks an editor from a .sldd's bytes. A constant here rather than an import,
@@ -641,10 +642,20 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     openContext: vscode.CustomDocumentOpenContext,
     _token: vscode.CancellationToken,
   ): Promise<BinarySlddDocument> {
-    const source = openContext.backupId ? vscode.Uri.parse(openContext.backupId) : uri;
-    // The FILE's stamp, even when the content comes from a backup, because the file is
-    // what a save will write over. Taken before the read, for the reason given at readDisk.
-    const stamp = await stampOf(uri);
+    // A hot-exit backup is a whole .sldd (backupCustomDocument), so a restore opens it as the
+    // document. Its stamp is the one the backup recorded, of the file the edits were made over
+    // (backupId.ts): the file now may be another program's since, and a save has to ask before
+    // writing over it. Otherwise the file's own, taken before the read for the reason given at
+    // readDisk.
+    let source = uri;
+    let stamp: DiskStamp | undefined;
+    if (openContext.backupId) {
+      const backup = backupSource(openContext.backupId);
+      source = vscode.Uri.parse(backup.uri);
+      stamp = backup.stamp;
+    } else {
+      stamp = await stampOf(uri);
+    }
     const bytes = await vscode.workspace.fs.readFile(source);
     // A custom editor's selector is a filename glob, and the two .sldd formats are not
     // distinguishable by name — so "Reopen Editor With…" offers THIS view for every
@@ -1598,7 +1609,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // is touched.
     await this.writeTo(document, ctx.destination, 'backup');
     return {
-      id: ctx.destination.toString(),
+      // With the stamp of the file these edits were made over, which a restore's first save
+      // compares the file with (backupId.ts).
+      id: backupId(ctx.destination.toString(), document.stamp),
       delete: async () => {
         try {
           await vscode.workspace.fs.delete(ctx.destination);
