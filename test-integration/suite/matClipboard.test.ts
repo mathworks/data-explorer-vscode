@@ -398,6 +398,42 @@ suite('MAT-file clipboard and row drags, between a MAT-file and a dictionary', (
     assert.strictEqual(b.events.length, 0);
   });
 
+  test('row drags between a MAT-file and both dictionary formats, both ways, moving and copying', async () => {
+    const m = await openMat(opened, dir, 'gains.mat', matFixture('pv_basic.mat'));
+    const j = await openJson(opened, dir, 'json.sldd');
+    const b = await openBinary(opened, dir, 'bin.sldd');
+    // Row ids as first painted: a gesture's own repaint of a dictionary is entry-scoped.
+    const [jGravity, jStruct, bGravity] = [entryRow(j.view.posts, 'gravity').ID, entryRow(j.view.posts, 'myStruct').ID, entryRow(b.view.posts, 'gravity').ID];
+
+    // MAT-file -> JSON dictionary, moved: the original leaves as the MAT-file's own edit.
+    m.view.send({ type: 'dragStart', rowIds: [variableRow(m.view.posts, 'x').ID] });
+    await onJson(j, { type: 'drop', rowId: jGravity, mode: 'move' });
+    await waitFor('the original moved out', () => !m.names().includes('x'));
+    assert.ok(j.names().includes('x'));
+    assert.strictEqual(m.events.length, 1);
+    assert.strictEqual(getDrag(), null);
+
+    // MAT-file -> binary dictionary, copied.
+    m.view.send({ type: 'dragStart', rowIds: [variableRow(m.view.posts, 'str').ID] });
+    await onBinary(b, { type: 'drop', rowId: 'section:design', mode: 'copy' });
+    assert.ok(b.names().includes('str'));
+    assert.ok(m.names().includes('str'), 'a copy leaves its original');
+
+    // JSON dictionary -> MAT-file, moved: the entry leaves the dictionary's text.
+    j.view.send({ type: 'dragStart', rowIds: [jStruct] });
+    await onMat(m, { type: 'drop', rowId: '', mode: 'move' });
+    await waitFor('the entry moved out of the JSON dictionary', () => !j.names().includes('myStruct'));
+    assert.ok(m.names().includes('myStruct'));
+
+    // Binary dictionary -> MAT-file, moved: the entry leaves the dictionary's chunk.
+    b.view.send({ type: 'dragStart', rowIds: [bGravity] });
+    await onMat(m, { type: 'drop', rowId: variableRow(m.view.posts, 'p').ID, mode: 'move' });
+    await waitFor('the entry moved out of the binary dictionary', () => !b.names().includes('gravity'));
+    assert.ok(m.names().includes('gravity'));
+    assert.deepStrictEqual(errorsIn(m.view.posts), []);
+    assert.strictEqual(getDrag(), null);
+  });
+
   test('MAT-file to MAT-file: a copy, a cut, a drop that moves and one that copies', async () => {
     const a = await openMat(opened, dir, 'a.mat', matFixture('pv_basic.mat'));
     const c = await openMat(opened, dir, 'c.mat', emptyMat());
