@@ -2,22 +2,23 @@
 // Integration tests for PropertiesViewProvider. Its untested logic is the
 // ready/pending buffering state machine: showNode()/clear() called before the
 // webview signals 'ready' must buffer and flush on ready, and calls after ready
-// must post immediately. VS Code only hands a real WebviewView to a contributed
-// view on resolve, so we drive resolveWebviewView with a minimal fake webview
-// that records postMessage — the provider's branching (the code under test) is
-// real, and getHtml still builds genuine vscode.Uri values. buildPropertyGroups
-// is covered separately by the piBuilder vitest suite.
+// must post immediately; every later 'ready' (the page reloaded after the view was
+// hidden) is sent what the inspector holds then. VS Code only hands a real
+// WebviewView to a contributed view on resolve, so we drive resolveWebviewView with
+// a minimal fake webview that records postMessage — the provider's branching (the
+// code under test) is real, and getHtml still builds genuine vscode.Uri values.
+// buildPropertyGroups is covered separately by the piBuilder vitest suite.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { PropertiesViewProvider } from '../../src/host/PropertiesViewProvider';
 
 // A node whose toPIObject yields one group with one property, so showNode
 // produces a non-empty groups payload (mirrors the piBuilder contract).
-function fakeNode() {
+function fakeNode(name = 'Kp') {
   return {
     toPIObject() {
       return {
-        objects: [{ Name: 'Kp' }],
+        objects: [{ Name: name }],
         propertySheet: {
           groups: [{ name: 'g', displayName: 'General', items: [{ type: 'property', name: 'Name' }] }],
           properties: [{ name: 'Name', displayName: 'Name' }],
@@ -149,5 +150,82 @@ suite('PropertiesViewProvider', () => {
     rec.fireDispose(); // the view goes away
     provider.showNode(fakeNode());
     assert.strictEqual(rec.posted.length, 0, 'no post to a disposed view');
+  });
+
+  // The view does not retain its context when hidden, so hiding it and showing it again reloads
+  // its page, which starts empty and says `ready` again; and what was posted to it while it was
+  // hidden never arrived. Every `ready` is therefore a page to fill with what the inspector holds.
+  test('every ready shows what the inspector holds now: a view hidden and shown again is not left empty', () => {
+    const provider = new PropertiesViewProvider(extensionUri());
+    const rec = fakeView(extensionUri());
+    provider.resolveWebviewView(rec.view);
+    rec.fireReady();
+    provider.showNode(fakeNode());
+    assert.strictEqual(rec.posted.length, 1);
+
+    rec.fireReady(); // hidden, shown again: the page reloaded
+    assert.strictEqual(rec.posted.length, 2, 'the reloaded page is sent the node again');
+    assert.deepStrictEqual(rec.posted[1], rec.posted[0]);
+  });
+
+  test('a node shown while the view was hidden is what the next ready shows', () => {
+    const provider = new PropertiesViewProvider(extensionUri());
+    const rec = fakeView(extensionUri());
+    provider.resolveWebviewView(rec.view);
+    rec.fireReady();
+    provider.showNode(fakeNode());
+    // Hidden now: these two reach no page.
+    provider.clear();
+    provider.showNode(fakeNode('Ki'));
+    const sent = rec.posted.length;
+    rec.fireReady();
+    assert.deepStrictEqual(
+      rec.posted.slice(sent).map((m) => [m.type, m.groups?.[0]?.properties?.[0]?.value]),
+      [['showProps', 'Ki']],
+      'the latest node, once',
+    );
+  });
+
+  test('a clear while the view was hidden leaves the reloaded page empty', () => {
+    const provider = new PropertiesViewProvider(extensionUri());
+    const rec = fakeView(extensionUri());
+    provider.resolveWebviewView(rec.view);
+    rec.fireReady();
+    provider.showNode(fakeNode());
+    provider.clear();
+    const sent = rec.posted.length;
+    rec.fireReady();
+    assert.deepStrictEqual(rec.posted.slice(sent), [], 'the page starts empty, so nothing is sent');
+  });
+
+  // Every editor shows its node again whenever its tree changes, and a showProps closes an open
+  // Variable Editor, so a node whose rows are what the page shows is not sent again. Which
+  // changes count is test/inspectorPage.test.ts; this is the provider handing it on.
+  test('a node whose rows are what the page shows is not sent again; one whose rows differ is', () => {
+    const provider = new PropertiesViewProvider(extensionUri());
+    const rec = fakeView(extensionUri());
+    provider.resolveWebviewView(rec.view);
+    rec.fireReady();
+    provider.showNode(fakeNode());
+    provider.showNode(fakeNode());
+    assert.strictEqual(rec.posted.length, 1, 'the same rows, once');
+    provider.showNode(fakeNode('Ki'));
+    assert.deepStrictEqual(
+      rec.posted.map((m) => m.groups?.[0]?.properties?.[0]?.value),
+      ['Kp', 'Ki'],
+    );
+  });
+
+  test('a disposed view takes what it held with it: the next view starts empty', () => {
+    const provider = new PropertiesViewProvider(extensionUri());
+    const first = fakeView(extensionUri());
+    provider.resolveWebviewView(first.view);
+    provider.showNode(fakeNode()); // waiting for a ready that never comes
+    first.fireDispose();
+
+    const second = fakeView(extensionUri());
+    provider.resolveWebviewView(second.view);
+    second.fireReady();
+    assert.deepStrictEqual(second.posted, [], 'nothing of the view that went');
   });
 });

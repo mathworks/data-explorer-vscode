@@ -39,6 +39,10 @@
 // (EPERM, EBUSY, EXDEV, EACCES, ENOTSUP: OneDrive or a virus scanner holding the file on
 // Windows, a bind-mounted file in a container, some network and FUSE mounts).
 //
+// A file whose folder is gone (deleted or renamed since the file was opened) has nowhere for a
+// temporary file, nor for itself: it is written through the provider (`workspace.fs.writeFile`),
+// which makes the folders a file needs, so the save recreates it where it was, as VS Code's does.
+//
 // A temporary file a crash leaves behind (`.<name>.<random>.dex-tmp`, beside the file) is removed
 // by the next save of the same file.
 //
@@ -76,9 +80,37 @@ export async function writeFileSafely(
   writeInPlace: () => PromiseLike<void>,
 ): Promise<Written> {
   const fs = uri.scheme === 'file' ? await nodeFs() : undefined;
-  if (fs) return replaceFile(fs, uri.fsPath, bytes);
+  if (fs) return replaceFile(fs, uri.fsPath, bytes, writeInPlace);
   await writeInPlace();
   return { mode: 'in-place' };
+}
+
+/** What a write of the user's file asks of the provider, where Node's fs does not make it. */
+export interface ProviderWrite {
+  /** Write the bytes over the file: `workspace.fs.writeFile`. */
+  write(): PromiseLike<void>;
+  /** The file's mtime+size, as `workspace.fs.stat` reports them, or undefined. */
+  stat(): PromiseLike<{ mtime: number; size: number } | undefined>;
+}
+
+/**
+ * Write the user's own file through `writeFileSafely`, and answer its mtime+size as this write
+ * left them: what a save records, so that the watcher's event for the save's own write, and the
+ * next save's check, find the disk matching.
+ *
+ * Read off the written file itself wherever the write could. A stat after the write would take an
+ * outside write landing in between for this one, and the next save would then write over that
+ * without asking. Only a write through the provider, which reads no stamp, is stat'd after it.
+ *
+ * The binary .sldd editor saves through this, by way of diskFollow's `writeUserFile`; a hot-exit
+ * backup is a scratch copy, not the user's file, and is written plainly.
+ */
+export async function writeAndStamp(
+  uri: { readonly scheme: string; readonly fsPath: string },
+  bytes: Uint8Array,
+  provider: ProviderWrite,
+): Promise<{ mtime: number; size: number } | undefined> {
+  return (await writeFileSafely(uri, bytes, () => provider.write())).stamp ?? (await provider.stat());
 }
 
 /**
@@ -206,9 +238,14 @@ async function keepsAccess(handle: Fs.FileHandle, original: { mode: number; uid:
 
 /**
  * The replace itself, on Node's fs: exported for the unit tests, which run it against a real
- * temporary directory.
+ * temporary directory. `provider` is the provider's write, for a file whose folder is gone.
  */
-export async function replaceFile(fs: typeof Fs, path: string, bytes: Uint8Array): Promise<Written> {
+export async function replaceFile(
+  fs: typeof Fs,
+  path: string,
+  bytes: Uint8Array,
+  provider?: () => PromiseLike<void>,
+): Promise<Written> {
   let target = path;
   // What of the original the replace carries over (and whether it has other names).
   let stat: { mode: number; uid: number; gid: number; nlink: number } | undefined;
@@ -236,6 +273,11 @@ export async function replaceFile(fs: typeof Fs, path: string, bytes: Uint8Array
     handle = await fs.open(temp, 'wx', stat ? stat.mode & 0o7777 : 0o666);
   } catch (err) {
     if (stat && NO_TEMP.has(errorCode(err) ?? '')) return writeInPlace(fs, target, bytes);
+    // The folder is gone: the provider's write makes it (see the header).
+    if (errorCode(err) === 'ENOENT' && provider) {
+      await provider();
+      return { mode: 'in-place' };
+    }
     throw err;
   }
   let written: Written['stamp'];
