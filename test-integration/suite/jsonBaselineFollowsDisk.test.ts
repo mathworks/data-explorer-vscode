@@ -186,6 +186,36 @@ suite('A JSON .sldd table marks what differs from the file on disk', () => {
       registered.dispose();
     }
   }).timeout(60000);
+
+  test('a webview that has not asked for its rows yet is sent none, whatever repaints', async () => {
+    // A new baseline repaints every tab, and a change nothing narrow can plan repaints wide —
+    // and a tab whose webview is still loading has no listener yet: a full payload posted to it
+    // is a parse and a row build thrown away, before the one its `ready` asks for.
+    const uri = wsUri('json_baseline_before_ready_copy.sldd');
+    await vscode.workspace.fs.copy(wsUri('data.sldd'), uri, { overwrite: true });
+    const table = fakeTable();
+    try {
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await new SlddTextEditorProvider(ctx()).resolveCustomTextEditor(doc, table.panel, token());
+      const edit = new vscode.WorkspaceEdit();
+      edit.insert(uri, new vscode.Position(0, 0), ' ');
+      assert.ok(await vscode.workspace.applyEdit(edit), 'the edit applied');
+      assert.ok(await doc.save(), 'and was saved');
+      await quiet(1000, 'a repaint of the change or of the save');
+      assert.deepStrictEqual(
+        table.posts.filter((m) => m.type === 'setRows' || m.type === 'updateEntryRows').map((m) => m.type),
+        [],
+        'nothing was painted before the webview asked',
+      );
+
+      table.send({ type: 'ready' });
+      await waitFor('the paint it asked for', () => table.posts.some((m) => m.type === 'setRows'));
+      assert.deepStrictEqual(marked(table.rows()), [], 'saved, so nothing is marked');
+    } finally {
+      table.close();
+      await vscode.workspace.fs.delete(uri);
+    }
+  }).timeout(60000);
 });
 
 /** A file system over a temporary folder, counting the whole-file reads made of it. */

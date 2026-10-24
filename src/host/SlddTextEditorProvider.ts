@@ -297,6 +297,13 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      */
     let disposed = false;
 
+    /**
+     * The webview has asked for its rows (`ready`). Until it does it has no listener: a full
+     * payload posted before then — for a new baseline, or a change nothing narrow could plan — is
+     * a parse and a row build thrown away, ahead of the one `ready` asks for anyway.
+     */
+    let webviewReady = false;
+
     // A narrow repaint: one entry's run of rows replaced, removed or added. Counted, because a
     // wide repaint in flight read its text before this and would paint over it (wideLanding).
     const postRowPatch = (msg: Record<string, unknown>): void => {
@@ -383,8 +390,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // that has to outlive a repaint has to be posted after it. A repaint whose rows are dropped
     // (see wideLanding) returns when the rows that replace them are.
     const post = (): Promise<void> => {
-      // A closed view repaints nothing — and must not register the tree a repaint parses.
-      if (disposed) return Promise.resolve();
+      // A closed view repaints nothing — and must not register the tree a repaint parses — and a
+      // webview not yet loaded is painted when it asks (see webviewReady).
+      if (disposed || !webviewReady) return Promise.resolve();
       // Counted before the text is read: a write painted before this point is never again taken
       // for one whose rows are on screen (isPaintedEcho), and a repaint begun before it is no
       // longer the newest (wideLanding).
@@ -2068,6 +2076,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // --- Message wiring ---------------------------------------------------------
     const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
       if (msg?.type === 'ready') {
+        webviewReady = true;
         void post();
       } else if (msg?.type === 'select') {
         this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
