@@ -627,11 +627,25 @@ class BinarySlddDocument implements vscode.CustomDocument, FollowedDocument {
     // Copied because a repaint can dispose a view (an error path re-registers), and a
     // Set mutated mid-iteration is how one view's failure silently skips another's.
     for (const view of [...this.views]) view.repaintAll(from);
+    this.onChanged?.();
   }
 
   repaintOps(applied: AppliedOp[]): void {
     for (const view of [...this.views]) view.repaintOps(applied);
+    this.onChanged?.();
   }
+
+  /**
+   * Called after every repaint of this document, once whatever views it has are painted: the
+   * provider's, which shows the Property Inspector's node again from the tree as it now is.
+   *
+   * Here, at the two repaints, because every change to the document ends in one of them: each
+   * edit, its undo and redo (applyOps), a save (re-registered), a revert and a reload
+   * (applyDisk), and every error path that rebuilds from the text. The views have re-registered
+   * the tree by then, when a wide repaint does that, so what the inspector resolves is the tree
+   * the table shows.
+   */
+  onChanged?: () => void;
 
   dispose(): void {
     this.disposed = true;
@@ -648,6 +662,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   public onSelect?: (uriString: string, rowIds: string[]) => void;
   // Handle a Usage-column link click (wired in extension.ts).
   public onNavigate?: (target: string, referrer?: string) => void;
+  // A document's tree changed: an edit, an undo or a redo, a save, a revert or a reload (wired in
+  // extension.ts, which shows the Property Inspector's node again from the tree, if it is this
+  // document's).
+  public onChanged?: (uriString: string) => void;
 
   private readonly _onDidChangeCustomDocument =
     new vscode.EventEmitter<vscode.CustomDocumentEditEvent<BinarySlddDocument>>();
@@ -704,6 +722,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     const zip = unzipSync(bytes);
     const doc = new BinarySlddDocument(uri, chunkOf(zip), passThroughParts(zip), false, !!openContext.backupId);
     doc.stamp = stamp;
+    doc.onChanged = () => this.onChanged?.(uri.toString());
     // Relay the document's edit events to the provider-level emitter VS Code listens on.
     doc.onDidChangeCustomDocument((e) => this._onDidChangeCustomDocument.fire(e));
     doc.track(this.watchDisk(doc));
