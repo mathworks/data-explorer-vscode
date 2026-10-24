@@ -93,17 +93,6 @@ type AssertTrue<T extends true> = T;
 type CoreCellFits<K extends keyof TreeTableRow & keyof RowData> = RowData[K] extends TreeTableRow[K] | undefined
   ? true
   : false;
-// The same check for a key this table declares ahead of the core that sends it: `true`
-// while core's RowData does not declare the key, and the full CoreCellFits from the pin that
-// does. Only for that window — once the pin carries the key, the line moves to the strict
-// form, so a key core renamed or dropped is a build error rather than a pass.
-//
-// "Declares" by name: RowData's `[key: string]: unknown` makes every string one of its keys,
-// so `keyof RowData` alone would read an undeclared key as a declared `unknown` (and fail).
-type DeclaredKeys<T> = keyof { [K in keyof T as string extends K ? never : number extends K ? never : K]: T[K] };
-type CoreCellFitsOnceDeclared<K extends keyof TreeTableRow> = K extends DeclaredKeys<RowData>
-  ? CoreCellFits<K & keyof RowData>
-  : true;
 type _CoreRowContract = [
   AssertTrue<CoreCellFits<'ID'>>,
   AssertTrue<CoreCellFits<'parent'>>,
@@ -116,8 +105,7 @@ type _CoreRowContract = [
   AssertTrue<CoreCellFits<'UsedBy'>>,
   AssertTrue<CoreCellFits<'_valueEditable'>>,
   AssertTrue<CoreCellFits<'_descriptionEditable'>>,
-  // Strict (CoreCellFits) at the core pin that adds `_descriptionApplies` to RowData.
-  AssertTrue<CoreCellFitsOnceDeclared<'_descriptionApplies'>>,
+  AssertTrue<CoreCellFits<'_descriptionApplies'>>,
 ];
 
 export interface EditCompletedDetail {
