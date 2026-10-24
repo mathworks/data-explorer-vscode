@@ -12,11 +12,11 @@
 //    therefore kept whether or not a page can take it, and sent on every `ready`, not only the
 //    first. A disposed view takes it with it: a next view starts empty.
 //
-//  - A node is only sent when it changes what the page shows. Every editor asks the inspector to
-//    show its node again whenever the document's tree changes (inspectorSelection.ts), which for
-//    the JSON view is every keystroke in the text, and a `showProps` closes an open Variable
-//    Editor (pi-main.ts: its rows are replaced). So an edit elsewhere in the document, which
-//    leaves the node's rows as they were, must not reach the page.
+//  - A node is only sent when it changes what the page shows. The binary .sldd editor asks the
+//    inspector to show its node again whenever the document's tree changes (inspectorSelection.ts),
+//    at every edit, undo and redo, and the MAT-file editor at every revert and reload; a
+//    `showProps` closes an open Variable Editor (pi-main.ts: its rows are replaced). So an edit
+//    elsewhere in the document, which leaves the node's rows as they were, must not reach the page.
 //
 //  - "What the page shows" is everything it was sent: the rows (`showProps`, compared as posted)
 //    and, when a Variable Editor was opened on them, the cells it was sent for it (`matrixCells`).

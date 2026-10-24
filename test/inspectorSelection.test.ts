@@ -109,4 +109,43 @@ describe('InspectorSelection.refresh', () => {
     h.selection.refresh(OTHER);
     expect(h.shown.map((s) => s.node)).toEqual([kp, ki, ki]);
   });
+
+  it('never throws into the edit that changed the tree: an inspector that cannot show the node is cleared', () => {
+    // A refresh runs inside the editor's repaint, which an undo and a redo run inside VS Code's
+    // own call: a throw here would fail that undo after it had changed the document.
+    const cleared: string[] = [];
+    let failing = false;
+    const selection = new InspectorSelection(
+      {
+        showNode: () => {
+          if (failing) throw new Error('toPIObject failed');
+        },
+        clear: () => void cleared.push('clear'),
+      },
+      () => ({ name: 'Kp' }),
+    );
+    selection.show(DOC, ['a']);
+    failing = true;
+    expect(() => selection.refresh(DOC)).not.toThrow();
+    expect(cleared).toEqual(['clear']);
+  });
+
+  it('never throws when the lookup or the clear throws either', () => {
+    let finding = true;
+    const selection = new InspectorSelection(
+      {
+        showNode: () => undefined,
+        clear: () => {
+          throw new Error('the view is gone');
+        },
+      },
+      () => {
+        if (!finding) throw new Error('the session is gone');
+        return { name: 'Kp' };
+      },
+    );
+    selection.show(DOC, ['a']);
+    finding = false;
+    expect(() => selection.refresh(DOC)).not.toThrow();
+  });
 });

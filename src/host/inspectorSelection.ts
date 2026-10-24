@@ -56,11 +56,24 @@ export class InspectorSelection {
    * cleared (table-main's `scheduleVanishedClear`), each through `show`. Clearing here too would
    * blank the inspector between the edit and that report, the flicker the table defers its own
    * clear to avoid.
+   *
+   * Never throws. A refresh runs inside the editor's repaint, and the binary .sldd editor's undo
+   * and redo repaint inside VS Code's own call, after they have changed the document: a node
+   * whose rows cannot be built would otherwise fail that undo half-way. The inspector is cleared
+   * instead, since it cannot show the node the table now does.
    */
   refresh(uriString: string): void {
     if (this.last?.uriString !== uriString) return;
-    const node = this.resolve();
-    if (node) this.inspector.showNode(node, uriString);
+    try {
+      const node = this.resolve();
+      if (node) this.inspector.showNode(node, uriString);
+    } catch {
+      try {
+        this.inspector.clear();
+      } catch {
+        /* nothing left to tell it */
+      }
+    }
   }
 
   /** The node of the first row of the last selection, or null for none, a section, or one gone. */
