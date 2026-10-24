@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
-import { buildPropertyGroups } from './piBuilder.js';
+import { buildPropertyGroups, type PIPropertyGroup } from './piBuilder.js';
 import { matrixCellsMessage } from './matrixRequest.js';
 import { renderWebviewHtml } from './webviewHtml.js';
 import type { PropsToHostMessage } from '../common/protocol.js';
@@ -9,7 +9,13 @@ export class PropertiesViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'dataExplorer.properties';
   private view: vscode.WebviewView | null = null;
   private ready = false;
-  private pending: any[] | null = null; // pending groups
+  // What the inspector shows: the groups of the node on display, or null for the empty pane.
+  // Kept whether or not a page can take it now, and sent on EVERY `ready`, not only the first.
+  // This view does not retain its context when hidden, so hiding it and showing it again
+  // reloads its page, which starts empty and says `ready` again; and a message posted to it
+  // while it was hidden never arrived. Sent once, to the first page, it left the pane empty
+  // after every hide and show, and a selection made while it was hidden never showed.
+  private groups: PIPropertyGroup[] | null = null;
   // The node currently on display, kept for `requestMatrix` only: its Value row may
   // carry a MatrixDescriptor, and the cells behind one are fetched when the panel
   // opens rather than stamped onto the row (see matrixRequest.ts for why).
@@ -36,10 +42,9 @@ export class PropertiesViewProvider implements vscode.WebviewViewProvider {
     view.webview.onDidReceiveMessage((msg: PropsToHostMessage) => {
       if (msg?.type === 'ready') {
         this.ready = true;
-        if (this.pending) {
-          view.webview.postMessage({ type: 'showProps', groups: this.pending });
-          this.pending = null;
-        }
+        // A page that has just loaded shows the empty pane (pi-main.ts says `ready` after
+        // setEmpty), so there is something to send only when the inspector holds a node.
+        if (this.groups) view.webview.postMessage({ type: 'showProps', groups: this.groups });
       } else if (msg?.type === 'navigate') {
         // Answered by the same closure the three table providers use, so a Data Type link
         // behaves identically whichever pane it was clicked in.
@@ -51,6 +56,9 @@ export class PropertiesViewProvider implements vscode.WebviewViewProvider {
     view.onDidDispose(() => {
       this.view = null;
       this.ready = false;
+      // With the node it is about: a next view starts empty, rather than on rows whose node
+      // this provider no longer answers a matrix request or a link for.
+      this.groups = null;
       this.shown = null;
       this.shownFrom = undefined;
     });
@@ -59,23 +67,17 @@ export class PropertiesViewProvider implements vscode.WebviewViewProvider {
 
   showNode(node: any, fromUri?: string): void {
     const groups = buildPropertyGroups(node);
+    this.groups = groups;
     this.shown = node;
     this.shownFrom = fromUri;
-    if (this.view && this.ready) {
-      this.view.webview.postMessage({ type: 'showProps', groups });
-    } else {
-      this.pending = groups;
-    }
+    if (this.view && this.ready) this.view.webview.postMessage({ type: 'showProps', groups });
   }
 
   clear(): void {
+    this.groups = null;
     this.shown = null;
     this.shownFrom = undefined;
-    if (this.view && this.ready) {
-      this.view.webview.postMessage({ type: 'empty' });
-    } else {
-      this.pending = null;
-    }
+    if (this.view && this.ready) this.view.webview.postMessage({ type: 'empty' });
   }
 
   /**
