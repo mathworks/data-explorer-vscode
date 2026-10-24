@@ -263,10 +263,15 @@ describe('the message vocabulary and the editors that speak it are both still he
     }
   });
 
-  it('finds every provider that has a table handing its messages to it, and answering none twice', () => {
+  it('finds every provider handing the shared messages to its table, and answering none twice', () => {
     const tabled = PROVIDERS.filter((p) => p.table);
-    // The three adopted so far; the JSON view's chain still answers them itself.
-    expect(tabled.map((p) => p.file).sort()).toEqual(['BinaryEditorProvider.ts', 'BinarySlddEditorProvider.ts', 'MatEditorProvider.ts']);
+    // Every table provider: none spells the shared messages out in a chain of its own any more.
+    expect(tabled.map((p) => p.file).sort()).toEqual([
+      'BinaryEditorProvider.ts',
+      'BinarySlddEditorProvider.ts',
+      'MatEditorProvider.ts',
+      'SlddTextEditorProvider.ts',
+    ]);
     for (const p of tabled) {
       expect(p.dispatchesTable, `${p.file} hands each message to its table`).toBe(true);
       const twice = [...p.table!].filter((t) => p.branches.has(t));
