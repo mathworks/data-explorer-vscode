@@ -381,9 +381,16 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
       return { removed: false, reason: this.describe(err) };
     }
     if (mat.readOnly) return { removed: false, reason: `${this.metaPath} is read-only` };
+    // The file's variables by name, once: a select-all cut of a large file names every one.
+    const byName = new Map<string, any[]>();
+    for (const v of mat.children as any[]) {
+      const named = byName.get(v.name);
+      if (named) named.push(v);
+      else byName.set(v.name, [v]);
+    }
     const variables: any[] = [];
     for (const name of new Set(targets.map((t) => toEntrySelector(t).name))) {
-      const named = (mat.children as any[]).filter((v) => v.name === name);
+      const named = byName.get(name) ?? [];
       if (named.length > 1) return { removed: false, reason: `it holds more than one "${name}", and a move takes its original out by name` };
       variables.push(...named);
     }
@@ -393,12 +400,14 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
       () => DataModel.deleteNodesById(variables.map((v) => v.id)),
       () => variables,
     );
-    if (observed.error) {
-      this.repaintAll();
-      return { removed: false, reason: this.describe(observed.error) };
-    }
-    if (observed.steps === 0) return { removed: false, reason: 'the file did not let it be removed' };
-    return { removed: true };
+    // Answered from what the file holds now, not from whether core threw: a delete it recorded
+    // before throwing took the originals out all the same (and is an edit VS Code was handed),
+    // and telling the user to remove them by hand would have them look for what is gone.
+    const gone = variables.every((v) => v.parent !== mat);
+    if (observed.error) this.repaintAll();
+    if (gone && observed.steps > 0) return { removed: true };
+    if (observed.error) return { removed: false, reason: this.describe(observed.error) };
+    return { removed: false, reason: 'the file did not let it be removed' };
   }
 
   /** Run core's undo or redo `steps` times on this file's stack, and repaint what it touched. */
@@ -714,6 +723,11 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       }
     };
 
+    // Closed while a paint was awaiting: what it would post next has nowhere to go (a disposed
+    // webview throws on a post), and the document, which other views may still show, is not this
+    // view's to report on.
+    let viewClosed = false;
+
     const post = async (): Promise<void> => {
       let mat = treeOrError();
       if (!mat) return;
@@ -722,7 +736,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
         // The Usage column, as the read-only view fills it. Awaited only here: an edit's repaint
         // fills it from the graph this built (annotateDataRowsNow).
         await annotateDataRows(uriString, built.planned.rows).catch(() => false);
-        if (document.disposed) return;
+        if (document.disposed || viewClosed) return;
         // The document moved while the graph was being built: these rows are from before it. A
         // reload (replace) moves it onto another tree altogether, so the tree is asked for again,
         // and the rows, the notice and the gallery's classes below are all of the one it holds.
@@ -752,6 +766,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
           },
           name,
         );
+        if (viewClosed) return;
         // Behind the rows, in the order the dictionary views post them: where a paste or a drop
         // can land (the whole file, one target, admitting what core says it does), and what the
         // clipboard holds. A read-only file is no target: its empty admitted list would read as
@@ -765,7 +780,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
         repaintClipMark();
         drainNavigateSelect(webview, uriString);
       } catch (err) {
-        webview.postMessage({ type: 'error', message: `Failed to show ${name}: ${document.describe(err)}` });
+        if (!viewClosed) webview.postMessage({ type: 'error', message: `Failed to show ${name}: ${document.describe(err)}` });
       }
     };
 
@@ -838,8 +853,8 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       try {
         mat = document.model();
       } catch {
-        // No tree to find the variables in: the wide repaint is where that is said.
-        void post();
+        // No tree, so no rows to mark: the view said why when it was painted, and saying it
+        // again on every clipboard broadcast would only flash the same banner.
         return;
       }
       paintedMark = next;
@@ -1145,6 +1160,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     webview.html = renderTableWebview(webview, distRoot);
 
     webviewPanel.onDidDispose(() => {
+      viewClosed = true;
       document.views.delete(view);
       unregisterWebview(webview);
       unregisterAddGalleryView(webviewPanel);

@@ -601,6 +601,30 @@ suite('MAT-file pastes and drops refused', () => {
     assert.strictEqual(a.events.length, 0);
   });
 
+  test('a move whose source delete core recorded and then threw is answered by what the file holds: done', async () => {
+    const a = await openMat(opened, dir, 'throws.mat', matFixture('pv_basic.mat'));
+    const j = await openJson(opened, dir, 'target.sldd');
+    a.view.send({ type: 'cut', rowIds: [variableRow(a.view.posts, 'x').ID] });
+    const deleteNodesById = (DataModel as any).deleteNodesById;
+    (DataModel as any).deleteNodesById = (...args: unknown[]) => {
+      const done = deleteNodesById(...args);
+      throw new Error(`after the delete (${done})`);
+    };
+    try {
+      await onJson(j, { type: 'paste', rowId: 'section:design' });
+      await moveDone();
+      await waitFor('the original taken out', () => !a.names().includes('x'));
+      await quiet(150, 'a report the move must not make');
+    } finally {
+      (DataModel as any).deleteNodesById = deleteNodesById;
+    }
+    assert.deepStrictEqual(errorsIn(j.view.posts), [], 'no "remove it there by hand" for an original that is gone');
+    assert.ok(j.names().includes('x'));
+    assert.strictEqual(a.events.length, 1, 'the delete is an edit VS Code was handed');
+    await a.events[0].undo();
+    assert.ok(a.names().includes('x'), 'and its undo puts the original back');
+  });
+
   test('the drag register is let go of after a drop that landed, one refused, and one that failed', async () => {
     const m = await openMat(opened, dir, 'gains.mat', matFixture('pv_basic.mat'));
     const j = await openJson(opened, dir, 'source.sldd');
