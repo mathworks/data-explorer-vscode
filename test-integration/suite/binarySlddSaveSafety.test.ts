@@ -8,6 +8,8 @@
 //   - a document restored from a hot-exit backup holds the stamp of the file its edits were made
 //     over (src/host/backupId.ts), so its first save asks before writing over a file another
 //     program changed since;
+//   - Save As onto the file itself, by its own name or another link to it, is a save, and moves
+//     the stamp and the dirty flag as one does;
 //
 // Every file here is a copy of the workspace fixture in a fresh tmpdir, as in
 // binarySlddOutsideChange.test.ts, so a listing of the directory is a listing of what the save
@@ -17,6 +19,7 @@ import * as vscode from 'vscode';
 import {
   chmodSync,
   closeSync,
+  linkSync,
   mkdtempSync,
   openSync,
   readdirSync,
@@ -224,5 +227,46 @@ suite('Binary .sldd: a save over the user’s file', () => {
     await save(restored);
     assert.ok(chunkOnDisk(path).includes('>Ki<'));
     await backup.delete();
+  });
+
+  const saveAs = (doc: any, dest: vscode.Uri) => provider.saveCustomDocumentAs(doc, dest, token());
+
+  test('Save As onto the file itself is a save', async () => {
+    const doc = await openDoc();
+    edit(doc, 'Ki');
+    await saveAs(doc, uri);
+    assert.ok(chunkOnDisk(path).includes('>Ki<'), 'the edit is on disk');
+    assert.strictEqual(doc.edits.dirty, false, 'and the document is clean, as a save leaves it');
+    // The stamp moved with the write, so the next save does not take that write for an outside one.
+    edit(doc, 'Kd', 'Ki');
+    await save(doc);
+    assert.ok(chunkOnDisk(path).includes('>Kd<'));
+    assert.deepStrictEqual(asked, []);
+  });
+
+  test('Save As onto another name of the same file (a hard link) is a save too, and keeps the link', async () => {
+    if (!posix) return;
+    const alias = join(dir, 'alias.sldd');
+    linkSync(path, alias);
+    const doc = await openDoc();
+    edit(doc, 'Ki');
+    await saveAs(doc, vscode.Uri.file(alias));
+    assert.strictEqual(doc.edits.dirty, false, 'clean, as a save leaves it');
+    assert.strictEqual(statSync(path).ino, statSync(alias).ino, 'the two names are still one file');
+    assert.ok(chunkOnDisk(path).includes('>Ki<'), 'which holds the edit');
+    edit(doc, 'Kd', 'Ki');
+    await save(doc);
+    assert.deepStrictEqual(asked, [], 'and the next save does not ask');
+  });
+
+  test('Save As onto another file writes that file, and leaves this one and its stamp alone', async () => {
+    const doc = await openDoc();
+    edit(doc, 'Ki');
+    const stamp = doc.stamp;
+    const other = join(dir, 'other.sldd');
+    await saveAs(doc, vscode.Uri.file(other));
+    assert.ok(chunkOnDisk(other).includes('>Ki<'), 'the copy holds the edit');
+    assert.ok(same(new Uint8Array(readFileSync(path)), FIXTURE), 'the document’s own file is as it was');
+    assert.deepStrictEqual(doc.stamp, stamp, 'and so is the stamp it is held to');
   });
 });

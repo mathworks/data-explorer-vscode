@@ -134,6 +134,7 @@ import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConfli
 import { saveSettled } from './settledSave.js';
 import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, writeUserFile, type FollowedDocument } from './diskFollow.js';
 import { backupId, backupSource } from './backupId.js';
+import { sameFile } from './safeWrite.js';
 
 // viewType of the default byte-backed view (BinaryEditorProvider), which owns the rule
 // that picks an editor from a .sldd's bytes. A constant here rather than an import,
@@ -1574,8 +1575,14 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   async saveCustomDocumentAs(
     document: BinarySlddDocument,
     dest: vscode.Uri,
-    _token: vscode.CancellationToken,
+    token: vscode.CancellationToken,
   ): Promise<void> {
+    // Onto the file itself, by its own name or another link to it: that is a save, and has to
+    // move the stamp, the save gate's chunk and the dirty flag as one does, or the next save
+    // would take its own write for an outside one. As the MAT-file editor's Save As.
+    if (dest.toString() === document.uri.toString() || (await sameFile(dest, document.uri))) {
+      return this.saveCustomDocument(document, token);
+    }
     await this.writeTo(document, dest);
   }
 
