@@ -102,7 +102,7 @@ export interface ProviderWrite {
  * outside write landing in between for this one, and the next save would then write over that
  * without asking. Only a write through the provider, which reads no stamp, is stat'd after it.
  *
- * Both byte-backed editors save through this, by way of diskFollow's `writeUserFile`; a hot-exit
+ * The binary .sldd editor saves through this, by way of diskFollow's `writeUserFile`; a hot-exit
  * backup is a scratch copy, not the user's file, and is written plainly.
  */
 export async function writeAndStamp(

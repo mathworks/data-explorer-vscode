@@ -5,10 +5,11 @@
 //
 // The binary .sldd and MAT-file editors hand the inspector its node again whenever the document's
 // tree changes (inspectorSelection.ts), the binary one at every edit, undo and redo, and a
-// `showProps` closes an open Variable Editor. So the page is sent a node only when that changes what it shows: its
-// rows, or the cells its open Variable Editor was sent. The nodes here are real ones, read by the
-// same reader the JSON view uses, re-read under the same id after an edit as an editor re-reads
-// them; PropertiesViewProvider's wiring of this is in test-integration/suite/propertiesView.test.ts.
+// `showProps` closes an open Variable Editor. So the page is sent a node only when that changes
+// what it shows: its rows, or the cells its open Variable Editor was sent. The nodes here are
+// real ones, read by the same reader the JSON view uses, re-read under the same id after an edit
+// as an editor re-reads them; PropertiesViewProvider's wiring of this is in
+// test-integration/suite/propertiesView.test.ts.
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';

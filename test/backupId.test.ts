@@ -3,7 +3,7 @@
 // The hot-exit backup id of the two writable byte-backed views (src/host/backupId.ts): where the
 // backup is, and the stamp of the file its edits were made over, which a restore's first save
 // compares the file with. What a restore then does with them is exercised in real VS Code
-// (test-integration/suite/binarySlddSaveGate.test.ts, matEdit.test.ts).
+// (test-integration/suite/binarySlddSaveSafety.test.ts, matEdit.test.ts).
 import { describe, it, expect } from 'vitest';
 import { backupId, backupSource } from '../src/host/backupId.js';
 

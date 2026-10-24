@@ -1636,7 +1636,8 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // VS Code marks the document clean as it asks for this, without waiting for it. The read
     // comes first, so that the watcher, which reads the dirty-flag copy, does not reload over
     // a revert still reading; the copy is marked clean once the read is in, either way. As the
-    // MAT-file editor's revert.
+    // MAT-file editor's revert. A revert also ends a save conflict, as it does for a text file,
+    // whether or not its read succeeds: both paths end in applyDisk, which ends it.
     let read: DiskRead;
     try {
       read = await readDisk(document.uri);
@@ -1646,19 +1647,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       // or wrote it, the chunk the save gate holds a save to and the parts beside it, under the
       // stamp it already holds, so that a save still asks about a file that changed. A document
       // restored from a backup last read the backup. The error says why to VS Code, which shows it.
-      this.markReverted(document);
+      document.edits.reverted();
       document.applyDisk({ stamp: document.stamp, chunkXml: document.saved.xml, parts: document.savedParts });
       throw err;
     }
-    this.markReverted(document);
-    document.applyDisk(read);
-  }
-
-  /** A revert also ends a save conflict, as it does for a text file, whether or not its read succeeds. */
-  private markReverted(document: BinarySlddDocument): void {
     document.edits.reverted();
-    document.inConflict = false;
-    document.overwriteStamp = undefined;
+    document.applyDisk(read);
   }
 
   async backupCustomDocument(

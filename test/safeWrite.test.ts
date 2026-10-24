@@ -238,7 +238,7 @@ describe('replaceFile', () => {
 });
 
 describe('writeAndStamp', () => {
-  // The stamp a save records for its own write (both byte-backed editors, through diskFollow's
+  // The stamp a save records for its own write (the binary .sldd editor's, through diskFollow's
   // writeUserFile): the watcher ignores an event that leaves the disk matching it, and the next
   // save asks before writing over a disk that does not.
   let dir: string;
