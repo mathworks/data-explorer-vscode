@@ -17,6 +17,7 @@
 import * as vscode from 'vscode';
 import { basename } from '../common/pathUtil.js';
 import { writeAndStamp } from './safeWrite.js';
+import { backupSource } from './backupId.js';
 import {
   changedOnDisk,
   checksSaveConflicts,
@@ -36,6 +37,31 @@ export async function stampOf(uri: vscode.Uri): Promise<DiskStamp | undefined> {
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The file's bytes, with the stamp they were read under: what a revert and a reload replace a
+ * document with, and what a document opened from the file is held to.
+ *
+ * The stat comes BEFORE the read, so a write that lands between the two leaves an old stamp on
+ * new bytes, and the next save asks about a conflict it did not need to. The other order would
+ * leave a new stamp on old bytes, and the next save would silently overwrite the write it missed.
+ */
+export async function readStamped(uri: vscode.Uri): Promise<{ stamp: DiskStamp | undefined; bytes: Uint8Array }> {
+  const stamp = await stampOf(uri);
+  return { stamp, bytes: await vscode.workspace.fs.readFile(uri) };
+}
+
+/**
+ * The bytes a document opens on, and the stamp it is held to: the file's (`readStamped`), or, for
+ * a hot-exit backup VS Code restores (`backupId`, its id), the backup's bytes under the stamp the
+ * backup recorded (backupId.ts) — of the file the edits were made over, which may be another
+ * program's since, so that the restored document's first save asks before writing over it.
+ */
+export async function readForOpen(uri: vscode.Uri, backupId: string | undefined): Promise<{ stamp: DiskStamp | undefined; bytes: Uint8Array }> {
+  if (!backupId) return readStamped(uri);
+  const backup = backupSource(backupId);
+  return { stamp: backup.stamp, bytes: await vscode.workspace.fs.readFile(vscode.Uri.parse(backup.uri)) };
 }
 
 /**

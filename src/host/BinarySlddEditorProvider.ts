@@ -132,8 +132,8 @@ import { binaryEditSrcId } from '../common/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { saveSettled } from './settledSave.js';
-import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, writeUserFile, type FollowedDocument } from './diskFollow.js';
-import { backupId, backupSource } from './backupId.js';
+import { followDisk, readForOpen, readStamped, refuseIfChangedOnDisk, watchDisk, writeUserFile, type FollowedDocument } from './diskFollow.js';
+import { backupId } from './backupId.js';
 import { sameFile } from './safeWrite.js';
 
 // viewType of the default byte-backed view (BinaryEditorProvider), which owns the rule
@@ -232,14 +232,7 @@ function passThroughParts(zip: Record<string, Uint8Array>): Record<string, Uint8
   return parts;
 }
 
-/**
- * One read of the file behind a document, with the stamp it was read under.
- *
- * The stat comes BEFORE the read, so a write that lands between the two leaves an old stamp
- * on new bytes. The next save then asks about a conflict it did not need to. The other order
- * would leave a new stamp on old bytes, and the next save would silently overwrite the write
- * it missed.
- */
+/** One read of the file behind a document, with the stamp it was read under (diskFollow.readStamped). */
 interface DiskRead {
   stamp: DiskStamp | undefined;
   /** The dictionary's data part, decoded (`chunkOf`). */
@@ -255,8 +248,8 @@ interface DiskRead {
  * and a reload leaves the document as it is, still held to the stamp it had, so its next save asks.
  */
 async function readDisk(uri: vscode.Uri): Promise<DiskRead> {
-  const stamp = await stampOf(uri);
-  const zip = unzipSync(await vscode.workspace.fs.readFile(uri));
+  const { stamp, bytes } = await readStamped(uri);
+  const zip = unzipSync(bytes);
   return { stamp, chunkXml: chunkOf(zip), parts: passThroughParts(zip) };
 }
 
@@ -689,20 +682,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     _token: vscode.CancellationToken,
   ): Promise<BinarySlddDocument> {
     // A hot-exit backup is a whole .sldd (backupCustomDocument), so a restore opens it as the
-    // document. Its stamp is the one the backup recorded, of the file the edits were made over
-    // (backupId.ts): the file now may be another program's since, and a save has to ask before
-    // writing over it. Otherwise the file's own, taken before the read for the reason given at
-    // readDisk.
-    let source = uri;
-    let stamp: DiskStamp | undefined;
-    if (openContext.backupId) {
-      const backup = backupSource(openContext.backupId);
-      source = vscode.Uri.parse(backup.uri);
-      stamp = backup.stamp;
-    } else {
-      stamp = await stampOf(uri);
-    }
-    const bytes = await vscode.workspace.fs.readFile(source);
+    // document, held to the stamp the backup recorded; otherwise the file's own, taken before the
+    // read (diskFollow.readForOpen, the MAT-file editor's too).
+    const { stamp, bytes } = await readForOpen(uri, openContext.backupId);
     // A custom editor's selector is a filename glob, and the two .sldd formats are not
     // distinguishable by name — so "Reopen Editor With…" offers THIS view for every
     // *.sldd, including a JSON one, which has nothing for `unzipSync` to read. That

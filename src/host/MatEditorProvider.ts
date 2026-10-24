@@ -70,29 +70,26 @@ import {
   type DeleteTarget,
 } from './editorHub.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
-import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, writeUserFile, type FollowedDocument } from './diskFollow.js';
+import { followDisk, readForOpen, readStamped, refuseIfChangedOnDisk, watchDisk, writeUserFile, type FollowedDocument } from './diskFollow.js';
 import { SaveMarks, replacementsIn, type SaveMark, type SaveSnapshot } from './saveMarks.js';
 import { saveSettled } from './settledSave.js';
 import { sameFile } from './safeWrite.js';
-import { backupId, backupSource } from './backupId.js';
+import { backupId } from './backupId.js';
 import { binaryEditSrcId } from '../common/srcId.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { matCatalog } from '../common/addCatalog.js';
 
-/** One read of the file behind a document, with the stamp it was read under (stat first). */
+/** One read of the file behind a document, with the stamp it was read under (diskFollow.readStamped). */
 interface DiskRead {
   stamp: DiskStamp | undefined;
   bytes: ArrayBuffer;
 }
 
 async function readDisk(uri: vscode.Uri): Promise<DiskRead> {
-  // The stat BEFORE the read, so a write landing between them leaves an old stamp on new bytes,
-  // and the next save asks about a conflict it did not need to. The other order would leave a
-  // new stamp on old bytes, and the next save would silently overwrite the write it missed.
-  const stamp = await stampOf(uri);
-  return { stamp, bytes: toArrayBuffer(await vscode.workspace.fs.readFile(uri)) };
+  const { stamp, bytes } = await readStamped(uri);
+  return { stamp, bytes: toArrayBuffer(bytes) };
 }
 
 /**
@@ -666,20 +663,9 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     _token: vscode.CancellationToken,
   ): Promise<MatDocument> {
     // A hot-exit backup is a whole MAT-file (backupCustomDocument), so a restore opens it as the
-    // document. Its stamp is the one the backup recorded, of the file the edits were made over
-    // (backupId.ts, the binary .sldd editor's format too): the file now may be another program's
-    // since, and a save has to ask before writing over it.
-    let source = uri;
-    let stamp: DiskStamp | undefined;
-    if (openContext.backupId) {
-      const backup = backupSource(openContext.backupId);
-      source = vscode.Uri.parse(backup.uri);
-      stamp = backup.stamp;
-    } else {
-      stamp = await stampOf(uri);
-    }
-    const bytes = toArrayBuffer(await vscode.workspace.fs.readFile(source));
-    const doc = new MatDocument(uri, bytes, !!openContext.backupId);
+    // document, held to the stamp the backup recorded (diskFollow.readForOpen).
+    const { stamp, bytes } = await readForOpen(uri, openContext.backupId);
+    const doc = new MatDocument(uri, toArrayBuffer(bytes), !!openContext.backupId);
     doc.stamp = stamp;
     doc.onChanged = () => this.onChanged?.(uri.toString());
     doc.onDidChangeCustomDocument((e) => this._onDidChangeCustomDocument.fire(e));
