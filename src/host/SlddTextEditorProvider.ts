@@ -247,9 +247,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * this text is proof the text parsed. Every path that leaves the two out of step has to
      * clear it — which is the one obligation this flag imposes and the only way it can lie.
      *
-     * The wide repaint is one of those paths for as long as it is in flight. It clears the flag
-     * when it begins and sets it only when its rows LAND, because in between the rows on screen
-     * are still the old ones — for seconds, when the usage graph is cold (see wideRepaint.ts).
+     * The wide repaint sets it only when its rows LAND, not when it has parsed: in between, the
+     * rows on screen are still the old ones — for seconds, when the usage graph is cold — and a
+     * narrow repaint in that window is spliced into THEM, so the rows the wide repaint is holding
+     * are read again before they may land (see wideRepaint.ts).
      */
     let modelInSync = false;
 
@@ -366,10 +367,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       // for one whose rows are on screen (isPaintedEcho), and a repaint begun before it is no
       // longer the newest (wideLanding).
       const epoch = ++wideEpoch;
-      // Not in step again until these rows LAND, which can be seconds away (the usage graph,
-      // below). Until then the rows on screen are older than the text, so a change in the
-      // window takes the wide path and an edit builds its own tree — see wideLanding.
-      modelInSync = false;
+      // modelInSync is NOT set here, only when these rows land — which can be seconds away (the
+      // usage graph, below). Until then the flag says what it said: rows in step stay in step
+      // through the narrow repaints, each of which this repaint then reads again for
+      // (wideLanding), and rows out of step stay withdrawn from them.
       latestPost = paintWide(epoch);
       return latestPost;
     };
@@ -2109,8 +2110,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // A model created or deleted in the workspace can add or remove a block that uses one of these
     // entries, and nothing about this document changes when it does (usageRepostWatch.ts). Held
     // back while a write this view painted ahead of is in flight: the repost re-reads the text,
-    // which until the write lands is the text from BEFORE the edit on screen, and the write's own
-    // change event is then skipped as an echo — leaving the table showing the edit undone.
+    // which until the write lands is the text from BEFORE the edit on screen — the edit would
+    // vanish from the table until the write's echo, no longer trusted after a wide repaint
+    // (isPaintedEcho), repainted the whole of it a second time.
     const usageSub = subscribeUsageRepost(
       () => void post(),
       () => paintedWrite !== null || hostEdit !== null,
