@@ -190,6 +190,19 @@ function owningEntriesOf(rowIds: unknown, findNode: (rowId: string) => any): any
 }
 
 /**
+ * A copy, a cut or a drag refused before anything reached its register: an entry that cannot
+ * travel (core's copyRefusal), or a cut of one its document cannot tell apart from another.
+ * The message names the entry and is shown as it is, never behind a "Failed to" prefix: it is
+ * a reason, not a failure.
+ */
+export class CopyRefused extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CopyRefused';
+  }
+}
+
+/**
  * The section an entry is carried from, as its register item spells `sourceSection`: its
  * section's name in a dictionary, and WHOLE_FILE_SECTION for an entry with no section between
  * it and its document — a MAT-file's variable, whose parent is the file's own source node. That
@@ -204,6 +217,26 @@ export function sourceSectionOf(entry: any): string {
   if (!parent) return WHOLE_FILE_SECTION;
   if (typeof parent.name === 'string' && (DataModel as any).getDataSource?.(parent.name) === parent) return WHOLE_FILE_SECTION;
   return parent.name ?? '';
+}
+
+/**
+ * Refuse, in core's words, the first of `entries` that cannot travel on the clipboard or in a
+ * drag (DataModel.copyRefusal): one with no value to write, one past the writer's budget, a
+ * MAT-file variable a copy would read back as another value. Asked of every format's entries
+ * alike, here, where both registers are filled: the reason a copy can be refused is a fact about
+ * the entry, and a check one provider made and another did not is a paste that lands wrong.
+ *
+ * Asked by id, so only of an entry the session resolves that id to: a node it does not hold, or
+ * one whose id it resolves to another node (two same-named MAT-file variables share one), would
+ * be judged as something else. Such an entry is left to its serialize(), which the snapshot
+ * makes next and which refuses what cannot be written.
+ */
+function refuseUncopyable(entries: readonly any[]): void {
+  for (const entry of entries) {
+    if (typeof entry?.id !== 'string' || (DataModel as any).findNodeById?.(entry.id) !== entry) continue;
+    const why = DataModel.copyRefusal(entry.id);
+    if (why) throw new CopyRefused(why);
+  }
 }
 
 /**
@@ -251,10 +284,11 @@ function entryNameCounts(root: any): Map<string, number> {
 /**
  * Each row's owning entry as a register item: what to paste, the section it came from, the
  * facts a drop target judges it by, and whether a move could take its original out alone. The
- * one build behind both registers.
+ * one build behind both registers, after the one refusal they share.
  */
 function registerItemsOf(rowIds: unknown, findNode: (rowId: string) => any): ClipboardItem[] {
   const entries = owningEntriesOf(rowIds, findNode);
+  refuseUncopyable(entries);
   const shared = entriesSharingAName(entries);
   return entries.map((entry): ClipboardItem => {
     const payload = entry.serialize() as Record<string, unknown>;

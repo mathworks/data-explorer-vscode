@@ -5,6 +5,8 @@
 // the two actions every provider runs (clipboardAction's copyEntriesToClipboard and
 // dragEntries):
 //
+//  - core's copyRefusal of each entry: what a copy cannot carry is refused where it is made,
+//    in core's words, and nothing reaches the register;
 //  - the section each entry is carried from, '' for a MAT-file's variable (the file's one
 //    section), so a same-file move is the usual no-op and the clip mark keys it as the rows do;
 //  - whether a move could take the original out alone: a selector with no uuid names whichever
@@ -13,15 +15,23 @@
 //    names both, and core resolves a shared id to neither), so the rule bites on a dictionary's
 //    hand-added entries; the MAT-file's source deleter refuses an ambiguous name as a backstop.
 import { describe, it, expect, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { DataModel } from 'data-explorer-core';
 import { copyEntriesToClipboard, dragEntries } from '../src/host/clipboardAction.js';
-import { clearClipboard, clipboardState, getClipboard } from '../src/host/clipboard.js';
+import { clearClipboard, clipboardState, getClipboard, setClipboard } from '../src/host/clipboard.js';
 import { clearDrag, dragDescriptor, getDrag } from '../src/host/dragState.js';
 import { buildClipboardSnapshot, buildDragSnapshot, sourceSectionOf } from '../src/host/structuralEdit.js';
+import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');
+
 const scalar = (name: string, value = 3) => ({ name, className: 'double', dimensions: [1, 1], isComplex: false, isLogical: false, value, fields: null });
+// An int8 0x3 empty: a copy carries it as [], which reads back as a double 0x0 (core's
+// copyDifference), so core refuses to copy it.
+const int8Empty = (name: string) => ({ name, className: 'int8', dimensions: [0, 3], isComplex: false, isLogical: false, value: [], fields: null });
 
 let seq = 0;
 /** A MAT-file registered as the editable view registers one, under a prefixed srcId. */
@@ -72,6 +82,39 @@ describe("a MAT-file's variables on a register", () => {
     expect(getClipboard()!.items[0].payload).toEqual({ name: 'Kp', metadata: null, value: 3 });
     expect(h.posted).toEqual([]);
     expect(h.broadcasts()).toBe(1);
+  });
+});
+
+describe("core's copyRefusal, asked where both registers are filled", () => {
+  const refusal = 'Cannot copy "e8": what a copy carries of it reads back as another value (e8: its class reads back as double where int8 was written). Nothing was copied.';
+
+  it('refuses a copy in its words, and leaves the clipboard as it was', () => {
+    const m = mat([scalar('Kp'), int8Empty('e8')]);
+    expect(DataModel.copyRefusal(m.id('e8'))).toBe(refusal);
+    setClipboard([{ payload: { name: 'Earlier' }, sourceSection: 'design', className: '', arrayClass: '', kind: '', isMatlabVariable: true, isScalarNumeric: false }], 'copy', 'file:///other.sldd');
+    const h = deps(m.find);
+    expect(copyEntriesToClipboard([m.id('Kp'), m.id('e8')], 'copy', m.uri, h.deps)).toBe(false);
+    expect(h.posted).toEqual([{ type: 'error', message: refusal }]);
+    expect(getClipboard()!.items[0].payload.name).toBe('Earlier');
+    expect(h.broadcasts()).toBe(0);
+  });
+
+  it('refuses a drag start the same way, and leaves no drag behind', () => {
+    const m = mat([int8Empty('e8')]);
+    const h = deps(m.find);
+    expect(dragEntries([m.id('e8')], m.uri, h.deps)).toBe(false);
+    expect(h.posted).toEqual([{ type: 'error', message: refusal }]);
+    expect(getDrag()).toBeNull();
+    expect(h.broadcasts(), 'every table is told no drag is on').toBe(1);
+  });
+
+  it("passes a dictionary's entries, which it can copy, as before", () => {
+    const uri = 'test://copyrules-arch.sldd';
+    invalidate(uri);
+    getModel(uri, 'arch.sldd', archText);
+    const h = deps((id) => findNode(uri, id));
+    expect(copyEntriesToClipboard([`${uri}/arch/DataInterface`], 'cut', uri, h.deps)).toBe(true);
+    expect(getClipboard()!.items.map((i) => [i.sourceSection, i.payload.name, i.sharedName])).toEqual([['arch', 'DataInterface', undefined]]);
   });
 });
 

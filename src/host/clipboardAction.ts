@@ -17,7 +17,7 @@
 // a drag through `dragEntries` below, the drag register's half of the same thing.
 import { setClipboard, type ClipboardMode } from './clipboard.js';
 import { clearDrag, setDrag } from './dragState.js';
-import { buildClipboardSnapshot, buildDragSnapshot } from './structuralEdit.js';
+import { CopyRefused, buildClipboardSnapshot, buildDragSnapshot } from './structuralEdit.js';
 import { sharedNameRefusal } from './transfer.js';
 
 export interface CopyDeps {
@@ -94,8 +94,9 @@ export function copyEntriesToClipboard(
   } catch (err) {
     // Reached when the model refresh itself fails: `refresh` re-parses the live
     // content, so a half-typed edit in the JSON .sldd's plain-text view makes
-    // JSON.parse throw right here.
-    deps.post({ type: 'error', message: `Failed to ${mode}: ${(err as Error).message}` });
+    // JSON.parse throw right here. A refusal (an entry that cannot travel) is a reason,
+    // and is said as core says it.
+    deps.post({ type: 'error', message: err instanceof CopyRefused ? err.message : `Failed to ${mode}: ${(err as Error).message}` });
     return false;
   }
 }
@@ -105,7 +106,7 @@ export function copyEntriesToClipboard(
  * table (`deps.broadcast` is editorHub's broadcastDragState here), so each can predict the drop
  * on dragover.
  *
- * The same walk and dedupe as a copy (buildDragSnapshot shares them with
+ * The same walk, dedupe and refusal as a copy (buildDragSnapshot shares them with
  * buildClipboardSnapshot): "if you can cut/copy you can drag". Every provider starts a drag
  * through here; only getting a live model and resolving a row differ between them, and those
  * are `deps`. A refused or failed start leaves no drag behind and says why — silent, the drag
@@ -124,7 +125,7 @@ export function dragEntries(rowIds: readonly string[], uriString: string, deps: 
   } catch (err) {
     clearDrag();
     deps.broadcast();
-    deps.post({ type: 'error', message: `Failed to drag: ${(err as Error).message}` });
+    deps.post({ type: 'error', message: err instanceof CopyRefused ? err.message : `Failed to drag: ${(err as Error).message}` });
     return false;
   }
 }
