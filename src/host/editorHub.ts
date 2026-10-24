@@ -22,13 +22,15 @@
 import * as vscode from 'vscode';
 import { clipboardState } from './clipboard.js';
 import { dragDescriptor } from './dragState.js';
-import type { EntrySelector } from 'data-explorer-core';
-import type { SourceDeleteResult } from './transfer.js';
+import type { SourceDeleteResult, SourceSelector } from './transfer.js';
 
 export type { SourceDeleteResult };
 
-/** What a cross-document move asks the source document to remove. */
-export type DeleteTarget = string | EntrySelector;
+/**
+ * What a cross-document move asks the source document to remove: a name, or a selector with the
+ * origin token its document handed out when the entry was taken, if it did (transfer.ts).
+ */
+export type DeleteTarget = string | SourceSelector;
 
 /**
  * How one open document removes named entries from ITSELF, in its own format.

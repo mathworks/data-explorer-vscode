@@ -633,6 +633,72 @@ suite('MAT-file pastes and drops refused', () => {
     assert.ok(a.names().includes('x'), 'and its undo puts the original back');
   });
 
+  // A cut is lazy and a MAT-file's variable is told by name alone, so between the cut and the
+  // paste the original can be deleted and another variable given its name. The cut carries who
+  // the original was (MatDocument.originOf), and the move takes out only that one.
+  const giveNameX = async (a: MatTab, from: string) => {
+    // A variable of the name `x` that is not the one cut: an Add, renamed.
+    await onMat(a, { type: 'addEntry', section: '', className: 'MatlabVariable', rename: false });
+    const added = a.names().find((n) => !from.split(',').includes(n))!;
+    await onMat(a, { type: 'edit', rowId: a.variable(added).id, columnId: 'Name', oldValue: added, newValue: 'x' });
+    assert.ok(a.names().includes('x'), 'another variable now holds the name');
+  };
+
+  test('a cut whose variable was deleted and its name given to another: the paste lands, and the other is left alone', async () => {
+    const a = await openMat(opened, dir, 'cut.mat', matFixture('pv_basic.mat'));
+    const j = await openJson(opened, dir, 'target.sldd');
+    a.view.send({ type: 'cut', rowIds: [variableRow(a.view.posts, 'x').ID] });
+    await onMat(a, { type: 'delete', rowIds: [a.variable('x').id] });
+    await giveNameX(a, a.names().join());
+    const other = a.variable('x');
+    const edits = a.events.length;
+    await onJson(j, { type: 'paste', rowId: 'section:design' });
+    await moveDone();
+    await waitFor('the report', () => errorsIn(j.view.posts).length > 0);
+    assert.deepStrictEqual(errorsIn(j.view.posts), [
+      'Pasted here; the original in cut.mat is no longer there to remove: the "x" it holds now is another variable, which was left as it is.',
+    ]);
+    assert.ok(j.names().includes('x'), 'the paste landed');
+    assert.strictEqual(a.variable('x'), other, 'and the variable that holds the name now was not taken out');
+    assert.strictEqual(a.events.length, edits, 'no edit in the MAT-file');
+  });
+
+  test('a cut whose variable was renamed and its name given to another: nothing is taken out, and the renamed one is named', async () => {
+    const a = await openMat(opened, dir, 'renamed.mat', matFixture('pv_basic.mat'));
+    const j = await openJson(opened, dir, 'target.sldd');
+    a.view.send({ type: 'cut', rowIds: [variableRow(a.view.posts, 'x').ID] });
+    await onMat(a, { type: 'edit', rowId: a.variable('x').id, columnId: 'Name', oldValue: 'x', newValue: 'y' });
+    await giveNameX(a, a.names().join());
+    await onJson(j, { type: 'paste', rowId: 'section:design' });
+    await moveDone();
+    await waitFor('the report', () => errorsIn(j.view.posts).length > 0);
+    assert.deepStrictEqual(errorsIn(j.view.posts), [
+      'Pasted here, but the original in renamed.mat could not be removed: the "x" it holds now is another variable, and the one taken is now "y". Remove it there by hand.',
+    ]);
+    assert.ok(a.names().includes('x') && a.names().includes('y'), 'both are where they were');
+  });
+
+  test('a cut whose variable was edited, or deleted and the delete undone, is still the one taken, and moves', async () => {
+    const a = await openMat(opened, dir, 'same.mat', matFixture('pv_basic.mat'));
+    const j = await openJson(opened, dir, 'target.sldd');
+    a.view.send({ type: 'cut', rowIds: [variableRow(a.view.posts, 'x').ID] });
+    await onMat(a, { type: 'edit', rowId: a.variable('x').id, columnId: 'Value', oldValue: '[1 2 3]', newValue: '[4 5]' });
+    await onJson(j, { type: 'paste', rowId: 'section:design' });
+    await moveDone();
+    await waitFor('the original moved out', () => !a.names().includes('x'));
+    assert.deepStrictEqual(errorsIn(j.view.posts), []);
+
+    a.view.send({ type: 'cut', rowIds: [variableRow(a.view.posts, 'p').ID] });
+    await onMat(a, { type: 'delete', rowIds: [a.variable('p').id] });
+    await a.events[a.events.length - 1].undo();
+    assert.ok(a.names().includes('p'), 'the delete is undone');
+    await onJson(j, { type: 'paste', rowId: 'section:design' });
+    await moveDone();
+    await waitFor('the original moved out', () => !a.names().includes('p'));
+    assert.deepStrictEqual(errorsIn(j.view.posts), []);
+    assert.ok(j.names().includes('p'));
+  });
+
   test('the drag register is let go of after a drop that landed, one refused, and one that failed', async () => {
     const m = await openMat(opened, dir, 'gains.mat', matFixture('pv_basic.mat'));
     const j = await openJson(opened, dir, 'source.sldd');

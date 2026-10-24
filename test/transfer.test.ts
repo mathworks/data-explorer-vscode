@@ -287,6 +287,18 @@ describe('a same-document move', () => {
 });
 
 describe('a cross-document move', () => {
+  it("hands the source's deleter each item's origin token with its selector, where the item has one", async () => {
+    // A MAT-file's variable has a name and no uuid; its document gives each one it lets go of a
+    // token, which comes back to its own deleter and to nothing else.
+    const token = {};
+    setClipboard([{ ...item('x', ''), payload: { name: 'x', metadata: null, value: 1 }, origin: token }, item('B', 'design')], 'cut', THERE);
+    const { deps, calls } = fakeDeps();
+    await runTransfer(ROW, paste(), fakeAdapter().adapter, deps);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].selectors).toEqual([{ name: 'x', origin: token }, { name: 'B', uuid: 'u-B' }]);
+    expect((calls[0].selectors[0] as any).origin, 'the very token, not a copy').toBe(token);
+  });
+
   it('pastes here, THEN deletes from the source by selector', async () => {
     setClipboard([item('A', 'design'), item('B', 'arch')], 'cut', THERE);
     const order: string[] = [];
@@ -418,6 +430,13 @@ describe('a source delete that fails AFTER the paste landed', () => {
       'throws',
       new Error('applyEdit failed.'),
       'Pasted here, but the original in my other.sldd could not be removed: applyEdit failed. Remove it there by hand.',
+    ],
+    [
+      // The original is no longer there (deleted, its name given to another entry): nothing is
+      // asked of the user, since removing what holds the name now would lose that one.
+      'answers its original is gone',
+      { removed: false, gone: true, reason: 'the "A" it holds now is another variable, which was left as it is' },
+      'Pasted here; the original in my other.sldd is no longer there to remove: the "A" it holds now is another variable, which was left as it is.',
     ],
   ];
   for (const [name, result, message] of cases) {

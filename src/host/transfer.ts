@@ -44,6 +44,21 @@ export interface TransferItem {
    * other one. A copy of it is a copy like any other.
    */
   sharedName?: boolean;
+  /**
+   * Who the entry was when it was taken, for a source whose selector cannot say: an opaque token
+   * its document handed out (a MAT-file's variable has a name and no uuid, so a cut of `x`, then
+   * a delete of `x` and an Add of another `x`, would otherwise have the paste take out the new
+   * one). Carried to that document's deleter (SourceSelector.origin) and read by nothing else.
+   */
+  origin?: object;
+}
+
+/**
+ * What a cross-document move asks the source document to remove: the entry's selector, and its
+ * origin token where it was taken with one (TransferItem.origin).
+ */
+export interface SourceSelector extends EntrySelector {
+  origin?: object;
 }
 
 /** What a register held when the transfer read it. */
@@ -146,11 +161,18 @@ export interface SourceDeleteResult {
   removed: boolean;
   /** Why not, as the tail of "…could not be removed: <reason>". Absent when removed. */
   reason?: string;
+  /**
+   * Not removed because the original is no longer in its document — deleted since it was taken,
+   * and its name since given to another entry, which the deleter left alone. Nothing is left for
+   * the user to remove, so the message asks nothing of them: the entry that holds the name now
+   * is not the original, and removing it by hand would lose it.
+   */
+  gone?: boolean;
 }
 
 export interface TransferDeps {
   /** Take the moved entries out of the document they came from (editorHub.deleteFromSource). */
-  deleteFromSource(sourceDocUri: string, selectors: EntrySelector[]): Promise<SourceDeleteResult>;
+  deleteFromSource(sourceDocUri: string, selectors: SourceSelector[]): Promise<SourceDeleteResult>;
   /**
    * Say something the user must not miss, somewhere that stays until they dismiss it (the
    * providers use `vscode.window.showWarningMessage`). Used for one thing: a move that landed
@@ -273,7 +295,9 @@ async function transfer<T extends TransferTarget>(
   // Selectors, not names: an entry's name is unique only within its namespace, and a .sldd
   // holds several, so deleting by name alone could take a same-named entry out of another
   // section (core's entrySelector.ts). Nameless payloads name nothing to delete.
-  const selectors = contents.items.map((it) => entrySelectorOf(it.payload)).filter((s) => s.name.length > 0);
+  const selectors: SourceSelector[] = contents.items
+    .map((it) => (it.origin ? { ...entrySelectorOf(it.payload), origin: it.origin } : entrySelectorOf(it.payload)))
+    .filter((s) => s.name.length > 0);
   const removeFirst = contents.move && sameDoc ? selectors : [];
   const label: TransferLabel = isPaste ? 'Paste' : contents.move ? 'Move' : 'Copy';
 
@@ -303,7 +327,7 @@ async function transfer<T extends TransferTarget>(
     if (sameDoc || selectors.length === 0) return { kind: 'done' };
     const result = await sourceDelete(contents.sourceDocUri, selectors, deps);
     if (result.removed) return { kind: 'done' };
-    const message = sourceKeptMessage(isPaste, contents.sourceDocUri, selectors.length, result.reason);
+    const message = sourceKeptMessage(isPaste, contents.sourceDocUri, selectors.length, result.reason, result.gone === true);
     adapter.report(message);
     deps.warn?.(message);
     return { kind: 'done', sourceKept: message };
@@ -316,7 +340,7 @@ async function transfer<T extends TransferTarget>(
 // of them is the same message.
 async function sourceDelete(
   sourceDocUri: string | undefined,
-  selectors: EntrySelector[],
+  selectors: SourceSelector[],
   deps: TransferDeps,
 ): Promise<SourceDeleteResult> {
   if (!sourceDocUri) return { removed: false, reason: 'nothing says which file it came from' };
@@ -349,18 +373,23 @@ export function sharedNameRefusal(verb: 'cut' | 'move', name: string, sourceDocU
 
 /**
  * "Pasted here, but the original in a.sldd could not be removed: <reason>. Remove it there by
- * hand." — accurate about both halves: the paste DID land, and nothing was rolled back.
+ * hand." — accurate about both halves: the paste DID land, and nothing was rolled back. Or, where
+ * the original is `gone` (SourceDeleteResult.gone), "Pasted here; the original in a.mat is no
+ * longer there to remove: <reason>." — asking nothing, since what holds its name now is not it.
  */
 export function sourceKeptMessage(
   isPaste: boolean,
   sourceDocUri: string | undefined,
   count: number,
   reason: string | undefined,
+  gone = false,
 ): string {
   const what = count === 1 ? 'the original' : 'the originals';
   const where = sourceDocUri ? ` in ${fileNameOf(sourceDocUri)}` : '';
   const why = (reason ?? 'the source did not say why').replace(/[.\s]+$/, '');
   const verb = isPaste ? 'Pasted' : 'Moved';
+  // Nothing to remove by hand: what holds the original's name there now is something else.
+  if (gone) return `${verb} here; ${what}${where} ${count === 1 ? 'is' : 'are'} no longer there to remove: ${why}.`;
   return `${verb} here, but ${what}${where} could not be removed: ${why}. Remove ${count === 1 ? 'it' : 'them'} there by hand.`;
 }
 

@@ -367,11 +367,13 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
    * source deleter), as ONE edit on this file's own stack, and answer what became of them for
    * the view the move was made in to say: this file's views are repainted, never told.
    *
-   * By name, because a MAT-file's payloads carry no metadata and so its selectors are names.
-   * A name the file now holds twice is refused rather than guessed at — a copy is all the
-   * move can have been, and the user is told the original stays — and so is a file that takes
-   * no edit. A name nothing answers to any more (renamed or deleted since the cut) is skipped,
-   * and only when none answers is that the answer.
+   * By name, because a MAT-file's payloads carry no metadata and so its selectors are names —
+   * and only the variable that was taken: the one holding the name must be the node the cut or
+   * the drag carried the token of (`originOf`), or nothing is removed. A name the file now holds
+   * twice is refused rather than guessed at — a copy is all the move can have been, and the user
+   * is told the original stays — and so is a file that takes no edit. A name nothing answers to
+   * any more (renamed or deleted since the cut) is skipped, and only when none answers is that
+   * the answer.
    */
   deleteMoved(targets: readonly DeleteTarget[]): SourceDeleteResult {
     let mat: any;
@@ -389,9 +391,21 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
       else byName.set(v.name, [v]);
     }
     const variables: any[] = [];
-    for (const name of new Set(targets.map((t) => toEntrySelector(t).name))) {
+    for (const target of targets) {
+      const { name } = toEntrySelector(target);
       const named = byName.get(name) ?? [];
       if (named.length > 1) return { removed: false, reason: `it holds more than one "${name}", and a move takes its original out by name` };
+      // The variable that holds the name now must be the one that was taken: a cut is lazy, and
+      // between it and the paste the original can be deleted and another variable given its
+      // name, which a delete by name would take out instead. Nothing is removed then: the
+      // original is gone, or (renamed since) still there under its new name for the user.
+      const origin = typeof target === 'object' ? target.origin : undefined;
+      if (named.length === 1 && origin && this.origins.get(named[0]) !== origin) {
+        const moved = (mat.children as any[]).find((v) => this.origins.get(v) === origin);
+        return moved
+          ? { removed: false, reason: `the "${name}" it holds now is another variable, and the one taken is now "${moved.name}"` }
+          : { removed: false, gone: true, reason: `the "${name}" it holds now is another variable, which was left as it is` };
+      }
       variables.push(...named);
     }
     if (variables.length === 0) return { removed: false, reason: NOT_FOUND_REASON };
@@ -409,6 +423,21 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
     if (observed.error) return { removed: false, reason: this.describe(observed.error) };
     return { removed: false, reason: 'the file did not let it be removed' };
   }
+
+  /**
+   * The token a cut or a drag of `variable` carries (TransferItem.origin), which `deleteMoved`
+   * tells the original by: one object for as long as the variable is the same node — through
+   * edits of it, a rename, and the undo of its delete, which puts the node itself back. A variable
+   * made since (an Add, a paste, a reload of the file) is another node, with another token.
+   */
+  originOf(variable: any): object {
+    let token = this.origins.get(variable);
+    if (!token) this.origins.set(variable, (token = {}));
+    return token;
+  }
+
+  // Keyed weakly by the node: a token keeps no variable alive, and a variable gone keeps no token.
+  private readonly origins = new WeakMap<object, object>();
 
   /** Run core's undo or redo `steps` times on this file's stack, and repaint what it touched. */
   private replay(direction: 'undo' | 'redo', steps: number): void {
@@ -1027,6 +1056,9 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       findNode,
       post: (message: { type: 'error'; message: string }) => webview.postMessage({ ...message, message: document.describe(message.message) }),
       broadcast,
+      // A variable's selector is its name alone, so each one taken carries who it was
+      // (deleteMoved reads it back before a move takes it out).
+      originOf: (variable: any) => document.originOf(variable),
     });
 
     // Copy or cut: nothing is changed until the cut is pasted (a cut is lazy). A cut of a file that

@@ -37,6 +37,12 @@ export interface CopyDeps {
    * editorHub imports `vscode`, and this module stays vscode-free so it can be unit-tested.
    */
   broadcast: () => void;
+  /**
+   * The token this document's deleter will tell an entry by when a move takes it out later, for
+   * a document whose selectors cannot (a MAT-file's: a name and no uuid). Absent for a
+   * dictionary, whose uuid already does.
+   */
+  originOf?: (entry: any) => object | undefined;
 }
 
 /**
@@ -73,7 +79,7 @@ export function copyEntriesToClipboard(
       });
       return false;
     }
-    const items = buildClipboardSnapshot(rowIds, deps.findNode);
+    const items = buildClipboardSnapshot(rowIds, deps.findNode, deps.originOf);
     if (!items.length) {
       deps.post({ type: 'error', message: 'Could not locate the owning entry in the model.' });
       return false;
@@ -117,7 +123,7 @@ export function copyEntriesToClipboard(
 export function dragEntries(rowIds: readonly string[], uriString: string, deps: CopyDeps): boolean {
   try {
     deps.refresh();
-    const snap = buildDragSnapshot(rowIds, deps.findNode);
+    const snap = buildDragSnapshot(rowIds, deps.findNode, deps.originOf);
     if (snap.items.length === 0) clearDrag();
     else setDrag(uriString, snap.items);
     deps.broadcast();

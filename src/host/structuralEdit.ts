@@ -282,16 +282,23 @@ function entryNameCounts(root: any): Map<string, number> {
 
 /**
  * Each row's owning entry as a register item: what to paste, the section it came from, the
- * facts a drop target judges it by, and whether a move could take its original out alone. The
- * one build behind both registers, after the one refusal they share.
+ * facts a drop target judges it by, whether a move could take its original out alone, and,
+ * where its document hands one out (`originOf`), the token its deleter later tells the entry
+ * by. The one build behind both registers, after the one refusal they share.
  */
-function registerItemsOf(rowIds: unknown, findNode: (rowId: string) => any): ClipboardItem[] {
+function registerItemsOf(
+  rowIds: unknown,
+  findNode: (rowId: string) => any,
+  originOf?: (entry: any) => object | undefined,
+): ClipboardItem[] {
   const entries = owningEntriesOf(rowIds, findNode);
   refuseUncopyable(entries);
   const shared = entriesSharingAName(entries);
   return entries.map((entry): ClipboardItem => {
     const payload = entry.serialize() as Record<string, unknown>;
     const item: ClipboardItem = { payload, sourceSection: sourceSectionOf(entry), ...dropFactsOf(entry, payload) };
+    const origin = originOf?.(entry);
+    if (origin) item.origin = origin;
     if (shared.has(entry)) item.sharedName = true;
     return item;
   });
@@ -312,8 +319,12 @@ function registerItemsOf(rowIds: unknown, findNode: (rowId: string) => any): Cli
  * Each item keeps its OWN source section, as a clipboard item does: a multi-row drag can
  * span sections, and whether a move is a no-op depends on every item's section.
  */
-export function buildDragSnapshot(rowIds: unknown, findNode: (rowId: string) => any): { items: DragRegisterItem[] } {
-  return { items: registerItemsOf(rowIds, findNode) };
+export function buildDragSnapshot(
+  rowIds: unknown,
+  findNode: (rowId: string) => any,
+  originOf?: (entry: any) => object | undefined,
+): { items: DragRegisterItem[] } {
+  return { items: registerItemsOf(rowIds, findNode, originOf) };
 }
 
 /**
@@ -329,8 +340,9 @@ export function buildDragSnapshot(rowIds: unknown, findNode: (rowId: string) => 
 export function buildClipboardSnapshot(
   rowIds: unknown,
   findNode: (rowId: string) => any,
+  originOf?: (entry: any) => object | undefined,
 ): ClipboardItem[] {
-  return registerItemsOf(rowIds, findNode);
+  return registerItemsOf(rowIds, findNode, originOf);
 }
 
 // Reserialize one entry to text, lined up behind the element's own `{`, the same way

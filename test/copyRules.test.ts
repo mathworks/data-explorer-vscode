@@ -213,3 +213,35 @@ describe('dragEntries', () => {
     expect(getDrag()).toBeNull();
   });
 });
+
+// A MAT-file's variable is told by name alone, so its document hands each one taken a token
+// (CopyDeps.originOf), which the register item carries back to that document's deleter. It
+// travels to nothing else: the payload, and what the webview is told, are as they were.
+describe("a document's origin token for what it lets go of", () => {
+  it('is carried by every item of a copy and a drag, and shown to no table', () => {
+    const m = mat([scalar('Kp'), scalar('Ki', 2)]);
+    const tokens = new Map<any, object>();
+    const originOf = (entry: any) => {
+      if (!tokens.has(entry)) tokens.set(entry, {});
+      return tokens.get(entry)!;
+    };
+    const h = deps(m.find);
+    expect(copyEntriesToClipboard([m.id('Kp'), m.id('Ki')], 'cut', m.uri, { ...h.deps, originOf })).toBe(true);
+    const [kp, ki] = m.node.children;
+    expect(getClipboard()!.items.map((i) => i.origin)).toEqual([tokens.get(kp), tokens.get(ki)]);
+    expect(getClipboard()!.items[0].origin).toBe(tokens.get(kp));
+    expect(getClipboard()!.items[0].payload).toEqual({ name: 'Kp', metadata: null, value: 3 });
+    expect(JSON.stringify(clipboardState())).not.toContain('origin');
+
+    expect(dragEntries([m.id('Ki')], m.uri, { ...h.deps, originOf })).toBe(true);
+    expect(getDrag()!.items[0].origin).toBe(tokens.get(ki));
+    expect(JSON.stringify(dragDescriptor())).not.toContain('origin');
+  });
+
+  it("is absent where the document hands none out, as a dictionary's does", () => {
+    const m = mat([scalar('Kp')]);
+    const h = deps(m.find);
+    expect(copyEntriesToClipboard([m.id('Kp')], 'copy', m.uri, h.deps)).toBe(true);
+    expect('origin' in getClipboard()!.items[0]).toBe(false);
+  });
+});

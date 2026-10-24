@@ -22,6 +22,8 @@ export type ClipboardMode = 'cut' | 'copy';
 export interface ClipboardItem extends DropFacts {
   payload: Record<string, unknown>;
   sourceSection: string;
+  /** Its document's token for the entry as it was taken, for that document's deleter (transfer.ts). */
+  origin?: object;
 }
 
 interface ClipboardEntry {
