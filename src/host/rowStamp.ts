@@ -89,9 +89,9 @@ export function capabilityFlags(n: any, opts: { canCopy: boolean }): CapabilityF
  * A node id is a path, so two entries of one name under one parent — a MAT-file holding two
  * records of a name, a dictionary section holding two entries of one — are one id, and so is
  * every row inside them. Core resolves an id that names two nodes to neither, so no gesture
- * addressed by it can act on either: Copy and Cut included, which would only say they could
- * not find the item. Such a row says so before it is clicked (`_canCopy` false); the file's
- * own warning says why. Only a malformed file holds such a pair.
+ * addressed by it can act on either — Copy, Cut, Delete and Add Child would each only say they
+ * could not find the item. Such a row says so before it is clicked (StampContext.sharedId: no
+ * capability flag set); the file's own warning says why. Only a malformed file holds such a pair.
  *
  * Each parent's names are counted once, on the first entry under it, so a build stays linear.
  */
@@ -130,11 +130,13 @@ export interface EntryStamp {
 }
 
 export interface StampContext {
-  /**
-   * Whether this row's entry travels on the clipboard (`_canCopy`): the document's answer,
-   * and false for an entry that shares its id with another (sharedIdTest).
-   */
+  /** Whether this document's entries travel on the clipboard (`_canCopy`). */
   canCopy: boolean;
+  /**
+   * The row's entry shares its id with another (sharedIdTest), so nothing addressed by the id
+   * reaches it: the row offers no Copy, Cut, Delete or Add Child, whatever the node says.
+   */
+  sharedId?: boolean;
   /** Present on an entry's own row only. */
   entry?: EntryStamp;
   /** The plan held this node's children back (lazyRows.ts). */
@@ -169,6 +171,9 @@ export function stampRow(built: any, n: any, ctx: StampContext): any {
       row = { ...row, Name: { ...row.Name, clipboardMode: entry.clipMark.mode } };
     }
   }
-  const stamped = stampLazy(stampMatrix({ ...row, ...capabilityFlags(n, { canCopy: ctx.canCopy }) }, n), ctx.deferred);
+  const flags = ctx.sharedId
+    ? { _canCopy: false, _canDelete: false, _canAddChild: false }
+    : capabilityFlags(n, { canCopy: ctx.canCopy });
+  const stamped = stampLazy(stampMatrix({ ...row, ...flags }, n), ctx.deferred);
   return ctx.pool ? ctx.pool.share(stamped) : stamped;
 }

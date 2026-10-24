@@ -86,12 +86,12 @@ function plannedRows(roots: any[], budget: number, saved: SavedStatus | undefine
   const pool = new RowCellPool();
   const plan = planRows(roots, budget);
   const canCopy = opts?.canCopy ?? false;
-  // A variable whose name the file holds twice shares its id with the other, and copies nothing
-  // (sharedIdTest). Every row under one root belongs to one variable, so it is asked per root.
+  // A variable whose name the file holds twice shares its id with the other, and nothing addressed
+  // by the id reaches it (sharedIdTest). Every row under one root belongs to one variable, so it
+  // is asked per root.
   const sharesId = sharedIdTest();
-  const rootCopies: boolean[] = [];
-  const copies = (root: number): boolean =>
-    (rootCopies[root] ??= canCopy && !sharesId(owningEntryOf(roots[root])));
+  const rootShared: boolean[] = [];
+  const shared = (root: number): boolean => (rootShared[root] ??= sharesId(owningEntryOf(roots[root])));
   for (const { node: n, deferred, root } of plan.planned) {
     let built: any;
     try {
@@ -113,7 +113,7 @@ function plannedRows(roots: any[], budget: number, saved: SavedStatus | undefine
     // the file can write (MatNode._editRefusal), so an item the menu offers is one the save
     // keeps. On every row, a read-only file's too: a view that shows a file read-only shows no
     // menu, so there the flags cost a few bytes a row and are read by nothing.
-    rows.push(stampRow(built, n, { canCopy: copies(root), entry, deferred, pool }));
+    rows.push(stampRow(built, n, { canCopy, sharedId: shared(root), entry, deferred, pool }));
   }
   return { rows, plan };
 }

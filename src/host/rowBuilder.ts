@@ -128,9 +128,9 @@ export function buildRowsPlanned(
   }
   const headroom = budget === Infinity ? Infinity : Math.max(1, budget - sections.length);
   const plan = planRows(entries, headroom);
-  // Whether each entry's rows copy (sharedIdTest), asked once per entry, not once per row.
+  // Whether each entry shares its id (sharedIdTest), asked once per entry, not once per row.
   const sharesId = sharedIdTest();
-  const copies: boolean[] = [];
+  const shared: boolean[] = [];
 
   // The plan is pre-order over the roots IN ORDER, so its rows are contiguous and
   // ascending by `root` — which is section order. One cursor therefore walks the whole
@@ -156,7 +156,7 @@ export function buildRowsPlanned(
     const pastLastRoot = firstRoot + ((section.children || []) as any[]).length;
     while (at < plan.planned.length && plan.planned[at].root < pastLastRoot) {
       const p = plan.planned[at++];
-      const row = plannedRow(p, entries[p.root], section.name, modifiedNames, clipMark, pool, (copies[p.root] ??= !sharesId(entries[p.root])));
+      const row = plannedRow(p, entries[p.root], section.name, modifiedNames, clipMark, pool, (shared[p.root] ??= sharesId(entries[p.root])));
       if (row) rows.push(row);
     }
     firstRoot = pastLastRoot;
@@ -194,9 +194,9 @@ export function buildChildRows(node: any, budget: number = Infinity): SectionedR
   const rows: any[] = [];
   const plan = planRows((node?.children ?? []) as any[], budget);
   // Every row under `node` belongs to its entry.
-  const copies = !sharedIdTest()(owningEntryOf(node));
+  const shared = sharedIdTest()(owningEntryOf(node));
   for (const p of plan.planned) {
-    const row = plannedRow(p, null, '', undefined, undefined, undefined, copies);
+    const row = plannedRow(p, null, '', undefined, undefined, undefined, shared);
     if (row) rows.push(row);
   }
   return { rows, plan };
@@ -228,9 +228,9 @@ export function buildEntryRows(
 ): any[] {
   const out: any[] = [];
   const plan = planRows([entry], budget);
-  const copies = !sharedIdTest()(entry);
+  const shared = sharedIdTest()(entry);
   for (const p of plan.planned) {
-    const row = plannedRow(p, entry, sectionName, modifiedNames, clipMark, pool, copies);
+    const row = plannedRow(p, entry, sectionName, modifiedNames, clipMark, pool, shared);
     if (row) out.push(row);
   }
   return out;
@@ -262,7 +262,7 @@ function plannedRow(
   modifiedNames?: Set<string>,
   clipMark?: ClipMark,
   pool?: RowCellPool,
-  canCopy = true,
+  sharedId = false,
 ): any | null {
   const n = p.node;
   let row: any;
@@ -299,9 +299,9 @@ function plannedRow(
     }
   }
   // Every row of a dictionary, model or project copies: Copy acts on the owning entry — but
-  // for an entry that shares its id with another (sharedIdTest, asked by the caller once per
-  // entry), which nothing can address.
-  return stampRow(row, n, { canCopy, entry: entryStamp, deferred: p.deferred, pool });
+  // an entry that shares its id with another (sharedIdTest, asked by the caller once per
+  // entry) takes no gesture at all, which nothing can address.
+  return stampRow(row, n, { canCopy: true, sharedId, entry: entryStamp, deferred: p.deferred, pool });
 }
 
 /**
