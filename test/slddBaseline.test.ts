@@ -3,7 +3,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getModel, invalidate, parseDetached } from '../src/host/SlddModel.js';
-import { baselineOwed, captureBaseline, computeModified, clearBaseline } from '../src/host/slddBaseline.js';
+import {
+  baselineOwed,
+  captureBaseline,
+  computeModified,
+  clearBaseline,
+  diskBaselineUsable,
+} from '../src/host/slddBaseline.js';
 
 function fixtureText(): string {
   const path = fileURLToPath(new URL('../test-integration/fixtures/workspace/data.sldd', import.meta.url));
@@ -206,10 +212,16 @@ describe('baselineOwed — a repaint captures the baseline only from a text know
     expect(baselineOwed(none, 5)).toBe(true);
   });
 
-  it('never captures while the disk read for a dirty open is on its way', () => {
+  it('does not capture a dirty text while the disk read for a dirty open is on its way', () => {
     // The dirty text is exactly what the marks have to be measured against.
     expect(baselineOwed({ ...none, pending: true }, 5)).toBe(false);
-    expect(baselineOwed({ ...none, pending: true, cleanAt: 5 }, 5)).toBe(false);
+    expect(baselineOwed({ ...none, pending: true, cleanAt: 4 }, 5)).toBe(false);
+  });
+
+  it('captures a SAVED text even while that read is on its way, which then lands too late to count', () => {
+    // A save made while the file is being read: the text is the file now, and the bytes the read
+    // returns may be from before the save.
+    expect(baselineOwed({ ...none, pending: true, cleanAt: 5 }, 5)).toBe(true);
   });
 
   it('captures again at a version known to read what the file says — a reload, a revert, a save', () => {
@@ -237,5 +249,22 @@ describe('a baseline from the file on disk marks what a dirty document changed',
     expect(findEntry(live, 'Number').setProperty('Value', '42')).toBe(true);
     expect([...computeModified(uri, live)]).toEqual(['Number']);
     clearBaseline(uri);
+  });
+});
+
+describe('diskBaselineUsable — the bytes of a dirty open count only if nothing newer is known', () => {
+  const pending = { captured: false, pending: true, version: -1, cleanAt: -1 };
+
+  it('counts when nothing became clean while the file was being read', () => {
+    expect(diskBaselineUsable({ ...pending, pending: false }, -1)).toBe(true);
+  });
+
+  it('does not count once a save has been baselined while it was read', () => {
+    expect(diskBaselineUsable({ captured: true, pending: false, version: 6, cleanAt: 6 }, -1)).toBe(false);
+  });
+
+  it('does not count once the document turned clean while it was read, baselined or not', () => {
+    // The bytes may be from before that save; the file now holds what the document did then.
+    expect(diskBaselineUsable({ ...pending, pending: false, cleanAt: 6 }, -1)).toBe(false);
   });
 });

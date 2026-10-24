@@ -1,8 +1,10 @@
 // Copyright 2026 The MathWorks, Inc.
 
 // Per-URI baseline store mapping entryName -> canonical serialized JSON string.
-// "Modified" is computed as a diff of the current model against the last-saved
-// baseline (captured on open and after each save). See the dirty-state design doc.
+// "Modified" is computed as a diff of the current model against the baseline, which is
+// what the file on disk holds: taken from the document whenever it is known to read what
+// the file does (clean on open, a save, a revert, a reload — see BaselineSource), and from
+// the file's own bytes for a document opened with unsaved changes.
 
 const baselines = new Map<string, Map<string, string>>();
 
@@ -137,11 +139,26 @@ export interface BaselineSource {
  * Yes when there is none yet and none is on its way from the disk — the first repaint of a
  * document opened clean, or one whose file could not be read (which then baselines its text, as
  * every open used to). And yes when this is a version known to read what the file says that the
- * baseline is not already of: a reload, a revert, a save. Never while the disk read is pending,
- * because the text a dirty document holds is exactly what the marks have to be measured AGAINST.
+ * baseline is not already of: a reload, a revert, a save.
+ *
+ * While the disk read is pending, only the second: the text a dirty document holds is exactly what
+ * the marks have to be measured AGAINST, but a text saved in the meantime is the file, and the bytes
+ * the read returns may be from before that save (see diskBaselineUsable).
  */
 export function baselineOwed(source: BaselineSource, versionRead: number): boolean {
-  if (source.pending) return false;
+  if (source.pending) return source.cleanAt === versionRead;
   if (!source.captured) return true;
   return source.cleanAt === versionRead && source.version !== versionRead;
+}
+
+/**
+ * Whether the file's bytes, read for a document opened dirty, may still become its baseline:
+ * `cleanAtBefore` is what `cleanAt` was when the read began.
+ *
+ * Not once a baseline has been taken (a save while the file was read), and not once the document
+ * turned clean in that time even if none was: the read may have returned the file from before
+ * that save, and the file now holds what the document did then — read it again.
+ */
+export function diskBaselineUsable(source: BaselineSource, cleanAtBefore: number): boolean {
+  return !source.captured && source.cleanAt === cleanAtBefore;
 }

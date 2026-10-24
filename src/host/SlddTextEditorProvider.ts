@@ -29,6 +29,7 @@ import {
   computeModified,
   isEntryModified,
   clearBaseline,
+  diskBaselineUsable,
   type BaselineSource,
 } from './slddBaseline.js';
 import {
@@ -118,13 +119,13 @@ import type { TableToHostMessage } from '../common/protocol.js';
  * the TextDocument — so the per-document facts live here, keyed by URI, and each call of
  * resolveCustomTextEditor opens one view against them and closes it on dispose.
  *
- * Both facts guard something a URI-keyed registry already treats as document-scoped: the
- * "Modified" baseline (slddBaseline) and the cross-document-move deleter (editorHub).
+ * The view count guards two things a URI-keyed registry already treats as document-scoped:
+ * the "Modified" baseline (slddBaseline) and the cross-document-move deleter (editorHub).
  * Tearing either down when ANY tab closed left a surviving split panel showing no Modified
  * marks at all — with no baseline, computeModified answers "nothing is modified" by design —
  * and unable to complete a move, while the document itself stayed open and edited. And
- * because captureBaseline OVERWRITES by URI, letting each tab capture its own on-open
- * baseline re-baselined an already-edited document against the EDITED text, clearing the
+ * because captureBaseline OVERWRITES by URI, letting each tab take its own baseline when it
+ * opened re-baselined an already-edited document against the EDITED text, clearing the
  * marks in every tab at once.
  *
  * BinarySlddEditorProvider carries these same two facts on its custom document
@@ -1993,6 +1994,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      */
     const baselineFromDisk = async (): Promise<void> => {
       docState.baseline.pending = true;
+      const cleanAtBefore = docState.baseline.cleanAt;
       let bytes: Uint8Array | null = null;
       try {
         bytes = await vscode.workspace.fs.readFile(document.uri);
@@ -2002,9 +2004,14 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       docState.baseline.pending = false;
       // The DOCUMENT's read, not this view's: a tab that closed meanwhile leaves it to the tabs
       // still open (repaintAll reaches only those). Only the last one closing ends it — before the
-      // parse, since a baseline then would outlive the document — as does a baseline a save has
-      // already taken, which is the file as well.
-      if (openDocs.get(uriString) !== docState || docState.baseline.captured) return;
+      // parse, since a baseline then would outlive the document.
+      if (openDocs.get(uriString) !== docState) return;
+      // A save while the file was read: baselined from the saved text already, or — if no tab
+      // could repaint — owed from the file as it now stands, which these bytes may predate.
+      if (!diskBaselineUsable(docState.baseline, cleanAtBefore)) {
+        if (!docState.baseline.captured) void baselineFromDisk();
+        return;
+      }
       let tree: any = null;
       try {
         tree = bytes ? parseDetached(name, new TextDecoder().decode(bytes)) : null;
