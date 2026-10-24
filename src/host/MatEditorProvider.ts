@@ -540,12 +540,13 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
    * Called after every repaint of this document's tree, once its views are told: the provider's,
    * which shows the Property Inspector's node again from the tree as it now is.
    *
-   * Here, at the two repaints (`repaint`, `repaintAll`), because every change to the tree ends in
-   * one of them: each gesture of a view (an edit, an Add, a delete, a paste) and the delete a move
-   * into another document asks of this one (`record`), each undo and redo (`replay`), and a revert
-   * or a reload (`replace`), whose new tree is registered first, so the inspector resolves the
-   * tree the table shows. The binary .sldd editor's hook, the same rule. A save changes no node
-   * here (the tree is kept), so it repaints only the Status column, and says nothing.
+   * Here, at the two repaints (`repaint`, `repaintAll`) and at a gesture that threw, whose view
+   * paints every row again itself (`record`), because every change to the tree ends in one of
+   * them: each gesture of a view (an edit, an Add, a delete, a paste) and the delete a move into
+   * another document asks of this one (`record`), each undo and redo (`replay`), and a revert or a
+   * reload (`replace`), whose new tree is registered first, so the inspector resolves the tree the
+   * table shows. The binary .sldd editor's hook, the same rule. A save changes no node here (the
+   * tree is kept), so it repaints only the Status column, and says nothing.
    */
   onChanged?: () => void;
 

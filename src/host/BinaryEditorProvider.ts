@@ -543,8 +543,6 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       }
     };
 
-    // Register listeners BEFORE assigning webview.html, so a fast-booting
-    // webview cannot post 'ready' before we are subscribed to receive it.
     // The messages every table view answers alike (tableDispatch.ts), keyed by message type. No
     // undo or redo: the view is read-only, and VS Code holds no stack for it.
     const common: CommonHandlers = {
@@ -564,6 +562,8 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       requestChildren: (nodeId) => void answerChildRequest(webview, uriString, nodeId, name, fillUsage, planner),
     };
 
+    // Register listeners BEFORE assigning webview.html, so a fast-booting
+    // webview cannot post 'ready' before we are subscribed to receive it.
     const sub = webview.onDidReceiveMessage((msg: TableToHostMessage | ProjectToHostMessage) => {
       if (dispatchCommon(msg, common)) return;
       if (msg?.type === 'openFile') {

@@ -9,9 +9,10 @@
 // it said a value the table no longer did until the user clicked another row. The provider now
 // says when the document's tree changed (`onChanged`), and extension.ts answers that with the
 // inspector's one re-resolve (src/host/inspectorSelection.ts, unit-tested on its own), as it
-// answers the MAT-file editor's (matInspectorRefresh.test.ts). There is no route to the registered provider here
-// (activate() returns no API), so this test wires its own provider to its own InspectorSelection
-// the way activate() does, and reads what the inspector was asked to show.
+// answers the MAT-file editor's (matInspectorRefresh.test.ts). There is no route to the
+// registered provider here (activate() returns no API), so this test wires its own provider to
+// its own InspectorSelection the way activate() does, and reads what the inspector was asked to
+// show.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from 'fs';
