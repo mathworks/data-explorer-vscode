@@ -70,10 +70,10 @@ import {
   type DeleteTarget,
 } from './editorHub.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
-import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, type FollowedDocument } from './diskFollow.js';
+import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, writeUserFile, type FollowedDocument } from './diskFollow.js';
 import { SaveMarks, replacementsIn, type SaveMark, type SaveSnapshot } from './saveMarks.js';
 import { saveSettled } from './settledSave.js';
-import { sameFile, writeFileSafely } from './safeWrite.js';
+import { sameFile } from './safeWrite.js';
 import { binaryEditSrcId } from '../common/srcId.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
@@ -1244,8 +1244,9 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       await refuseIfChangedOnDisk(document, MatEditorProvider.viewType, (m) => this.askSaveConflict(m));
       // What a later save and the watcher compare the disk with, read off the written file itself
       // where the write could: a stat after it would take an outside write landing just after
-      // for this one. The watcher's event for this write then finds the disk matching.
-      document.stamp = (await this.write(document.uri, bytes)) ?? (await stampOf(document.uri));
+      // for this one. The watcher's event for this write then finds the disk matching. The one
+      // write of the user's file both byte-backed editors make (diskFollow.writeUserFile).
+      document.stamp = await writeUserFile(document.uri, bytes);
       document.onDisk = bytes;
     } catch (err) {
       // Nothing was written, so what the snapshot held is never what the file holds.
@@ -1269,7 +1270,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     if (dest.toString() === document.uri.toString() || (await sameFile(dest, document.uri))) {
       return this.saveCustomDocument(document, token);
     }
-    await this.write(dest, document.serialize());
+    await writeUserFile(dest, document.serialize());
   }
 
   async revertCustomDocument(document: MatDocument, _token: vscode.CancellationToken): Promise<void> {
@@ -1328,11 +1329,4 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     return document.lastBackup.handle();
   }
 
-  /**
-   * The user's file, replaced whole where the file system lets us (safeWrite.ts). Answers the
-   * stamp the write left, where it could read one.
-   */
-  private async write(uri: vscode.Uri, bytes: Uint8Array): Promise<DiskStamp | undefined> {
-    return (await writeFileSafely(uri, bytes, () => vscode.workspace.fs.writeFile(uri, bytes))).stamp;
-  }
 }

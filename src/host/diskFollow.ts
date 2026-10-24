@@ -40,8 +40,9 @@ export async function stampOf(uri: vscode.Uri): Promise<DiskStamp | undefined> {
 
 /**
  * Write the user's file, replaced whole where the file system lets us (safeWrite.ts), and answer
- * the stamp the write left, which a save records as the document's `stamp`. Every write the
- * binary .sldd editor makes of the user's own file, a save and a Save As, goes through here.
+ * the stamp the write left, which a save records as the document's `stamp`. Every write either
+ * byte-backed editor (the binary .sldd and the MAT-file) makes of the user's own file, a save and
+ * a Save As, goes through here.
  */
 export function writeUserFile(uri: vscode.Uri, bytes: Uint8Array): Promise<DiskStamp | undefined> {
   return writeAndStamp(uri, bytes, { write: () => vscode.workspace.fs.writeFile(uri, bytes), stat: () => stampOf(uri) });

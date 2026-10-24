@@ -17,6 +17,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import {
   chmodSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -692,6 +693,22 @@ suite('MAT-file editor: edit, undo, save', () => {
     assert.strictEqual(valuesOf(disk(o)).get('scalarD').Value, '42');
     keptUntouched(o.original, disk(o), ['scalarD']);
     await backup.delete();
+  });
+
+  test('a file whose folder was deleted under the view is saved, folder and all, and holds the stamp its write left', async () => {
+    const folder = join(dir, 'project');
+    mkdirSync(folder);
+    const o = await open('cases.mat', fixture('cases.mat'), join('project', 'cases.mat'));
+    edit(o, 'scalarD', 'Value', '42');
+    rmSync(folder, { recursive: true });
+    await save(o);
+    assert.strictEqual(valuesOf(disk(o)).get('scalarD').Value, '42', 'the edit is on disk, in the folder made again');
+    assert.deepStrictEqual(readdirSync(folder), ['cases.mat'], 'and nothing beside it');
+    const st = statSync(o.path);
+    assert.deepStrictEqual(o.doc.stamp, { mtime: st.mtime.getTime(), size: st.size }, 'the stamp of the file as written');
+    edit(o, 'negD', 'Value', '7');
+    await save(o);
+    assert.deepStrictEqual(asked, [], 'so the next save does not take that write for an outside one');
   });
 
   test('a file whose records do not tile it opens read-only, and takes no edit', async () => {
