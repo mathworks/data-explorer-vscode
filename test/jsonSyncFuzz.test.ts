@@ -14,17 +14,14 @@
 // braces, brackets, commas, colons, backslashes) and of ordinary text, anywhere in the entries
 // of a real dictionary — from fixed seeds, so a failure names a reproducible keystroke.
 //
-// KNOWN BUG, found by this file (data-explorer-core v1.45.4, SectionNode.parseEntry): a re-read
-// of the file's own text (`{ asRead: true }`, which the narrow path's replace op asks for) still
-// stamps a missing `lastmod` with the current time and a missing `modifiedby` with '', as a paste
-// is stamped, though the file's read leaves both missing. So a keystroke that removes or renames
-// an entry's "lastmod" key — or any keystroke in an entry of a text dictionary written without
-// one, as two of the fixtures here are — repaints that entry's Last Modified as now, where a
-// re-parse of the same text shows none. Pinned at the end by a test that asserts today's wrong
-// value, so it FAILS when core is fixed. In the fuzz, only that row's `lastModified` /
-// `lastModifiedBy`, and only for a keystroke whose record lacks the key, is set aside
-// (setAsideKnownBug), so any other difference still fails. Remove both once core reads an asRead
-// record's metadata as the file's read does.
+// A bug this file found, now fixed in core (SectionNode.parseEntry): a re-read of the file's own
+// text (`{ asRead: true }`, which the narrow path's replace op asks for) stamped a missing
+// `lastmod` with the current time and a missing `modifiedby` with '', as a paste is stamped,
+// though the file's read leaves both missing. So a keystroke that removed or renamed an entry's
+// "lastmod" key — or any keystroke in an entry of a text dictionary written without one, as two
+// of the fixtures here are — repainted that entry's Last Modified as now, where a re-parse of the
+// same text showed none. The fuzz compares every row whole again, and the end of the file pins
+// the one keystroke that showed it.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -80,17 +77,6 @@ function keystroke(next: () => number, text: string, from: number): Keystroke {
 
 const plain = (rows: unknown) => JSON.parse(JSON.stringify(rows));
 
-/** Set aside what the known bug changes in the row of the entry `record` rebuilt, and only that. */
-function setAsideKnownBug(rows: any[], rowId: string, record: any): void {
-  const md = record?.metadata;
-  if (!md || typeof md !== 'object') return;
-  for (const row of rows) {
-    if (row.ID !== rowId) continue;
-    if (md.lastmod == null) row.lastModified = '(set aside: known bug)';
-    if (md.modifiedby == null) row.lastModifiedBy = '(set aside: known bug)';
-  }
-}
-
 describe('a planned keystroke repaints exactly what a re-parse would', () => {
   for (const fixture of FIXTURES) {
     const base = read(fixture);
@@ -118,14 +104,10 @@ describe('a planned keystroke repaints exactly what a re-parse would', () => {
           // A plan is never made for text the wide path cannot read.
           expect(() => JSON.parse(after), where).not.toThrow();
 
-          const [applied] = applyEntryOps(live, [
-            { kind: 'replace', rowId: plan.entry.id, record: plan.record, fromDocumentText: true },
-          ]) as any[];
+          applyEntryOps(live, [{ kind: 'replace', rowId: plan.entry.id, record: plan.record, fromDocumentText: true }]);
           const narrow = plain(buildRows(live));
           invalidate(uri);
           const wide = plain(buildRows(getModel(uri, fixture.split('/').pop()!, after)));
-          setAsideKnownBug(narrow, applied.entry.id, plan.record);
-          setAsideKnownBug(wide, applied.entry.id, plan.record);
           expect(narrow, where).toEqual(wide);
         }
         invalidate(uri);
@@ -137,13 +119,13 @@ describe('a planned keystroke repaints exactly what a re-parse would', () => {
   }
 });
 
-describe('KNOWN BUG: a re-read entry with no lastmod is stamped with the current time', () => {
+describe('a re-read entry with no lastmod shows none, as a re-parse of the same text does', () => {
   // See the header. Deleting the "lastmod" line of an entry in the text view is one keystroke
-  // (a line delete) that the narrow path takes, and its repaint should be the re-parse's.
+  // (a line delete) that the narrow path takes, and its repaint is the re-parse's.
   //
-  // Plain tests, not an `it.fails`: an it.fails passes on ANY throw, so a fixture that stopped
-  // holding a "lastmod" line, or a delete that stopped being planned narrow, would have kept it
-  // green after core was fixed. Every step it depends on is asserted as a step instead.
+  // Every step it depends on is asserted as a step, so a fixture that stopped holding a
+  // "lastmod" line, or a delete that stopped being planned narrow, fails as that and does not
+  // pass for the wrong reason.
   function deleteLastmodLine() {
     const base = read('parity/artifacts/text/params.sldd');
     const uri = 'test://json-sync-lastmod.sldd';
@@ -174,11 +156,10 @@ describe('KNOWN BUG: a re-read entry with no lastmod is stamped with the current
     expect(wide.lastModified).toBe('');
   });
 
-  it('TODAY the narrow repaint shows the time of the keystroke — when this fails, core fixed the asRead lastmod stamp: delete setAsideKnownBug and this test', () => {
+  it('the narrow repaint shows no Last Modified either, not the time of the keystroke', () => {
     const { narrow, wide } = deleteLastmodLine();
-    // The wrong value: a timestamp the text does not hold, where the re-parse shows none.
-    expect(narrow.lastModified).not.toBe('');
-    expect(narrow.lastModified).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
-    expect(narrow.lastModified).not.toBe(wide.lastModified);
+    expect(narrow.lastModified).toBe('');
+    expect(narrow.lastModifiedBy).toBe(wide.lastModifiedBy);
+    expect(narrow).toEqual(wide);
   });
 });
