@@ -46,9 +46,9 @@ function recordEdits(t: DexTreeTable): any[] {
   return edits;
 }
 
-async function dblclick(t: DexTreeTable, rowId: string): Promise<boolean> {
+async function dblclick(t: DexTreeTable, rowId: string, col = 'Description'): Promise<boolean> {
   (t as any)._editingCell = null;
-  cell(t, rowId).dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+  cell(t, rowId, col).dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
   await t.updateComplete;
   return (t as any)._editingCell !== null;
 }
@@ -128,16 +128,11 @@ describe('a Description the object does not have', () => {
     const kept = makeRow('kept', { Value: { text: 'v2', editable: true } });
     const t = await mount([ro, kept]);
     const edits = recordEdits(t);
-    const open = async (id: string) => {
-      (t as any)._editingCell = null;
-      cell(t, id, 'Value').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-      await t.updateComplete;
-    };
-    await open('ro');
+    await dblclick(t, 'ro', 'Value');
     t.rows = [{ ...ro, Value: { text: 'v1', editable: false } } as TreeTableRow, kept];
     await t.updateComplete;
     expect((t as any)._editingCell).toBeNull();
-    await open('kept');
+    await dblclick(t, 'kept', 'Value');
     (t.shadowRoot!.querySelector('.edit-input') as HTMLInputElement).value = 'typed';
     t.rows = [ro, { ...kept }];
     await t.updateComplete;

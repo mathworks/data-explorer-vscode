@@ -3159,7 +3159,8 @@ export class DexTreeTable extends LitElement {
    *     a service bus has no data type) — nothing will ever go here;
    *   - the property exists and is simply unset (no usage recorded, not modified, no unit
    *     given) — an empty VALUE, which is ordinary and needs no cue.
-   * Only NOT_APPLICABLE_WHEN_BLANK columns are the first kind. Measured over five real
+   * Read off a blank, only NOT_APPLICABLE_WHEN_BLANK columns are the first kind (core can
+   * also say so outright of a Description: propertyAbsent). Measured over five real
    * dictionaries with every column shown, the second kind is the overwhelming majority:
    * Usage, Status, Unit and Header File are blank on 100% of rows, Storage Class and
    * Alignment on 97%, Dimensions/Dimensions Mode/Complexity/Min/Max on 87-91%, Last
@@ -3408,7 +3409,7 @@ export class DexTreeTable extends LitElement {
   // closed the same way: kept, it was an input in a read-only or grayed cell whose
   // typing could only be refused or dropped. Runs in willUpdate, so the state write
   // joins this update and the input is still in the DOM to say whether it held focus.
-  private _closeEditorIfCellGone(): void {
+  private _closeEditorIfCellNoLongerEditable(): void {
     const cell = this._editingCell;
     if (!cell) return;
     const row = (this.rows ?? []).find((r) => r.ID === cell.rowId);
@@ -3464,7 +3465,7 @@ export class DexTreeTable extends LitElement {
     // A repaint can arrive under an open editor. One that says the object no longer HAS the
     // property (propertyAbsent) leaves nothing to write the text to, so the edit is dropped
     // rather than posted for a cell that now shows not applicable.
-    const current = (this.rows as TreeTableRow[]).find((r) => r.ID === rowId);
+    const current = (this.rows ?? []).find((r) => r.ID === rowId);
     if (current && propertyAbsent(current, columnId)) return;
 
     if (newValue !== oldValue) {
@@ -3879,7 +3880,7 @@ export class DexTreeTable extends LitElement {
       this._buildCaches();
     }
     if (changedProps.has('rows') || changedProps.has('columns')) {
-      this._closeEditorIfCellGone();
+      this._closeEditorIfCellNoLongerEditable();
     }
     if (changedProps.has('_expandedIds') || changedProps.has('_filterText') || changedProps.has('_sortState')) {
       this._visibleRowsCache = null;
