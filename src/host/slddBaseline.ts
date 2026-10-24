@@ -108,3 +108,40 @@ export function isEntryModified(uriString: string, entry: any): boolean {
 export function clearBaseline(uriString: string): void {
   baselines.delete(uriString);
 }
+
+/**
+ * What a text-backed document knows about where its baseline came from — which is what decides
+ * when a repaint has to take a new one.
+ *
+ * The baseline is the file ON DISK, and a TextDocument only says it reads what the file says at
+ * a few moments: when it is clean as a view opens, when it turns clean (a save, a revert), and
+ * when a reload from disk is found to have left it equal to the file (VS Code reports that with
+ * no dirty-state change at all). Each of those records the version (`cleanAt`), and the next wide
+ * repaint that reads exactly that version — it parses the text anyway — captures from it.
+ */
+export interface BaselineSource {
+  /** Whether a baseline has been captured for the document at all. */
+  captured: boolean;
+  /** A baseline is being read from the file on disk (a document already dirty when opened). */
+  pending: boolean;
+  /** The document version the baseline was captured at; -1 when it came from the disk bytes. */
+  version: number;
+  /** The newest document version known to read what the file on disk says; -1 for none. */
+  cleanAt: number;
+}
+
+/**
+ * Whether a repaint that read the document at `versionRead` has to capture the baseline from
+ * what it read.
+ *
+ * Yes when there is none yet and none is on its way from the disk — the first repaint of a
+ * document opened clean, or one whose file could not be read (which then baselines its text, as
+ * every open used to). And yes when this is a version known to read what the file says that the
+ * baseline is not already of: a reload, a revert, a save. Never while the disk read is pending,
+ * because the text a dirty document holds is exactly what the marks have to be measured AGAINST.
+ */
+export function baselineOwed(source: BaselineSource, versionRead: number): boolean {
+  if (source.pending) return false;
+  if (!source.captured) return true;
+  return source.cleanAt === versionRead && source.version !== versionRead;
+}

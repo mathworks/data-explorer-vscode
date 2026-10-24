@@ -1,7 +1,15 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
 import { renderTableWebview } from './webviewHtml.js';
-import { getModel, invalidate, findNode, peekModel, openSourceView, releaseSourceView } from './SlddModel.js';
+import {
+  getModel,
+  invalidate,
+  findNode,
+  peekModel,
+  openSourceView,
+  parseDetached,
+  releaseSourceView,
+} from './SlddModel.js';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
 import {
   buildEntryRows,
@@ -15,7 +23,14 @@ import {
 import { rowPlannerFor } from './rowPlanner.js';
 import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
 import { answerChildRequest } from './childRequest.js';
-import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
+import {
+  baselineOwed,
+  captureBaseline,
+  computeModified,
+  isEntryModified,
+  clearBaseline,
+  type BaselineSource,
+} from './slddBaseline.js';
 import {
   applyEntryOps,
   findEntryByName,
@@ -115,13 +130,23 @@ import type { TableToHostMessage } from '../common/protocol.js';
  * BinarySlddEditorProvider carries these same two facts on its custom document
  * (`views` / `baselineCaptured`) and for the same reasons; this is that one rule on the
  * other path.
+ *
+ * Where the baseline came from is document-scoped for the same reason (BaselineSource, see
+ * slddBaseline.ts): it is the file on disk, and the moments the document is known to read what
+ * the file says — clean at an open, a save, a revert, a reload — are the document's, not a tab's.
+ * So is the list of every tab's repaint, because a new baseline changes the marks in all of them
+ * and only one tab's event may be the one that noticed.
  */
-type DocState = { views: number; baselineCaptured: boolean };
+type DocState = { views: number; baseline: BaselineSource; repaints: Set<() => void> };
 const openDocs = new Map<string, DocState>();
 
 /** Count one more open view of this document, and answer what it already knows. */
 function openView(uriString: string): DocState {
-  const state = openDocs.get(uriString) ?? { views: 0, baselineCaptured: false };
+  const state = openDocs.get(uriString) ?? {
+    views: 0,
+    baseline: { captured: false, pending: false, version: -1, cleanAt: -1 },
+    repaints: new Set<() => void>(),
+  };
   state.views++;
   openDocs.set(uriString, state);
   return state;
@@ -198,9 +223,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // user can ask for it.
     const planner = rowPlannerFor(name);
 
-    // Capture the on-open baseline once PER DOCUMENT — not per tab — so per-entry
-    // "Modified" marks are diffed against the content this document was opened with, and a
-    // second tab does not re-baseline it to the edited text. See openDocs.
+    // The baseline is PER DOCUMENT — not per tab — so a second tab does not re-baseline an
+    // edited document to its edited text. See openDocs.
     const docState = openView(uriString);
     // This view holds the tree it registers under the uri, until it closes (see onDidDispose).
     openSourceView(uriString);
@@ -359,9 +383,12 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         const version = document.version;
         const touched = rowsTouched;
         const node = getModel(uriString, name, document.getText());
-        if (!docState.baselineCaptured) {
+        // From this read, if it is a text known to be the file's (see baselineOwed): parsed
+        // fresh here, so it is never a tree an edit has changed ahead of its write.
+        if (baselineOwed(docState.baseline, version)) {
           captureBaseline(uriString, node);
-          docState.baselineCaptured = true;
+          docState.baseline.captured = true;
+          docState.baseline.version = version;
         }
         const modified = computeModified(uriString, node);
         const clipMark = clipMarkOfDoc();
@@ -1886,6 +1913,92 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         : { removed: false, reason: 'the document rejected the edit (it may have changed on disk)' };
     };
 
+    // --- The baseline: the file on disk ------------------------------------------
+    //
+    // A Modified mark says an entry differs from what the FILE holds. It used to be measured
+    // against the text this document had the first time it painted, replaced only by a save —
+    // so a file reloaded after another tool changed it was marked in a document with nothing to
+    // save, a revert left the marks measured against the old text, and a document already dirty
+    // when the table opened (a window restored with unsaved changes) was measured against its
+    // own edits and marked nothing.
+    //
+    // What VS Code says, and when, is the whole difficulty (measured in the integration host):
+    // a change event carries the dirty state from BEFORE it — an edit to a clean document reads
+    // clean — and the dirty-state event that follows, with no content changes, carries the new
+    // one. A revert and a save end in one of those reading clean. A reload from disk ends in
+    // nothing: its change reads clean, and no dirty-state event follows. So a revert and a save
+    // are told by that event, and a reload by comparing the text with the file.
+
+    // Whether the last change this view saw was an undo or a redo. Back to a clean document that
+    // way is back to a text the baseline was already taken from — the save or the open that made
+    // it clean — so it needs neither a capture nor a repaint.
+    let lastByHistory = false;
+
+    // Every tab of this document repaints wide, and the first to read the text takes the new
+    // baseline from it (baselineOwed); the others mark against it.
+    const repaintAll = (): void => {
+      for (const repaint of docState.repaints) repaint();
+    };
+    const repaintThis = (): void => void post();
+    docState.repaints.add(repaintThis);
+
+    /** This document now reads what its file on disk does. */
+    const noteClean = (): void => {
+      docState.baseline.cleanAt = document.version;
+      if (docState.baseline.version === document.version) return;
+      repaintAll();
+    };
+
+    /**
+     * Whether a change that left the document reading clean was a reload from disk — which says
+     * so with no dirty-state event — or an edit to a clean document, which reads clean the same
+     * way until its own dirty-state event arrives.
+     *
+     * The file decides: the document reads what the file holds, or it does not. The read is the
+     * wait, too: an edit's dirty-state event has arrived by the time it is done, which answers
+     * the common case before anything is compared.
+     */
+    const checkAgainstDisk = async (version: number): Promise<void> => {
+      let bytes: Uint8Array;
+      try {
+        bytes = await vscode.workspace.fs.readFile(document.uri);
+      } catch {
+        return;
+      }
+      if (document.isDirty || document.version !== version) return;
+      if (docState.baseline.version === version) return;
+      if (new TextDecoder().decode(bytes) !== document.getText()) return;
+      noteClean();
+    };
+
+    /**
+     * The baseline of a document opened with unsaved changes: the file's own bytes, parsed where
+     * nothing else can see them. Until it lands nothing is marked (no baseline yet); a file that
+     * cannot be read is baselined from the document's text, as every open used to be.
+     */
+    const baselineFromDisk = async (): Promise<void> => {
+      docState.baseline.pending = true;
+      let tree: any = null;
+      try {
+        tree = parseDetached(name, new TextDecoder().decode(await vscode.workspace.fs.readFile(document.uri)));
+      } catch {
+        tree = null;
+      }
+      docState.baseline.pending = false;
+      // Closed meanwhile (a baseline now would outlive the document), or already baselined by a
+      // save, which is the file as well.
+      if (openDocs.get(uriString) !== docState || docState.baseline.captured) return;
+      if (tree) {
+        captureBaseline(uriString, tree);
+        docState.baseline.captured = true;
+        docState.baseline.version = -1;
+      }
+      repaintAll();
+    };
+
+    if (!document.isDirty) docState.baseline.cleanAt = document.version;
+    else if (!docState.baseline.captured && !docState.baseline.pending) void baselineFromDisk();
+
     // --- Message wiring ---------------------------------------------------------
     const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
       if (msg?.type === 'ready') {
@@ -1950,7 +2063,20 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       // Returned BEFORE the hint is spent, deliberately: which of the two events arrives first
       // is VS Code's business, and an expectation dropped by the empty one would send the
       // host's own edit down the recovery path it exists to avoid.
-      if (e.contentChanges.length === 0) return;
+      //
+      // It is also the one event that says the document has turned clean — a save or a revert
+      // (see noteClean).
+      if (e.contentChanges.length === 0) {
+        if (!e.document.isDirty && !lastByHistory) noteClean();
+        return;
+      }
+      lastByHistory =
+        e.reason === vscode.TextDocumentChangeReason.Undo || e.reason === vscode.TextDocumentChangeReason.Redo;
+      // A change to a document that read clean before it, from neither this view's own write nor
+      // the undo stack, may be a reload from disk, which says so no other way.
+      if (!e.document.isDirty && !lastByHistory && hostEdit === null && paintedWrite === null) {
+        void checkAgainstDisk(e.document.version);
+      }
       // Spent or dropped here, exactly once, whichever branch the event takes: an expectation
       // that survived its own event must not be waiting for the next one.
       const hint = hintFor(hostEdit, wideEpoch);
@@ -1974,17 +2100,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       void post();
     });
 
-    // On save, re-capture the baseline so per-row "Modified" marks clear.
+    // On save the text IS the file, so the marks clear: the next repaint takes it as the baseline
+    // (once, whether this or the dirty-state event that clears it comes first).
     const saveSub = vscode.workspace.onDidSaveTextDocument((doc) => {
-      if (doc.uri.toString() === uriString) {
-        invalidate(uriString);
-        try {
-          captureBaseline(uriString, getModel(uriString, name, doc.getText()));
-        } catch {
-          /* leave baseline as-is on parse failure */
-        }
-        void post();
-      }
+      if (doc.uri.toString() === uriString) noteClean();
     });
 
     // A model created or deleted in the workspace can add or remove a block that uses one of these
@@ -2014,6 +2133,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       sub.dispose();
       changeSub.dispose();
       saveSub.dispose();
+      docState.repaints.delete(repaintThis);
       usageSub.dispose();
       navSub.dispose();
       // Per VIEW, paired with the open above: the count is what decides which close is the

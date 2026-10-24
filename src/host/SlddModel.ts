@@ -1,5 +1,5 @@
 // Copyright 2026 The MathWorks, Inc.
-import { DataModel, isMatFile, isModelFile, type ParseWarning } from 'data-explorer-core';
+import { DataModel, createSession, isMatFile, isModelFile, type ParseWarning } from 'data-explorer-core';
 import { readSlddContent } from './slddContent.js';
 import { refuseIfUnreadable, sourceWarnings } from './parseWarnings.js';
 
@@ -27,6 +27,16 @@ function registered(srcId: string, node: any): any {
     throw err;
   }
   return node;
+}
+
+/**
+ * A tree of a dictionary's text that nothing else can see: built in a session of its own, so it
+ * is not registered under any uri, not cached here, and not found by the Property Inspector or
+ * an edit. For a reading that is only ever compared against — the baseline of a document opened
+ * with unsaved changes is the FILE's text, while the document holds other text under the uri.
+ */
+export function parseDetached(name: string, text: string): any {
+  return createSession().addDataSource(`detached:${name}`, JSON.parse(text), { path: name });
 }
 
 export function getModel(uriString: string, name: string, text: string): any {

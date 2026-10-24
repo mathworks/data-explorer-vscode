@@ -2,8 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, invalidate } from '../src/host/SlddModel.js';
-import { captureBaseline, computeModified, clearBaseline } from '../src/host/slddBaseline.js';
+import { getModel, invalidate, parseDetached } from '../src/host/SlddModel.js';
+import { baselineOwed, captureBaseline, computeModified, clearBaseline } from '../src/host/slddBaseline.js';
 
 function fixtureText(): string {
   const path = fileURLToPath(new URL('../test-integration/fixtures/workspace/data.sldd', import.meta.url));
@@ -185,6 +185,57 @@ describe('slddBaseline survives a model it cannot walk', () => {
     ]);
     expect(() => captureBaseline(uri, m)).not.toThrow();
     expect(() => computeModified(uri, m)).not.toThrow();
+    clearBaseline(uri);
+  });
+});
+
+// When a text-backed document's repaint takes a new baseline. The baseline is the file ON DISK;
+// it used to be taken once, from whatever the document said the first time it painted, and
+// replaced only by a save — so a reload, a revert and a document opened already dirty were all
+// marked against the wrong text. The end-to-end cases are in
+// test-integration/suite/jsonBaselineFollowsDisk.test.ts; this pins the decision.
+describe('baselineOwed — a repaint captures the baseline only from a text known to be the file', () => {
+  const none = { captured: false, pending: false, version: -1, cleanAt: -1 };
+
+  it('captures the first repaint of a document opened clean', () => {
+    expect(baselineOwed({ ...none, cleanAt: 3 }, 3)).toBe(true);
+  });
+
+  it('captures from the text when there is no baseline and none is coming from the disk', () => {
+    // A document opened dirty whose file could not be read: the old behaviour, its own text.
+    expect(baselineOwed(none, 5)).toBe(true);
+  });
+
+  it('never captures while the disk read for a dirty open is on its way', () => {
+    // The dirty text is exactly what the marks have to be measured against.
+    expect(baselineOwed({ ...none, pending: true }, 5)).toBe(false);
+    expect(baselineOwed({ ...none, pending: true, cleanAt: 5 }, 5)).toBe(false);
+  });
+
+  it('captures again at a version known to read what the file says — a reload, a revert, a save', () => {
+    expect(baselineOwed({ captured: true, pending: false, version: 3, cleanAt: 9 }, 9)).toBe(true);
+  });
+
+  it('does not capture a version not known to be the file, nor one it already holds', () => {
+    // An edit after a clean point: the text is what is being compared, not what it is compared to.
+    expect(baselineOwed({ captured: true, pending: false, version: 3, cleanAt: 3 }, 4)).toBe(false);
+    // A second repaint of the same clean version, or a second tab's.
+    expect(baselineOwed({ captured: true, pending: false, version: 9, cleanAt: 9 }, 9)).toBe(false);
+    // A baseline read from the disk, while the document has not been clean since.
+    expect(baselineOwed({ captured: true, pending: false, version: -1, cleanAt: -1 }, 7)).toBe(false);
+  });
+});
+
+describe('a baseline from the file on disk marks what a dirty document changed', () => {
+  it('is the same baseline the document would give, entry for entry, where the two agree', () => {
+    const uri = 'test://baseline-detached.sldd';
+    const text = fixtureText();
+    // The disk's tree, parsed where no session or editor can see it.
+    captureBaseline(uri, parseDetached('data.sldd', text));
+    expect([...computeModified(uri, freshModel(uri))]).toEqual([]);
+    const live = freshModel(uri);
+    expect(findEntry(live, 'Number').setProperty('Value', '42')).toBe(true);
+    expect([...computeModified(uri, live)]).toEqual(['Number']);
     clearBaseline(uri);
   });
 });
