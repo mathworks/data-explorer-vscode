@@ -198,6 +198,24 @@ suite('PropertiesViewProvider', () => {
     assert.deepStrictEqual(rec.posted.slice(sent), [], 'the page starts empty, so nothing is sent');
   });
 
+  // Every editor shows its node again whenever its tree changes, and a showProps closes an open
+  // Variable Editor, so a node whose rows are what the page shows is not sent again. Which
+  // changes count is test/inspectorPage.test.ts; this is the provider handing it on.
+  test('a node whose rows are what the page shows is not sent again; one whose rows differ is', () => {
+    const provider = new PropertiesViewProvider(extensionUri());
+    const rec = fakeView(extensionUri());
+    provider.resolveWebviewView(rec.view);
+    rec.fireReady();
+    provider.showNode(fakeNode());
+    provider.showNode(fakeNode());
+    assert.strictEqual(rec.posted.length, 1, 'the same rows, once');
+    provider.showNode(fakeNode('Ki'));
+    assert.deepStrictEqual(
+      rec.posted.map((m) => m.groups?.[0]?.properties?.[0]?.value),
+      ['Kp', 'Ki'],
+    );
+  });
+
   test('a disposed view takes what it held with it: the next view starts empty', () => {
     const provider = new PropertiesViewProvider(extensionUri());
     const first = fakeView(extensionUri());
