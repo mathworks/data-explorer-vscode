@@ -12,10 +12,13 @@
 //
 // Everything format-specific is injected, mirroring buildDragSnapshot: `refresh`
 // (bring the model up to date with the live content) and `findNode` (resolve a row id
-// against it) are the ONLY real difference between the two providers here, never what
-// copying a row means.
+// against it) are the ONLY real difference between the providers here, never what
+// copying a row means. The MAT-file editor copies through it too, and every provider starts
+// a drag through `dragEntries` below, the drag register's half of the same thing.
 import { setClipboard, type ClipboardMode } from './clipboard.js';
-import { buildClipboardSnapshot } from './structuralEdit.js';
+import { clearDrag, setDrag } from './dragState.js';
+import { CopyRefused, buildClipboardSnapshot, buildDragSnapshot } from './structuralEdit.js';
+import { sharedNameRefusal } from './transfer.js';
 
 export interface CopyDeps {
   /**
@@ -29,11 +32,17 @@ export interface CopyDeps {
   /** Post to the owning webview. Only ever used for failures. */
   post: (message: { type: 'error'; message: string }) => void;
   /**
-   * Fan the new clipboard state out to every live table (editorHub's
-   * broadcastClipboardState). Injected because editorHub imports `vscode`, and
-   * this module stays vscode-free so it can be unit-tested.
+   * Fan the register's new state out to every live table (editorHub's
+   * broadcastClipboardState for a copy, broadcastDragState for a drag). Injected because
+   * editorHub imports `vscode`, and this module stays vscode-free so it can be unit-tested.
    */
   broadcast: () => void;
+  /**
+   * The token this document's deleter will tell an entry by when a move takes it out later, for
+   * a document whose selectors cannot (a MAT-file's: a name and no uuid). Absent for a
+   * dictionary, whose uuid already does.
+   */
+  originOf?: (entry: any) => object | undefined;
 }
 
 /**
@@ -70,9 +79,17 @@ export function copyEntriesToClipboard(
       });
       return false;
     }
-    const items = buildClipboardSnapshot(rowIds, deps.findNode);
+    const items = buildClipboardSnapshot(rowIds, deps.findNode, deps.originOf);
     if (!items.length) {
       deps.post({ type: 'error', message: 'Could not locate the owning entry in the model.' });
+      return false;
+    }
+    // A cut is a move whose delete comes later, by name: refused now, before it marks anything,
+    // for an entry that name does not tell apart in its document (transfer.ts refuses a
+    // move-mode drop of one the same way). A copy of it is a copy.
+    const shared = mode === 'cut' ? items.find((it) => it.sharedName) : undefined;
+    if (shared) {
+      deps.post({ type: 'error', message: sharedNameRefusal('cut', String(shared.payload.name ?? ''), uriString) });
       return false;
     }
     setClipboard(items, mode, uriString);
@@ -83,8 +100,38 @@ export function copyEntriesToClipboard(
   } catch (err) {
     // Reached when the model refresh itself fails: `refresh` re-parses the live
     // content, so a half-typed edit in the JSON .sldd's plain-text view makes
-    // JSON.parse throw right here.
-    deps.post({ type: 'error', message: `Failed to ${mode}: ${(err as Error).message}` });
+    // JSON.parse throw right here. A refusal (an entry that cannot travel) is a reason,
+    // and is said as core says it.
+    deps.post({ type: 'error', message: err instanceof CopyRefused ? err.message : `Failed to ${mode}: ${(err as Error).message}` });
+    return false;
+  }
+}
+
+/**
+ * Snapshot every entry the dragged rows resolve to into the drag register, and tell every open
+ * table (`deps.broadcast` is editorHub's broadcastDragState here), so each can predict the drop
+ * on dragover.
+ *
+ * The same walk, dedupe and refusal as a copy (buildDragSnapshot shares them with
+ * buildClipboardSnapshot): "if you can cut/copy you can drag". Every provider starts a drag
+ * through here; only getting a live model and resolving a row differ between them, and those
+ * are `deps`. A refused or failed start leaves no drag behind and says why — silent, the drag
+ * looked like it had started, and the drop that ended it reported only "Nothing to drop.".
+ *
+ * Returns whether anything is being dragged, for the tests.
+ */
+export function dragEntries(rowIds: readonly string[], uriString: string, deps: CopyDeps): boolean {
+  try {
+    deps.refresh();
+    const snap = buildDragSnapshot(rowIds, deps.findNode, deps.originOf);
+    if (snap.items.length === 0) clearDrag();
+    else setDrag(uriString, snap.items);
+    deps.broadcast();
+    return snap.items.length > 0;
+  } catch (err) {
+    clearDrag();
+    deps.broadcast();
+    deps.post({ type: 'error', message: err instanceof CopyRefused ? err.message : `Failed to drag: ${(err as Error).message}` });
     return false;
   }
 }

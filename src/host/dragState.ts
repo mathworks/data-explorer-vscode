@@ -22,6 +22,8 @@ import type { DropFacts } from './dropFacts.js';
 export interface DragRegisterItem extends DropFacts {
   payload: Record<string, unknown>;
   sourceSection: string;
+  /** Its document's token for the entry as it was taken, for that document's deleter (transfer.ts). */
+  origin?: object;
 }
 
 interface DragEntry {
@@ -64,6 +66,7 @@ export function dragDescriptor(): DragDescriptor | null {
       kind: it.kind,
       isMatlabVariable: it.isMatlabVariable,
       isScalarNumeric: it.isScalarNumeric,
+      ...(it.sharedName ? { sharedName: true } : {}),
     })),
   };
 }

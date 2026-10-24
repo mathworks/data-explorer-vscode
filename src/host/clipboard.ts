@@ -22,6 +22,8 @@ export type ClipboardMode = 'cut' | 'copy';
 export interface ClipboardItem extends DropFacts {
   payload: Record<string, unknown>;
   sourceSection: string;
+  /** Its document's token for the entry as it was taken, for that document's deleter (transfer.ts). */
+  origin?: object;
 }
 
 interface ClipboardEntry {
@@ -85,13 +87,14 @@ export function clipboardState(): {
     mode: current ? current.mode : null,
     sourceDocUri: current?.sourceDocUri,
     items: (current?.items ?? []).map(
-      ({ sourceSection, className, arrayClass, kind, isMatlabVariable, isScalarNumeric }) => ({
+      ({ sourceSection, className, arrayClass, kind, isMatlabVariable, isScalarNumeric, sharedName }) => ({
         sectionName: sourceSection,
         className,
         arrayClass,
         kind,
         isMatlabVariable,
         isScalarNumeric,
+        ...(sharedName ? { sharedName } : {}),
       }),
     ),
   };

@@ -9,8 +9,8 @@
 // row with no section ancestor — and no row at all — resolves to. So a paste on a variable, a
 // paste on the empty body, Cmd+V with nothing selected and a drop on an empty file all land in
 // the file. A dictionary posts no '' rule, so none of that reaches it: its empty space stays
-// inert, exactly as before. And today's MAT host, which still sends `clipboard: false` and no
-// rules, sees none of it either (matTableWiring.test.ts pins that half).
+// inert, exactly as before. The MAT host's half — that it posts the rule — is
+// matClipboard.test.ts's, in real VS Code.
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -34,7 +34,7 @@ const matRows = () => [
   { ID: 'm/cfg/gain', parent: 'm/cfg', Name: { label: 'gain' }, _canCopy: true, _canDelete: true },
 ];
 
-/** A MAT-file payload as its host will send it once it offers the clipboard. */
+/** A MAT-file payload as its host sends it. */
 function paintMat(rows: any[] = matRows()): void {
   send({ type: 'setRows', docUri: MAT, rows, columns: ['Name'], columnLabels: { Name: 'Name' }, editable: true });
   send({
@@ -203,23 +203,6 @@ describe('a drag onto a section-less table predicts against the file', () => {
     expect(fire(body, 'dragover').defaultPrevented).toBe(true);
     fire(body, 'drop');
     expect(sent('drop')).toEqual([{ type: 'drop', rowId: '', mode: 'move' }]);
-  });
-});
-
-describe("a table whose rows do not travel has no row-less target, even with a '' rule", () => {
-  // Today's MAT host sends `clipboard: false`; one that also posted its rule must still offer
-  // nothing on the empty body — the rule is about where a paste or a drop lands.
-  beforeEach(async () => {
-    send({ type: 'setRows', docUri: MAT, rows: matRows(), columns: ['Name'], columnLabels: { Name: 'Name' }, editable: true, clipboard: false });
-    send({ type: 'sectionRules', docUri: MAT, rules: [{ sectionName: '', sectionLabel: 'gains.mat', isDerived: false, allowedTypes: [] }] });
-    await table.updateComplete;
-    posted.length = 0;
-  });
-
-  it('opens no menu on the empty body and pastes nothing on Cmd+V', async () => {
-    expect(await openMenu(null)).toEqual([]);
-    pressPaste();
-    expect(sent('paste')).toEqual([]);
   });
 });
 

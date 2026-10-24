@@ -1,31 +1,36 @@
 // Copyright 2026 The MathWorks, Inc.
 //
-// Cross-provider hub shared by the JSON (SlddTextEditorProvider) and compressed-
-// binary (BinarySlddEditorProvider) table editors. Both back the SAME table
-// webview and the SAME module-level clipboard + drag register, so drag-and-drop
-// and clipboard state must flow across BOTH providers uniformly:
+// Cross-provider hub shared by the JSON (SlddTextEditorProvider), compressed-
+// binary (BinarySlddEditorProvider) and MAT-file (MatEditorProvider) table
+// editors. All three back the SAME table webview and the SAME module-level
+// clipboard + drag register, so drag-and-drop and clipboard state must flow
+// across every provider uniformly:
 //
-//   • Every live table webview (JSON or binary) is registered here so a copy/cut
-//     or an in-flight drag in one view broadcasts its state to ALL views — that
-//     is what lets a drag started in a JSON .sldd predict its drop live in a
-//     binary .sldd and vice versa (the descriptor must reach the target webview
-//     or its drop predictor falls back to a misleading permissive "accept drop").
+//   • Every live table webview (JSON, binary or MAT-file) is registered here so a
+//     copy/cut or an in-flight drag in one view broadcasts its state to ALL views —
+//     that is what lets a drag started in a JSON .sldd predict its drop live in a
+//     binary .sldd or a MAT-file and vice versa (the descriptor must reach the
+//     target webview or its drop predictor falls back to a misleading permissive
+//     "accept drop").
 //
 //   • A cross-document MOVE must delete the originals from the SOURCE document.
-//     The source may be a JSON .sldd (delete via a TextDocument WorkspaceEdit) or
-//     a binary .sldd (delete via an in-memory chunkXml edit + re-zip). Each open
-//     editor registers a format-appropriate deleter here, keyed by its URI, so
-//     the drop handler completes the source-delete without knowing the format.
+//     The source may be a JSON .sldd (delete via a TextDocument WorkspaceEdit), a
+//     binary .sldd (delete via an in-memory chunkXml edit + re-zip) or a MAT-file
+//     (delete through core's session, one undo step). Each open editor registers a
+//     format-appropriate deleter here, keyed by its URI, so the drop handler
+//     completes the source-delete without knowing the format.
 import * as vscode from 'vscode';
 import { clipboardState } from './clipboard.js';
 import { dragDescriptor } from './dragState.js';
-import type { EntrySelector } from 'data-explorer-core';
-import type { SourceDeleteResult } from './transfer.js';
+import type { SourceDeleteResult, SourceSelector } from './transfer.js';
 
 export type { SourceDeleteResult };
 
-/** What a cross-document move asks the source document to remove. */
-export type DeleteTarget = string | EntrySelector;
+/**
+ * What a cross-document move asks the source document to remove: a name, or a selector with the
+ * origin token its document handed out when the entry was taken, if it did (transfer.ts).
+ */
+export type DeleteTarget = string | SourceSelector;
 
 /**
  * How one open document removes named entries from ITSELF, in its own format.

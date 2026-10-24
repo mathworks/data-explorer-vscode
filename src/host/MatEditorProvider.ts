@@ -5,9 +5,9 @@
 // and none of them is this module's own judgement of a value:
 //
 //  - Every edit is made through core's session (editProperty, addEntry, addChildTo,
-//    deleteNode(s)ById), whose gate offers no edit a save of the file would refuse or write as
-//    something else (MatNode._editRefusal), and whose undo and redo are the only undo and redo
-//    there are. A gesture core refuses records no step and changes nothing.
+//    deleteNode(s)ById, pasteEntries), whose gate offers no edit a save of the file would refuse
+//    or write as something else (MatNode._editRefusal), and whose undo and redo are the only undo
+//    and redo there are. A gesture core refuses records no step and changes nothing.
 //  - A save is `session.serializeSource`: the file as it was read, every variable nobody edited
 //    as its own bytes, what was edited written fresh, self-checked against MATLAB's load rules
 //    before any byte is handed back. A refusal (MatWriteError, naming the variable) fails the
@@ -34,7 +34,7 @@
 // disk. The edits VS Code still holds from before were made on the old tree, which is gone, so
 // their undo and redo do nothing but say so (the document's `generation`).
 import * as vscode from 'vscode';
-import { DataModel } from 'data-explorer-core';
+import { DataModel, toEntrySelector, type PastePayload, type PasteResult } from 'data-explorer-core';
 import { renderTableWebview } from './webviewHtml.js';
 import { COLUMNS, COLUMN_LABELS, COLUMN_GROUPS } from './rowBuilder.js';
 import { rowPlannerFor } from './rowPlanner.js';
@@ -48,7 +48,27 @@ import { subscribeUsageRepost } from './usageRepostWatch.js';
 import { refuseIfUnreadable, sourceWarnings, warningBanner, type WarningBanner } from './parseWarnings.js';
 import { postOrReport } from './postPayload.js';
 import { clearDrag, getDrag } from './dragState.js';
-import { broadcastDragState, registerAddGalleryView, unregisterAddGalleryView } from './editorHub.js';
+import { clipboardState } from './clipboard.js';
+import { clipMarkChange, clipMarkOfDoc } from './clipMarks.js';
+import { copyEntriesToClipboard, dragEntries } from './clipboardAction.js';
+import { cloneForPaste } from './structuralEdit.js';
+import { WHOLE_FILE_SECTION, wholeFileRules } from './sectionRules.js';
+import { runTransfer, TransferRefused, type SourceDeleteResult, type TransferAdapter, type TransferDeps, type TransferTarget } from './transfer.js';
+import { clipboardRegister, dragRegister } from './transferRegisters.js';
+import type { ClipMark } from './rowStamp.js';
+import {
+  NOT_FOUND_REASON,
+  broadcastClipboardState,
+  broadcastDragState,
+  deleteFromSource,
+  registerAddGalleryView,
+  registerSourceDeleter,
+  registerWebview,
+  unregisterAddGalleryView,
+  unregisterSourceDeleter,
+  unregisterWebview,
+  type DeleteTarget,
+} from './editorHub.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, type FollowedDocument } from './diskFollow.js';
 import { SaveMarks, replacementsIn, type SaveMark, type SaveSnapshot } from './saveMarks.js';
@@ -317,6 +337,107 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
       },
     });
   }
+
+  /**
+   * Run one gesture through the session, push what it recorded as ONE VS Code edit, and repaint
+   * every view of the file: the half of a gesture that is the document's. A view's own gestures
+   * come through here (the provider's `gesture`, which also says what went wrong in that view),
+   * and so does the delete a move into another document asks of this one, which has no view of
+   * its own to say anything in (`deleteMoved`).
+   *
+   * What core recorded before a throw is one edit like any other, so that the next Undo undoes
+   * it and not the edit before it. A gesture that threw is not repainted here: whatever core did
+   * before it threw is in the tree, and the caller paints every row again and says why.
+   */
+  record(label: string, run: (mat: any) => void, touched: () => Iterable<any> = () => []): Observed {
+    const mat = this.model();
+    const observed = observe(mat, this.srcId, () => run(mat));
+    if (observed.steps > 0) this.pushEdit(label, observed, touched());
+    if (observed.error) {
+      this.version++;
+      return observed;
+    }
+    // Its rows, and the gallery's classes where the edit moved them.
+    this.repaint(observed);
+    return observed;
+  }
+
+  /**
+   * Take out of this file the variables a move into another document carried away (editorHub's
+   * source deleter), as ONE edit on this file's own stack, and answer what became of them for
+   * the view the move was made in to say: this file's views are repainted, never told.
+   *
+   * By name, because a MAT-file's payloads carry no metadata and so its selectors are names —
+   * and only the variable that was taken: the one holding the name must be the node the cut or
+   * the drag carried the token of (`originOf`), or nothing is removed. A name the file now holds
+   * twice is refused rather than guessed at — a copy is all the move can have been, and the user
+   * is told the original stays — and so is a file that takes no edit. A name nothing answers to
+   * any more (renamed or deleted since the cut) is skipped, and only when none answers is that
+   * the answer.
+   */
+  deleteMoved(targets: readonly DeleteTarget[]): SourceDeleteResult {
+    let mat: any;
+    try {
+      mat = this.model();
+    } catch (err) {
+      return { removed: false, reason: this.describe(err) };
+    }
+    if (mat.readOnly) return { removed: false, reason: `${this.metaPath} is read-only` };
+    // The file's variables by name, once: a select-all cut of a large file names every one.
+    const byName = new Map<string, any[]>();
+    for (const v of mat.children as any[]) {
+      const named = byName.get(v.name);
+      if (named) named.push(v);
+      else byName.set(v.name, [v]);
+    }
+    const variables: any[] = [];
+    for (const target of targets) {
+      const { name } = toEntrySelector(target);
+      const named = byName.get(name) ?? [];
+      if (named.length > 1) return { removed: false, reason: `it holds more than one "${name}", and a move takes its original out by name` };
+      // The variable that holds the name now must be the one that was taken: a cut is lazy, and
+      // between it and the paste the original can be deleted and another variable given its
+      // name, which a delete by name would take out instead. Nothing is removed then: the
+      // original is gone, or (renamed since) still there under its new name for the user.
+      const origin = typeof target === 'object' ? target.origin : undefined;
+      if (named.length === 1 && origin && this.origins.get(named[0]) !== origin) {
+        const moved = (mat.children as any[]).find((v) => this.origins.get(v) === origin);
+        return moved
+          ? { removed: false, reason: `the "${name}" it holds now is another variable, and the one taken is now "${moved.name}"` }
+          : { removed: false, gone: true, reason: `the "${name}" it holds now is another variable, which was left as it is` };
+      }
+      variables.push(...named);
+    }
+    if (variables.length === 0) return { removed: false, reason: NOT_FOUND_REASON };
+    const observed = this.record(
+      'Move (remove source)',
+      () => DataModel.deleteNodesById(variables.map((v) => v.id)),
+      () => variables,
+    );
+    // Answered from what the file holds now, not from whether core threw: a delete it recorded
+    // before throwing took the originals out all the same (and is an edit VS Code was handed),
+    // and telling the user to remove them by hand would have them look for what is gone.
+    const gone = variables.every((v) => v.parent !== mat);
+    if (observed.error) this.repaintAll();
+    if (gone && observed.steps > 0) return { removed: true };
+    if (observed.error) return { removed: false, reason: this.describe(observed.error) };
+    return { removed: false, reason: 'the file did not let it be removed' };
+  }
+
+  /**
+   * The token a cut or a drag of `variable` carries (TransferItem.origin), which `deleteMoved`
+   * tells the original by: one object for as long as the variable is the same node — through
+   * edits of it, a rename, and the undo of its delete, which puts the node itself back. A variable
+   * made since (an Add, a paste, a reload of the file) is another node, with another token.
+   */
+  originOf(variable: any): object {
+    let token = this.origins.get(variable);
+    if (!token) this.origins.set(variable, (token = {}));
+    return token;
+  }
+
+  // Keyed weakly by the node: a token keeps no variable alive, and a variable gone keeps no token.
+  private readonly origins = new WeakMap<object, object>();
 
   /** Run core's undo or redo `steps` times on this file's stack, and repaint what it touched. */
   private replay(direction: 'undo' | 'redo', steps: number): void {
@@ -599,10 +720,18 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       return `Read-only: ${name} is laid out in a way a save could not keep as it is, so it opens for viewing only.`;
     };
 
-    // The rows of the whole file, with the Status column measured from the last save.
+    // What every row of this view is stamped with beyond the Status column: its variables travel
+    // on the clipboard and in row drags, as a dictionary's entries do (`_canCopy`), and those the
+    // clipboard holds carry its mark (clipMarks.ts; keyed ('', name), the file's one section).
+    // The payload, a variable's repaint and a fetch of the rows under one all stamp alike.
+    const stamps = () => ({ canCopy: true, clipMark: clipMarkOfDoc(uriString) });
+
+    // The rows of the whole file, with the Status column measured from the last save, and the
+    // clipboard mark they carry (what the clip-mark repaint compares the clipboard with next).
     const build = (mat: any) => {
-      const planned = planner.payload(mat, LAZY_ROW_BUDGET, { savedStatus: document.marks.marks() });
-      return { planned, version: document.version };
+      const opts = { ...stamps(), savedStatus: document.marks.marks() };
+      const planned = planner.payload(mat, LAZY_ROW_BUDGET, opts);
+      return { planned, clipMark: opts.clipMark, version: document.version };
     };
 
     // The classes the gallery was last told the file can take a new variable of. Core's answer
@@ -610,6 +739,8 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     // writes as read — so an edit that changes it, or the undo or redo of one, repaints the whole
     // table, which tells the gallery again (refreshGallery, below).
     let lastClasses: readonly string[] = [];
+    // The clipboard mark the rows last painted whole carry (repaintClipMark, below).
+    let paintedMark: ClipMark | undefined;
 
     // The document's tree, or null once the view has been told why there is none.
     const treeOrError = (): any => {
@@ -621,6 +752,11 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       }
     };
 
+    // Closed while a paint was awaiting: what it would post next has nowhere to go (a disposed
+    // webview throws on a post), and the document, which other views may still show, is not this
+    // view's to report on.
+    let viewClosed = false;
+
     const post = async (): Promise<void> => {
       let mat = treeOrError();
       if (!mat) return;
@@ -629,7 +765,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
         // The Usage column, as the read-only view fills it. Awaited only here: an edit's repaint
         // fills it from the graph this built (annotateDataRowsNow).
         await annotateDataRows(uriString, built.planned.rows).catch(() => false);
-        if (document.disposed) return;
+        if (document.disposed || viewClosed) return;
         // The document moved while the graph was being built: these rows are from before it. A
         // reload (replace) moves it onto another tree altogether, so the tree is asked for again,
         // and the rows, the notice and the gallery's classes below are all of the one it holds.
@@ -655,15 +791,25 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
             notice,
             // The gallery offers the classes core says this file can take a new variable of.
             add: { classes: lastClasses = allowedClasses(mat) },
-            // Nor does it copy, cut, paste or drag one: a variable has no dictionary entry form.
-            clipboard: false,
             warnings: document.describeBanner(lazyRowsBanner(built.planned.plan, warningBanner(sourceWarnings(mat)))),
           },
           name,
         );
+        if (viewClosed) return;
+        // Behind the rows, in the order the dictionary views post them: where a paste or a drop
+        // can land (the whole file, one target, admitting what core says it does), and what the
+        // clipboard holds. A read-only file is no target: its empty admitted list would read as
+        // "no restriction" (sectionRules.wholeFileRules), so it posts no rule at all.
+        webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: notice ? [] : wholeFileRules(mat, name) });
+        webview.postMessage({ type: 'clipboardState', ...clipboardState() });
+        // The mark these rows CARRY. A copy or a cut that landed while they were being built
+        // repainted the rows it marked at once, ahead of these, which have just landed over that
+        // with the mark from before: so the rows that moved are painted again, after them.
+        paintedMark = built.clipMark;
+        repaintClipMark();
         drainNavigateSelect(webview, uriString);
       } catch (err) {
-        webview.postMessage({ type: 'error', message: `Failed to show ${name}: ${document.describe(err)}` });
+        if (!viewClosed) webview.postMessage({ type: 'error', message: `Failed to show ${name}: ${document.describe(err)}` });
       }
     };
 
@@ -673,8 +819,9 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     const repaintVariables = (variables: Iterable<any>, before?: ReadonlyMap<any, string>) => {
       try {
         const saved = document.marks.marks();
+        const opts = stamps();
         for (const v of variables) {
-          const rows = buildMatVariableRows(v, LAZY_ROW_BUDGET, saved);
+          const rows = buildMatVariableRows(v, LAZY_ROW_BUDGET, saved, opts);
           annotateDataRowsNow(uriString, rows);
           webview.postMessage({ type: 'updateEntryRows', entryRowId: before?.get(v) ?? v.id, rows });
         }
@@ -720,8 +867,45 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       if (!sameList(allowedClasses(mat), lastClasses)) void post();
     };
 
+    /**
+     * The narrow repaint that keeps the clipboard mark this view painted (`paintedMark`) current:
+     * on every clipboard broadcast (editorHub), the variables the painted mark and the
+     * clipboard's now name between them, and nothing when they are the same mark — the rule
+     * every table follows (clipMarks.ts). A variable is found by its name, the key's other half;
+     * one the file no longer holds (a cut pasted elsewhere took it) has no rows left to un-dim.
+     */
+    const repaintClipMark = () => {
+      const next = clipMarkOfDoc(uriString);
+      const affected = clipMarkChange(paintedMark, next);
+      if (!affected) return;
+      let mat: any;
+      try {
+        mat = document.model();
+      } catch {
+        // No tree, so no rows to mark: the view said why when it was painted, and saying it
+        // again on every clipboard broadcast would only flash the same banner.
+        return;
+      }
+      paintedMark = next;
+      const names = new Set(affected.filter((e) => e.section === WHOLE_FILE_SECTION).map((e) => e.name));
+      const variables = (mat.children as any[]).filter((v) => names.has(v.name));
+      if (variables.length > 0) repaintVariables(variables);
+    };
+
     const view: DocumentView = { repaintAll: () => void post(), repaintVariables, refreshGallery };
     document.views.add(view);
+
+    // The document's tree when it takes an edit, or null once the view has been told why not:
+    // there is no tree, or core opened the file read-only.
+    const editableTree = (): any => {
+      const mat = treeOrError();
+      if (!mat) return null;
+      if (mat.readOnly) {
+        webview.postMessage({ type: 'error', message: readOnlyNotice(mat) ?? `${name} is read-only.` });
+        return null;
+      }
+      return mat;
+    };
 
     /**
      * Run one gesture through the session, and push what it recorded as one VS Code edit.
@@ -731,24 +915,13 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
      * offers nothing either; this is the lock behind the door).
      */
     const gesture = (label: string, run: (mat: any) => void, touched: () => Iterable<any> = () => []): Observed | null => {
-      const mat = treeOrError();
-      if (!mat) return null;
-      if (mat.readOnly) {
-        webview.postMessage({ type: 'error', message: readOnlyNotice(mat) ?? `${name} is read-only.` });
-        return null;
-      }
-      const observed = observe(mat, document.srcId, () => run(mat));
-      // What core recorded before a throw is one edit like any other, so that the next Undo
-      // undoes it and not the edit before it.
-      if (observed.steps > 0) document.pushEdit(label, observed, touched());
+      if (!editableTree()) return null;
+      const observed = document.record(label, run, touched);
       if (observed.error) {
         // Whatever core did before it threw is in the tree, and the table is shown it whole.
-        document.version++;
         repaintAndReport(`Failed to apply edit: ${document.describe(observed.error)}`);
         return null;
       }
-      // Its rows, and the gallery's classes where the edit moved them.
-      document.repaint(observed);
       return observed;
     };
 
@@ -872,10 +1045,104 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       webview.postMessage({ type: 'selectRows', rowIds: [child.id] });
     };
 
-    // The clipboard and row drags carry a dictionary's entries, which a MAT-file's variables are
-    // not: the view offers none of them (`clipboard: false`), and says so if one arrives anyway.
-    const noClipboard = (what: string) =>
-      webview.postMessage({ type: 'error', message: `${what} is not available in a MAT-file.` });
+    // --- The clipboard and row drags --------------------------------------------------------
+    //
+    // A variable travels as a dictionary's entry does: its serialize() ({name, metadata: null,
+    // value}), snapshotted by the walk every table shares (clipboardAction.ts), which asks core
+    // first whether it can travel at all (copyRefusal) and carries it from the file's one section,
+    // ''. Core's words come back naming the srcId, so every message is described.
+    const copyDeps = (broadcast: () => void) => ({
+      refresh: () => void document.model(),
+      findNode,
+      post: (message: { type: 'error'; message: string }) => webview.postMessage({ ...message, message: document.describe(message.message) }),
+      broadcast,
+      // A variable's selector is its name alone, so each one taken carries who it was
+      // (deleteMoved reads it back before a move takes it out).
+      originOf: (variable: any) => document.originOf(variable),
+    });
+
+    // Copy or cut: nothing is changed until the cut is pasted (a cut is lazy). A cut of a file that
+    // takes no edit could never be completed — its original could not be taken out — so it is
+    // refused here, as every edit of one is.
+    const applyCopy = (rowIds: readonly string[], mode: 'cut' | 'copy') => {
+      if (mode === 'cut' && !editableTree()) return;
+      copyEntriesToClipboard(rowIds, mode, uriString, copyDeps(broadcastClipboardState));
+    };
+
+    const applyDragStart = (rowIds: readonly string[]) => dragEntries(rowIds, uriString, copyDeps(broadcastDragState));
+
+    const applyDragEnd = () => {
+      clearDrag();
+      broadcastDragState();
+    };
+
+    // --- Paste and drop: the transfer every table runs -----------------------------------------
+    //
+    // What a paste or a drop MEANS is transfer.ts's: which register, the no-op of a move back into
+    // where every item came from — which for a MAT-file is any move within it, the file being one
+    // section — and a cross-document move as the paste here and then the delete in the source's
+    // own format (editorHub). What is left here is what the edit IS in a MAT-file: core's
+    // pasteEntries into this file, all of the entries or none, as ONE undo step, inside a gesture
+    // so that it is ONE VS Code edit with the Status column and the repaint every edit has.
+
+    // Thrown by the adapter where the view has already been told why (a gesture reports its own
+    // refusals and failures), so that the transfer's failure path says nothing more.
+    class Told extends Error {}
+
+    const transferAdapter = (): TransferAdapter<TransferTarget> => ({
+      docUri: uriString,
+      // One section: a same-file move is always the no-op, so the policy never asks this file to
+      // take entries out and paste them in one edit — and refuses, should it ever have to.
+      takesRemoveFirst: false,
+      // Any row, and no row at all (''), is the file.
+      resolveTarget: () => {
+        if (!treeOrError()) throw new Told();
+        return { sectionName: WHOLE_FILE_SECTION };
+      },
+      validate: () => {
+        const mat = document.model();
+        if (mat.readOnly) throw new TransferRefused(readOnlyNotice(mat) ?? `${name} is read-only.`);
+      },
+      commit: ({ payloads, removeFirst, label }) => {
+        // The policy guarantees none (takesRemoveFirst: false); a paste that went on regardless
+        // would leave the originals standing beside what it pasted.
+        if (removeFirst.length > 0) throw new Error(`a move within ${name} reached its paste`);
+        let result: PasteResult | undefined;
+        const observed = gesture(
+          label,
+          () => {
+            // Clones, as a dictionary's paste takes (recordCopy: a number JSON has no spelling
+            // for stays itself): the register keeps its records for the next paste.
+            result = DataModel.pasteEntries(document.srcId, payloads.map((p) => cloneForPaste(p)) as unknown as PastePayload[]);
+          },
+          () => (result && 'nodes' in result ? result.nodes : []),
+        );
+        if (!observed) throw new Told();
+        // Refused whole by core, in its words: nothing was made, recorded or published.
+        if (!result || 'error' in result) throw new TransferRefused(result ? document.describe(result.reason) : `Could not paste into ${name}.`);
+        // Selected once their rows arrive: the repaint that brings them is on its way.
+        const ids = result.nodes.map((n: any) => n.id);
+        if (ids.length > 0) webview.postMessage({ type: 'selectRows', rowIds: ids });
+      },
+      onFailure: (err) => {
+        if (err instanceof Told) return;
+        repaintAndReport(`Failed to apply edit: ${document.describe(err)}`);
+      },
+      report: (message) => void webview.postMessage({ type: 'error', message: document.describe(message) }),
+    });
+    // A move that left its original behind is said where it stays, not only in the banner a row
+    // update clears: see TransferDeps.warn.
+    const transferDeps: TransferDeps = {
+      deleteFromSource,
+      warn: (message) => void vscode.window.showWarningMessage(message),
+    };
+    const transferred = (run: Promise<unknown>) =>
+      void run.catch((err) => repaintAndReport(`Failed to apply edit: ${document.describe(err)}`));
+
+    const applyPaste = (rowId: string) =>
+      transferred(runTransfer({ rowId }, clipboardRegister(broadcastClipboardState), transferAdapter(), transferDeps));
+    const applyDrop = (msg: { rowId: string; mode: 'copy' | 'move' }) =>
+      transferred(runTransfer({ rowId: msg.rowId }, dragRegister(msg.mode, broadcastDragState), transferAdapter(), transferDeps));
 
     const handle = (msg: TableToHostMessage) => {
       if (msg?.type === 'ready') void post();
@@ -884,23 +1151,19 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       else if (msg?.type === 'delete') applyDelete(msg.rowIds);
       else if (msg?.type === 'addEntry') applyAddEntry(msg);
       else if (msg?.type === 'addChild') applyAddChild(msg.rowId);
-      else if (msg?.type === 'copy' || msg?.type === 'cut' || msg?.type === 'paste') noClipboard('Copy and paste');
-      else if (msg?.type === 'dragStart') noClipboard('Dragging rows');
-      else if (msg?.type === 'dragEnd') {
-        // Nothing to end: no drag starts here.
-      } else if (msg?.type === 'drop') {
-        // A drag from a dictionary, let go over this table. It ends here, as any drop does.
-        if (getDrag()) {
-          clearDrag();
-          broadcastDragState();
-        }
-        noClipboard('Dropping rows');
-      } else if (msg?.type === 'navigate') {
+      else if (msg?.type === 'copy') applyCopy(msg.rowIds, 'copy');
+      else if (msg?.type === 'cut') applyCopy(msg.rowIds, 'cut');
+      else if (msg?.type === 'paste') applyPaste(msg.rowId);
+      else if (msg?.type === 'dragStart') applyDragStart(msg.rowIds);
+      else if (msg?.type === 'dragEnd') applyDragEnd();
+      else if (msg?.type === 'drop') applyDrop(msg);
+      else if (msg?.type === 'navigate') {
         if (typeof msg.target === 'string') this.onNavigate?.(msg.target, uriString);
       } else if (msg?.type === 'requestMatrix') {
         answerMatrixRequest(webview, uriString, msg.nodeId);
       } else if (msg?.type === 'requestChildren') {
-        void answerChildRequest(webview, uriString, msg.nodeId, name, annotateDataRows, planner);
+        // Stamped as the payload was, so a fetched row's menu offers what its siblings' does.
+        void answerChildRequest(webview, uriString, msg.nodeId, name, annotateDataRows, planner, stamps());
       } else if (msg?.type === 'undo' || msg?.type === 'redo') void vscode.commands.executeCommand(msg.type);
     };
 
@@ -914,6 +1177,11 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       }
     });
 
+    // The cross-provider hub: a clipboard broadcast from any table reaches this one (and repaints
+    // the mark it carries), and a move whose source is this file, pasted or dropped in another
+    // document, takes its originals out of this file through the document (deleteMoved).
+    registerWebview(webview, repaintClipMark);
+    registerSourceDeleter(uriString, (targets) => document.deleteMoved(targets));
     // The keyboard's Add (dataExplorer.addEntry): the webview adds a variable at once.
     registerAddGalleryView(webviewPanel, () => void webview.postMessage({ type: 'openAddGallery' }));
     const navSub = wireNavigateSelect(webview, uriString);
@@ -924,8 +1192,18 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     webview.html = renderTableWebview(webview, distRoot);
 
     webviewPanel.onDidDispose(() => {
+      viewClosed = true;
       document.views.delete(view);
+      unregisterWebview(webview);
       unregisterAddGalleryView(webviewPanel);
+      // A drag that started in this view and is still on goes with it, so that a drop elsewhere
+      // cannot complete against a source no view shows.
+      if (getDrag()?.sourceDocUri === uriString) {
+        clearDrag();
+        broadcastDragState();
+      }
+      // The deleter is the document's, so it stays while any view of it does.
+      if (document.views.size === 0) unregisterSourceDeleter(uriString);
       sub.dispose();
       navSub.dispose();
       usageSub.dispose();

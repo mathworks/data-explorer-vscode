@@ -7,10 +7,10 @@
 // format here measured at two million nodes, and `budget` is what stops this
 // building a row for every one of them. The default is Infinity — the whole tree, as
 // before — so only a caller that can answer a `requestChildren` passes a budget.
-import { RowCellPool } from 'data-explorer-core';
+import { RowCellPool, owningEntryOf } from 'data-explorer-core';
 import { WHOLE_FILE_SECTION } from '../common/sectionRowId.js';
 import { planRows, type RowPlan } from './lazyRows.js';
-import { stampRow, type ClipMark } from './rowStamp.js';
+import { sharedIdTest, stampRow, type ClipMark } from './rowStamp.js';
 
 /** Rows for a .mat subtree, plus what the plan held back (for the banner). */
 export interface MatRows {
@@ -27,7 +27,7 @@ export type SavedStatus = ReadonlyMap<unknown, string>;
 
 /**
  * What a MAT-file's rows take on top of the Status column: the stamps a dictionary's rows
- * have had all along (rowStamp.ts), absent until the MAT-file's host offers the clipboard.
+ * have had all along (rowStamp.ts), which the editable view passes on every build.
  */
 export interface MatStampOptions {
   /**
@@ -37,9 +37,9 @@ export interface MatStampOptions {
    */
   clipMark?: ClipMark;
   /**
-   * Whether a variable travels on the clipboard (`_canCopy` on every row). Absent is false,
-   * which is what the editable view sends today (`clipboard: false` on its setRows). The read-only
-   * view shows no menu, so it reads nothing here.
+   * Whether a variable travels on the clipboard (`_canCopy` on every row). True from the
+   * editable view, whose variables copy, cut, paste and drag as a dictionary's entries do.
+   * Absent is false: the read-only view shows no menu, so it reads nothing here.
    */
   canCopy?: boolean;
 }
@@ -86,7 +86,13 @@ function plannedRows(roots: any[], budget: number, saved: SavedStatus | undefine
   const pool = new RowCellPool();
   const plan = planRows(roots, budget);
   const canCopy = opts?.canCopy ?? false;
-  for (const { node: n, deferred } of plan.planned) {
+  // A variable whose name the file holds twice shares its id with the other, and nothing addressed
+  // by the id reaches it (sharedIdTest). Every row under one root belongs to one variable, so it
+  // is asked per root.
+  const sharesId = sharedIdTest();
+  const rootShared: boolean[] = [];
+  const shared = (root: number): boolean => (rootShared[root] ??= sharesId(owningEntryOf(roots[root])));
+  for (const { node: n, deferred, root } of plan.planned) {
     let built: any;
     try {
       built = n.toRow();
@@ -107,7 +113,7 @@ function plannedRows(roots: any[], budget: number, saved: SavedStatus | undefine
     // the file can write (MatNode._editRefusal), so an item the menu offers is one the save
     // keeps. On every row, a read-only file's too: a view that shows a file read-only shows no
     // menu, so there the flags cost a few bytes a row and are read by nothing.
-    rows.push(stampRow(built, n, { canCopy, entry, deferred, pool }));
+    rows.push(stampRow(built, n, { canCopy, sharedId: shared(root), entry, deferred, pool }));
   }
   return { rows, plan };
 }

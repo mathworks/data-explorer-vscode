@@ -38,6 +38,10 @@ export interface DragItem {
   // sourceSection. Only the no-op check reads it, and an item without one is never
   // part of a no-op (the host completes that drop as a delete and paste).
   sectionName?: string;
+  // Another entry of its document answers to the name a move would delete it by (a dictionary
+  // entry with no uuid whose name another section holds): it can be copied, never moved — the
+  // host's transfer refuses the move (transfer.ts), and so does the prediction.
+  sharedName?: boolean;
 }
 
 // The section is per item, not per drag: a multi-row drag can span sections.
@@ -143,6 +147,12 @@ export function dropDecision(source: DragSource, target: DropTarget, mode: DragM
 
   if (isNoopMove(source, target, mode)) {
     return { canDrop: false, cursor: 'no-drop', tooltip: '', noop: true };
+  }
+
+  // A move takes each original out by name, so one whose name its document holds twice is
+  // refused as the host refuses it, before the target is judged: no target takes that move.
+  if (mode === 'move' && items.some((it) => it.sharedName)) {
+    return reject('Its name is not unique in its file: copy it instead');
   }
 
   // Any single rejected item rejects the whole drop (mirrors a multi-select

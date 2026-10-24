@@ -1,14 +1,16 @@
 // Copyright 2026 The MathWorks, Inc.
 // @vitest-environment happy-dom
 //
-// The MAT-file editor's two departures from a dictionary's table, through the webview entry
-// point as it ships (table-main.ts), as addEntryWiring.test.ts drives the gallery's:
+// The MAT-file editor's table, through the webview entry point as it ships (table-main.ts), as
+// addEntryWiring.test.ts drives the gallery's:
 //
-//  - `add: {classes}`: the Add button and its key open a gallery of the classes the host says the
-//    file can take a new variable of (core's MatNode.getAllowedTypes), and a tile asks for one of
-//    that class, in no section, with its name editor asked for;
-//  - `clipboard: false`: the copy, cut and paste chords and a row drag send nothing, since a
-//    variable has no dictionary entry form to travel as. Delete still goes.
+//  - `add: {classes}`, its one departure from a dictionary's table: the Add button and its key
+//    open a gallery of the classes the host says the file can take a new variable of (core's
+//    MatNode.getAllowedTypes), and a tile asks for one of that class, in no section, with its
+//    name editor asked for;
+//  - the clipboard and row drags, as a dictionary's: the copy, cut and paste chords and a row
+//    drag send what they send there, and the file's one rule ('') is where a paste or a drop on
+//    any row, or on none, lands. The host's half is matClipboard.test.ts, in real VS Code.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import '../src/webview/components/dex-add-gallery.js';
 import { allTiles } from '../src/common/addCatalog.js';
@@ -22,9 +24,14 @@ const CLASSES = ['Simulink.Bus', 'string', 'MatlabVariable', 'Simulink.Parameter
 const IN_CATALOG_ORDER = ['MatlabVariable', 'MatlabStruct', 'Simulink.Parameter', 'Simulink.Bus'];
 
 const rowsOf = () => [
-  { ID: 'm/x', parent: null, Name: { label: 'x', editable: true }, Value: '1', _canDelete: true, _canCopy: false },
-  { ID: 'm/y', parent: null, Name: { label: 'y', editable: true }, Value: '2', _canDelete: true, _canCopy: false },
+  { ID: 'm/x', parent: null, Name: { label: 'x', editable: true }, Value: '1', _canDelete: true, _canCopy: true },
+  { ID: 'm/y', parent: null, Name: { label: 'y', editable: true }, Value: '2', _canDelete: true, _canCopy: true },
 ];
+
+// What the MAT host posts behind its rows: the whole file as one target, admitting a plain
+// variable and a Parameter.
+const FILE_RULE = { sectionName: '', sectionLabel: 'd.mat', isDerived: false, allowedTypes: ['MatlabVariable', 'Simulink.Parameter'] };
+const VARIABLE = { className: 'double', arrayClass: '', kind: 'MATLAB Variable', isMatlabVariable: true, isScalarNumeric: true };
 
 describe('the MAT-file table, wired through the webview entry point', () => {
   let table: any;
@@ -49,8 +56,13 @@ describe('the MAT-file table, wired through the webview entry point', () => {
           columnLabels: { Name: 'Name', Value: 'Value' },
           editable: true,
           add: { classes: CLASSES },
-          clipboard: false,
         },
+      }),
+    );
+    window.dispatchEvent(new MessageEvent('message', { data: { type: 'sectionRules', docUri: 'file:///fx/d.mat', rules: [FILE_RULE] } }));
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'clipboardState', canPaste: true, mode: 'copy', sourceDocUri: 'file:///fx/other.mat', items: [{ ...VARIABLE, sectionName: '' }] },
       }),
     );
     table._editingCell = null;
@@ -109,33 +121,40 @@ describe('the MAT-file table, wired through the webview entry point', () => {
     await closeGallery();
   });
 
-  it('copy, cut and paste chords send nothing; Delete still goes', async () => {
+  it('the copy, cut and paste chords send what a dictionary table sends; so does Delete', async () => {
     table.selectedRowIds = ['m/x'];
     await table.updateComplete;
     for (const key of ['c', 'x', 'v']) {
       table.dispatchEvent(new KeyboardEvent('keydown', { key, metaKey: true, ctrlKey: true, bubbles: true, cancelable: true }));
     }
-    expect(posted.filter((m) => ['copy', 'cut', 'paste'].includes(m.type))).toEqual([]);
+    expect(posted.filter((m) => ['copy', 'cut', 'paste'].includes(m.type))).toEqual([
+      { type: 'copy', rowIds: ['m/x'] },
+      { type: 'cut', rowIds: ['m/x'] },
+      { type: 'paste', rowId: 'm/x' },
+    ]);
     table.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
     expect(posted.filter((m) => m.type === 'delete')).toEqual([{ type: 'delete', rowIds: ['m/x'] }]);
   });
 
-  it('no row is draggable, though a dictionary’s are', async () => {
+  it('every row is draggable, as a dictionary’s are, and not once the file is read-only', async () => {
     const rowEls = () => [...table.shadowRoot.querySelectorAll('tr.data-row')] as HTMLElement[];
     expect(rowEls().length).toBeGreaterThan(0);
-    expect(rowEls().every((r) => r.getAttribute('draggable') === 'false')).toBe(true);
+    expect(rowEls().every((r) => r.getAttribute('draggable') === 'true')).toBe(true);
     window.dispatchEvent(
       new MessageEvent('message', {
-        data: { type: 'setRows', docUri: 'file:///fx/d.sldd', rows: rowsOf(), columns: ['Name', 'Value'], columnLabels: {}, editable: true },
+        data: { type: 'setRows', docUri: 'file:///fx/d.mat', rows: rowsOf(), columns: ['Name', 'Value'], columnLabels: {}, editable: false },
       }),
     );
     await table.updateComplete;
-    expect(rowEls().every((r) => r.getAttribute('draggable') === 'true')).toBe(true);
+    expect(rowEls().every((r) => r.getAttribute('draggable') === 'false')).toBe(true);
   });
 
-  it('a row drag and a drop send nothing', () => {
+  it('a row drag starts, and a drop on a variable lands in the file', () => {
     table.dispatchEvent(new CustomEvent('dex-row-drag-start', { detail: { rowIds: ['m/x'] } }));
-    table.dispatchEvent(new CustomEvent('dex-row-drop', { detail: { targetRowId: 'm/y', mode: 'move' } }));
-    expect(posted.filter((m) => m.type === 'dragStart' || m.type === 'drop')).toEqual([]);
+    table.dispatchEvent(new CustomEvent('dex-row-drop', { detail: { targetRowId: 'm/y', mode: 'copy' } }));
+    expect(posted.filter((m) => m.type === 'dragStart' || m.type === 'drop')).toEqual([
+      { type: 'dragStart', rowIds: ['m/x'] },
+      { type: 'drop', rowId: 'm/y', mode: 'copy' },
+    ]);
   });
 });

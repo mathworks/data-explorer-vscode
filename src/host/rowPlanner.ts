@@ -40,9 +40,9 @@ export interface PlanOptions {
    */
   savedStatus?: SavedStatus;
   /**
-   * Whether a MAT-file's variables travel on the clipboard (`_canCopy`). Absent is false,
-   * today's answer. A dictionary's entries always do, so the sectioned planner reads nothing
-   * here.
+   * Whether a MAT-file's variables travel on the clipboard (`_canCopy`): true from the editable
+   * view, absent (false) from the read-only one, which shows no menu. A dictionary's entries
+   * always do, so the sectioned planner reads nothing here.
    */
   canCopy?: boolean;
 }

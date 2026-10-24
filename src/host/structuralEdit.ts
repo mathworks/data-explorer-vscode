@@ -21,6 +21,7 @@ import {
   indentBefore,
 } from './entrySplice.js';
 import {
+  DataModel,
   applyTextPatch,
   entrySelectorOf,
   generateUuid,
@@ -29,7 +30,7 @@ import {
   type EntrySelector,
   type TextPatch,
 } from 'data-explorer-core';
-import { buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
+import { WHOLE_FILE_SECTION, buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
 import type { DragRegisterItem } from './dragState.js';
 import type { ClipboardItem } from './clipboard.js';
 import { dropFactsOf } from './dropFacts.js';
@@ -189,13 +190,127 @@ function owningEntriesOf(rowIds: unknown, findNode: (rowId: string) => any): any
 }
 
 /**
+ * A copy, a cut or a drag refused before anything reached its register: an entry that cannot
+ * travel (core's copyRefusal). The message names the entry and is shown as it is, never behind
+ * a "Failed to" prefix: it is a reason, not a failure.
+ */
+export class CopyRefused extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CopyRefused';
+  }
+}
+
+/**
+ * The section an entry is carried from, as its register item spells `sourceSection`: its
+ * section's name in a dictionary, and WHOLE_FILE_SECTION for an entry with no section between
+ * it and its document — a MAT-file's variable, whose parent is the file's own source node. That
+ * node's name is the srcId it was registered under, which no section rule spells, so a copied
+ * variable recorded under it would make no same-file move a no-op and dim no row.
+ *
+ * Told by the session, not by the node's class: a parent the session holds as a source IS the
+ * document. A detached entry, or one whose section has no name, is '' as it always was.
+ */
+export function sourceSectionOf(entry: any): string {
+  const parent = entry?.parent;
+  if (!parent) return WHOLE_FILE_SECTION;
+  if (typeof parent.name === 'string' && (DataModel as any).getDataSource?.(parent.name) === parent) return WHOLE_FILE_SECTION;
+  return parent.name ?? '';
+}
+
+/**
+ * Refuse, in core's words, the first of `entries` that cannot travel on the clipboard or in a
+ * drag (DataModel.copyRefusal): one with no value to write, one past the writer's budget, a
+ * MAT-file variable a copy would read back as another value. Asked of every format's entries
+ * alike, here, where both registers are filled: the reason a copy can be refused is a fact about
+ * the entry, and a check one provider made and another did not is a paste that lands wrong.
+ *
+ * Asked by id, so only of an entry the session resolves that id to: a node it does not hold, or
+ * one whose id it resolves to another node (two same-named MAT-file variables share one), would
+ * be judged as something else. Such an entry is left to its serialize(), which the snapshot
+ * makes next and which refuses what cannot be written.
+ */
+function refuseUncopyable(entries: readonly any[]): void {
+  for (const entry of entries) {
+    if (typeof entry?.id !== 'string' || (DataModel as any).findNodeById?.(entry.id) !== entry) continue;
+    const why = DataModel.copyRefusal(entry.id);
+    if (why) throw new CopyRefused(why);
+  }
+}
+
+/**
+ * Of `entries`, the ones a move could not take out of their document alone.
+ *
+ * A move deletes its originals by selector (core's entrySelector.ts): the name, with the uuid
+ * consulted only to tell same-named entries apart. A selector with no uuid — every MAT-file
+ * variable's, whose payload has no metadata, and a dictionary entry added by hand — names
+ * whichever entry of that name the delete finds first, and a document can hold two: a
+ * dictionary's in two namespaces, a MAT-file's two records of one name. Such an entry can be
+ * copied, never moved: the delete would take out the wrong one, or both.
+ *
+ * Counted once per document, over every entry in it, because that is the delete's scope (it
+ * searches the whole entries array, not the section).
+ */
+function entriesSharingAName(entries: readonly any[]): Set<any> {
+  const shared = new Set<any>();
+  const counts = new Map<any, Map<string, number>>();
+  for (const entry of entries) {
+    if (entrySelectorOf(entry).uuid) continue;
+    let root = entry;
+    while (root.parent) root = root.parent;
+    let names = counts.get(root);
+    if (!names) counts.set(root, (names = entryNameCounts(root)));
+    if ((names.get(entry.name) ?? 0) > 1) shared.add(entry);
+  }
+  return shared;
+}
+
+// How many entries of the document under `root` answer to each name: its entries are the
+// first nodes down each branch that are one (a MAT-file's children, a dictionary's sections'
+// children). Nothing below an entry is one.
+function entryNameCounts(root: any): Map<string, number> {
+  const counts = new Map<string, number>();
+  const visit = (node: any) => {
+    for (const child of (node?.children ?? []) as any[]) {
+      if (child?.isEntry) counts.set(child.name, (counts.get(child.name) ?? 0) + 1);
+      else visit(child);
+    }
+  };
+  visit(root);
+  return counts;
+}
+
+/**
+ * Each row's owning entry as a register item: what to paste, the section it came from, the
+ * facts a drop target judges it by, whether a move could take its original out alone, and,
+ * where its document hands one out (`originOf`), the token its deleter later tells the entry
+ * by. The one build behind both registers, after the one refusal they share.
+ */
+function registerItemsOf(
+  rowIds: unknown,
+  findNode: (rowId: string) => any,
+  originOf?: (entry: any) => object | undefined,
+): ClipboardItem[] {
+  const entries = owningEntriesOf(rowIds, findNode);
+  refuseUncopyable(entries);
+  const shared = entriesSharingAName(entries);
+  return entries.map((entry): ClipboardItem => {
+    const payload = entry.serialize() as Record<string, unknown>;
+    const item: ClipboardItem = { payload, sourceSection: sourceSectionOf(entry), ...dropFactsOf(entry, payload) };
+    const origin = originOf?.(entry);
+    if (origin) item.origin = origin;
+    if (shared.has(entry)) item.sharedName = true;
+    return item;
+  });
+}
+
+/**
  * Snapshot the rows a drag started on into the drag-register shape.
  *
- * Shared by BOTH table providers (SlddTextEditorProvider and
- * BinarySlddEditorProvider): the two formats differ only in how they get a live
- * model, never in what a dragged row means, so this ran as two near-identical
- * 35-line copies. A divergence between them would show up as a drag from one
- * .sldd format predicting a different drop than the same drag from the other.
+ * Shared by every table provider, through clipboardAction's dragEntries: the formats
+ * differ only in how they get a live model, never in what a dragged row means, so this
+ * ran as two near-identical 35-line copies. A divergence between them would show up as a
+ * drag from one .sldd format predicting a different drop than the same drag from the other.
  *
  * `findNode` is injected because that IS the per-format difference. Which rows become
  * which entries — the dedupe by owning entry, and the rows that contribute nothing — is
@@ -204,12 +319,12 @@ function owningEntriesOf(rowIds: unknown, findNode: (rowId: string) => any): any
  * Each item keeps its OWN source section, as a clipboard item does: a multi-row drag can
  * span sections, and whether a move is a no-op depends on every item's section.
  */
-export function buildDragSnapshot(rowIds: unknown, findNode: (rowId: string) => any): { items: DragRegisterItem[] } {
-  const items = owningEntriesOf(rowIds, findNode).map((entry): DragRegisterItem => {
-    const payload = entry.serialize() as Record<string, unknown>;
-    return { payload, sourceSection: entry.parent?.name ?? '', ...dropFactsOf(entry, payload) };
-  });
-  return { items };
+export function buildDragSnapshot(
+  rowIds: unknown,
+  findNode: (rowId: string) => any,
+  originOf?: (entry: any) => object | undefined,
+): { items: DragRegisterItem[] } {
+  return { items: registerItemsOf(rowIds, findNode, originOf) };
 }
 
 /**
@@ -225,11 +340,9 @@ export function buildDragSnapshot(rowIds: unknown, findNode: (rowId: string) => 
 export function buildClipboardSnapshot(
   rowIds: unknown,
   findNode: (rowId: string) => any,
+  originOf?: (entry: any) => object | undefined,
 ): ClipboardItem[] {
-  return owningEntriesOf(rowIds, findNode).map((entry) => {
-    const payload = entry.serialize() as Record<string, unknown>;
-    return { payload, sourceSection: entry.parent?.name ?? '', ...dropFactsOf(entry, payload) };
-  });
+  return registerItemsOf(rowIds, findNode, originOf);
 }
 
 // Reserialize one entry to text, lined up behind the element's own `{`, the same way
@@ -279,15 +392,15 @@ function unwrittenNumberIn(value: unknown, path: string[] = []): { value: number
 /**
  * Refuse to write a NEW entry into a JSON dictionary with a `null` where its value holds a number.
  *
- * A binary dictionary, and a MAT-file, hold a scalar Inf, -Inf or NaN as the bare number — an
- * entry's value, a struct's field, an object's property — and so does the record a copy of one
- * carries. A text dictionary spells such a number as text (`{"_type": "double", "_value":
- * "Inf"}`, as MATLAB writes one, and as core writes an edited one), but the paste hands the
- * record to core as it is (SectionNode.parseEntry), whose text form today leaves a bare number
- * bare, and this writer is JSON.stringify, which writes it as null. The pasted entry then
- * re-read as another value, and saved as one, with nothing said. Until core spells it on the
- * way in, the paste is refused instead, naming the entry and what it holds; nothing is written.
- * When core does, the record arrives here already spelled and this never refuses.
+ * A binary dictionary, and a MAT-file, hold a scalar Inf, -Inf or NaN as the bare number, and so
+ * does the record a copy of one carries. A text dictionary spells such a number as text
+ * (`{"_type": "double", "_value": "Inf"}`, as MATLAB writes one), and core spells a bare one so as
+ * it takes a pasted entry in (SectionNode.parseEntry), at an entry's value, a struct's field, a
+ * cell's element and an object's property alike: so a paste never reaches this with one. This is
+ * the safety net for a record core handed back as it was — a value it could not take apart, one
+ * past its writer's budget — whose bare number this writer, JSON.stringify, would write as null:
+ * the pasted entry would then read, and save, as another value, with nothing said. Refused
+ * instead, naming the entry and where in it the number is; nothing is written.
  *
  * New entries only (a paste, a drop, an Add): the file's own entries are written as they read.
  */
@@ -298,7 +411,7 @@ function refuseUnwrittenNumber(newNode: any, record: any): void {
   const where = found.path.length ? ` (in ${found.path.join('.')})` : '';
   throw new Error(
     `Cannot paste "${newNode?.name}" into a text dictionary: it holds ${spelled}${where}, ` +
-      'which this version cannot write there yet. Nothing was pasted.',
+      'which would be written there as null. Nothing was pasted.',
   );
 }
 
@@ -657,6 +770,10 @@ export function createEntry(section: any, className: string): any {
 function insertNewEntry(text: string, newNode: any): StructuralResult {
   const insertion = findEntriesArrayInsertion(text);
   if (!insertion) throw new Error('Could not locate the entries array.');
+  // Core spells what JSON has no number for (an Inf, a NaN copied out of a binary dictionary
+  // or a MAT-file) as a text dictionary does, `{"_type": "double", "_value": "Inf"}`, as it
+  // takes the entry in (parseEntry); a record it handed back as it was is refused rather than
+  // written with a null (refuseUnwrittenNumber).
   const record = newNode.serialize();
   refuseUnwrittenNumber(newNode, record);
   const entryText = recordText(record, detectIndent(text), insertion.elementIndent);

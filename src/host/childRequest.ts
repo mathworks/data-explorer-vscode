@@ -15,7 +15,7 @@
 // that looks live and does nothing for the rest of the session.
 import { findNode } from './SlddModel.js';
 import { LAZY_ROW_BUDGET } from './lazyRows.js';
-import type { RowPlanner } from './rowPlanner.js';
+import type { PlanOptions, RowPlanner } from './rowPlanner.js';
 import { postOrReport, type PostTarget } from './postPayload.js';
 
 /**
@@ -46,16 +46,21 @@ export type UsageFiller = (sourceUri: string, rows: any[]) => Promise<boolean>;
  * uncapped), and defers what is under them. It is still sent so the message keeps its
  * shape (protocol.ts). 0 on the failure paths too: an empty answer means the node is gone
  * or has no children, and neither is a loss to report.
+ *
+ * `opts` are the stamps the view's payload was planned with (a MAT-file's `canCopy`), so a
+ * fetched row carries the flags its siblings carry: the menu of a row the user expanded must
+ * be the menu of the row beside it.
  */
 export function childRowsMessage(
   nodeId: string,
   node: any,
   planner: RowPlanner,
+  opts?: PlanOptions,
 ): { type: 'childRows'; nodeId: string; rows: any[]; truncated: number } {
   let rows: any[] = [];
   let truncated = 0;
   try {
-    const built = node ? planner.children(node, LAZY_ROW_BUDGET) : null;
+    const built = node ? planner.children(node, LAZY_ROW_BUDGET, opts) : null;
     rows = built?.rows ?? [];
     truncated = built?.plan.truncated ?? 0;
   } catch {
@@ -90,6 +95,7 @@ export async function answerChildRequest(
   what: string,
   fillUsage: UsageFiller,
   planner: RowPlanner,
+  opts?: PlanOptions,
 ): Promise<void> {
   let node = null;
   try {
@@ -97,7 +103,7 @@ export async function answerChildRequest(
   } catch {
     node = null;
   }
-  const message = childRowsMessage(nodeId, node, planner);
+  const message = childRowsMessage(nodeId, node, planner, opts);
   if (message.rows.length > 0) {
     await fillUsage(uriString, message.rows).catch(() => false);
   }

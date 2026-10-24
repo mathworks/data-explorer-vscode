@@ -28,6 +28,13 @@ export interface DropFacts {
    * it lands in Architectural Data (a Constant must be scalar-numeric).
    */
   isScalarNumeric: boolean;
+  /**
+   * Another entry of its document answers to the selector a move deletes it by (a dictionary
+   * entry with no uuid whose name another section holds, say), so it can be copied and never
+   * moved. Computed over the whole document where both registers are filled (structuralEdit's
+   * registerItemsOf), not here, and set only where true.
+   */
+  sharedName?: boolean;
 }
 
 /**

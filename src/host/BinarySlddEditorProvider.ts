@@ -35,7 +35,8 @@
 import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
 import { renderTableWebview } from './webviewHtml.js';
-import { buildEntryRows, clipMarkKey, splitClipMarkKey, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
+import { buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
+import { clipMarkChange, clipMarkOfDoc } from './clipMarks.js';
 import { rowPlannerFor } from './rowPlanner.js';
 import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
 import { answerChildRequest } from './childRequest.js';
@@ -67,11 +68,10 @@ import {
   refuseDisallowedPaste,
   sectionByName,
   sectionTarget,
-  buildDragSnapshot,
   reselectAfterRemoval,
   type SectionTarget,
 } from './structuralEdit.js';
-import { copyEntriesToClipboard } from './clipboardAction.js';
+import { copyEntriesToClipboard, dragEntries } from './clipboardAction.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
 import {
   deleteEntryXml,
@@ -109,8 +109,8 @@ import {
   type EntryRecord,
 } from './entryOps.js';
 import { buildSectionRowId } from '../common/sectionRowId.js';
-import { getClipboard, clipboardState } from './clipboard.js';
-import { setDrag, getDrag, clearDrag } from './dragState.js';
+import { clipboardState } from './clipboard.js';
+import { getDrag, clearDrag } from './dragState.js';
 import {
   registerWebview,
   unregisterWebview,
@@ -805,23 +805,6 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       return found ?? null;
     };
 
-    // The clipboard mark this document's rows should carry, if any. Shared by the
-    // full and entry-scoped repaints so a cut/copied entry renders its affordance
-    // the same way whichever one painted it.
-    // Every entry the clipboard holds carries the mark, each keyed by its OWN source
-    // section: a multi-row cut can span sections, so one shared section would dim the
-    // wrong rows.
-    const clipMarkOfDoc = (): ClipMark | undefined => {
-      const clip = getClipboard();
-      if (!clip || clip.sourceDocUri !== uriString) return undefined;
-      const keys = new Set<string>();
-      for (const it of clip.items) {
-        const name = it.payload.name;
-        if (typeof name === 'string' && name) keys.add(clipMarkKey(it.sourceSection, name));
-      }
-      return keys.size ? { keys, mode: clip.mode } : undefined;
-    };
-
     const post = (from: ModelSource = 'chunk') => {
       try {
         // 'registered' is only ever passed by a caller that has just registered a tree
@@ -834,7 +817,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           document.baselineCaptured = true;
         }
         const modified = computeModified(uriString, node);
-        const clipMark = clipMarkOfDoc();
+        const clipMark = clipMarkOfDoc(uriString);
         const planned = planner.payload(node, LAZY_ROW_BUDGET, { modifiedNames: modified, clipMark });
         const rows = planned.rows;
         // Through postOrReport, and NOT awaited: the postMessage itself (and the
@@ -864,7 +847,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         );
         webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
         webview.postMessage({ type: 'clipboardState', ...clipboardState() });
-        paintedMark = clipMarkOfDoc();
+        paintedMark = clipMark;
         drainNavigateSelect(webview, uriString);
       } catch (err) {
         webview.postMessage({ type: 'error', message: `Failed to parse ${name}: ${(err as Error).message}` });
@@ -886,7 +869,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       // Planned to the same budget the payload used, so a repaint of one huge entry
       // cannot post more than the RPC carries — see the note at the sibling call site in
       // SlddTextEditorProvider.
-      return buildEntryRows(entry, section.name, modified, clipMarkOfDoc(), undefined, LAZY_ROW_BUDGET);
+      return buildEntryRows(entry, section.name, modified, clipMarkOfDoc(uriString), undefined, LAZY_ROW_BUDGET);
     };
 
     /**
@@ -956,17 +939,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
      * mark), so there is nothing left to un-dim.
      */
     let paintedMark: ClipMark | undefined;
-    // Order-independent: the same entries marked in a different order is the SAME mark,
-    // and repainting for it would be a repaint the user's rows do not need.
-    const markKey = (mark?: ClipMark): string =>
-      mark ? JSON.stringify([mark.mode, [...mark.keys].sort()]) : '';
     const repaintClipMark = () => {
-      const next = clipMarkOfDoc();
-      if (markKey(paintedMark) === markKey(next)) return;
-      // Every entry either mark names: the ones losing the affordance and the ones
-      // gaining it. A key present in both yields one repaint (the `seen` guard below),
-      // as does a copy re-taken as a cut.
-      const affected = new Set<string>([...(paintedMark?.keys ?? []), ...(next?.keys ?? [])]);
+      const next = clipMarkOfDoc(uriString);
+      // Every entry either mark names (clipMarkChange), or none when they are the same mark.
+      const affected = clipMarkChange(paintedMark, next);
+      if (!affected) return;
       let model: any;
       try {
         model = liveModel();
@@ -981,8 +958,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       paintedMark = next;
       const ops: AppliedOp[] = [];
       const seen = new Set<string>();
-      for (const key of affected) {
-        const { section, name } = splitClipMarkKey(key);
+      for (const { section, name } of affected) {
         const entry = findEntryByName(model, section, name);
         if (!entry || seen.has(entry.id)) continue;
         seen.add(entry.id);
@@ -1468,23 +1444,19 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // Each dragged row's owning entry is serialized (the payload the drop pastes)
     // alongside the display facts (class/kind) the target webview needs to predict
     // the drop, then the payload-free descriptor is broadcast so every open table
-    // renders feedback. The snapshot itself is shared with SlddTextEditorProvider
-    // (buildDragSnapshot); only getting a live model differs between the formats.
+    // renders feedback. Shared with every other table (clipboardAction.dragEntries);
+    // only getting a live model differs between the formats.
     const applyDragStart = (msg: { rowIds: string[] }): void => {
-      try {
+      dragEntries(msg.rowIds, uriString, {
         // From the model as it stands: starting a drag changes no text, so a re-parse
         // could only rebuild the tree that is already there. See applyCopy.
-        liveModel();
-        const snap = buildDragSnapshot(msg.rowIds, findNode);
-        if (snap.items.length === 0) clearDrag();
-        else setDrag(uriString, snap.items);
-        broadcastDragState();
-      } catch (err) {
-        clearDrag();
-        broadcastDragState();
-        // Said, as a failed copy is — see SlddTextEditorProvider's applyDragStart.
-        webview.postMessage({ type: 'error', message: `Failed to drag: ${(err as Error).message}` });
-      }
+        refresh: () => {
+          liveModel();
+        },
+        findNode,
+        post: (message) => webview.postMessage(message),
+        broadcast: broadcastDragState,
+      });
     };
 
     const applyDragEnd = (): void => {

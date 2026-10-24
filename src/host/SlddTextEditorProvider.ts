@@ -3,15 +3,8 @@ import * as vscode from 'vscode';
 import { renderTableWebview } from './webviewHtml.js';
 import { getModel, invalidate, findNode, peekModel, openSourceView, releaseSourceView } from './SlddModel.js';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
-import {
-  buildEntryRows,
-  clipMarkKey,
-  splitClipMarkKey,
-  COLUMNS,
-  COLUMN_LABELS,
-  COLUMN_GROUPS,
-  type ClipMark,
-} from './rowBuilder.js';
+import { buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
+import { clipMarkChange, clipMarkOfDoc } from './clipMarks.js';
 import { rowPlannerFor } from './rowPlanner.js';
 import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
 import { answerChildRequest } from './childRequest.js';
@@ -41,8 +34,8 @@ import {
   type KnownEdit,
   type RangeReplacement,
 } from './jsonEntrySync.js';
-import { getClipboard, clipboardState } from './clipboard.js';
-import { setDrag, getDrag, clearDrag } from './dragState.js';
+import { clipboardState } from './clipboard.js';
+import { getDrag, clearDrag } from './dragState.js';
 import {
   registerWebview,
   unregisterWebview,
@@ -74,13 +67,12 @@ import {
   sectionByName,
   sectionTarget,
   reserializeEntry,
-  buildDragSnapshot,
   type SectionTarget,
   type StructuralResult,
   type TextPatch,
 } from './structuralEdit.js';
 import { entrySelectorOf, minimalReplacement, planDeletion, type EntrySelector } from 'data-explorer-core';
-import { copyEntriesToClipboard } from './clipboardAction.js';
+import { copyEntriesToClipboard, dragEntries } from './clipboardAction.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { subscribeUsageRepost } from './usageRepostWatch.js';
 import { sourceWarnings, warningBanner } from './parseWarnings.js';
@@ -222,27 +214,6 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      */
     let modelInSync = false;
 
-    // If the clipboard's cut/copied entry lives in THIS document, the mark its source
-    // row should carry, so the table can render the cut (dimmed) / copied (dashed)
-    // affordance. Cleared automatically once the clipboard empties on paste.
-    //
-    // Shared by the full and entry-scoped repaints, so a cut affordance renders the same
-    // way whichever one painted it: one that appeared or vanished depending on which
-    // repaint the user happened to trigger would be a bug visible only after an edit.
-    // Every entry the clipboard holds carries the mark, each keyed by its OWN source
-    // section: a multi-row cut can span sections, so one shared section would dim the
-    // wrong rows.
-    const clipMarkOfDoc = (): ClipMark | undefined => {
-      const clip = getClipboard();
-      if (!clip || clip.sourceDocUri !== uriString) return undefined;
-      const keys = new Set<string>();
-      for (const it of clip.items) {
-        const name = it.payload.name;
-        if (typeof name === 'string' && name) keys.add(clipMarkKey(it.sourceSection, name));
-      }
-      return keys.size ? { keys, mode: clip.mode } : undefined;
-    };
-
     /**
      * The tree for this document — the one already built when it still says what the text
      * says, a fresh parse when it does not.
@@ -300,7 +271,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           docState.baselineCaptured = true;
         }
         const modified = computeModified(uriString, node);
-        const clipMark = clipMarkOfDoc();
+        const clipMark = clipMarkOfDoc(uriString);
         const planned = planner.payload(node, LAZY_ROW_BUDGET, { modifiedNames: modified, clipMark });
         const rows = planned.rows;
         // Every row below is built from `node`, which getModel just parsed from the live
@@ -343,10 +314,12 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
             // a drop (dropDecision) live on dragover without a host round-trip.
             webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
             webview.postMessage({ type: 'clipboardState', ...clipboardState() });
-            // The mark these rows CARRY, not the one the clipboard holds now: a copy that
-            // happened while the rows were in flight is behind them in the webview's queue, so
-            // what is on screen is `clipMark`, and the next broadcast has to see the difference.
+            // The mark these rows CARRY, not the one the clipboard holds now. A copy or a cut that
+            // landed while they waited on the Usage column repainted the entries it marked at
+            // once, ahead of these, which have just landed over that with the mark from before:
+            // so the entries that moved are painted again, after them (clipMarks.ts).
             paintedMark = clipMark;
+            repaintClipMark();
             drainNavigateSelect(webview, uriString);
           });
       } catch (err) {
@@ -378,7 +351,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         entry,
         entry.parent?.name ?? '',
         modified,
-        clipMarkOfDoc(),
+        clipMarkOfDoc(uriString),
         undefined,
         LAZY_ROW_BUDGET,
       );
@@ -765,23 +738,17 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * (see modelInSync), and only a full repaint can fix that.
      */
     let paintedMark: ClipMark | undefined;
-    // Order-independent: the same entries marked in a different order is the SAME mark,
-    // and repainting for it would be a repaint the user's rows do not need.
-    const markKey = (mark?: ClipMark): string =>
-      mark ? JSON.stringify([mark.mode, [...mark.keys].sort()]) : '';
     const repaintClipMark = (): void => {
-      const next = clipMarkOfDoc();
-      if (markKey(paintedMark) === markKey(next)) return;
+      const next = clipMarkOfDoc(uriString);
+      // Every entry either mark names (clipMarkChange), or none when they are the same mark.
+      const affected = clipMarkChange(paintedMark, next);
+      if (!affected) return;
       // The rows on screen are not what the text says, so painting two entries over them would
       // leave the rest stale — this is the wide repaint every broadcast used to be.
       if (!modelInSync) {
         void post();
         return;
       }
-      // Every entry either mark names: the ones losing the affordance and the ones
-      // gaining it. A key present in both yields one repaint (the `seen` guard below),
-      // as does a copy re-taken as a cut.
-      const affected = new Set<string>([...(paintedMark?.keys ?? []), ...(next?.keys ?? [])]);
       let model: any;
       try {
         model = liveModel();
@@ -795,8 +762,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       paintedMark = next;
       const ops: AppliedOp[] = [];
       const seen = new Set<string>();
-      for (const key of affected) {
-        const { section, name } = splitClipMarkKey(key);
+      for (const { section, name } of affected) {
         const entry = findEntryByName(model, section, name);
         if (!entry || seen.has(entry.id)) continue;
         seen.add(entry.id);
@@ -1710,30 +1676,22 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // serialized (the payload the eventual paste uses) alongside the display
     // facts (class/kind) the webview needs to predict the drop. Then broadcast
     // the payload-free descriptor so every open table can render live feedback.
-    // The snapshot itself is shared with BinarySlddEditorProvider
-    // (buildDragSnapshot); only getting a live model differs between the formats.
+    // Shared with every other table (clipboardAction.dragEntries); only getting a live
+    // model differs between the formats.
     const applyDragStart = (msg: { rowIds: string[] }): void => {
-      try {
+      dragEntries(msg.rowIds, uriString, {
         // From the tree as it stands, for the reason applyCopy gives: a drag start changes no
         // text, and it is the first thing a drag does, so a re-parse here is latency before the
         // cursor can even predict a drop.
-        liveModel();
-        const snap = buildDragSnapshot(msg.rowIds, (rowId) => findNode(uriString, rowId));
-        if (snap.items.length === 0) {
-          clearDrag();
-        } else {
-          setDrag(uriString, snap.items);
-        }
-        broadcastDragState();
-      } catch (err) {
-        clearDrag();
-        broadcastDragState();
-        // Said, as a failed copy is (clipboardAction.ts). Silent, the drag looked like it had
-        // started, and the drop that ended it reported only "Nothing to drop." — the snapshot that
-        // failed is the serialize of every dragged entry, so this is where a value core will not
-        // write (a MatWriteError) says so.
-        webview.postMessage({ type: 'error', message: `Failed to drag: ${(err as Error).message}` });
-      }
+        refresh: () => {
+          liveModel();
+        },
+        findNode: (rowId) => findNode(uriString, rowId),
+        // Said, as a failed copy is: the snapshot that fails is the serialize of every dragged
+        // entry, so this is where a value core will not write (a MatWriteError) says so.
+        post: (message) => webview.postMessage(message),
+        broadcast: broadcastDragState,
+      });
     };
 
     // --- Drag end: clear the register and tell every webview the drag is over ---
