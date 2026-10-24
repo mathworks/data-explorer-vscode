@@ -30,7 +30,9 @@ import {
   isEntryModified,
   clearBaseline,
   diskBaselineUsable,
+  sameDiskStamp,
   type BaselineSource,
+  type DiskStamp,
 } from './slddBaseline.js';
 import {
   applyEntryOps,
@@ -136,9 +138,15 @@ import type { TableToHostMessage } from '../common/protocol.js';
  * slddBaseline.ts): it is the file on disk, and the moments the document is known to read what
  * the file says — clean at an open, a save, a revert, a reload — are the document's, not a tab's.
  * So is the list of every tab's repaint, because a new baseline changes the marks in all of them
- * and only one tab's event may be the one that noticed.
+ * and only one tab's event may be the one that noticed — and so is the file's stamp at the last of
+ * those moments, which every tab's check for a reload asks first (see checkAgainstDisk).
  */
-type DocState = { views: number; baseline: BaselineSource; repaints: Set<() => void> };
+type DocState = {
+  views: number;
+  baseline: BaselineSource;
+  repaints: Set<() => void>;
+  diskStamp: DiskStamp | null;
+};
 const openDocs = new Map<string, DocState>();
 
 /** Count one more open view of this document, and answer what it already knows. */
@@ -147,6 +155,7 @@ function openView(uriString: string): DocState {
     views: 0,
     baseline: { captured: false, pending: false, version: -1, cleanAt: -1 },
     repaints: new Set<() => void>(),
+    diskStamp: null,
   };
   state.views++;
   openDocs.set(uriString, state);
@@ -1958,9 +1967,29 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     const repaintThis = (): void => void post();
     docState.repaints.add(repaintThis);
 
-    /** This document now reads what its file on disk does. */
-    const noteClean = (): void => {
+    // The file's stamp, or null when it cannot be had.
+    const statDisk = async (): Promise<DiskStamp | null> => {
+      try {
+        const stat = await vscode.workspace.fs.stat(document.uri);
+        return { mtime: stat.mtime, size: stat.size };
+      } catch {
+        return null;
+      }
+    };
+
+    // Taken whenever the document is known to read what the file does; kept only if it still
+    // does by the time the stat answers.
+    const stampDisk = (version: number): void => {
+      void statDisk().then((stamp) => {
+        if (stamp && !document.isDirty && document.version === version) docState.diskStamp = stamp;
+      });
+    };
+
+    /** This document now reads what its file on disk does — whose stamp is `stamp`, if known. */
+    const noteClean = (stamp?: DiskStamp): void => {
       docState.baseline.cleanAt = document.version;
+      if (stamp) docState.diskStamp = stamp;
+      else stampDisk(document.version);
       if (docState.baseline.version === document.version) return;
       repaintAll();
     };
@@ -1970,11 +1999,17 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * so with no dirty-state event — or an edit to a clean document, which reads clean the same
      * way until its own dirty-state event arrives.
      *
-     * The file decides: the document reads what the file holds, or it does not. The read is the
-     * wait, too: an edit's dirty-state event has arrived by the time it is done, which answers
-     * the common case before anything is compared.
+     * The file decides: the document reads what the file holds, or it does not. But it is asked
+     * only if it has CHANGED since the document last matched it, which its stat says: a reload
+     * follows a change on disk, and an edit — the common case by far — leaves the file as it
+     * was. Read first, as this used to, it cost every tab a read of the whole file on the first
+     * edit after every save (47.8 MB on a real dictionary, after every autosave). The stat is
+     * the wait, too: an edit's dirty-state event has usually arrived by the time it answers.
      */
     const checkAgainstDisk = async (version: number): Promise<void> => {
+      const stamp = await statDisk();
+      if (!stamp || disposed || document.isDirty || document.version !== version) return;
+      if (docState.baseline.version === version || sameDiskStamp(docState.diskStamp, stamp)) return;
       let bytes: Uint8Array;
       try {
         bytes = await vscode.workspace.fs.readFile(document.uri);
@@ -1982,9 +2017,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         return;
       }
       if (disposed || document.isDirty || document.version !== version) return;
-      if (docState.baseline.version === version) return;
       if (new TextDecoder().decode(bytes) !== document.getText()) return;
-      noteClean();
+      noteClean(stamp);
     };
 
     /**
@@ -2026,8 +2060,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       repaintAll();
     };
 
-    if (!document.isDirty) docState.baseline.cleanAt = document.version;
-    else if (!docState.baseline.captured && !docState.baseline.pending) void baselineFromDisk();
+    if (!document.isDirty) {
+      docState.baseline.cleanAt = document.version;
+      stampDisk(document.version);
+    } else if (!docState.baseline.captured && !docState.baseline.pending) void baselineFromDisk();
 
     // --- Message wiring ---------------------------------------------------------
     const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {

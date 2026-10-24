@@ -162,3 +162,18 @@ export function baselineOwed(source: BaselineSource, versionRead: number): boole
 export function diskBaselineUsable(source: BaselineSource, cleanAtBefore: number): boolean {
   return !source.captured && source.cleanAt === cleanAtBefore;
 }
+
+/** What a file's stat says about its bytes without reading them. */
+export interface DiskStamp {
+  mtime: number;
+  size: number;
+}
+
+/**
+ * Whether the file is as it was when `known` was taken — so a change to a document that read
+ * the same as it then cannot have been a reload of it, and nothing has to be read to say so.
+ * An unknown stamp proves nothing.
+ */
+export function sameDiskStamp(known: DiskStamp | null, now: DiskStamp): boolean {
+  return known !== null && known.mtime === now.mtime && known.size === now.size;
+}

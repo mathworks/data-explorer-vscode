@@ -9,6 +9,7 @@ import {
   computeModified,
   clearBaseline,
   diskBaselineUsable,
+  sameDiskStamp,
 } from '../src/host/slddBaseline.js';
 
 function fixtureText(): string {
@@ -266,5 +267,20 @@ describe('diskBaselineUsable — the bytes of a dirty open count only if nothing
   it('does not count once the document turned clean while it was read, baselined or not', () => {
     // The bytes may be from before that save; the file now holds what the document did then.
     expect(diskBaselineUsable({ ...pending, pending: false, cleanAt: 6 }, -1)).toBe(false);
+  });
+});
+
+describe('sameDiskStamp — a file not changed since the document matched it was not reloaded', () => {
+  it('is the same file when its size and modification time are', () => {
+    expect(sameDiskStamp({ mtime: 1000, size: 15507 }, { mtime: 1000, size: 15507 })).toBe(true);
+  });
+
+  it('may have changed when either moved', () => {
+    expect(sameDiskStamp({ mtime: 1000, size: 15507 }, { mtime: 1001, size: 15507 })).toBe(false);
+    expect(sameDiskStamp({ mtime: 1000, size: 15507 }, { mtime: 1000, size: 15508 })).toBe(false);
+  });
+
+  it('proves nothing before a stamp has been taken', () => {
+    expect(sameDiskStamp(null, { mtime: 1000, size: 15507 })).toBe(false);
   });
 });
