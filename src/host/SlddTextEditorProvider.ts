@@ -555,8 +555,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
     /**
      * What the table edit in flight will need when its own change event arrives: the entry it
-     * changed, the row id the screen holds that entry under, and the range replacement it
-     * submitted.
+     * changed — under the id the model and the rows it painted now share — and the range
+     * replacement it submitted.
      *
      * Set immediately before the WorkspaceEdit and spent by the very next change event,
      * whatever that event turns out to be — an expectation that outlived its edit must not be
@@ -769,8 +769,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * locate the entry and 0.3 ms to rebuild it.
      *
      * Still the path for a table edit whose own event did not come back recognisable
-     * (syncOwnEdit ran first and refused), which is why it takes the hint too: the row id on
-     * screen is what a rename makes it unable to work out for itself.
+     * (syncOwnEdit ran first and refused). It needs no hint for that: the edit painted before it
+     * wrote, so the rows on screen carry the entry as the model now names it — a rename's new id
+     * included — and that is the entry the plan resolves.
      *
      * Returns false for anything it is not sure about, and the caller repaints the old way.
      * See jsonEntrySync.ts for what "sure" means; the checks that live HERE are the ones
@@ -780,7 +781,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      *   - rows that match the text (modelInSync) and a tree still registered for this
      *     document to apply the op to.
      */
-    const syncOneEntry = (e: vscode.TextDocumentChangeEvent, hint: HostEdit | null): boolean => {
+    const syncOneEntry = (e: vscode.TextDocumentChangeEvent): boolean => {
       if (e.contentChanges.length !== 1) return false;
       if (!modelInSync) return false;
       const model = peekModel(uriString);
@@ -792,9 +793,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           text: change.text,
         });
         if (!plan) return false;
-        // Honoured only when it names the very entry the plan resolved, so a hint left over
-        // from an edit of another entry cannot move this repaint onto the wrong run of rows.
-        const entryRowId = hint && hint.entryId === plan.entry.id ? hint.rowId : plan.entry.id;
+        const entryRowId = plan.entry.id;
         const applied = applyEntryOps(model, [
           { kind: 'replace', rowId: plan.entry.id, record: plan.record, fromDocumentText: plan.fromDocumentText },
         ]);
@@ -953,6 +952,13 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     };
 
     /**
+     * Where an entry-scoped paint left its entry: the run the table now holds it under, the id
+     * the file still spells it by (the two differ by a rename), and the wide repaints begun when
+     * the paint went out.
+     */
+    type PaintedRun = { rowId: string; fileRowId: string; epoch: number };
+
+    /**
      * Take back a paint the text never confirmed, and say why.
      *
      * The price of painting before writing: for the ~200 ms between the two the screen is ahead
@@ -963,12 +969,22 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * for a write that failed), repaints the entry from it, and posts the banner AFTER those
      * rows: fresh rows are how the webview learns a failure is over, so a banner posted before
      * them is one they wipe (see the `updateEntryRows` handler in table-main).
+     *
+     * Two ids, because a rename's paint re-keyed the run: the entry is found in the re-read tree
+     * by the id the FILE still spells, and its rows go over the run the PAINT left. Spliced over
+     * the old id, the repair missed and the table asked for the whole payload to recover. And
+     * neither, once a wide repaint has begun since the paint: it read the text the write never
+     * reached and built a tree of its own, so its rows are already the file's answer.
      */
-    const undoPaint = (entryRowId: string, message: string): void => {
+    const undoPaint = (painted: PaintedRun, message: string): void => {
+      if (painted.epoch !== wideEpoch) {
+        void latestPost.then(() => webview.postMessage({ type: 'error', message }));
+        return;
+      }
       rebuildModel();
-      const fresh = findNode(uriString, entryRowId);
+      const fresh = findNode(uriString, painted.fileRowId);
       if (fresh) {
-        void postEntryRows(entryRowId, fresh).then(() => webview.postMessage({ type: 'error', message }));
+        void postEntryRows(painted.rowId, fresh).then(() => webview.postMessage({ type: 'error', message }));
       } else {
         // The re-read cannot find what was painted — pathological (the write that failed is the
         // reason the entry is still spelled the way the rows say), and the one case where
@@ -1018,7 +1034,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       // far — what a failure has to take back. Set the moment the mutation succeeds, so it reads
       // as "the screen and the tree may be ahead of the file", which is the exact window
       // undoPaint exists to close. Null before that: nothing to take back.
-      let paintedRowId: string | null = null;
+      let painted: PaintedRun | null = null;
       try {
         if (!ensureValidJson()) return;
         const currentText = document.getText();
@@ -1043,8 +1059,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         const entrySelectorForLookup = entrySelectorOf(entry);
         const isRename = msg.columnId === 'Name';
         // And its row id, for the same reason one step further on: the rows on screen
-        // carry the entry as the table last painted it, so the repaint this edit
-        // triggers has to splice over THAT id, not the one a rename is about to mint.
+        // carry the entry as the table last painted it, so the paint this edit makes
+        // has to splice over THAT id, not the one a rename is about to mint. Everything
+        // after the paint addresses the id the paint left (`painted.rowId`).
         const entryRowIdOnScreen = entry.id;
         // And the rename to carry into the System Composer catalog, for the same
         // before-the-mutation reason: the catalog names the entry as the document still
@@ -1085,7 +1102,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         //
         // From here to the write the screen is ahead of the file, so every way out of that
         // window that is not a write has to take the paint back (undoPaint).
-        paintedRowId = entryRowIdOnScreen;
+        // The rows the paint posts carry the entry as the mutation left it, so from here on the
+        // table holds it under `entry.id` — the new id, after a rename — while the file still
+        // spells it the old way.
+        painted = { rowId: entry.id, fileRowId: entryRowIdOnScreen, epoch: wideEpoch };
         postEntryRowsNow(entryRowIdOnScreen, entry);
         // After a rename node.id reflects the new name, and the rows just posted carry it —
         // so the row to re-select exists by the time this arrives.
@@ -1098,7 +1118,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         if (!span) {
           // The tree has been mutated and painted, and the text cannot be — so the two now
           // disagree, and the text is the truth here.
-          undoPaint(entryRowIdOnScreen, 'Could not locate the entry text to update.');
+          undoPaint(painted, 'Could not locate the entry text to update.');
           return;
         }
         // The System Composer interface dictionary is a part of THIS document, and it lists
@@ -1133,8 +1153,8 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         });
         // Set last, immediately before the edit, so the change event this edit fires is
         // the one that spends it (see hostEdit). The entry id is read AFTER the mutation
-        // (a rename has already moved it) while the row id was read before, which is the
-        // whole reason both are carried.
+        // (a rename has already moved it), which is also the id the paint left the rows
+        // under — so the echo's repaint lands on the run the table is holding.
         //
         // No hint when the catalog rode along: the event will report several changes, which
         // is not an echo of one entry span and not a change any narrow path can plan, so it
@@ -1144,7 +1164,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         hostEdit =
           scEdits.length > 0
             ? null
-            : { entryId: entry.id, rowId: entryRowIdOnScreen, submitted, epoch: wideEpoch };
+            : { entryId: entry.id, submitted, epoch: wideEpoch };
         // Awaited but no longer waited ON: the table was painted before this line and the echo
         // this fires only confirms it (syncOwnEdit). What the await is still for is the answer —
         // VS Code refuses a WorkspaceEdit whose document moved under it, and a refusal is a
@@ -1166,10 +1186,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       } catch (err) {
         hostEdit = null;
         const message = 'Failed to apply edit: ' + (err as Error).message;
-        if (paintedRowId) {
+        if (painted) {
           // Whatever threw may have left the tree saying something the document does not — and,
           // since it threw after the paint, the screen too.
-          undoPaint(paintedRowId, message);
+          undoPaint(painted, message);
         } else {
           // Nothing was painted and nothing was mutated, so the rows on screen are the ones the
           // last repaint left and they still say what the file says. The banner is the whole
@@ -1284,7 +1304,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     ): Promise<void> => {
       // What a failure has to take back, set the moment the screen is ahead of the file. See
       // applyEdit, whose window this is the same one.
-      let paintedRowId: string | null = null;
+      let painted: PaintedRun | null = null;
       try {
         const currentText = document.getText();
         const entry = findOwningEntry(node);
@@ -1303,7 +1323,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
         // PAINT — in this run, before the ~100 ms span scan the transform already did and the
         // write below.
-        paintedRowId = entryRowId;
+        painted = { rowId: entryRowId, fileRowId: entryRowId, epoch: wideEpoch };
         postEntryRowsNow(entryRowId, entry);
         if (result.selectId) webview.postMessage({ type: 'selectRows', rowIds: [result.selectId] });
 
@@ -1311,7 +1331,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         const submitted = submittedOf(patch);
         // Set immediately before the write, so the event this write fires is the one that spends
         // it (see hostEdit).
-        hostEdit = { entryId: entry.id, rowId: entryRowId, submitted, epoch: wideEpoch };
+        hostEdit = { entryId: entry.id, submitted, epoch: wideEpoch };
         await writePatch(patch);
         remember({ submitted, replaced: currentText.slice(patch.offset, patch.offset + patch.length) });
       } catch (err) {
@@ -1319,7 +1339,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         const message = 'Failed to apply edit: ' + (err as Error).message;
         // The tree was mutated and the rows painted for a write that did not happen, and the text
         // is the truth in this format.
-        if (paintedRowId) undoPaint(paintedRowId, message);
+        if (painted) undoPaint(painted, message);
         else webview.postMessage({ type: 'error', message });
       }
     };
@@ -1950,7 +1970,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       // recognised the same way, but only one of them has an element in the bytes to read.
       if (syncKnownOps(e)) return;
       if (syncKnownChange(e)) return;
-      if (syncOneEntry(e, hint)) return;
+      if (syncOneEntry(e)) return;
       void post();
     });
 

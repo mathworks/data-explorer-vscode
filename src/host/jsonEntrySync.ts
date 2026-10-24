@@ -153,17 +153,21 @@ export interface KnownEdit {
  * What the host remembers about the edit it just submitted, until the change event arrives.
  *
  * Set immediately before the WorkspaceEdit and spent by the very next change event, once.
+ *
+ * ONE id, because the edit has painted by the time this is set: the model holds the entry under
+ * the name the edit gave it, and so do the rows on screen. It used to carry the pre-rename id as
+ * well, for the rows — from when the echo was the paint, and the table still held the entry under
+ * its old name. Once the paint came first, that id named a run the table no longer had, every
+ * rename's confirmation missed it, and the table asked for the whole payload to recover.
  */
 export interface HostEdit {
-  /** The edited entry as the MODEL now spells it — a rename has already happened. */
+  /** The edited entry as the MODEL and the ROWS ON SCREEN now spell it — after any rename. */
   entryId: string;
-  /** The id the ROWS ON SCREEN carry for it — before that rename. */
-  rowId: string;
   /** The range replacement handed to the document. */
   submitted: RangeReplacement;
   /**
    * How many wide repaints the view had begun when this was set — the same stamp, for the same
-   * reason, as PaintedWrite's: a wide repaint begun since has replaced the rows `rowId` names
+   * reason, as PaintedWrite's: a wide repaint begun since has replaced the rows `entryId` names
    * (see hintFor).
    */
   epoch: number;
@@ -184,7 +188,7 @@ export function hintFor(hint: HostEdit | null, epoch: number): HostEdit | null {
 /** The op the host's own edit amounts to, and the run of rows to paint it over. */
 export interface OwnEditPlan {
   op: EntryOp;
-  /** The row id the table is holding the entry under (see HostEdit.rowId). */
+  /** The row id the table is holding the entry under (see HostEdit.entryId). */
   entryRowId: string;
 }
 
@@ -223,12 +227,12 @@ export function planOwnEdit(
     return null;
   }
   if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
-  // The op resolves the entry as the MODEL spells it (the mutation renamed it already); the
-  // repaint lands on the id the TABLE still shows. Neither substitutes for the other.
+  // The op resolves the entry as the MODEL spells it (the mutation renamed it already), and the
+  // repaint lands on the same id, which is the one the paint left the rows under.
   // The record is the text now in the document, so the op says so (see EntryOp).
   return {
     op: { kind: 'replace', rowId: hint.entryId, record: record as EntryRecord, fromDocumentText: true },
-    entryRowId: hint.rowId,
+    entryRowId: hint.entryId,
   };
 }
 
