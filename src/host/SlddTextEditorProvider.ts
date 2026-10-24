@@ -90,6 +90,7 @@ import { postOrReport } from './postPayload.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { answerMatrixRequest } from './matrixRequest.js';
 import { parsesAsJson } from './slddFormat.js';
+import { wideLanding } from './wideRepaint.js';
 import { catalogFunctionRenameOf, catalogRenameOf, scJsonFunctionRenameEdits, scJsonRenameEdits } from './scRename.js';
 import { buildSectionRowId } from '../common/sectionRowId.js';
 import { basename } from '../common/pathUtil.js';
@@ -221,6 +222,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * correct (see liveModel), and what lets it skip the validity gate: a tree built from
      * this text is proof the text parsed. Every path that leaves the two out of step has to
      * clear it — which is the one obligation this flag imposes and the only way it can lie.
+     *
+     * The wide repaint is one of those paths for as long as it is in flight. It clears the flag
+     * when it begins and sets it only when its rows LAND, because in between the rows on screen
+     * are still the old ones — for seconds, when the usage graph is cold (see wideRepaint.ts).
      */
     let modelInSync = false;
 
@@ -236,6 +241,31 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
      * treated as the change it is (isPaintedEcho, hintFor).
      */
     let wideEpoch = 0;
+
+    /**
+     * How many times this view has changed its rows, or put its tree out of step, OUTSIDE a wide
+     * repaint — what a wide repaint in flight has to know happened behind it (see wideLanding).
+     *
+     * Per VIEW, deliberately, rather than read off the tree the session holds: two tabs of one
+     * document share that tree, and each one's wide repaint registers a fresh one, so a repaint
+     * that asked "is the tree still mine?" was answered no by the other tab's, read again, and
+     * answered the other tab the same way — for ever.
+     */
+    let rowsTouched = 0;
+
+    // A narrow repaint: one entry's run of rows replaced, removed or added. Counted, because a
+    // wide repaint in flight read its text before this and would paint over it (wideLanding).
+    const postRowPatch = (msg: Record<string, unknown>): void => {
+      rowsTouched++;
+      void webview.postMessage(msg);
+    };
+
+    // The rows or the tree no longer match the text (see modelInSync) — said through here by
+    // every path but the wide repaint itself, which is what such a declaration is waiting for.
+    const leaveStep = (): void => {
+      modelInSync = false;
+      rowsTouched++;
+    };
 
     // If the clipboard's cut/copied entry lives in THIS document, the mark its source
     // row should carry, so the table can render the cut (dimmed) / copied (dashed)
@@ -295,7 +325,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       } catch {
         // The text does not parse, so nothing can be trusted: the next repaint goes wide and
         // reports the parse error.
-        modelInSync = false;
+        leaveStep();
       }
     };
 
@@ -305,13 +335,29 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     // from the shared workspace usage graph.
     //
     // Returns when the rows are on the wire, for the same reason postEntryRows does: a banner
-    // that has to outlive a repaint has to be posted after it.
+    // that has to outlive a repaint has to be posted after it. A repaint whose rows are dropped
+    // (see wideLanding) returns when the rows that replace them are.
     const post = (): Promise<void> => {
-      // Counted before the text is read, so a write painted before this point is never again
-      // taken for one whose rows are on screen.
-      wideEpoch++;
+      // Counted before the text is read: a write painted before this point is never again taken
+      // for one whose rows are on screen (isPaintedEcho), and a repaint begun before it is no
+      // longer the newest (wideLanding).
+      const epoch = ++wideEpoch;
+      // Not in step again until these rows LAND, which can be seconds away (the usage graph,
+      // below). Until then the rows on screen are older than the text, so a change in the
+      // window takes the wide path and an edit builds its own tree — see wideLanding.
+      modelInSync = false;
+      latestPost = paintWide(epoch);
+      return latestPost;
+    };
+
+    // The newest wide repaint, for an older one whose rows it replaces to resolve with.
+    let latestPost: Promise<void> = Promise.resolve();
+
+    const paintWide = (epoch: number): Promise<void> => {
       try {
         invalidate(uriString);
+        const version = document.version;
+        const touched = rowsTouched;
         const node = getModel(uriString, name, document.getText());
         if (!docState.baselineCaptured) {
           captureBaseline(uriString, node);
@@ -321,15 +367,24 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         const clipMark = clipMarkOfDoc();
         const planned = planner.payload(node, LAZY_ROW_BUDGET, { modifiedNames: modified, clipMark });
         const rows = planned.rows;
-        // Every row below is built from `node`, which getModel just parsed from the live
-        // text and registered as this document's source.
-        modelInSync = true;
         // Fill the Usage column from the shared usage graph, then post. The graph
         // builds lazily on first use and is cached, so only the very first open in
         // a session pays the scan cost; subsequent posts resolve near-instantly.
         return annotateDataRows(uriString, rows)
           .catch(() => false)
-          .then(() => {
+          .then((): Promise<void> | void => {
+            // Only if these rows are still the answer: the newest repaint, over the text they
+            // were built from, with nothing painted or put out of step behind them. A newer
+            // repaint lands for this one; anything else that moved while the graph was awaited
+            // is read again.
+            const landing = wideLanding(
+              { epoch, version, touched },
+              { epoch: wideEpoch, version: document.version, touched: rowsTouched },
+            );
+            if (landing === 'superseded') return latestPost;
+            if (landing === 'reread') return post();
+            // Every row below is built from `node`, which is still what the text says.
+            modelInSync = true;
             // Through postOrReport: an undeliverable payload — one too large for the
             // webview RPC to serialize — rejects asynchronously, where the catch below
             // cannot see it, and the table would wait on its spinner for ever. NOT
@@ -414,7 +469,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       return annotateDataRows(uriString, rows)
         .catch(() => false)
         .then(() => {
-          void webview.postMessage({ type: 'updateEntryRows', entryRowId, rows });
+          postRowPatch({ type: 'updateEntryRows', entryRowId, rows });
         });
     };
 
@@ -439,7 +494,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     const postEntryRowsNow = (entryRowId: string, entry: any): void => {
       const rows = entryRowsOf(entry);
       const filled = annotateDataRowsNow(uriString, rows);
-      void webview.postMessage({ type: 'updateEntryRows', entryRowId, rows });
+      postRowPatch({ type: 'updateEntryRows', entryRowId, rows });
       if (!filled) void postEntryRows(entryRowId, entry);
     };
 
@@ -467,7 +522,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         for (const op of applied) {
           if (op.kind === 'remove') {
             // An empty replacement IS the removal — see spliceEntryRows.
-            void webview.postMessage({ type: 'updateEntryRows', entryRowId: op.entryRowId, rows: [] });
+            postRowPatch({ type: 'updateEntryRows', entryRowId: op.entryRowId, rows: [] });
             continue;
           }
           const section = op.entry?.parent;
@@ -475,9 +530,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           const rows = entryRowsOf(op.entry);
           const filled = annotateDataRowsNow(uriString, rows);
           if (op.kind === 'replace') {
-            void webview.postMessage({ type: 'updateEntryRows', entryRowId: op.entryRowId, rows });
+            postRowPatch({ type: 'updateEntryRows', entryRowId: op.entryRowId, rows });
           } else {
-            void webview.postMessage({
+            postRowPatch({
               type: 'insertEntryRows',
               sectionRowId: buildSectionRowId(section.name),
               beforeRowId: op.beforeRowId,
@@ -613,7 +668,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // The model may now be half-changed, so the caller's full repaint is the repair: it
         // re-parses the text, which is the truth in this format.
         invalidate(uriString);
-        modelInSync = false;
+        leaveStep();
         return false;
       }
     };
@@ -651,7 +706,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // The model may now be half-changed, so the caller's full repaint is the repair: it
         // re-parses the text, which is the truth in this format.
         invalidate(uriString);
-        modelInSync = false;
+        leaveStep();
         return false;
       }
     };
@@ -699,7 +754,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // The model may now be half-changed, so the caller's full repaint is the repair: it
         // re-parses the text, which is the truth in this format.
         invalidate(uriString);
-        modelInSync = false;
+        leaveStep();
         return false;
       }
     };
@@ -757,7 +812,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // fallback but the repair: it re-parses the text, which is the truth in this
         // format, and re-registers the tree built from it.
         invalidate(uriString);
-        modelInSync = false;
+        leaveStep();
         return false;
       }
     };
@@ -1557,7 +1612,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
               // — the row may have been one of the entries just removed — and a tree without it
               // is a failure the repair below answers, never a paste into the old tree's section.
               narrow = false;
-              modelInSync = false;
+              leaveStep();
               invalidate(uriString);
               section = sectionByName(getModel(uriString, name, workingText), target.sectionName);
               if (!section) throw new Error('Could not resolve the target section.');
@@ -1579,7 +1634,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           } else {
             // The tree registered above describes the trimmed text, not the document: the change
             // event this write fires has to repaint the old way, from a re-parse.
-            modelInSync = false;
+            leaveStep();
           }
           if (pasted.selectIds.length) webview.postMessage({ type: 'selectRows', rowIds: pasted.selectIds });
 
