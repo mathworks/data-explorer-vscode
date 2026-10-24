@@ -36,6 +36,11 @@ const ENTRY = 'mat2x2';
 // Its pasted copies: the uniquifier appends a number.
 const COPY = /^mat2x2\d+$/;
 const REFUSAL = 'Value of "mat2x2" would write 134217728 bytes no data backs';
+// What a drag start says of an entry that will not serialize: before the snapshot, core is asked
+// whether the entry can travel at all (copyRefusal), and answers in its own words. The stub's
+// error is an Error named MatWriteError rather than core's class, so core words it as a writing
+// that failed, quoting it.
+const DRAG_REFUSAL = `Cannot copy "${ENTRY}": it could not be written (${REFUSAL}). Nothing was copied.`;
 
 /**
  * Make `method` throw a MatWriteError for every node `when` picks, on the prototype in `node`'s
@@ -176,7 +181,7 @@ suite('A refused paste or drop into a JSON .sldd', () => {
       } finally {
         restore();
       }
-      assert.deepStrictEqual(errorsIn(tab.view.posts), [`Failed to drag: ${REFUSAL}`], 'the failure is reported');
+      assert.deepStrictEqual(errorsIn(tab.view.posts), [DRAG_REFUSAL], 'the refusal is reported, in core\'s words');
       assert.strictEqual(getDrag(), null, 'and the drag register is empty');
     });
   }).timeout(60000);
@@ -254,7 +259,7 @@ suite('A refused drag or drop on a compressed-binary .sldd', () => {
       } finally {
         restore();
       }
-      assert.deepStrictEqual(errorsIn(view.posts), [`Failed to drag: ${REFUSAL}`], 'the failure is reported');
+      assert.deepStrictEqual(errorsIn(view.posts), [DRAG_REFUSAL], 'the refusal is reported, in core\'s words');
       assert.strictEqual(getDrag(), null, 'and the drag register is empty');
     });
   }).timeout(60000);

@@ -85,12 +85,17 @@ describe('buildMatRows', () => {
 });
 
 describe('buildMatRows for the editable view', () => {
-  it('stamps the menu flags from the node: a variable is deletable, nothing is copyable', () => {
+  it('stamps the menu flags from the node: a variable is deletable, and copyable where the view says', () => {
     const rows = buildMatRows(makeNode());
     const kp = rows.find((r: any) => r.Name?.label === 'Kp');
     expect(kp._canDelete).toBe(true);
+    // The read-only view's rows, which no menu reads.
     expect(kp._canCopy).toBe(false);
     expect(typeof kp._canAddChild).toBe('boolean');
+    // The editable view's: every row of the file, a field's too (Copy acts on its variable).
+    const editable = buildMatRowsPlanned(makeNode(), Infinity, undefined, { canCopy: true }).rows;
+    expect(editable.length).toBeGreaterThan(1);
+    expect(editable.every((r: any) => r._canCopy === true)).toBe(true);
   });
 
   it('shows the saved status it is given on a variable row, and nothing where it has none', () => {

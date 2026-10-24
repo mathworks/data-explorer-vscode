@@ -468,34 +468,6 @@ describe('Paste of an mpt entry, against the rules a real model posts', () => {
   });
 });
 
-// A MAT-file's menu (setRows' `clipboard: false`): its variables have no dictionary entry form,
-// so Copy, Cut and Paste are not on it at all, and the rest is the menu any editable view has.
-describe('a view with no clipboard', () => {
-  const MAT_ROWS: MenuRow[] = [
-    { ID: 'm/v', parent: null, Name: { label: 'v' }, _canCopy: false, _canDelete: true, _canAddChild: true },
-    { ID: 'm/v/1', parent: 'm/v', Name: { label: '1' }, _canCopy: false, _canDelete: true },
-  ];
-  const matMenu = (over: Partial<MenuInput> = {}) =>
-    menu({ rows: MAT_ROWS, selectedRowIds: ['m/v'], anchorRowId: 'm/v', hasTextView: false, pasteTarget: null, hasClipboard: false, ...over });
-
-  it('leaves Copy, Cut and Paste off, and keeps Add Child, Delete, Undo and Redo', () => {
-    const items = matMenu({ clipboard: BUS_CLIP });
-    expect(items.map((i) => i.id).filter((id) => !id.startsWith('_sep'))).toEqual(['addChild', 'delete', 'undo', 'redo']);
-    expect(byId(items, 'delete')!.disabled).toBe(false);
-    expect(byId(items, 'addChild')!.disabled).toBe(false);
-  });
-
-  it('on a menu with no row operand, offers only Undo and Redo', () => {
-    const items = matMenu({ selectedRowIds: [], anchorRowId: null });
-    expect(labels(items)).toEqual(['Undo', 'Redo']);
-  });
-
-  it('gives the copy, cut and paste chords no item to run', () => {
-    const items = matMenu();
-    for (const id of ['copy', 'cut', 'paste']) expect(byId(items, id)).toBeUndefined();
-  });
-});
-
 // A section-less table (a MAT-file) pastes into the file wherever it is right-clicked: its
 // host posts one rule for section '' and table-main resolves every row, and no row, to it.
 describe('a section-less table: one paste target', () => {
@@ -507,6 +479,12 @@ describe('a section-less table: one paste target', () => {
   const FILE: PasteTarget = { sectionLabel: 'gains.mat', isDerived: false, allowedTypes: ['MatlabVariable', 'Simulink.Bus'] };
   const mat = (over: Partial<MenuInput>) =>
     menu({ rows: MAT_ROWS, clipboard: BUS_CLIP, pasteTarget: FILE, hasTextView: false, ...over });
+
+  it("a variable's menu is an entry's: Copy, Cut and Paste, then Add Child and Delete, then Undo and Redo", () => {
+    const items = mat({ selectedRowIds: ['m/cfg'], anchorRowId: 'm/cfg' });
+    expect(items.filter((i) => !i.separator).map((i) => i.id)).toEqual(['copy', 'cut', 'paste', 'addChild', 'delete', 'undo', 'redo']);
+    for (const id of ['copy', 'cut', 'paste', 'addChild', 'delete']) expect(byId(items, id)!.disabled, id).toBeFalsy();
+  });
 
   it('a selection over several variables offers one enabled Paste', () => {
     const paste = byId(mat({ selectedRowIds: ['m/x', 'm/cfg/gain'], anchorRowId: 'm/x' }), 'paste')!;

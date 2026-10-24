@@ -74,12 +74,6 @@ export interface SetRowsMessage {
    * variable of (MatNode.getAllowedTypes), in no section.
    */
   add?: { classes: readonly string[] };
-  /**
-   * Whether rows can be copied, cut, pasted and dragged. Absent is true. False for a
-   * MAT-file, whose variables have no dictionary entry form to travel as: the menu leaves
-   * those items off, their chords do nothing, and a row starts no drag.
-   */
-  clipboard?: boolean;
 }
 
 /**

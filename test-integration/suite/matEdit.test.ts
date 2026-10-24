@@ -184,19 +184,20 @@ suite('MAT-file editor: edit, undo, save', () => {
   const save = (o: { doc: any }) => provider.saveCustomDocument(o.doc, token());
   const disk = (o: { path: string }) => new Uint8Array(readFileSync(o.path));
 
-  test('the view is editable, offers the gallery of the classes the file takes, and offers no clipboard', async () => {
+  test('the view is editable, offers the gallery of the classes the file takes, and the clipboard', async () => {
     const o = await open('cases.mat');
     const set = o.view.posts.find((p) => p.type === 'setRows');
     assert.strictEqual(set.editable, true);
     // Which classes, and each tile end to end, is matAddGallery.test.ts.
     assert.ok(set.add.classes.includes('MatlabVariable'), 'the gallery offers a plain variable');
-    assert.strictEqual(set.clipboard, false);
+    // Copy, cut, paste and drag, as a dictionary's table offers them (matClipboard.test.ts).
+    assert.strictEqual(set.clipboard, undefined);
     assert.strictEqual(set.notice, undefined);
     // The menu's flags come with each row, from core's gate.
     const vec = topRow(o.view.posts, 'rowVec');
     assert.strictEqual(vec._canDelete, true);
     assert.strictEqual(vec._canAddChild, true);
-    assert.strictEqual(vec._canCopy, false);
+    assert.strictEqual(vec._canCopy, true);
     assert.strictEqual(topRow(o.view.posts, 'strScalar')._valueEditable, true, 'a string takes a value edit');
   });
 
