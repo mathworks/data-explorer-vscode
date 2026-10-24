@@ -8,7 +8,7 @@
 // undo, a keystroke in the text view, a reload from disk — and the inspector went on showing the
 // node it was handed until the user clicked another row. The provider now says when it has
 // repainted (`onChanged`), and extension.ts answers that with the inspector's one re-resolve, as
-// it answers the binary editor's `onChanged` and the MAT-file editor's `onReplaced`.
+// it answers the binary editor's and the MAT-file editor's `onChanged`.
 //
 // It fires at keystroke rate, so the page's own rule is what keeps that free: a node is sent only
 // when it changes what the page shows (inspectorPage.ts). The last case pins that a keystroke in

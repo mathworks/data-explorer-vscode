@@ -149,9 +149,10 @@ describe('answerMatrixRequest', () => {
 });
 
 describe('every host that answers requestMatrix answers it from here', () => {
-  // messageDispatch.test.ts pins that the three TABLE providers have a branch for it.
-  // This pins the other half, and reaches the fourth host it does not cover: that the
-  // branch answers through this module rather than assembling an envelope of its own.
+  // messageDispatch.test.ts pins that the TABLE providers answer it — by a branch of their
+  // own, or by the `requestMatrix` handler of their CommonHandlers table (tableDispatch.ts).
+  // This pins the other half, and reaches the host it does not cover: that the answer goes
+  // through this module rather than assembling an envelope of its own.
   //
   // The Property Inspector is why that is not automatic. It is handed a node and never
   // learns which document it came from, so it cannot call `answerMatrixRequest` — it
@@ -165,6 +166,7 @@ describe('every host that answers requestMatrix answers it from here', () => {
   const HOSTS = [
     ['src/host/SlddTextEditorProvider.ts'],
     ['src/host/BinarySlddEditorProvider.ts'],
+    ['src/host/MatEditorProvider.ts'],
     ['src/host/BinaryEditorProvider.ts'],
     ['src/host/PropertiesViewProvider.ts', 'src/host/inspectorPage.ts'],
   ];
@@ -172,7 +174,7 @@ describe('every host that answers requestMatrix answers it from here', () => {
 
   for (const files of HOSTS) {
     it(`${files[0].replace('src/host/', '')} builds no matrixCells envelope of its own`, () => {
-      expect(source(files[0])).toMatch(/msg\??\.type === 'requestMatrix'/);
+      expect(source(files[0])).toMatch(/msg\??\.type === 'requestMatrix'|\brequestMatrix: \(nodeId\) => answerMatrixRequest\(/);
       expect(source(files[files.length - 1])).toMatch(/answerMatrixRequest|matrixCellsMessage/);
       // The literal, nowhere but here. A host that writes `{ type: 'matrixCells' ... }`
       // itself has started a second rule, whatever it happens to say today.

@@ -31,6 +31,7 @@ import {
   projectFallbackName,
 } from 'data-explorer-core';
 import type { ProjectToHostMessage, TableToHostMessage } from '../common/protocol.js';
+import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 
 // viewType of the editable text-backed table (SlddTextEditorProvider). Declared
 // here as a constant to avoid importing the provider (which would be circular).
@@ -542,35 +543,35 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       }
     };
 
+    // The messages every table view answers alike (tableDispatch.ts), keyed by message type. No
+    // undo or redo: the view is read-only, and VS Code holds no stack for it.
+    const common: CommonHandlers = {
+      ready: () => void post(),
+      // Relay the selection to the Property Inspector via the wired callback.
+      select: (rowIds) => this.onSelect?.(uriString, rowIds),
+      navigate: (target) => this.onNavigate?.(target, uriString),
+      // A Variable Editor panel is opening: send its cells. One shared answer for all four
+      // webview hosts — see matrixRequest.ts. Read-only is no reason to skip it; this is the
+      // viewer where most matrices are actually looked at.
+      requestMatrix: (nodeId) => answerMatrixRequest(webview, uriString, nodeId),
+      // A row the payload deferred is being opened: send the rows under it. The answer is a
+      // module (childRequest.ts) rather than a body here because all three providers plan their
+      // payloads and so all three can be asked. `fillUsage` is handed in rather than imported
+      // there: it is this provider that already depends on vscode, and childRequest.ts stays
+      // loadable under vitest because it does not (see its UsageFiller).
+      requestChildren: (nodeId) => void answerChildRequest(webview, uriString, nodeId, name, fillUsage, planner),
+    };
+
     // Register listeners BEFORE assigning webview.html, so a fast-booting
     // webview cannot post 'ready' before we are subscribed to receive it.
     const sub = webview.onDidReceiveMessage((msg: TableToHostMessage | ProjectToHostMessage) => {
-      if (msg?.type === 'ready') {
-        void post();
-      } else if (msg?.type === 'openFile') {
+      if (dispatchCommon(msg, common)) return;
+      if (msg?.type === 'openFile') {
         // Only the project page sends this, and only the host can answer it: the path
         // is project-root-relative, and the page has no idea where that root is.
         if (typeof msg.path === 'string' && msg.path.length > 0) {
           void openProjectPath(projectRootOf(document.uri), msg.path, msg.preferProject === true);
         }
-      } else if (msg?.type === 'select') {
-        // Relay the selection to the Property Inspector via the wired callback.
-        this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
-      } else if (msg?.type === 'navigate') {
-        if (typeof msg.target === 'string') this.onNavigate?.(msg.target, uriString);
-      } else if (msg?.type === 'requestMatrix') {
-        // A Variable Editor panel is opening: send its cells. One shared answer for
-        // all four webview hosts — see matrixRequest.ts. Read-only is no reason to
-        // skip it; this is the viewer where most matrices are actually looked at.
-        answerMatrixRequest(webview, uriString, msg.nodeId);
-      } else if (msg?.type === 'requestChildren') {
-        // A row the payload deferred is being opened: send the rows under it. The answer
-        // is a module (childRequest.ts) rather than a body here because all three
-        // providers plan their payloads and so all three can be asked. `fillUsage` is
-        // handed in rather than imported there: it is this provider that already depends
-        // on vscode, and childRequest.ts stays loadable under vitest because it does not
-        // (see its UsageFiller).
-        void answerChildRequest(webview, uriString, msg.nodeId, name, fillUsage, planner);
       }
     });
 

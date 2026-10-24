@@ -130,10 +130,11 @@ import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { answerMatrixRequest } from './matrixRequest.js';
 import { binaryEditSrcId } from '../common/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
+import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { saveSettled } from './settledSave.js';
-import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, writeUserFile, type FollowedDocument } from './diskFollow.js';
-import { backupId, backupSource } from './backupId.js';
+import { followDisk, readForOpen, readStamped, refuseIfChangedOnDisk, watchDisk, writeUserFile, type FollowedDocument } from './diskFollow.js';
+import { backupId } from './backupId.js';
 import { sameFile } from './safeWrite.js';
 
 // viewType of the default byte-backed view (BinaryEditorProvider), which owns the rule
@@ -232,14 +233,7 @@ function passThroughParts(zip: Record<string, Uint8Array>): Record<string, Uint8
   return parts;
 }
 
-/**
- * One read of the file behind a document, with the stamp it was read under.
- *
- * The stat comes BEFORE the read, so a write that lands between the two leaves an old stamp
- * on new bytes. The next save then asks about a conflict it did not need to. The other order
- * would leave a new stamp on old bytes, and the next save would silently overwrite the write
- * it missed.
- */
+/** One read of the file behind a document, with the stamp it was read under (diskFollow.readStamped). */
 interface DiskRead {
   stamp: DiskStamp | undefined;
   /** The dictionary's data part, decoded (`chunkOf`). */
@@ -255,8 +249,8 @@ interface DiskRead {
  * and a reload leaves the document as it is, still held to the stamp it had, so its next save asks.
  */
 async function readDisk(uri: vscode.Uri): Promise<DiskRead> {
-  const stamp = await stampOf(uri);
-  const zip = unzipSync(await vscode.workspace.fs.readFile(uri));
+  const { stamp, bytes } = await readStamped(uri);
+  const zip = unzipSync(bytes);
   return { stamp, chunkXml: chunkOf(zip), parts: passThroughParts(zip) };
 }
 
@@ -689,20 +683,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     _token: vscode.CancellationToken,
   ): Promise<BinarySlddDocument> {
     // A hot-exit backup is a whole .sldd (backupCustomDocument), so a restore opens it as the
-    // document. Its stamp is the one the backup recorded, of the file the edits were made over
-    // (backupId.ts): the file now may be another program's since, and a save has to ask before
-    // writing over it. Otherwise the file's own, taken before the read for the reason given at
-    // readDisk.
-    let source = uri;
-    let stamp: DiskStamp | undefined;
-    if (openContext.backupId) {
-      const backup = backupSource(openContext.backupId);
-      source = vscode.Uri.parse(backup.uri);
-      stamp = backup.stamp;
-    } else {
-      stamp = await stampOf(uri);
-    }
-    const bytes = await vscode.workspace.fs.readFile(source);
+    // document, held to the stamp the backup recorded; otherwise the file's own, taken before the
+    // read (diskFollow.readForOpen, the MAT-file editor's too).
+    const { stamp, bytes } = await readForOpen(uri, openContext.backupId);
     // A custom editor's selector is a filename glob, and the two .sldd formats are not
     // distinguishable by name — so "Reopen Editor With…" offers THIS view for every
     // *.sldd, including a JSON one, which has nothing for `unzipSync` to read. That
@@ -1470,10 +1453,28 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     const applyDrop = (msg: { rowId: string; mode: 'copy' | 'move' }) =>
       runTransfer({ rowId: msg.rowId }, dragRegister(msg.mode, broadcastDragState), transferAdapter(), transferDeps);
 
+    // The messages every table view answers alike (tableDispatch.ts), keyed by message type.
+    const common: CommonHandlers = {
+      ready: () => post(),
+      select: (rowIds) => this.onSelect?.(uriString, rowIds),
+      navigate: (target) => this.onNavigate?.(target, uriString),
+      // A Variable Editor panel is opening: send its cells. One shared answer for all four
+      // webview hosts — see matrixRequest.ts.
+      requestMatrix: (nodeId) => answerMatrixRequest(webview, uriString, nodeId),
+      // A row the payload deferred is being opened: send the rows under it (childRequest.ts).
+      // The filler is a no-op because THIS view's payload fills no Usage column either — a
+      // fetched row has to match its siblings, and matching means empty here. `uriString`
+      // resolves because findNode prefers the global registry, which is keyed by the node id
+      // this provider's prefixed srcId is embedded in; that is the same lookup the Property
+      // Inspector's selection uses.
+      requestChildren: (nodeId) => void answerChildRequest(webview, uriString, nodeId, name, async () => false, planner),
+      undo: () => void vscode.commands.executeCommand('undo'),
+      redo: () => void vscode.commands.executeCommand('redo'),
+    };
+
     const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
-      if (msg?.type === 'ready') post();
-      else if (msg?.type === 'select') this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
-      else if (msg?.type === 'edit') applyEdit(msg);
+      if (dispatchCommon(msg, common)) return;
+      if (msg?.type === 'edit') applyEdit(msg);
       else if (msg?.type === 'copy') applyCopy(msg.rowIds, 'copy');
       else if (msg?.type === 'cut') applyCopy(msg.rowIds, 'cut');
       else if (msg?.type === 'delete') applyDelete(msg.rowIds);
@@ -1483,21 +1484,6 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       else if (msg?.type === 'dragStart') applyDragStart(msg);
       else if (msg?.type === 'dragEnd') applyDragEnd();
       else if (msg?.type === 'drop') void applyDrop(msg);
-      else if (msg?.type === 'navigate') {
-        if (typeof msg.target === 'string') this.onNavigate?.(msg.target, uriString);
-      } else if (msg?.type === 'requestMatrix') {
-        // A Variable Editor panel is opening: send its cells. One shared answer for
-        // all four webview hosts — see matrixRequest.ts.
-        answerMatrixRequest(webview, uriString, msg.nodeId);
-      } else if (msg?.type === 'requestChildren') {
-        // A row the payload deferred is being opened: send the rows under it
-        // (childRequest.ts). The filler is a no-op because THIS view's payload fills no
-        // Usage column either — a fetched row has to match its siblings, and matching
-        // means empty here. `uriString` resolves because findNode prefers the global
-        // registry, which is keyed by the node id this provider's prefixed srcId is
-        // embedded in; that is the same lookup the Property Inspector's selection uses.
-        void answerChildRequest(webview, uriString, msg.nodeId, name, async () => false, planner);
-      } else if (msg?.type === 'undo' || msg?.type === 'redo') void vscode.commands.executeCommand(msg.type);
     });
 
     const navSub = wireNavigateSelect(webview, uriString);

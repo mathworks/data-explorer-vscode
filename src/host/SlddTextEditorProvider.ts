@@ -105,6 +105,7 @@ import { catalogFunctionRenameOf, catalogRenameOf, scJsonFunctionRenameEdits, sc
 import { buildSectionRowId } from '../common/sectionRowId.js';
 import { basename } from '../common/pathUtil.js';
 import type { TableToHostMessage } from '../common/protocol.js';
+import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 
 /**
  * What belongs to the DOCUMENT rather than to one of its tabs.
@@ -2066,13 +2067,30 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     }
 
     // --- Message wiring ---------------------------------------------------------
-    const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
-      if (msg?.type === 'ready') {
+    // The messages every table view answers alike (tableDispatch.ts), keyed by message type.
+    const common: CommonHandlers = {
+      ready: () => {
         webviewReady = true;
         void post();
-      } else if (msg?.type === 'select') {
-        this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
-      } else if (msg?.type === 'edit') {
+      },
+      select: (rowIds) => this.onSelect?.(uriString, rowIds),
+      navigate: (target) => this.onNavigate?.(target, uriString),
+      // A Variable Editor panel is opening: send its cells. One shared answer for all four
+      // webview hosts — see matrixRequest.ts.
+      requestMatrix: (nodeId) => answerMatrixRequest(webview, uriString, nodeId),
+      // A row the payload deferred is being opened: send the rows under it (childRequest.ts).
+      // `annotateDataRows` is handed in rather than imported there so that module stays
+      // loadable under vitest — see its UsageFiller.
+      requestChildren: (nodeId) => void answerChildRequest(webview, uriString, nodeId, name, annotateDataRows, planner),
+      // Single native stack: the table view is the active editor when its menu is used, so
+      // these target the shared TextDocument undo history.
+      undo: () => void vscode.commands.executeCommand('undo'),
+      redo: () => void vscode.commands.executeCommand('redo'),
+    };
+
+    const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
+      if (dispatchCommon(msg, common)) return;
+      if (msg?.type === 'edit') {
         void applyEdit(msg);
       } else if (msg?.type === 'copy') {
         applyCopy(msg.rowIds, 'copy');
@@ -2094,21 +2112,6 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         void applyDrop(msg);
       } else if (msg?.type === 'locateInText') {
         void applyLocateInText(msg);
-      } else if (msg?.type === 'navigate') {
-        if (typeof msg.target === 'string') this.onNavigate?.(msg.target, uriString);
-      } else if (msg?.type === 'requestMatrix') {
-        // A Variable Editor panel is opening: send its cells. One shared answer for
-        // all four webview hosts — see matrixRequest.ts.
-        answerMatrixRequest(webview, uriString, msg.nodeId);
-      } else if (msg?.type === 'requestChildren') {
-        // A row the payload deferred is being opened: send the rows under it
-        // (childRequest.ts). `annotateDataRows` is handed in rather than imported there
-        // so that module stays loadable under vitest — see its UsageFiller.
-        void answerChildRequest(webview, uriString, msg.nodeId, name, annotateDataRows, planner);
-      } else if (msg?.type === 'undo' || msg?.type === 'redo') {
-        // Single native stack: the table view is the active editor when its menu
-        // is used, so this targets the shared TextDocument undo history.
-        void vscode.commands.executeCommand(msg.type);
       }
     });
 

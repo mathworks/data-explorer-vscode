@@ -17,6 +17,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import {
   chmodSync,
+  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -512,14 +513,15 @@ suite('MAT-file editor: edit, undo, save', () => {
   });
 
   test('revert reads the disk, and an edit from before it is not undone on the new tree', async () => {
-    const replaced: string[] = [];
-    provider.onReplaced = (uri) => replaced.push(uri);
+    const changed: string[] = [];
+    provider.onChanged = (uri) => changed.push(uri);
     const o = await open('cases.mat');
     edit(o, 'scalarD', 'Value', '42');
     await save(o);
     edit(o, 'negD', 'Value', '7');
+    changed.length = 0;
     await provider.revertCustomDocument(o.doc, token());
-    assert.deepStrictEqual(replaced, [o.uri.toString()], 'the Property Inspector is told the tree changed');
+    assert.deepStrictEqual(changed, [o.uri.toString()], 'the Property Inspector is told the tree changed, once');
     await waitFor('the reverted rows', () => topRow(o.view.posts, 'negD').Value === '-2.5');
     assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, '42', 'the disk holds the save');
     await o.events[0].undo();
@@ -647,6 +649,30 @@ suite('MAT-file editor: edit, undo, save', () => {
     await backup.delete();
   });
 
+  // The id is the shared backupId.ts's, which the binary .sldd editor writes too; one that is a
+  // bare uri (that editor's id before it carried a stamp) restores here as well, with no stamp.
+  test('a backup id that is a bare uri still restores the backed-up edits', async () => {
+    const o = await open('cases.mat');
+    edit(o, 'scalarD', 'Value', '42');
+    const destination = vscode.Uri.file(join(dir, 'backup.bin'));
+    const backup = await provider.backupCustomDocument(o.doc, { destination } as vscode.CustomDocumentBackupContext, token());
+    assert.deepStrictEqual(JSON.parse(backup.id), { backup: destination.toString(), stamp: o.doc.stamp }, 'the id names the backup and the stamp');
+    o.view.close();
+    o.doc.dispose();
+    opened.splice(opened.findIndex((x) => x.doc === o.doc), 1);
+    const restored: any = await provider.openCustomDocument(o.uri, { backupId: destination.toString() } as vscode.CustomDocumentOpenContext, token());
+    const view = fakePanel();
+    opened.push({ doc: restored, view });
+    await provider.resolveCustomEditor(restored, view.panel, token());
+    view.send({ type: 'ready' });
+    await waitFor('the restored rows', () => view.posts.some((p) => p.type === 'setRows'));
+    assert.strictEqual(topRow(view.posts, 'scalarD').Value, '42', 'the restore holds the backed-up edit');
+    assert.strictEqual(restored.stamp, undefined, 'and no stamp, which no id of that shape carries');
+    await provider.saveCustomDocument(restored, token());
+    assert.strictEqual(valuesOf(disk(o)).get('scalarD').Value, '42');
+    await backup.delete();
+  });
+
   test('a backup core refuses keeps the last one that could be written standing', async () => {
     const o = await open('cases.mat');
     edit(o, 'scalarD', 'Value', '42');
@@ -691,6 +717,22 @@ suite('MAT-file editor: edit, undo, save', () => {
     assert.strictEqual(valuesOf(disk(o)).get('scalarD').Value, '42');
     keptUntouched(o.original, disk(o), ['scalarD']);
     await backup.delete();
+  });
+
+  test('a file whose folder was deleted under the view is saved, folder and all, and holds the stamp its write left', async () => {
+    const folder = join(dir, 'project');
+    mkdirSync(folder);
+    const o = await open('cases.mat', fixture('cases.mat'), join('project', 'cases.mat'));
+    edit(o, 'scalarD', 'Value', '42');
+    rmSync(folder, { recursive: true });
+    await save(o);
+    assert.strictEqual(valuesOf(disk(o)).get('scalarD').Value, '42', 'the edit is on disk, in the folder made again');
+    assert.deepStrictEqual(readdirSync(folder), ['cases.mat'], 'and nothing beside it');
+    const st = statSync(o.path);
+    assert.deepStrictEqual(o.doc.stamp, { mtime: st.mtime.getTime(), size: st.size }, 'the stamp of the file as written');
+    edit(o, 'negD', 'Value', '7');
+    await save(o);
+    assert.deepStrictEqual(asked, [], 'so the next save does not take that write for an outside one');
   });
 
   test('a file whose records do not tile it opens read-only, and takes no edit', async () => {

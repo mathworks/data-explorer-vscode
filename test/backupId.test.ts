@@ -24,8 +24,8 @@ describe('backupId / backupSource', () => {
     expect(JSON.parse(backupId(where, extra))).toEqual({ backup: where, stamp });
   });
 
-  it('is the MAT-file editor’s format, so a backup either view wrote restores through either', () => {
-    // The shape that editor's own copy writes: JSON.stringify({ backup, stamp: stamp ?? null }).
+  it('is the format the MAT-file editor wrote with its own copy, so a backup either view wrote restores through either', () => {
+    // The shape that editor wrote before it used this module: JSON.stringify({ backup, stamp: stamp ?? null }).
     expect(backupId(where, stamp)).toBe(JSON.stringify({ backup: where, stamp }));
     expect(backupId(where, undefined)).toBe(JSON.stringify({ backup: where, stamp: null }));
   });

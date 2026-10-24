@@ -70,28 +70,27 @@ import {
   type DeleteTarget,
 } from './editorHub.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
-import { followDisk, refuseIfChangedOnDisk, stampOf, watchDisk, type FollowedDocument } from './diskFollow.js';
+import { followDisk, readForOpen, readStamped, refuseIfChangedOnDisk, watchDisk, writeUserFile, type FollowedDocument } from './diskFollow.js';
 import { SaveMarks, replacementsIn, type SaveMark, type SaveSnapshot } from './saveMarks.js';
 import { saveSettled } from './settledSave.js';
-import { sameFile, writeFileSafely } from './safeWrite.js';
+import { sameFile } from './safeWrite.js';
+import { backupId } from './backupId.js';
 import { binaryEditSrcId } from '../common/srcId.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
+import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 import { matCatalog } from '../common/addCatalog.js';
 
-/** One read of the file behind a document, with the stamp it was read under (stat first). */
+/** One read of the file behind a document, with the stamp it was read under (diskFollow.readStamped). */
 interface DiskRead {
   stamp: DiskStamp | undefined;
   bytes: ArrayBuffer;
 }
 
 async function readDisk(uri: vscode.Uri): Promise<DiskRead> {
-  // The stat BEFORE the read, so a write landing between them leaves an old stamp on new bytes,
-  // and the next save asks about a conflict it did not need to. The other order would leave a
-  // new stamp on old bytes, and the next save would silently overwrite the write it missed.
-  const stamp = await stampOf(uri);
-  return { stamp, bytes: toArrayBuffer(await vscode.workspace.fs.readFile(uri)) };
+  const { stamp, bytes } = await readStamped(uri);
+  return { stamp, bytes: toArrayBuffer(bytes) };
 }
 
 /**
@@ -355,6 +354,8 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
     if (observed.steps > 0) this.pushEdit(label, observed, touched());
     if (observed.error) {
       this.version++;
+      // Whatever core did before it threw is in the tree, which the caller paints again.
+      this.onChanged?.();
       return observed;
     }
     // Its rows, and the gallery's classes where the edit moved them.
@@ -478,6 +479,7 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
       // and its redo, which come through here as the gesture does.
       view.refreshGallery();
     }
+    this.onChanged?.();
   }
 
   /** Repaint the variables whose Status changed between two answers of `marks`. */
@@ -502,6 +504,7 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
 
   repaintAll(): void {
     for (const view of [...this.views]) view.repaintAll();
+    this.onChanged?.();
   }
 
   /**
@@ -531,11 +534,21 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
       /* reported by the paint */
     }
     this.repaintAll();
-    this.onReplaced?.();
   }
 
-  /** Called after `replace`: the provider's, which refreshes the Property Inspector. */
-  onReplaced?: () => void;
+  /**
+   * Called after every repaint of this document's tree, once its views are told: the provider's,
+   * which shows the Property Inspector's node again from the tree as it now is.
+   *
+   * Here, at the two repaints (`repaint`, `repaintAll`) and at a gesture that threw, whose view
+   * paints every row again itself (`record`), because every change to the tree ends in one of
+   * them: each gesture of a view (an edit, an Add, a delete, a paste) and the delete a move into
+   * another document asks of this one (`record`), each undo and redo (`replay`), and a revert or a
+   * reload (`replace`), whose new tree is registered first, so the inspector resolves the tree the
+   * table shows. The binary .sldd editor's hook, the same rule. A save changes no node here (the
+   * tree is kept), so it repaints only the Status column, and says nothing.
+   */
+  onChanged?: () => void;
 
   /**
    * The last hot-exit backup this document wrote, which a backup that cannot be written keeps
@@ -605,30 +618,6 @@ class SharedBackup {
 }
 
 /**
- * A backup's id: where it is, and the stamp of the file the document was last read or saved as.
- * A restore compares the file with that stamp at its first save, so an outside change between the
- * backup and the restore is asked about rather than overwritten. Read back by `backupSource`.
- */
-function backupId(destination: vscode.Uri, stamp: DiskStamp | undefined): string {
-  return JSON.stringify({ backup: destination.toString(), stamp: stamp ?? null });
-}
-
-/** Where a backup id points, and its stamp, or none for an id this editor did not write. */
-function backupSource(id: string): { uri: vscode.Uri; stamp: DiskStamp | undefined } {
-  try {
-    const parsed = JSON.parse(id) as { backup?: unknown; stamp?: { mtime?: unknown; size?: unknown } | null };
-    if (typeof parsed?.backup === 'string') {
-      const s = parsed.stamp;
-      const stamp = s && typeof s.mtime === 'number' && typeof s.size === 'number' ? { mtime: s.mtime, size: s.size } : undefined;
-      return { uri: vscode.Uri.parse(parsed.backup), stamp };
-    }
-  } catch {
-    /* a bare uri */
-  }
-  return { uri: vscode.Uri.parse(id), stamp: undefined };
-}
-
-/**
  * The classes `mat` can take a new variable of, as core lists them (MatNode.getAllowedTypes): a
  * plain variable and a struct, and the classes of MATLAB's own default objects where the file's
  * objects can be added to. A core without the list adds a plain variable only, as it always has.
@@ -653,9 +642,10 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
   public onSelect?: (uriString: string, rowIds: string[]) => void;
   // Handle a Usage-column link click (wired in extension.ts).
   public onNavigate?: (target: string, referrer?: string) => void;
-  // A document's tree was replaced from disk (wired in extension.ts, which shows the Property
-  // Inspector's node again from the new tree, if it is this document's).
-  public onReplaced?: (uriString: string) => void;
+  // A document's tree changed: a gesture, a move out of it, an undo or a redo, a revert or a reload
+  // (wired in extension.ts, which shows the Property Inspector's node again from the tree, if it
+  // is this document's).
+  public onChanged?: (uriString: string) => void;
 
   private readonly _onDidChangeCustomDocument = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<MatDocument>>();
   readonly onDidChangeCustomDocument = this._onDidChangeCustomDocument.event;
@@ -675,19 +665,11 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     _token: vscode.CancellationToken,
   ): Promise<MatDocument> {
     // A hot-exit backup is a whole MAT-file (backupCustomDocument), so a restore opens it as the
-    // document. Its stamp is the one the backup recorded, of the file the edits were made over:
-    // the file now may be another program's since, and a save has to ask before writing over it.
-    let source = uri;
-    let stamp: DiskStamp | undefined;
-    if (openContext.backupId) {
-      ({ uri: source, stamp } = backupSource(openContext.backupId));
-    } else {
-      stamp = await stampOf(uri);
-    }
-    const bytes = toArrayBuffer(await vscode.workspace.fs.readFile(source));
-    const doc = new MatDocument(uri, bytes, !!openContext.backupId);
+    // document, held to the stamp the backup recorded (diskFollow.readForOpen).
+    const { stamp, bytes } = await readForOpen(uri, openContext.backupId);
+    const doc = new MatDocument(uri, toArrayBuffer(bytes), !!openContext.backupId);
     doc.stamp = stamp;
-    doc.onReplaced = () => this.onReplaced?.(uri.toString());
+    doc.onChanged = () => this.onChanged?.(uri.toString());
     doc.onDidChangeCustomDocument((e) => this._onDidChangeCustomDocument.fire(e));
     doc.track(watchDisk(doc, () => followDisk(doc, () => readDisk(doc.uri), (read) => doc.replace(read))));
     return doc;
@@ -1144,10 +1126,21 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     const applyDrop = (msg: { rowId: string; mode: 'copy' | 'move' }) =>
       transferred(runTransfer({ rowId: msg.rowId }, dragRegister(msg.mode, broadcastDragState), transferAdapter(), transferDeps));
 
+    // The messages every table view answers alike (tableDispatch.ts), keyed by message type.
+    const common: CommonHandlers = {
+      ready: () => void post(),
+      select: (rowIds) => this.onSelect?.(uriString, rowIds),
+      navigate: (target) => this.onNavigate?.(target, uriString),
+      requestMatrix: (nodeId) => answerMatrixRequest(webview, uriString, nodeId),
+      // Stamped as the payload was, so a fetched row's menu offers what its siblings' does.
+      requestChildren: (nodeId) => void answerChildRequest(webview, uriString, nodeId, name, annotateDataRows, planner, stamps()),
+      undo: () => void vscode.commands.executeCommand('undo'),
+      redo: () => void vscode.commands.executeCommand('redo'),
+    };
+
+    // This editor's own: its edits, the clipboard and row drags.
     const handle = (msg: TableToHostMessage) => {
-      if (msg?.type === 'ready') void post();
-      else if (msg?.type === 'select') this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
-      else if (msg?.type === 'edit') applyEdit(msg);
+      if (msg?.type === 'edit') applyEdit(msg);
       else if (msg?.type === 'delete') applyDelete(msg.rowIds);
       else if (msg?.type === 'addEntry') applyAddEntry(msg);
       else if (msg?.type === 'addChild') applyAddChild(msg.rowId);
@@ -1157,21 +1150,13 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       else if (msg?.type === 'dragStart') applyDragStart(msg.rowIds);
       else if (msg?.type === 'dragEnd') applyDragEnd();
       else if (msg?.type === 'drop') applyDrop(msg);
-      else if (msg?.type === 'navigate') {
-        if (typeof msg.target === 'string') this.onNavigate?.(msg.target, uriString);
-      } else if (msg?.type === 'requestMatrix') {
-        answerMatrixRequest(webview, uriString, msg.nodeId);
-      } else if (msg?.type === 'requestChildren') {
-        // Stamped as the payload was, so a fetched row's menu offers what its siblings' does.
-        void answerChildRequest(webview, uriString, msg.nodeId, name, annotateDataRows, planner, stamps());
-      } else if (msg?.type === 'undo' || msg?.type === 'redo') void vscode.commands.executeCommand(msg.type);
     };
 
     // A message that throws is said, as a gesture's throw is, over every row painted again from
     // the tree: whatever it did before it threw is in it, and a cell may still show what was typed.
     const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
       try {
-        handle(msg);
+        if (!dispatchCommon(msg, common)) handle(msg);
       } catch (err) {
         repaintAndReport(`Failed to handle ${String(msg?.type)} in ${name}: ${document.describe(err)}`);
       }
@@ -1230,8 +1215,9 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       await refuseIfChangedOnDisk(document, MatEditorProvider.viewType, (m) => this.askSaveConflict(m));
       // What a later save and the watcher compare the disk with, read off the written file itself
       // where the write could: a stat after it would take an outside write landing just after
-      // for this one. The watcher's event for this write then finds the disk matching.
-      document.stamp = (await this.write(document.uri, bytes)) ?? (await stampOf(document.uri));
+      // for this one. The watcher's event for this write then finds the disk matching. The one
+      // write of the user's file both byte-backed editors make (diskFollow.writeUserFile).
+      document.stamp = await writeUserFile(document.uri, bytes);
       document.onDisk = bytes;
     } catch (err) {
       // Nothing was written, so what the snapshot held is never what the file holds.
@@ -1255,7 +1241,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     if (dest.toString() === document.uri.toString() || (await sameFile(dest, document.uri))) {
       return this.saveCustomDocument(document, token);
     }
-    await this.write(dest, document.serialize());
+    await writeUserFile(dest, document.serialize());
   }
 
   async revertCustomDocument(document: MatDocument, _token: vscode.CancellationToken): Promise<void> {
@@ -1310,15 +1296,8 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     }
     await vscode.workspace.fs.writeFile(ctx.destination, bytes);
     document.backupRefusalShown = false;
-    document.lastBackup = new SharedBackup(backupId(ctx.destination, document.stamp), ctx.destination);
+    document.lastBackup = new SharedBackup(backupId(ctx.destination.toString(), document.stamp), ctx.destination);
     return document.lastBackup.handle();
   }
 
-  /**
-   * The user's file, replaced whole where the file system lets us (safeWrite.ts). Answers the
-   * stamp the write left, where it could read one.
-   */
-  private async write(uri: vscode.Uri, bytes: Uint8Array): Promise<DiskStamp | undefined> {
-    return (await writeFileSafely(uri, bytes, () => vscode.workspace.fs.writeFile(uri, bytes))).stamp;
-  }
 }
