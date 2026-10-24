@@ -2,6 +2,15 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## [1.45.0] — 2026-10-24
+
+- MAT-file variables can now be cut, copied, pasted and dragged: within a file, between MAT-files, and to and from data dictionaries.
+- Complex values in JSON data dictionaries can now be edited.
+- A Description is shown and editable only for objects that have one; elsewhere its cell is grayed out.
+- The Properties panel now stays up to date as you edit, undo or reload.
+- Saving a compressed data dictionary is safer, and restoring an unsaved session now asks before overwriting newer changes on disk.
+- Bug fixes.
+
 ## [1.44.4] — 2026-10-23
 
 - A MAT-file string variable can now be changed back to a number or other value by typing it.
