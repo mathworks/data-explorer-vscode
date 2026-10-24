@@ -34,6 +34,12 @@ export interface TreeTableRow {
   // to keep a Description, an object with a summarized Value has a read-only Value and
   // keeps one fine. Reading the Value flag for it was wrong in both directions.
   _descriptionEditable?: boolean;
+  // Whether this row's object HAS a Description property at all — core's answer, beside the
+  // two above. false (a plain MATLAB variable, a value inside another) draws the cell not
+  // applicable: the wash a blank Value or Data Type gets, no text, no editor. Absent — a core
+  // older than the flag — is today's cell. Not the same question as `_descriptionEditable`:
+  // a Description this file cannot save is still the object's, shown and read-only.
+  _descriptionApplies?: boolean;
   // Present only when this row's value is a griddable matrix (host: matrixPayload.ts).
   // Its presence IS the decision — the cell renders the glyph and asks nothing else.
   // A DESCRIPTOR: name, class, shape and the node to ask. The cells are fetched when
@@ -99,6 +105,7 @@ type _CoreRowContract = [
   AssertTrue<CoreCellFits<'UsedBy'>>,
   AssertTrue<CoreCellFits<'_valueEditable'>>,
   AssertTrue<CoreCellFits<'_descriptionEditable'>>,
+  AssertTrue<CoreCellFits<'_descriptionApplies'>>,
 ];
 
 export interface EditCompletedDetail {
@@ -225,6 +232,16 @@ const KNOWN_COLUMNS_KEY = 'dex-known-columns';
 // rounds of feedback on this table have been that there is too much on it, never too
 // little.
 const NOT_APPLICABLE_WHEN_BLANK = new Set(['Value', 'DataType']);
+
+// Whether core says this row's object has no such property at all — not inferred from a
+// blank, which is why it is a separate rule from NOT_APPLICABLE_WHEN_BLANK rather than an
+// entry in it: an empty Description is an ordinary empty value, and only the object's own
+// answer (`_descriptionApplies: false`) makes the cell not applicable. The one rule every
+// reader of the cell asks — what it shows (and is searched by), whether it opens an editor,
+// which state it draws, whether an open editor may still commit — so none can disagree.
+function propertyAbsent(row: TreeTableRow, columnId: string): boolean {
+  return columnId === 'Description' && row._descriptionApplies === false;
+}
 
 // The display text of a cell value, which the host emits either as a plain
 // string or as an object carrying `text`.
@@ -2390,7 +2407,7 @@ export class DexTreeTable extends LitElement {
       case 'Kind':
         return cellText(row.Kind);
       case 'Description':
-        return cellText(row.Description);
+        return propertyAbsent(row, col) ? '' : cellText(row.Description);
       case 'Status':
         return cellText(row.Status);
       case 'UsedBy':
@@ -3107,6 +3124,8 @@ export class DexTreeTable extends LitElement {
       };
     }
     if (columnId === 'Description') {
+      // A property the object does not have takes no editor at all (propertyAbsent).
+      if (propertyAbsent(row, columnId)) return null;
       // The row's OWN Description flag, not its Value's: the node that cannot keep a
       // Description says so here (core: BaseNode.descriptionEditable), and offering an
       // editor anyway showed the user text that serialize drops on the next read.
@@ -3140,7 +3159,8 @@ export class DexTreeTable extends LitElement {
    *     a service bus has no data type) — nothing will ever go here;
    *   - the property exists and is simply unset (no usage recorded, not modified, no unit
    *     given) — an empty VALUE, which is ordinary and needs no cue.
-   * Only NOT_APPLICABLE_WHEN_BLANK columns are the first kind. Measured over five real
+   * Read off a blank, only NOT_APPLICABLE_WHEN_BLANK columns are the first kind (core can
+   * also say so outright of a Description: propertyAbsent). Measured over five real
    * dictionaries with every column shown, the second kind is the overwhelming majority:
    * Usage, Status, Unit and Header File are blank on 100% of rows, Storage Class and
    * Alignment on 97%, Dimensions/Dimensions Mode/Complexity/Min/Max on 87-91%, Last
@@ -3151,6 +3171,9 @@ export class DexTreeTable extends LitElement {
    */
   private _cellStateClass(row: TreeTableRow, columnId: string): string {
     if (this._cellEditTarget(row, columnId)) return 'cell-editable';
+    // The first kind, said outright by core rather than read off a blank: the object has no
+    // such property (propertyAbsent). The same class, so the same wash, as a blank Value.
+    if (propertyAbsent(row, columnId)) return 'cell-readonly cell-blank';
     if (!NOT_APPLICABLE_WHEN_BLANK.has(columnId)) return 'cell-readonly';
     return this._getCellText(row, columnId) === '' ? 'cell-readonly cell-blank' : 'cell-readonly';
   }
@@ -3376,18 +3399,21 @@ export class DexTreeTable extends LitElement {
   };
 
   // A repaint (any assignment of `rows` or `columns`: a save, an undo, a text-view
-  // edit) can arrive while an editor is open. If the cell it edits is still there the
-  // editor is kept, with what the user typed: a background repaint must not throw
-  // typing away. If its row or column is gone the editor is closed as Escape closes
-  // it, writing nothing, because while `_editingCell` is set `_onTableKeyDown` ignores
-  // every key, and with the edited cell gone nothing would ever clear it. Runs in
-  // willUpdate, so the state write joins this update and the input is still in the
-  // DOM to say whether it held focus.
-  private _closeEditorIfCellGone(): void {
+  // edit) can arrive while an editor is open. If the cell it edits is still there and
+  // still editable the editor is kept, with what the user typed: a background repaint
+  // must not throw typing away. If its row or column is gone the editor is closed as
+  // Escape closes it, writing nothing, because while `_editingCell` is set
+  // `_onTableKeyDown` ignores every key, and with the edited cell gone nothing would
+  // ever clear it. A cell that is there but no longer opens an editor (_cellEditTarget —
+  // a Value the host made read-only, a Description whose object no longer has one) is
+  // closed the same way: kept, it was an input in a read-only or grayed cell whose
+  // typing could only be refused or dropped. Runs in willUpdate, so the state write
+  // joins this update and the input is still in the DOM to say whether it held focus.
+  private _closeEditorIfCellNoLongerEditable(): void {
     const cell = this._editingCell;
     if (!cell) return;
-    const rowThere = (this.rows ?? []).some((r) => r.ID === cell.rowId);
-    if (rowThere && this._availableColumns.includes(cell.columnId)) return;
+    const row = (this.rows ?? []).find((r) => r.ID === cell.rowId);
+    if (row && this._availableColumns.includes(cell.columnId) && this._cellEditTarget(row, cell.columnId)) return;
     const active = this.shadowRoot?.activeElement;
     this._editingCell = null;
     if (active instanceof HTMLElement && active.classList.contains('edit-input')) this._focusTable();
@@ -3436,6 +3462,11 @@ export class DexTreeTable extends LitElement {
     const oldValue = this._editingCell.value;
     const { rowId, columnId } = this._editingCell;
     this._editingCell = null;
+    // A repaint can arrive under an open editor. One that says the object no longer HAS the
+    // property (propertyAbsent) leaves nothing to write the text to, so the edit is dropped
+    // rather than posted for a cell that now shows not applicable.
+    const current = (this.rows ?? []).find((r) => r.ID === rowId);
+    if (current && propertyAbsent(current, columnId)) return;
 
     if (newValue !== oldValue) {
       this.dispatchEvent(
@@ -3718,7 +3749,9 @@ export class DexTreeTable extends LitElement {
     }
 
     if (columnId === 'Description') {
-      const val = cellText(row.Description);
+      // Through _getCellText, so the cell shows exactly the string it is searched and sorted
+      // by — nothing, where the object has no Description (propertyAbsent).
+      const val = this._getCellText(row, columnId);
       if (isEditing) {
         return html`<input
           class="edit-input"
@@ -3847,7 +3880,7 @@ export class DexTreeTable extends LitElement {
       this._buildCaches();
     }
     if (changedProps.has('rows') || changedProps.has('columns')) {
-      this._closeEditorIfCellGone();
+      this._closeEditorIfCellNoLongerEditable();
     }
     if (changedProps.has('_expandedIds') || changedProps.has('_filterText') || changedProps.has('_sortState')) {
       this._visibleRowsCache = null;
