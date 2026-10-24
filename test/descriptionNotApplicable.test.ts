@@ -97,6 +97,57 @@ describe('a Description the object does not have', () => {
     t.remove();
   });
 
+  it('an editor already open is closed when a repaint says the property is gone', async () => {
+    // Kept open, it was an input inside a grayed cell whose typing the commit then threw
+    // away. Closed as a repaint closes one whose cell is gone: as Escape does, writing
+    // nothing, with the keyboard back on the table.
+    const row = makeRow('gone', { _descriptionApplies: true, Description: 'before' });
+    const t = await mount([row]);
+    const edits = recordEdits(t);
+    expect(await dblclick(t, 'gone')).toBe(true);
+    await t.updateComplete;
+    const input = t.shadowRoot!.querySelector('.edit-input') as HTMLInputElement;
+    input.focus();
+    input.value = 'half-typed';
+    t.rows = [{ ...row, _descriptionApplies: false } as TreeTableRow];
+    await t.updateComplete;
+    await t.updateComplete;
+    expect((t as any)._editingCell).toBeNull();
+    expect(t.shadowRoot!.querySelector('.edit-input')).toBeNull();
+    expect(cell(t, 'gone').className).toContain('cell-blank');
+    expect(edits).toEqual([]);
+    expect(t.shadowRoot!.activeElement).toBe((t as any)._container);
+    t.remove();
+  });
+
+  it('as is any editor whose cell a repaint makes read-only, and one still editable is kept', async () => {
+    // The same rule as the Description, through the one place that says whether a cell opens
+    // an editor (_cellEditTarget): a Value the host now says is read-only would only commit
+    // an edit the host refuses.
+    const ro = makeRow('ro', { Value: { text: 'v1', editable: true } });
+    const kept = makeRow('kept', { Value: { text: 'v2', editable: true } });
+    const t = await mount([ro, kept]);
+    const edits = recordEdits(t);
+    const open = async (id: string) => {
+      (t as any)._editingCell = null;
+      cell(t, id, 'Value').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      await t.updateComplete;
+    };
+    await open('ro');
+    t.rows = [{ ...ro, Value: { text: 'v1', editable: false } } as TreeTableRow, kept];
+    await t.updateComplete;
+    expect((t as any)._editingCell).toBeNull();
+    await open('kept');
+    (t.shadowRoot!.querySelector('.edit-input') as HTMLInputElement).value = 'typed';
+    t.rows = [ro, { ...kept }];
+    await t.updateComplete;
+    expect((t as any)._editingCell).toMatchObject({ rowId: 'kept', columnId: 'Value' });
+    expect((t.shadowRoot!.querySelector('.edit-input') as HTMLInputElement).value).toBe('typed');
+    expect(edits).toEqual([]);
+    (t as any)._editingCell = null;
+    t.remove();
+  });
+
   it('an editor already open when a repaint says the property is gone posts nothing', async () => {
     // The row can change under an open editor (the object was retyped by another view).
     const row = makeRow('flip', { _descriptionApplies: true, Description: 'before' });

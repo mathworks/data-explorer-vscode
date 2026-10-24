@@ -3410,18 +3410,21 @@ export class DexTreeTable extends LitElement {
   };
 
   // A repaint (any assignment of `rows` or `columns`: a save, an undo, a text-view
-  // edit) can arrive while an editor is open. If the cell it edits is still there the
-  // editor is kept, with what the user typed: a background repaint must not throw
-  // typing away. If its row or column is gone the editor is closed as Escape closes
-  // it, writing nothing, because while `_editingCell` is set `_onTableKeyDown` ignores
-  // every key, and with the edited cell gone nothing would ever clear it. Runs in
-  // willUpdate, so the state write joins this update and the input is still in the
-  // DOM to say whether it held focus.
+  // edit) can arrive while an editor is open. If the cell it edits is still there and
+  // still editable the editor is kept, with what the user typed: a background repaint
+  // must not throw typing away. If its row or column is gone the editor is closed as
+  // Escape closes it, writing nothing, because while `_editingCell` is set
+  // `_onTableKeyDown` ignores every key, and with the edited cell gone nothing would
+  // ever clear it. A cell that is there but no longer opens an editor (_cellEditTarget —
+  // a Value the host made read-only, a Description whose object no longer has one) is
+  // closed the same way: kept, it was an input in a read-only or grayed cell whose
+  // typing could only be refused or dropped. Runs in willUpdate, so the state write
+  // joins this update and the input is still in the DOM to say whether it held focus.
   private _closeEditorIfCellGone(): void {
     const cell = this._editingCell;
     if (!cell) return;
-    const rowThere = (this.rows ?? []).some((r) => r.ID === cell.rowId);
-    if (rowThere && this._availableColumns.includes(cell.columnId)) return;
+    const row = (this.rows ?? []).find((r) => r.ID === cell.rowId);
+    if (row && this._availableColumns.includes(cell.columnId) && this._cellEditTarget(row, cell.columnId)) return;
     const active = this.shadowRoot?.activeElement;
     this._editingCell = null;
     if (active instanceof HTMLElement && active.classList.contains('edit-input')) this._focusTable();
