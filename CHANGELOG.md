@@ -2,6 +2,11 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## [1.45.1] — 2026-10-25
+
+- In a MAT-file, a struct field or cell element can now be set to a string, and back to a number.
+- Complex arrays such as `[1+2i 3i]` can now be typed as a value, in MAT-files and data dictionaries.
+
 ## [1.45.0] — 2026-10-24
 
 - MAT-file variables can now be cut, copied, pasted and dragged: within a file, between MAT-files, and to and from data dictionaries.
