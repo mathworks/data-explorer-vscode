@@ -92,7 +92,7 @@ async function open(uri: vscode.Uri) {
     const before = doc.chunkXml;
     view.posts.length = 0;
     view.send({ type: 'edit', rowId: entry(name).id, columnId, oldValue: '', newValue });
-    const refused = view.posts.find((m) => m.type === 'error' || m.type === 'validationError');
+    const refused = view.posts.find((m) => m.type === 'error' || m.type === 'validationError' || m.type === 'refused');
     assert.ok(!refused, `the ${columnId} edit of "${name}" was applied (${JSON.stringify(refused)})`);
     assert.notStrictEqual(doc.chunkXml, before, `the ${columnId} edit of "${name}" reached the document`);
   };
@@ -189,7 +189,7 @@ suite('Binary .sldd: an edit keeps what it did not touch (D12)', () => {
           const after = original.slice(at.end);
           d.view.posts.length = 0;
           act(d);
-          const refused = d.view.posts.find((m) => m.type === 'error' || m.type === 'validationError');
+          const refused = d.view.posts.find((m) => m.type === 'error' || m.type === 'validationError' || m.type === 'refused');
           assert.ok(!refused, `${gesture} was applied (${JSON.stringify(refused)})`);
           const chunk: string = d.doc.chunkXml;
           assert.notStrictEqual(chunk, original, `${gesture} reached the document`);
@@ -704,7 +704,7 @@ suite('Binary .sldd: an edit keeps what it did not touch (D12)', () => {
         const before: string = d.doc.chunkXml;
         d.view.posts.length = 0;
         act(d);
-        const refused = () => d.view.posts.find((m) => m.type === 'error' || m.type === 'validationError');
+        const refused = () => d.view.posts.find((m) => m.type === 'error' || m.type === 'validationError' || m.type === 'refused');
         await waitFor('the edit to reach the document', () => d.doc.chunkXml !== before || !!refused());
         assert.ok(!refused(), `the edit was applied (${JSON.stringify(refused())})`);
         await d.save();

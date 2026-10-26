@@ -59,6 +59,23 @@ export function mutateEntry<T>(entry: any, mutate: () => T): T {
 }
 
 /**
+ * A cell edit: `columnId` of `node` (in `entry`) set to `newValue` through mutateEntry. `result`
+ * is the setter's answer; `unchanged` says the setter took the text the cell already showed.
+ *
+ * Core takes a cell's own shown text, set back, as no edit: its setter answers `true` having
+ * changed nothing (DataNode._isUnchangedCommit), and the session's editProperty, which the
+ * MAT-file editor edits through, writes nothing for it. A dictionary's editor that went on to
+ * write the entry would rewrite it, in core's spelling, and dirty the document, for an edit the
+ * user never made. The shown text is read before the setter, which is what changes it.
+ */
+export function cellEdit(entry: any, node: any, columnId: string, newValue: string): { result: any; unchanged: boolean } {
+  const cell = node.toRow()?.[columnId];
+  const shown = cell !== null && typeof cell === 'object' ? String(cell.text ?? cell.label ?? '') : String(cell ?? '');
+  const result = mutateEntry(entry, () => node.setProperty(columnId, newValue));
+  return { result, unchanged: result === true && newValue === shown };
+}
+
+/**
  * A change to WHICH entries a dictionary has, or to what one of them holds.
  *
  * Deliberately only three, and all at entry granularity: an edit inside an entry —

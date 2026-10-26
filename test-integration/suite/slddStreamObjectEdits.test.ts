@@ -174,7 +174,7 @@ function rowOf(posts: any[], nodeId: string): any {
   assert.fail(`the table was sent a row for ${nodeId}`);
 }
 
-const problemsIn = (posts: any[]) => posts.filter((m) => m.type === 'error' || m.type === 'validationError');
+const problemsIn = (posts: any[]) => posts.filter((m) => m.type === 'error' || m.type === 'validationError' || m.type === 'refused');
 
 /** Every node of `root`'s stream entries and controls, each with what its newest row offers. */
 function offeredInTable(root: any, posts: any[]): Record<string, string[]> {

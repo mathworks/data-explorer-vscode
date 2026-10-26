@@ -226,6 +226,17 @@ export interface ValidationErrorMessage {
   previousValue: unknown;
 }
 
+/**
+ * A gesture refused before it changed anything (Add Child, Delete, Add): shown in the dialog a
+ * refused cell edit is shown in, titled by the gesture, with why (host/refusal.ts). A dialog and
+ * not the banner, because the next repaint clears the banner.
+ */
+export interface RefusedMessage {
+  type: 'refused';
+  title: string;
+  reason: string;
+}
+
 // --- Host -> Webview (property inspector: pi-main.ts) -------------------------
 
 /** Render the property groups for the selected node. */
@@ -348,6 +359,7 @@ export type HostToTableMessage =
   | OpenAddGalleryMessage
   | ErrorMessage
   | ValidationErrorMessage
+  | RefusedMessage
   | MatrixCellsMessage
   | ChildRowsMessage;
 

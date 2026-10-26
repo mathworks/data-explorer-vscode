@@ -210,14 +210,14 @@ describe('XML structural edits against text the model no longer matches', () => 
       .flatMap((s: any) => s.children)
       .find((e: any) => typeof e.canAddChild !== 'function' || !e.canAddChild());
     expect(scalar).toBeTruthy();
-    expect(() => addChildXml(xml, scalar)).toThrow('This item cannot have children added.');
+    expect(() => addChildXml(xml, scalar)).toThrow('This item takes no children.');
   });
 
   it('refuses to delete a top-level entry through the nested-child path', () => {
     // deleteChildXml's caller picks the path from node.isEntry; an entry routed
     // here has a SECTION as its parent, which has no canRemoveChild.
     const { model, xml } = load('mem://xse-child-entry');
-    expect(() => deleteChildXml(xml, firstEntry(model))).toThrow('This item cannot be deleted.');
+    expect(() => deleteChildXml(xml, firstEntry(model))).toThrow("This element can't be removed from its parent.");
   });
 });
 

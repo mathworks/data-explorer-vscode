@@ -4,6 +4,7 @@ import { LitElement, html, css, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { highContrastStyles } from './styles/high-contrast.styles.js';
 import { dragModeFromModifiers, type DragMode } from './dragMode.js';
+import { hasLineBreak, withHeldLineBreaks } from './lineBreaks.js';
 import {
   filterRows, formatToken, parseFilterExpression, removeToken,
   type FilterOp, type FilterTerm, type FilterToken,
@@ -1433,11 +1434,14 @@ export class DexTreeTable extends LitElement {
         outline: none;
       }
 
-      /* One line high, like the input, inside a row of fixed height; further lines scroll. */
+      /* One line high, like the input, inside a row of fixed height; further lines scroll. Not
+         wrapped (wrap="off"), and with no horizontal scrollbar to cover the one line it shows:
+         a long line scrolls sideways with the caret, as it does in the input. */
       .edit-textarea {
         display: block;
         resize: none;
         line-height: inherit;
+        overflow-x: hidden;
         overflow-y: auto;
       }
 
@@ -1511,6 +1515,9 @@ export class DexTreeTable extends LitElement {
     value: string;
     editor?: string;
     options?: string[];
+    // Edited in a <textarea> rather than an <input>, decided once when the editor opens
+    // (_onCellDblClick), so a repaint cannot swap the element under the user's typing.
+    multiline?: boolean;
   } | null = null;
   @state() private _scrollTop = 0;
   @state() private _viewportHeight = 400;
@@ -3361,7 +3368,16 @@ export class DexTreeTable extends LitElement {
     editor?: string,
     options?: string[],
   ): void {
-    this._editingCell = { rowId, columnId, value: currentValue, editor, options };
+    // A textarea where the text may hold a line break, an <input> elsewhere: an <input> drops
+    // every line break from the value it is given, so a two-line text opened in one and merely
+    // clicked away from was written back as one line, a change the user never made. That is
+    // any text that holds one now, a cell core gives a textArea editor (a coder info's Pre and
+    // Post Statement), and every Description: core's own editor of one is a textArea, and
+    // MATLAB takes any text there, a line break included, so a one-line Description can be
+    // given a second line (Shift+Enter, _onTextAreaKeyDown). A Value never holds one: core
+    // spells a line break in a char or a string as `newline`.
+    const multiline = editor !== 'select' && (editor === 'textArea' || columnId === 'Description' || hasLineBreak(currentValue));
+    this._editingCell = { rowId, columnId, value: currentValue, editor, options, multiline };
     this.updateComplete.then(() => {
       const input = this.shadowRoot?.querySelector('.edit-input') as HTMLInputElement | HTMLSelectElement;
       if (input) {
@@ -3374,7 +3390,11 @@ export class DexTreeTable extends LitElement {
     });
   }
 
+  // The keys of every editor: Enter (with or without Ctrl/Cmd) commits and Escape cancels, as in
+  // VS Code's own inline inputs; Tab and a click away commit too, through the blur. An Enter
+  // that confirms an IME candidate is the input method's, not a commit, as VS Code treats it.
   private _onEditKeyDown = (e: KeyboardEvent): void => {
+    if (e.isComposing) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       e.stopPropagation();
@@ -3389,7 +3409,8 @@ export class DexTreeTable extends LitElement {
   };
 
   // Enter commits and Escape cancels, as in every other editor; Shift+Enter is left to the
-  // textarea, which starts a new line with it. Stopped here so the table does not act on it.
+  // textarea, which starts a new line with it, as in VS Code's multi-line inputs. Stopped here
+  // so the table does not act on it.
   private _onTextAreaKeyDown = (e: KeyboardEvent): void => {
     if (e.key === 'Enter' && e.shiftKey) {
       e.stopPropagation();
@@ -3458,8 +3479,10 @@ export class DexTreeTable extends LitElement {
     // blur arrives before Lit tears the old input down — so without this check
     // the abandoned text would be written to the newly opened cell's entry.
     if (!this._isEditorFor(input, this._editingCell.rowId, this._editingCell.columnId)) return;
-    const newValue = input.value;
     const oldValue = this._editingCell.value;
+    // A textarea reads its line breaks back as LF whatever it was given, so its text is posted
+    // with the breaks the cell held, and one only its breaks tell apart is no edit (lineBreaks.ts).
+    const newValue = input.tagName === 'TEXTAREA' ? withHeldLineBreaks(input.value, oldValue) : input.value;
     const { rowId, columnId } = this._editingCell;
     this._editingCell = null;
     // A repaint can arrive under an open editor. One that says the object no longer HAS the
@@ -3587,6 +3610,41 @@ export class DexTreeTable extends LitElement {
     })}`;
   }
 
+  // The editor of the cell being edited, seeded with `text`, its shown text: the one renderer of
+  // every column's editor, so the kind of element and its keys are decided once
+  // (_onCellDblClick). A <select> lists the current text among its options even where core's
+  // list does not have it: a select shows its first option when none is selected, so a value
+  // outside the list, opened and clicked away from, was written over with that first option.
+  private _renderEditor(text: string): unknown {
+    const cell = this._editingCell;
+    if (cell?.editor === 'select') {
+      const options = cell.options ?? [];
+      const listed = options.includes(text) ? options : [text, ...options];
+      return html`<select
+        class="edit-input"
+        @keydown=${this._onEditKeyDown}
+        @change=${this._onEditBlur}
+        @blur=${this._onEditBlur}
+      >
+        ${listed.map((opt) => html`<option .value=${opt} ?selected=${opt === text}>${opt}</option>`)}
+      </select>`;
+    }
+    // One line high, like the input, in a row of fixed height; further lines scroll, and a
+    // line is never wrapped, so each line on screen is a line of the text.
+    if (cell?.multiline) {
+      return html`<textarea
+        class="edit-input edit-textarea"
+        rows="1"
+        wrap="off"
+        title="Shift+Enter starts a new line"
+        .value=${text}
+        @keydown=${this._onTextAreaKeyDown}
+        @blur=${this._onEditBlur}
+      ></textarea>`;
+    }
+    return html`<input class="edit-input" .value=${text} @keydown=${this._onEditKeyDown} @blur=${this._onEditBlur} />`;
+  }
+
   private _renderCellValue(row: TreeTableRow, columnId: string): unknown {
     const isEditing = this._editingCell?.rowId === row.ID && this._editingCell?.columnId === columnId;
 
@@ -3631,7 +3689,7 @@ export class DexTreeTable extends LitElement {
           <div class="name-cell">
             <span class="indent" style="width: ${depth * 16}px"></span>
             <span class="toggle empty"></span>
-            <input class="edit-input" .value=${label} @keydown=${this._onEditKeyDown} @blur=${this._onEditBlur} />
+            ${this._renderEditor(label)}
           </div>
         `;
       }
@@ -3671,25 +3729,7 @@ export class DexTreeTable extends LitElement {
       const text = cellText(val);
       const linkTarget = (val as { linkTarget?: string }).linkTarget;
 
-      if (isEditing) {
-        if (this._editingCell?.editor === 'select') {
-          const options = this._editingCell?.options || [];
-          return html`<select
-            class="edit-input"
-            @keydown=${this._onEditKeyDown}
-            @change=${this._onEditBlur}
-            @blur=${this._onEditBlur}
-          >
-            ${options.map((opt) => html`<option .value=${opt} ?selected=${opt === text}>${opt}</option>`)}
-          </select>`;
-        }
-        return html`<input
-          class="edit-input"
-          .value=${text}
-          @keydown=${this._onEditKeyDown}
-          @blur=${this._onEditBlur}
-        />`;
-      }
+      if (isEditing) return this._renderEditor(text);
 
       if (linkTarget) {
         return html`<a class="value-link" href="#" @click=${(e: Event) => this._onLinkClick(linkTarget, e)}
@@ -3752,14 +3792,7 @@ export class DexTreeTable extends LitElement {
       // Through _getCellText, so the cell shows exactly the string it is searched and sorted
       // by — nothing, where the object has no Description (propertyAbsent).
       const val = this._getCellText(row, columnId);
-      if (isEditing) {
-        return html`<input
-          class="edit-input"
-          .value=${val}
-          @keydown=${this._onEditKeyDown}
-          @blur=${this._onEditBlur}
-        />`;
-      }
+      if (isEditing) return this._renderEditor(val);
       return html`<span>${this._highlight(val, columnId)}</span>`;
     }
 
@@ -3828,40 +3861,7 @@ export class DexTreeTable extends LitElement {
       const raw = (row as any)[columnId];
       const isObj = raw !== null && typeof raw === 'object';
       const editable = isObj && (raw as any).editable === true;
-      if (editable && isEditing) {
-        const editor = (raw as any).editor;
-        const text = String((raw as any).text ?? '');
-        if (editor === 'select') {
-          const options: string[] = (raw as any).options || [];
-          return html`<select
-            class="edit-input"
-            @keydown=${this._onEditKeyDown}
-            @change=${this._onEditBlur}
-            @blur=${this._onEditBlur}
-          >
-            ${options.map((opt) => html`<option .value=${opt} ?selected=${opt === text}>${opt}</option>`)}
-          </select>`;
-        }
-        // A textarea for text that may hold a line break (a coder info's Pre and Post
-        // Statement): an <input> drops every line break from the value it is given, so
-        // opening one and clicking away would write the text back as one line.
-        if (editor === 'textArea') {
-          return html`<textarea
-            class="edit-input edit-textarea"
-            rows="1"
-            title="Shift+Enter starts a new line"
-            .value=${text}
-            @keydown=${this._onTextAreaKeyDown}
-            @blur=${this._onEditBlur}
-          ></textarea>`;
-        }
-        return html`<input
-          class="edit-input"
-          .value=${text}
-          @keydown=${this._onEditKeyDown}
-          @blur=${this._onEditBlur}
-        />`;
-      }
+      if (editable && isEditing) return this._renderEditor(String((raw as any).text ?? ''));
       if (raw !== undefined && raw !== null && raw !== '') {
         const val = isObj ? ((raw as any).text ?? '') : String(raw);
         // Editable cells render as plain (editable) text; only genuinely

@@ -29,6 +29,7 @@ import {
 } from './slddBaseline.js';
 import {
   applyEntryOps,
+  cellEdit,
   findEntryByName,
   insertOp,
   mutateEntry,
@@ -105,6 +106,7 @@ import { catalogFunctionRenameOf, catalogRenameOf, scJsonFunctionRenameEdits, sc
 import { buildSectionRowId } from '../common/sectionRowId.js';
 import { basename } from '../common/pathUtil.js';
 import type { TableToHostMessage } from '../common/protocol.js';
+import { EditRefused, describeSource, refusedMessage } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 
 /**
@@ -228,6 +230,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
     const uriString = document.uri.toString();
     const name = basename(document.uri.path) || 'document';
+    // Core's messages name this source by its id (the uri string), which every message shown
+    // here spells as the file's name, as the MAT-file editor's do.
+    const describe = describeSource(uriString, name);
 
     // Which builder plans this file's rows AND answers a fetch for them (rowPlanner.ts).
     // An editable view plans too, which took some arguing with the comment below about
@@ -1134,7 +1139,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // PATH, so renaming an entry rekeys it and everything under it. The wide re-parse used
         // to repair that as a side effect — and the repaint's replace op, which detaches this
         // very subtree, unindexes it by the ids the mutation leaves behind.
-        const result = mutateEntry(entry, () => node.setProperty(msg.columnId, msg.newValue));
+        const { result, unchanged } = cellEdit(entry, node, msg.columnId, msg.newValue);
         if (result && typeof result === 'object' && result.error) {
           // Invalid cell input: show the dex error dialog inside the webview
           // (scoped to the table view, not a window-blocking native modal),
@@ -1144,13 +1149,15 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           // what the text says.
           webview.postMessage({
             type: 'validationError',
-            reason: result.reason,
+            reason: describe(result.reason),
             invalidValue: msg.newValue,
             previousValue: msg.oldValue,
           });
           void postEntryRows(entryRowIdOnScreen, entry);
           return;
         }
+        // The cell's own text set back (cellEdit): nothing changed, so nothing is painted or written.
+        if (unchanged) return;
 
         // PAINT — synchronously, and before anything expensive: the model now says what the user
         // typed, and the renderer has it ~1 ms after the keystroke. Everything below this line
@@ -1324,6 +1331,16 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     };
 
     /**
+     * What a structural edit that threw before it painted says: a refusal (EditRefused: an Add
+     * Child, a Delete or an Add the model will not take) in the refusal dialog, as every table
+     * editor says one (refusal.ts); anything else as the failed edit it is, in the banner.
+     */
+    const reportUnpainted = (err: unknown): void => {
+      if (err instanceof EditRefused) webview.postMessage(refusedMessage(err, describe));
+      else webview.postMessage({ type: 'error', message: 'Failed to apply edit: ' + (err as Error).message });
+    };
+
+    /**
      * The prologue every structural edit shares: the mid-edit JSON gate, a tree that matches the
      * text, and the node the row names — resolved ONCE, because which shape a delete takes
      * depends on what the row turned out to be.
@@ -1393,11 +1410,10 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         remember({ submitted, replaced: currentText.slice(patch.offset, patch.offset + patch.length) });
       } catch (err) {
         hostEdit = null;
-        const message = 'Failed to apply edit: ' + (err as Error).message;
         // The tree was mutated and the rows painted for a write that did not happen, and the text
-        // is the truth in this format.
-        if (painted) undoPaint(painted, message);
-        else webview.postMessage({ type: 'error', message });
+        // is the truth in this format. A refusal is thrown before the paint, having changed nothing.
+        if (painted) undoPaint(painted, 'Failed to apply edit: ' + (err as Error).message);
+        else reportUnpainted(err);
       }
     };
 
@@ -1536,10 +1552,14 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         paintedWrite = null;
         const message = 'Failed to apply edit: ' + (err as Error).message;
         // Unpainted, the rows still say what the text says, but the tree may not: the entries
-        // leave it first, then each child group, and a group that throws leaves the ones before
-        // it done. The text is the truth in this format, so the tree is re-read from it.
+        // leave it first, then each child group, and a group that throws (a child its parent will
+        // not give up, refused) leaves the ones before it done. The text is the truth in this
+        // format, so the tree is re-read from it.
         if (painted) resyncWide(message);
-        else refusedStructural(message);
+        else {
+          rebuildModel();
+          reportUnpainted(err);
+        }
       }
     };
 
@@ -1814,7 +1834,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         if (painted) resyncWide(message);
         else {
           rebuildModel();
-          webview.postMessage({ type: 'error', message });
+          reportUnpainted(err);
         }
       }
     };

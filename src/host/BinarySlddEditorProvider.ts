@@ -92,6 +92,7 @@ import {
 } from './scRename.js';
 import {
   applyEntryOps,
+  cellEdit,
   entryRecord,
   findEntryByName,
   insertOp,
@@ -130,6 +131,7 @@ import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { answerMatrixRequest } from './matrixRequest.js';
 import { binaryEditSrcId } from '../common/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
+import { EditRefused, describeSource, refusedMessage } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { saveSettled } from './settledSave.js';
@@ -741,6 +743,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     webviewPanel.iconPath = new vscode.ThemeIcon('table');
     const uriString = document.uri.toString();
     const name = document.metaPath;
+    // Core's messages name this source by its id, which every message shown here spells as the
+    // file's name, as the MAT-file editor's do.
+    const describe = describeSource(document.srcId, name);
 
     // Which builder plans this file's rows AND answers a fetch for them (rowPlanner.ts).
     // Planning an editable view is admissible for the reasons set out in
@@ -1044,6 +1049,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         document.repaintOps([{ kind: 'replace', entryRowId, entry }]);
         if (selectId) webview.postMessage({ type: 'selectRows', rowIds: [selectId] });
       } catch (err) {
+        // A refusal is thrown before the transform changes anything, so it costs no repaint.
+        if (err instanceof EditRefused) {
+          webview.postMessage(refusedMessage(err, describe));
+          return;
+        }
         // These transforms mutate the model BEFORE they splice the text
         // (removeChildFromModel / addChildToModel), so a transform that throws half-way
         // leaves a model that no longer matches chunkXml. The edit path now trusts that
@@ -1163,10 +1173,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         if (landing) webview.postMessage({ type: 'selectRows', rowIds: [landing] });
       } catch (err) {
         // Nothing was pushed, so chunkXml is untouched; the model may not be — the child
-        // removals happen before the splice. Rebuild from the text, then say so (the
-        // repaint clears the banner, so it goes first).
+        // removals happen before the splice, and a group refused leaves the ones before it
+        // done. Rebuild from the text, then say so (the repaint clears the banner, so it goes
+        // first; a refusal is said in its dialog, which no repaint clears).
         document.repaintAll();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+        if (err instanceof EditRefused) webview.postMessage(refusedMessage(err, describe));
+        else webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
       }
     };
 
@@ -1225,11 +1237,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // the pre-edit state exists. (Through attempt, so an entry that will not
         // serialize costs this edit its fast undo and not the edit itself.)
         const beforeRecord = attempt(() => entryRecord(entry));
-        const result = mutateEntry(entry, () => node.setProperty(msg.columnId, msg.newValue));
+        const { result, unchanged } = cellEdit(entry, node, msg.columnId, msg.newValue);
         if (result && typeof result === 'object' && result.error) {
           webview.postMessage({
             type: 'validationError',
-            reason: result.reason,
+            reason: describe(result.reason),
             invalidValue: msg.newValue,
             previousValue: msg.oldValue,
           });
@@ -1238,6 +1250,8 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           postEntry(entry, entryRowId);
           return;
         }
+        // The cell's own text set back (cellEdit): nothing changed, so nothing is pushed or painted.
+        if (unchanged) return;
         const before = document.chunkXml;
         // Core writes the entry and splices it: its bytes, with what the edit changed written
         // from the model, laid out as this chunk is, and every byte around it as it was.
@@ -1417,9 +1431,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       } catch (err) {
         // `addEntry` attaches the new node before the XML splice can fail, so the model may be
         // a step ahead of chunkXml. Rebuild from the text — the state the user still has —
-        // first, because the repaint clears the banner.
+        // first, because the repaint clears the banner. A class the section refuses
+        // (createEntry) is said in the refusal dialog.
         document.repaintAll();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+        if (err instanceof EditRefused) webview.postMessage(refusedMessage(err, describe));
+        else webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
       }
     };
 

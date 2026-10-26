@@ -79,6 +79,7 @@ import { binaryEditSrcId } from '../common/srcId.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
+import { addChildRefused, addRefused, deleteRefused, refusedMessage, type EditRefused } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 import { matCatalog } from '../common/addCatalog.js';
 
@@ -941,6 +942,9 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       if (msg.columnId === 'Name') webview.postMessage({ type: 'selectRows', rowIds: [node.id] });
     };
 
+    // A refused Add Child, Delete or Add, said as every table editor says one (refusal.ts).
+    const postRefusal = (refusal: EditRefused) => webview.postMessage(refusedMessage(refusal, (text) => document.describe(text)));
+
     // Delete the rows the gesture named, as ONE edit: the variables in one batch (one step), and
     // each row under a variable on its own (one step each). Nodes are resolved first and each is
     // deleted by the id it has at that moment: an element's id is its index, which the removal of
@@ -978,7 +982,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       );
       if (!observed) return;
       if (observed.steps === 0) {
-        webview.postMessage({ type: 'error', message: 'Nothing was deleted: this file does not let the selected items be removed.' });
+        postRefusal(deleteRefused());
         return;
       }
       if (landing && !doomed.has(landing)) webview.postMessage({ type: 'selectRows', rowIds: [landing.id] });
@@ -1001,7 +1005,8 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       });
       if (!observed) return;
       if (!added) {
-        webview.postMessage({ type: 'error', message: refusal ? document.describe(refusal) : `Could not add a ${tileLabelOf(className)} to ${name}.` });
+        const reason = refusal ?? `${tileLabelOf(className)} cannot be added to ${name}.`;
+        postRefusal(addRefused(reason));
         return;
       }
       webview.postMessage({ type: 'selectRows', rowIds: [added.id] });
@@ -1021,7 +1026,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       });
       if (!observed) return;
       if (!child) {
-        webview.postMessage({ type: 'error', message: 'This item takes no children.' });
+        postRefusal(addChildRefused());
         return;
       }
       webview.postMessage({ type: 'selectRows', rowIds: [child.id] });

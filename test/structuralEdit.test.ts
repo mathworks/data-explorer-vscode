@@ -486,7 +486,7 @@ describe('deleteChild / addChild on a node that does not support it', () => {
     const uri = 'test://add-child-scalar-msg.sldd';
     const model = freshModel(uri);
     const scalar = findNode(uri, buildRows(model).find((r: any) => r.Name?.label === 'Number').ID);
-    expect(() => addChild(fixtureText, scalar)).toThrow('This item cannot have children added.');
+    expect(() => addChild(fixtureText, scalar)).toThrow('This item takes no children.');
   });
 
   it('refuses to delete a top-level entry through the nested-child path', () => {
@@ -495,7 +495,7 @@ describe('deleteChild / addChild on a node that does not support it', () => {
     const uri = 'test://del-child-entry.sldd';
     const model = freshModel(uri);
     const entry = findNode(uri, buildRows(model).find((r: any) => r.Name?.label === 'Number').ID);
-    expect(() => deleteChild(fixtureText, entry)).toThrow('This item cannot be deleted.');
+    expect(() => deleteChild(fixtureText, entry)).toThrow("This element can't be removed from its parent.");
   });
 });
 
@@ -590,7 +590,7 @@ describe('deleteChildren', () => {
     // group check and the single check cannot come to disagree.
     const uri = 'test://del-children-refuse.sldd';
     const entry = entryNamed(freshModel(uri), 'Number');
-    expect(() => deleteChildren(fixtureText, [entry])).toThrow('This item cannot be deleted.');
+    expect(() => deleteChildren(fixtureText, [entry])).toThrow("This element can't be removed from its parent.");
   });
 
   it('leaves the model untouched when only ONE of the group is refused', () => {
@@ -604,7 +604,7 @@ describe('deleteChildren', () => {
     // The entry itself is not a removable child, so the group is refused — after the
     // first element has already been accepted.
     expect(() => deleteChildren(fixtureText, [entry.children[0], entry])).toThrow(
-      'This item cannot be deleted.',
+      "This element can't be removed from its parent.",
     );
     expect(entry.children.map((c: any) => c.name)).toEqual(before);
   });

@@ -36,6 +36,7 @@ import type { ClipboardItem } from './clipboard.js';
 import { dropFactsOf } from './dropFacts.js';
 import { TransferRefused, type TransferTarget } from './transfer.js';
 import { recordCopy } from './entryOps.js';
+import { addChildRefused, addRefused, deleteRefused } from './refusal.js';
 
 // One byte-scoped replacement of a document's text, and the one applier — both now core's
 // (`src/edit/textPatch.ts`), because WHICH REGION a text edit covers is a property of the two
@@ -467,10 +468,11 @@ function removableChild(node: any): boolean {
  * a nested delete that decides what the edit MEANS — which nodes may be removed,
  * which entry owns the row, where the selection goes — so both .sldd formats
  * share it and only the splicing differs (see the header of xmlStructuralEdit.ts).
+ * A child its parent will not give up is refused (EditRefused) before anything changes.
  */
 export function removeChildFromModel(node: any): { entry: any; selectId: string } {
   const parent = node.parent;
-  if (!removableChild(node)) throw new Error('This item cannot be deleted.');
+  if (!removableChild(node)) throw deleteRefused();
   // PRECONDITION (untested): the canRemoveChild guard above already restricts
   // `node` to a child of a container (Bus/Struct/Enum), and every container in a
   // parsed model sits under a top-level entry — a SECTION has no canRemoveChild,
@@ -486,12 +488,10 @@ export function removeChildFromModel(node: any): { entry: any; selectId: string 
 /**
  * Add a child to a container node in the in-memory model, reporting the owning
  * entry and the new child's id (which the caller selects). Shared by both .sldd
- * formats, for the same reason as removeChildFromModel.
+ * formats, for the same reason as removeChildFromModel, and refuses the same way.
  */
 export function addChildToModel(node: any): { entry: any; selectId: string } {
-  if (typeof node.canAddChild !== 'function' || !node.canAddChild()) {
-    throw new Error('This item cannot have children added.');
-  }
+  if (typeof node.canAddChild !== 'function' || !node.canAddChild()) throw addChildRefused();
   // PRECONDITION (untested): as in removeChildFromModel, every container node in
   // a parsed model has an owning entry — a SECTION's canAddChild() returns false,
   // so the guard above already excludes the only node kind with no entry above it.
@@ -503,7 +503,7 @@ export function addChildToModel(node: any): { entry: any; selectId: string } {
   // unconditionally, so the guard above already excludes every node that could
   // yield null here. Kept as a belt-and-braces net for a future container type.
   const child = node.addChildNode();
-  if (!child) throw new Error('Failed to add a child element.');
+  if (!child) throw addChildRefused();
   return { entry, selectId: child.id };
 }
 
@@ -550,7 +550,7 @@ export function removeChildrenFromModel(nodes: readonly any[]): { entry: any; se
     if (findOwningEntry(node) !== entry) {
       throw new Error('These items are not all in the same entry.');
     }
-    if (!removableChild(node)) throw new Error('This item cannot be deleted.');
+    if (!removableChild(node)) throw deleteRefused();
   }
   // Removals first, one splice after: the text must be rewritten from the entry as it
   // ends up, not once per child.
@@ -754,7 +754,7 @@ export function createEntry(section: any, className: string): any {
     // Reached when the section refuses the class. Worth a real message rather than a
     // silent no-op: the gallery only offers legal tiles (its guard test creates every
     // one), so a refusal here means the catalog and core have gone out of step.
-    throw new Error(`${className} cannot be added to ${section.displayName || section.name}.`);
+    throw addRefused(`${className} cannot be added to ${section.displayName || section.name}.`);
   }
   return node;
 }

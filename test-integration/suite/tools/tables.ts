@@ -31,9 +31,11 @@ export function closeAll(opened: Opened): void {
   }
 }
 
+/** The path of a file of test-integration/fixtures, e.g. `fixturePath('multiline', 'x.sldd')`. */
+export const fixturePath = (...parts: string[]): string => join(ctx().extensionUri.fsPath, 'test-integration', 'fixtures', ...parts);
+
 /** A MATLAB-written MAT-file of test-integration/fixtures/mat. */
-export const matFixture = (name: string): Uint8Array =>
-  new Uint8Array(readFileSync(join(ctx().extensionUri.fsPath, 'test-integration', 'fixtures', 'mat', name)));
+export const matFixture = (name: string): Uint8Array => new Uint8Array(readFileSync(fixturePath('mat', name)));
 
 /** The records of `bytes` by name, as core's reader frames them. */
 function recordBytes(bytes: Uint8Array, name: string): Uint8Array {
@@ -161,10 +163,13 @@ export interface JsonTab {
   names(): string[];
 }
 
-/** A copy of the workspace's params.sldd as `as` in `dir`, opened in the JSON table editor. */
-export async function openJson(opened: Opened, dir: string, as: string): Promise<JsonTab> {
+/**
+ * A copy of `from` (the workspace's params.sldd unless said) as `as` in `dir`, opened in the JSON
+ * table editor.
+ */
+export async function openJson(opened: Opened, dir: string, as: string, from = join(ws().fsPath, 'params.sldd')): Promise<JsonTab> {
   const path = join(dir, as);
-  copyFileSync(join(ws().fsPath, 'params.sldd'), path);
+  copyFileSync(from, path);
   const uri = vscode.Uri.file(path);
   const doc = await vscode.workspace.openTextDocument(uri);
   const view = fakePanel();
@@ -186,10 +191,18 @@ export interface BinaryTab {
   names(): string[];
 }
 
-/** A copy of the MATLAB-written binary params.sldd as `as` in `dir`, opened in the binary table editor. */
-export async function openBinary(opened: Opened, dir: string, as: string): Promise<BinaryTab> {
+/**
+ * A copy of `from` (the MATLAB-written binary params.sldd unless said) as `as` in `dir`, opened in
+ * the binary table editor.
+ */
+export async function openBinary(
+  opened: Opened,
+  dir: string,
+  as: string,
+  from = join(ws().fsPath, '..', '..', '..', 'test', 'parity', 'artifacts', 'binary', 'params.sldd'),
+): Promise<BinaryTab> {
   const path = join(dir, as);
-  copyFileSync(join(ws().fsPath, '..', '..', '..', 'test', 'parity', 'artifacts', 'binary', 'params.sldd'), path);
+  copyFileSync(from, path);
   const uri = vscode.Uri.file(path);
   const provider = new BinarySlddEditorProvider(ctx());
   const doc: any = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());

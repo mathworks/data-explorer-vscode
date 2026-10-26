@@ -29,8 +29,8 @@
 //
 // HOW it breaks was measured rather than assumed, by deleting that check and running this
 // file: the redundant child ids are then planned as work of their own against an entry that
-// is about to leave the tree, and the model op refuses — "This item cannot be deleted" on
-// the JSON path, "\"StructType\" is not in a section" on the binary one. So the gesture is
+// is about to leave the tree, and the model op refuses — "This element can't be removed from
+// its parent" (a refusal, in its dialog) on the JSON path, "\"StructType\" is not in a section" on the binary one. So the gesture is
 // rejected outright rather than half-applied, and what catches it is the no-error guard
 // every run in this file passes through. The file comparison is kept as the assertion
 // anyway: it is the invariant that has to hold, and a future provider that swallowed that
@@ -66,6 +66,10 @@ import {
 // one element leaves a scalar with no child rows at all rather than a container holding
 // one. Both are correct behaviour and neither is this test's subject.
 const isElementRow = (row: any): boolean => /[({][\d,\s]+[)}]$/.test(nameOf(row));
+
+// What the host says when a delete does not happen: a failure in the banner (`error`), or a
+// refusal in its dialog (`refused`: a child its parent will not give up).
+const isReport = (m: any): boolean => m.type === 'error' || m.type === 'refused';
 
 /**
  * Open a working copy of a JSON fixture through the real provider, let the caller choose a
@@ -104,7 +108,7 @@ async function deleteFromJson(
     await waitFor(
       'the delete to be applied or refused',
       () =>
-        view.posts.some((m) => m.type === 'error') ||
+        view.posts.some(isReport) ||
         (doc.version > versionBefore &&
           view.posts.some((m) => m.type === 'updateEntryRows' || m.type === 'setRows')),
     );
@@ -113,10 +117,7 @@ async function deleteFromJson(
     await quiet(150, 'an error reported after the delete landed');
 
     const after = doc.getText();
-    assert.ok(
-      !view.posts.some((m) => m.type === 'error'),
-      `no error was reported (${JSON.stringify(view.posts.filter((m) => m.type === 'error'))})`,
-    );
+    assert.ok(!view.posts.some(isReport), `no error was reported (${JSON.stringify(view.posts.filter(isReport))})`);
     return { before, after, versions: doc.version - versionBefore, posts: view.posts, rows };
   } finally {
     view.close();
@@ -409,10 +410,7 @@ async function deleteFromBinary(
     view.send({ type: 'delete', rowIds });
 
     const after = (doc as any).chunkXml as string;
-    assert.ok(
-      !view.posts.some((m) => m.type === 'error'),
-      `no error was reported (${JSON.stringify(view.posts.filter((m) => m.type === 'error'))})`,
-    );
+    assert.ok(!view.posts.some(isReport), `no error was reported (${JSON.stringify(view.posts.filter(isReport))})`);
     await provider.saveCustomDocument(doc, token());
     const saved = unzipSync(await vscode.workspace.fs.readFile(uri));
     return { before, after, edits, posts: view.posts, rows, saved };
@@ -600,11 +598,7 @@ suite('Undo of a multi-entry delete, on a compressed-binary .sldd', () => {
 
       view.posts.length = 0;
       view.send({ type: 'delete', rowIds: [p.id, q.id] });
-      assert.deepStrictEqual(
-        view.posts.filter((m) => m.type === 'error'),
-        [],
-        'the delete is applied',
-      );
+      assert.deepStrictEqual(view.posts.filter(isReport), [], 'the delete is applied');
       assert.strictEqual(edits.length, 1, 'as one edit');
       assert.strictEqual(section.children[0], r, `${p.name} and ${q.name} left, so ${r.name} leads`);
 
