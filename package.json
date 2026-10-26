@@ -243,7 +243,7 @@
   },
   "dependencies": {
     "@lit/context": "^1.1.6",
-    "data-explorer-core": "github:mathworks/data-explorer-core#86a3e6495c8d89b09fe93e6b948777e7b783b6bf",
+    "data-explorer-core": "github:mathworks/data-explorer-core#5a51815ee5f81d0a158dcf59332fd8042bd576d7",
     "fast-xml-parser": "^5.8.0",
     "fflate": "^0.8.3",
     "highlight.js": "^11.11.1",
