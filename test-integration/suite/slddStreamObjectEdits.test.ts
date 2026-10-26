@@ -89,7 +89,9 @@ const OFFERED: Record<string, string[]> = {
   'pStruct.sp': ['Name'],
   'pStruct.sp(1,2)': ['Value'],
   'sPh': ['Name'],
-  'sPh.p': ['Name', 'Value', 'Min', 'Max', 'Description'],
+  // And a Unit, which the stream writes as a dictionary writes one of an object outside one (a
+  // Signal's DataType too, which core offers and the table edits in no cell).
+  'sPh.p': ['Name', 'Value', 'Min', 'Max', 'Unit', 'Description'],
   'sPh.q': ['Name', 'Value'],
   'sPh.sp': ['Name'],
   'sPh.sp(1,2)': ['Value'],
@@ -103,7 +105,7 @@ const OFFERED: Record<string, string[]> = {
   'shared.sp': ['Name'],
   'shared.sp(1,2)': ['Value'],
   'sigH': ['Name'],
-  'sigH.sig': ['Name', 'Min', 'Max', 'Description'],
+  'sigH.sig': ['Name', 'Min', 'Max', 'Unit', 'Description'],
   'sigH.sp': ['Name'],
   'sigH.sp(1,2)': ['Value'],
   'plainP': ['Name', 'Value', 'Min', 'Max', 'Unit', 'Description', 'storageClass'],
@@ -446,10 +448,11 @@ suite('An object inside a binary .sldd value stream, edited in the binary editor
 
   test("what core refuses in a stream is refused by the table in core's words, and nothing is written", async () => {
     const REFUSED: [Edit, RegExp][] = [
-      // No rule writes a Parameter's DataType, nor the stream's whole value typed over it; and a
-      // string beside the objects is one the value written anew could not hold.
+      // No rule writes a Parameter's DataType; the stream's whole value is a struct, edited a field
+      // at a time, so it takes no Value typed over it; and a string beside the objects is one the
+      // value written anew could not hold.
       [['sPh.p', 'DataType', 'single'], ENCODED_REASON],
-      [['sPh', 'Value', '1'], ENCODED_REASON],
+      [['sPh', 'Value', '1'], /^Cannot edit the Value of "sPh": it is a struct, whose fields are edited one at a time\.$/],
       [['sPh.q', 'Value', '"abc"'], /^Cannot edit "sPh": sPh\.q would hold a string, which a save does not write into its MAT stream\.$/],
       // An allow-listed property the stream holds no value for, and one the rules refuse.
       [['sTh.t', 'Description', 'x'], /^Cannot edit "sTh": sTh\.t\.Description is at its class default/],
