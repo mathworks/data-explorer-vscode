@@ -106,7 +106,7 @@ const OFFERED: Record<string, string[]> = {
   'sigH.sig': ['Name', 'Min', 'Max', 'Description'],
   'sigH.sp': ['Name'],
   'sigH.sp(1,2)': ['Value'],
-  'plainP': ['Name', 'Value', 'Min', 'Max', 'Description', 'storageClass'],
+  'plainP': ['Name', 'Value', 'Min', 'Max', 'Unit', 'Description', 'storageClass'],
   'plainS': ['Name'],
   'plainS.x': ['Name', 'Value'],
 };

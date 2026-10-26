@@ -133,6 +133,7 @@ import { binaryEditSrcId } from '../common/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { addChildRefusal, addEntryRefusal, deleteRefusal, describeSource, refusedMessage, type RefusedGesture } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
+import { answerEditTextRequest } from './editTextRequest.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { saveSettled } from './settledSave.js';
 import { followDisk, readForOpen, readStamped, refuseIfChangedOnDisk, watchDisk, writeUserFile, type FollowedDocument } from './diskFollow.js';
@@ -1496,6 +1497,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       // A Variable Editor panel is opening: send its cells. One shared answer for all four
       // webview hosts — see matrixRequest.ts.
       requestMatrix: (nodeId) => answerMatrixRequest(webview, uriString, nodeId),
+      // A Value editor is opening on a summary: send its whole text, read off the live tree,
+      // as an edit is (editTextRequest.ts).
+      requestEditText: (rowId) => answerEditTextRequest((m) => webview.postMessage(m), (id) => (liveModel(), findNode(id)), rowId, describe),
       // A row the payload deferred is being opened: send the rows under it (childRequest.ts).
       // The filler is a no-op because THIS view's payload fills no Usage column either — a
       // fetched row has to match its siblings, and matching means empty here. `uriString`

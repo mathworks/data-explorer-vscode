@@ -574,6 +574,11 @@ window.addEventListener('message', (event: MessageEvent) => {
     // A refused Add Child, Delete or Add: the same dialog, titled by the gesture, which stays
     // until it is closed. A banner would be cleared by the next repaint.
     errorDialog.show({ title: msg.title, reason: msg.reason });
+  } else if (msg.type === 'editText') {
+    // The whole text of a Value shown as a summary, asked for as its editor opens: the editor
+    // opens on it. None (the value changed under the request): core's reason, where it gives one.
+    if (typeof msg.text === 'string') table.openWholeValueEditor?.(msg.rowId, msg.text);
+    else if (typeof msg.reason === 'string') errorDialog.show({ title: 'Cannot Edit', reason: msg.reason });
   }
 });
 
@@ -811,6 +816,14 @@ table.addEventListener('dex-add-entry', (e: Event) => {
     className: detail.className,
     rename: !!detail.rename,
   });
+});
+
+// A Value editor is opening on a summary: ask the host for the whole text it stands for, which the
+// row does not carry (answered by an `editText` message, above).
+table.addEventListener('dex-edit-text-request', (e: Event) => {
+  if (!editable) return;
+  const rowId = (e as CustomEvent).detail?.rowId;
+  if (typeof rowId === 'string') vscode.postMessage({ type: 'requestEditText', rowId });
 });
 
 // Relay committed cell edits to the host for write-back into the JSON text.

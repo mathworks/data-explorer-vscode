@@ -18,7 +18,7 @@
 /**
  * How a provider answers the messages every table view answers alike, keyed by message type: the
  * four every view must (`ready`, `select`, `navigate`, `requestMatrix`), `requestChildren` where its
- * payload defers rows, and `undo` and `redo` where its document is editable.
+ * payload defers rows, and `undo`, `redo` and `requestEditText` where its document is editable.
  */
 export interface CommonHandlers {
   /** The webview is up: paint it. */
@@ -31,6 +31,8 @@ export interface CommonHandlers {
   requestMatrix(nodeId: string): void;
   /** A row the payload deferred is being opened. */
   requestChildren?(nodeId: string): void;
+  /** A Value editor is opening on a row whose whole text is fetched as it opens (`_hasEditText`). */
+  requestEditText?(rowId: string): void;
   /** The webview's own Undo, for VS Code's stack. */
   undo?(): void;
   /** The webview's own Redo, for VS Code's stack. */
@@ -43,7 +45,7 @@ export interface CommonHandlers {
  * provider's own to dispatch, or to ignore.
  */
 export function dispatchCommon(msg: unknown, handlers: CommonHandlers): boolean {
-  const m = (msg ?? {}) as { type?: unknown; rowIds?: unknown; target?: unknown; nodeId?: unknown };
+  const m = (msg ?? {}) as { type?: unknown; rowIds?: unknown; target?: unknown; nodeId?: unknown; rowId?: unknown };
   switch (m.type) {
     case 'ready':
       handlers.ready();
@@ -60,6 +62,10 @@ export function dispatchCommon(msg: unknown, handlers: CommonHandlers): boolean 
     case 'requestChildren':
       if (!handlers.requestChildren) return false;
       handlers.requestChildren(m.nodeId as string);
+      return true;
+    case 'requestEditText':
+      if (!handlers.requestEditText) return false;
+      if (typeof m.rowId === 'string') handlers.requestEditText(m.rowId);
       return true;
     case 'undo':
     case 'redo': {

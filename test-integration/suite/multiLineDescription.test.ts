@@ -15,105 +15,30 @@
 // what this extension writes: a live gate outside this repo opens each and compares.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { quiet, token, waitFor } from './tools/hostHarness';
-import {
-  closeAll,
-  entryOf,
-  entryRow,
-  fixturePath,
-  openBinary,
-  openJson,
-  openMat,
-  readMat,
-  readSldd,
-  variableRow,
-  type Opened,
-} from './tools/tables';
+import { quiet, waitFor } from './tools/hostHarness';
+import { closeAll, fixturePath, type Opened } from './tools/tables';
+import { BINARY_EDITOR, MAT_EDITOR, TEXT_EDITOR, type EditorKind, type EditorTab } from './tools/editorTabs';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const LF = "two\nlines, it's";
 
-/** One editor's tab, as these tests drive it. */
-interface Tab {
-  view: { posts: any[]; send(message: any): void };
-  /** The row of the entry or variable of that name, as the table holds it. */
-  row(name: string): any;
-  /** Whether any edit reached the document since it was opened. */
-  edited(): boolean;
-  dirty(): boolean;
-  /** Save, and answer the bytes now on disk. */
-  save(): Promise<Uint8Array>;
-}
-
-interface Format {
-  name: string;
+/** An editor, and the MATLAB-written file of the multiline fixtures it opens. */
+interface Format extends EditorKind {
   file: string;
-  open(opened: Opened, dir: string, as: string, from: string): Promise<Tab>;
-  /** The Description of `name` that core reads from saved bytes. */
-  readBack(bytes: Uint8Array, name: string): string;
 }
 
 const FORMATS: Format[] = [
-  {
-    name: 'a MAT-file',
-    file: 'multiline_r2027a.mat',
-    open: async (opened, dir, as, from) => {
-      const m = await openMat(opened, dir, as, new Uint8Array(readFileSync(from)));
-      return {
-        view: m.view,
-        row: (name) => variableRow(m.view.posts, name),
-        edited: () => m.events.length > 0,
-        dirty: () => m.doc.edits.dirty,
-        save: async () => {
-          await m.provider.saveCustomDocument(m.doc, token());
-          return new Uint8Array(readFileSync(m.path));
-        },
-      };
-    },
-    readBack: (bytes, name) => readMat(bytes, (mat) => (mat.children as any[]).find((v) => v.name === name).toRow().Description),
-  },
-  {
-    name: 'a text dictionary',
-    file: 'multiline_r2027a_text.sldd',
-    open: async (opened, dir, as, from) => {
-      const j = await openJson(opened, dir, as, from);
-      const version = j.doc.version;
-      return {
-        view: j.view,
-        row: (name) => entryRow(j.view.posts, name),
-        edited: () => j.doc.version !== version,
-        dirty: () => j.doc.isDirty,
-        save: async () => {
-          assert.ok(await j.doc.save(), 'the dictionary saved');
-          return new Uint8Array(readFileSync(j.path));
-        },
-      };
-    },
-    readBack: (bytes, name) => readSldd(bytes, (dict) => entryOf(dict, name).toRow().Description),
-  },
-  {
-    name: 'a binary dictionary',
-    file: 'multiline_r2027a_binary.sldd',
-    open: async (opened, dir, as, from) => {
-      const b = await openBinary(opened, dir, as, from);
-      return {
-        view: b.view,
-        row: (name) => entryRow(b.view.posts, name),
-        edited: () => b.events.length > 0,
-        dirty: () => b.doc.edits.dirty,
-        save: async () => {
-          await b.provider.saveCustomDocument(b.doc, token());
-          return new Uint8Array(readFileSync(b.path));
-        },
-      };
-    },
-    readBack: (bytes, name) => readSldd(bytes, (dict) => entryOf(dict, name).toRow().Description),
-  },
+  { ...MAT_EDITOR, file: 'multiline_r2027a.mat' },
+  { ...TEXT_EDITOR, file: 'multiline_r2027a_text.sldd' },
+  { ...BINARY_EDITOR, file: 'multiline_r2027a_binary.sldd' },
 ];
+
+/** The Description core reads of a node. */
+const description = (node: any): string => node.toRow().Description;
 
 /** The Description's character codes, so a failure shows which line break went where. */
 const codes = (text: string): string => [...text].map((c) => c.charCodeAt(0)).join(' ');
@@ -151,7 +76,7 @@ suite('A multi-line Description is written exactly as typed, in every table edit
     rmSync(dir, { recursive: true, force: true });
   });
 
-  const editDescription = (tab: Tab, row: any, newValue: string) =>
+  const editDescription = (tab: EditorTab, row: any, newValue: string) =>
     tab.view.send({ type: 'edit', rowId: row.ID, columnId: 'Description', oldValue: String(row.Description), newValue });
 
   const refusalsIn = (posts: any[]) => posts.filter((p) => p.type === 'validationError' || p.type === 'error');
@@ -175,7 +100,7 @@ suite('A multi-line Description is written exactly as typed, in every table edit
 
       const saved = await tab.save();
       forGate(saved, format.file, { pLF: typed, pCRLF: crlfHeld, pOne: 'one line' });
-      assert.strictEqual(codes(format.readBack(saved, 'pLF')), codes(typed), 'a fresh read of the saved file');
+      assert.strictEqual(codes(format.readBack(saved, 'pLF', description)), codes(typed), 'a fresh read of the saved file');
       const reopened = await format.open(opened, dir, `reopen-${format.file}`, join(dir, `edit-${format.file}`));
       assert.strictEqual(codes(reopened.row('pLF').Description), codes(typed), 'the saved file reopened in a new editor');
       assert.strictEqual(reopened.row('pOne').Description, 'one line', 'the other entries as MATLAB wrote them');
@@ -190,7 +115,7 @@ suite('A multi-line Description is written exactly as typed, in every table edit
       await waitFor('the edit to reach the document', () => tab.edited());
       const saved = await tab.save();
       forGate(saved, format.file, { pLF: LF, pCRLF: typed, pOne: 'one line' });
-      assert.strictEqual(codes(format.readBack(saved, 'pCRLF')), codes(typed), 'a fresh read of the saved file');
+      assert.strictEqual(codes(format.readBack(saved, 'pCRLF', description)), codes(typed), 'a fresh read of the saved file');
       const reopened = await format.open(opened, dir, `crlf-reopen-${format.file}`, join(dir, `crlf-${format.file}`));
       assert.strictEqual(codes(reopened.row('pCRLF').Description), codes(typed), 'the saved file reopened in a new editor');
     });

@@ -108,6 +108,7 @@ import { basename } from '../common/pathUtil.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { addChildRefusal, addEntryRefusal, deleteRefusal, describeSource, refusedMessage, type RefusedGesture } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
+import { answerEditTextRequest } from './editTextRequest.js';
 
 /**
  * What belongs to the DOCUMENT rather than to one of its tabs.
@@ -2095,6 +2096,17 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       void baselineFromDisk();
     }
 
+    // The node a row names in the tree the document's text says now, as an edit finds it; null
+    // where there is none to read (text that does not parse).
+    const liveFind = (rowId: string): any => {
+      try {
+        liveModel();
+        return findNode(uriString, rowId);
+      } catch {
+        return null;
+      }
+    };
+
     // --- Message wiring ---------------------------------------------------------
     // The messages every table view answers alike (tableDispatch.ts), keyed by message type.
     const common: CommonHandlers = {
@@ -2107,6 +2119,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       // A Variable Editor panel is opening: send its cells. One shared answer for all four
       // webview hosts — see matrixRequest.ts.
       requestMatrix: (nodeId) => answerMatrixRequest(webview, uriString, nodeId),
+      // A Value editor is opening on a summary: send its whole text, read off the tree the
+      // text says, as an edit is (editTextRequest.ts).
+      requestEditText: (rowId) => answerEditTextRequest((m) => webview.postMessage(m), (id) => liveFind(id), rowId, describe),
       // A row the payload deferred is being opened: send the rows under it (childRequest.ts).
       // `annotateDataRows` is handed in rather than imported there so that module stays
       // loadable under vitest — see its UsageFiller.

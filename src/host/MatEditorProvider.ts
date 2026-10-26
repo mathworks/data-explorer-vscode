@@ -81,6 +81,7 @@ import { toArrayBuffer } from '../common/bytes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { addChildRefusal, addEntryRefusal, deleteRefusal, describeSource, refusedMessage, type RefusedGesture } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
+import { answerEditTextRequest } from './editTextRequest.js';
 import { matCatalog } from '../common/addCatalog.js';
 
 /** One read of the file behind a document, with the stamp it was read under (diskFollow.readStamped). */
@@ -1154,6 +1155,8 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       select: (rowIds) => this.onSelect?.(uriString, rowIds),
       navigate: (target) => this.onNavigate?.(target, uriString),
       requestMatrix: (nodeId) => answerMatrixRequest(webview, uriString, nodeId),
+      // A Value editor is opening on a summary: send its whole text (editTextRequest.ts).
+      requestEditText: (rowId) => answerEditTextRequest((m) => webview.postMessage(m), findNode, rowId, (text) => document.describe(text)),
       // Stamped as the payload was, so a fetched row's menu offers what its siblings' does.
       requestChildren: (nodeId) => void answerChildRequest(webview, uriString, nodeId, name, annotateDataRows, planner, stamps()),
       undo: () => void vscode.commands.executeCommand('undo'),

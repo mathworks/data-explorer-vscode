@@ -237,6 +237,18 @@ export interface RefusedMessage {
   reason: string;
 }
 
+/**
+ * The answer to `RequestEditTextMessage`: the whole text of the row's Value, which seeds its editor,
+ * or null where there is none to edit (the value changed under the request), with core's reason
+ * where it gives one (`valueEditRefusal`).
+ */
+export interface EditTextMessage {
+  type: 'editText';
+  rowId: string;
+  text: string | null;
+  reason?: string;
+}
+
 // --- Host -> Webview (property inspector: pi-main.ts) -------------------------
 
 /** Render the property groups for the selected node. */
@@ -360,6 +372,7 @@ export type HostToTableMessage =
   | ErrorMessage
   | ValidationErrorMessage
   | RefusedMessage
+  | EditTextMessage
   | MatrixCellsMessage
   | ChildRowsMessage;
 
@@ -526,6 +539,18 @@ export interface RequestChildrenMessage {
   nodeId: string;
 }
 
+/**
+ * The whole text of a Value the row shows as a summary for its size (`<1x500 double>`), asked for
+ * as its editor opens. The table's third question: the row carries only a MARKER that there is
+ * such a text (`_hasEditText`), and the text, which can run to 200,000 characters, is fetched when
+ * the user opens the editor, as a matrix's cells are when the Variable Editor opens. Answered by
+ * `EditTextMessage`.
+ */
+export interface RequestEditTextMessage {
+  type: 'requestEditText';
+  rowId: string;
+}
+
 /** Every message the host receives from the table webview. */
 export type TableToHostMessage =
   | ReadyMessage
@@ -544,7 +569,8 @@ export type TableToHostMessage =
   | DragEndMessage
   | DropMessage
   | RequestMatrixMessage
-  | RequestChildrenMessage;
+  | RequestChildrenMessage
+  | RequestEditTextMessage;
 
 /**
  * A link on the project page was activated: open what it names.

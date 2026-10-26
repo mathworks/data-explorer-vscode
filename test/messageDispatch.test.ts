@@ -107,6 +107,9 @@ const EDITING = [
   'dragEnd',
   'undo',
   'redo',
+  // Not a mutation, but asked only as an editor opens, which only an editable view offers: the
+  // whole text of a Value shown as a summary, which seeds that editor.
+  'requestEditText',
 ];
 
 // Reveal a range in the underlying text. Only meaningful for the one provider whose
@@ -256,7 +259,7 @@ describe('the message vocabulary and the editors that speak it are both still he
   it('reads the shared table: its keys are message types, and the helper dispatches each', () => {
     // A key that is not a message type would be a handler no message can reach, and a key the
     // helper has no case for would be read here as answered while nothing answers it.
-    expect([...TABLE_KEYS].sort()).toEqual(['navigate', 'ready', 'redo', 'requestChildren', 'requestMatrix', 'select', 'undo']);
+    expect([...TABLE_KEYS].sort()).toEqual(['navigate', 'ready', 'redo', 'requestChildren', 'requestEditText', 'requestMatrix', 'select', 'undo']);
     for (const key of TABLE_KEYS) {
       expect(VOCABULARY, `${key} is a message type`).toContain(key);
       expect(DISPATCH, `dispatchCommon has a case for ${key}`).toMatch(new RegExp(`case '${key}':`));
