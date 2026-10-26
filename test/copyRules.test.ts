@@ -86,7 +86,8 @@ describe("a MAT-file's variables on a register", () => {
 });
 
 describe("core's copyRefusal, asked where both registers are filled", () => {
-  const refusal = 'Cannot copy "e8": what a copy carries of it reads back as another value (e8: its class reads back as double where int8 was written). Nothing was copied.';
+  // A copy of an int8 0x3 keeps its class and loses its shape (a MAT-file's classed, shaped empty).
+  const refusal = 'Cannot copy "e8": what a copy carries of it reads back as another value (e8: its size reads back as 0x0 where 0x3 was written). Nothing was copied.';
 
   it('refuses a copy in its words, and leaves the clipboard as it was', () => {
     const m = mat([scalar('Kp'), int8Empty('e8')]);
