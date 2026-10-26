@@ -41,8 +41,12 @@ export class DexErrorDialog extends LitElement {
       color: var(--dex-color-error, #d32f2f);
     }
 
+    /* The body scrolls, and not the footer: however long the reason and the values, the OK button
+       stays on screen. */
     .body {
       padding: 16px;
+      max-height: 70vh;
+      overflow: auto;
     }
 
     .message {
@@ -78,12 +82,16 @@ export class DexErrorDialog extends LitElement {
       flex-shrink: 0;
     }
 
+    /* A value can run to many thousands of characters (a long array typed in, and refused): a few
+       lines of it show, and the rest scrolls, so the dialog stays on screen with its OK button. */
     .value {
       font-family: var(--dex-font-mono, 'SF Mono', 'Menlo', 'Monaco', monospace);
       background: var(--dex-bg-tertiary, #f5f5f5);
       padding: 2px 6px;
       border-radius: 3px;
       word-break: break-all;
+      max-height: 6em;
+      overflow: auto;
     }
 
     .footer {
