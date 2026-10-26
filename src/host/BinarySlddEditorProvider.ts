@@ -92,6 +92,7 @@ import {
 } from './scRename.js';
 import {
   applyEntryOps,
+  cellEdit,
   entryRecord,
   findEntryByName,
   insertOp,
@@ -130,6 +131,7 @@ import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { answerMatrixRequest } from './matrixRequest.js';
 import { binaryEditSrcId } from '../common/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
+import { addChildRefusal, addEntryRefusal, deleteRefusal, describeSource, refusedMessage, type RefusedGesture } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { saveSettled } from './settledSave.js';
@@ -741,6 +743,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     webviewPanel.iconPath = new vscode.ThemeIcon('table');
     const uriString = document.uri.toString();
     const name = document.metaPath;
+    // Core's messages name this source by its id, which every message shown here spells as the
+    // file's name, as the MAT-file editor's do; a failed edit says so in the banner.
+    const describe = describeSource(document.srcId, name);
+    const failedEdit = (err: unknown): string => 'Failed to apply edit: ' + describe((err as Error).message);
+    // A refused Add Child, Delete or Add, in core's words, said as every table editor says one.
+    const postRefusal = (gesture: RefusedGesture, reason: string) => webview.postMessage(refusedMessage(gesture, reason, describe));
 
     // Which builder plans this file's rows AND answers a fetch for them (rowPlanner.ts).
     // Planning an editable view is admissible for the reasons set out in
@@ -833,7 +841,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         paintedMark = clipMark;
         drainNavigateSelect(webview, uriString);
       } catch (err) {
-        webview.postMessage({ type: 'error', message: `Failed to parse ${name}: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: `Failed to parse ${name}: ${describe((err as Error).message)}` });
       }
     };
 
@@ -898,7 +906,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // rows from before it. Repaint wide, then say so — after, because the repaint
         // clears the banner the message writes.
         post();
-        webview.postMessage({ type: 'error', message: `Failed to update the row: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: `Failed to update the row: ${describe((err as Error).message)}` });
       }
     };
 
@@ -1017,6 +1025,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       rowId: string,
       transform: (xml: string, node: any) => StructuralResult,
       label: string,
+      gesture: RefusedGesture,
     ) => {
       liveModel();
       const node = findNode(rowId);
@@ -1027,6 +1036,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       const entry = findOwningEntry(node);
       if (!entry) {
         webview.postMessage({ type: 'error', message: 'Could not locate the owning entry in the model.' });
+        return;
+      }
+      // Core's reason, asked before anything changes (refusal.ts).
+      const refused = gesture === 'addChild' ? addChildRefusal(node.id) : deleteRefusal([node.id]);
+      if (refused) {
+        postRefusal(gesture, refused);
         return;
       }
       // Snapshot before the transform, which mutates the model: the entry's pre-edit
@@ -1051,7 +1066,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // than waiting for the next repaint to paper over it. First, because the repaint
         // clears the error banner the message writes.
         document.repaintAll();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: failedEdit(err) });
       }
     };
 
@@ -1085,7 +1100,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // Nothing was pushed, so chunkXml is untouched; the model may not be. Rebuild
         // from the text, which is the state the user still has.
         document.repaintAll();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: failedEdit(err) });
       }
     };
 
@@ -1110,6 +1125,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       const plan = planDeletion(rowIds, (rowId) => findNode(rowId));
       if (!plan.entries.length && !plan.childGroups.length) {
         webview.postMessage({ type: 'error', message: 'Could not locate the items in the model.' });
+        return;
+      }
+      // Asked of every row the plan removes, before any leaves (refusal.ts).
+      const refused = deleteRefusal([...plan.entries, ...plan.childGroups.flatMap((g) => g.children)].map((n: any) => n.id));
+      if (refused) {
+        postRefusal('delete', refused);
         return;
       }
       // Read off the live tree, before anything leaves it.
@@ -1166,7 +1187,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // removals happen before the splice. Rebuild from the text, then say so (the
         // repaint clears the banner, so it goes first).
         document.repaintAll();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: failedEdit(err) });
       }
     };
 
@@ -1188,8 +1209,14 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         webview.postMessage({ type: 'error', message: 'Could not locate the item in the model.' });
         return;
       }
-      if (node.isEntry) applyDeleteEntry(node);
-      else applyStructural(rowIds[0], (xml, n) => deleteChildXml(xml, n), 'Delete');
+      if (!node.isEntry) {
+        applyStructural(rowIds[0], (xml, n) => deleteChildXml(xml, n), 'Delete', 'delete');
+        return;
+      }
+      // Core's reason, asked before anything changes (refusal.ts).
+      const refused = deleteRefusal([node.id]);
+      if (refused) postRefusal('delete', refused);
+      else applyDeleteEntry(node);
     };
 
     // Value edit / rename: mutate node, reserialize its owning entry, splice.
@@ -1225,11 +1252,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // the pre-edit state exists. (Through attempt, so an entry that will not
         // serialize costs this edit its fast undo and not the edit itself.)
         const beforeRecord = attempt(() => entryRecord(entry));
-        const result = mutateEntry(entry, () => node.setProperty(msg.columnId, msg.newValue));
+        const { result, unchanged } = cellEdit(entry, node, msg.columnId, msg.newValue);
         if (result && typeof result === 'object' && result.error) {
           webview.postMessage({
             type: 'validationError',
-            reason: result.reason,
+            reason: describe(result.reason),
             invalidValue: msg.newValue,
             previousValue: msg.oldValue,
           });
@@ -1238,6 +1265,8 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           postEntry(entry, entryRowId);
           return;
         }
+        // The cell's own text set back (cellEdit): nothing changed, so nothing is pushed or painted.
+        if (unchanged) return;
         const before = document.chunkXml;
         // Core writes the entry and splices it: its bytes, with what the edit changed written
         // from the model, laid out as this chunk is, and every byte around it as it was.
@@ -1277,7 +1306,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // Same reason as the not-found branch above, in both halves: setProperty may have landed
         // before the throw, and the repaint clears the banner the message writes.
         document.repaintAll();
-        webview.postMessage({ type: 'error', message: 'Failed to apply edit: ' + (err as Error).message });
+        webview.postMessage({ type: 'error', message: failedEdit(err) });
       }
     };
 
@@ -1291,7 +1320,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           liveModel();
         },
         findNode,
-        post: (message) => webview.postMessage(message),
+        post: (message) => webview.postMessage({ ...message, message: describe(message.message) }),
         broadcast: broadcastClipboardState,
       });
     };
@@ -1362,9 +1391,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       // the banner.
       onFailure: (err) => {
         document.repaintAll();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: failedEdit(err) });
       },
-      report: (message) => void webview.postMessage({ type: 'error', message }),
+      report: (message) => void webview.postMessage({ type: 'error', message: describe(message) }),
     });
     // A move that left its original behind is said where it stays, not only in the banner a row
     // update clears: see TransferDeps.warn.
@@ -1399,6 +1428,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
           return;
         }
+        // Core's reason, asked before anything changes (refusal.ts).
+        const refused = addEntryRefusal(section.id, msg.className);
+        if (refused) {
+          postRefusal('add', refused);
+          return;
+        }
         const before = document.chunkXml;
         // Before the add: the mark the new tail is measured from (see the transfer commit).
         const addedFrom = (section.children as any[]).length;
@@ -1419,7 +1454,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // a step ahead of chunkXml. Rebuild from the text — the state the user still has —
         // first, because the repaint clears the banner.
         document.repaintAll();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: failedEdit(err) });
       }
     };
 
@@ -1437,7 +1472,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           liveModel();
         },
         findNode,
-        post: (message) => webview.postMessage(message),
+        post: (message) => webview.postMessage({ ...message, message: describe(message.message) }),
         broadcast: broadcastDragState,
       });
     };
@@ -1478,7 +1513,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       else if (msg?.type === 'copy') applyCopy(msg.rowIds, 'copy');
       else if (msg?.type === 'cut') applyCopy(msg.rowIds, 'cut');
       else if (msg?.type === 'delete') applyDelete(msg.rowIds);
-      else if (msg?.type === 'addChild') applyStructural(msg.rowId, (xml, node) => addChildXml(xml, node), 'Add child');
+      else if (msg?.type === 'addChild') applyStructural(msg.rowId, (xml, node) => addChildXml(xml, node), 'Add child', 'addChild');
       else if (msg?.type === 'paste') void applyPaste(msg.rowId);
       else if (msg?.type === 'addEntry') applyAddEntry(msg);
       else if (msg?.type === 'dragStart') applyDragStart(msg);

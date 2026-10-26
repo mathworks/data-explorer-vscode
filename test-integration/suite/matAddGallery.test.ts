@@ -454,8 +454,10 @@ suite('MAT-file editor: the Add gallery', () => {
       if (lastSetRows(o.view.posts).add.classes.includes(className)) return; // core offers it after all
       const before = tableOf(o.view.posts).length;
       add(o, className);
-      await waitFor('the refusal', () => o.view.posts.some((p) => p.type === 'error'));
-      const message: string = o.view.posts.filter((p) => p.type === 'error').pop().message;
+      await waitFor('the refusal', () => o.view.posts.some((p) => p.type === 'refused'));
+      const refusal = o.view.posts.filter((p) => p.type === 'refused').pop();
+      assert.strictEqual(refusal.title, 'Cannot Add', 'in the refusal dialog');
+      const message: string = refusal.reason;
       // Core's reason (MatNode.addEntryRefusal), with the file named as every other message names it.
       assert.match(message, new RegExp(className.replace('.', '\\.')));
       assert.match(message, /takes a new variable of a plain value, a struct, or one of /);

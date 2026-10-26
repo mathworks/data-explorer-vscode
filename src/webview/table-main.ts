@@ -570,6 +570,10 @@ window.addEventListener('message', (event: MessageEvent) => {
       invalidValue: msg.invalidValue,
       validValue: msg.previousValue,
     });
+  } else if (msg.type === 'refused') {
+    // A refused Add Child, Delete or Add: the same dialog, titled by the gesture, which stays
+    // until it is closed. A banner would be cleared by the next repaint.
+    errorDialog.show({ title: msg.title, reason: msg.reason });
   }
 });
 

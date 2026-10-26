@@ -29,6 +29,7 @@ import {
 } from './slddBaseline.js';
 import {
   applyEntryOps,
+  cellEdit,
   findEntryByName,
   insertOp,
   mutateEntry,
@@ -105,6 +106,7 @@ import { catalogFunctionRenameOf, catalogRenameOf, scJsonFunctionRenameEdits, sc
 import { buildSectionRowId } from '../common/sectionRowId.js';
 import { basename } from '../common/pathUtil.js';
 import type { TableToHostMessage } from '../common/protocol.js';
+import { addChildRefusal, addEntryRefusal, deleteRefusal, describeSource, refusedMessage, type RefusedGesture } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 
 /**
@@ -228,6 +230,12 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
 
     const uriString = document.uri.toString();
     const name = basename(document.uri.path) || 'document';
+    // Core's messages name this source by its id (the uri string), which every message shown here
+    // spells as the file's name, as the MAT-file editor's do; a failed edit says so in the banner.
+    const describe = describeSource(uriString, name);
+    const failedEdit = (err: unknown): string => 'Failed to apply edit: ' + describe((err as Error).message);
+    // A refused Add Child, Delete or Add, in core's words, said as every table editor says one.
+    const postRefusal = (gesture: RefusedGesture, reason: string) => webview.postMessage(refusedMessage(gesture, reason, describe));
 
     // Which builder plans this file's rows AND answers a fetch for them (rowPlanner.ts).
     // An editable view plans too, which took some arguing with the comment below about
@@ -495,7 +503,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         modelInSync = false;
         webview.postMessage({
           type: 'error',
-          message: `Failed to parse ${name}: ${(err as Error).message}`,
+          message: `Failed to parse ${name}: ${describe((err as Error).message)}`,
         });
         return Promise.resolve();
       }
@@ -613,7 +621,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // The model change has already landed, so the table must not be left showing the rows
         // from before it. Repaint wide, then say so — after, because fresh rows are how the
         // webview learns a failure is over and would wipe a banner posted first.
-        void repaintStale().then(() => postBanner(`Failed to update the row: ${(err as Error).message}`));
+        void repaintStale().then(() => postBanner(`Failed to update the row: ${describe((err as Error).message)}`));
       }
     };
 
@@ -1134,7 +1142,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // PATH, so renaming an entry rekeys it and everything under it. The wide re-parse used
         // to repair that as a side effect — and the repaint's replace op, which detaches this
         // very subtree, unindexes it by the ids the mutation leaves behind.
-        const result = mutateEntry(entry, () => node.setProperty(msg.columnId, msg.newValue));
+        const { result, unchanged } = cellEdit(entry, node, msg.columnId, msg.newValue);
         if (result && typeof result === 'object' && result.error) {
           // Invalid cell input: show the dex error dialog inside the webview
           // (scoped to the table view, not a window-blocking native modal),
@@ -1144,13 +1152,15 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           // what the text says.
           webview.postMessage({
             type: 'validationError',
-            reason: result.reason,
+            reason: describe(result.reason),
             invalidValue: msg.newValue,
             previousValue: msg.oldValue,
           });
           void postEntryRows(entryRowIdOnScreen, entry);
           return;
         }
+        // The cell's own text set back (cellEdit): nothing changed, so nothing is painted or written.
+        if (unchanged) return;
 
         // PAINT — synchronously, and before anything expensive: the model now says what the user
         // typed, and the renderer has it ~1 ms after the keystroke. Everything below this line
@@ -1242,7 +1252,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         }
       } catch (err) {
         hostEdit = null;
-        const message = 'Failed to apply edit: ' + (err as Error).message;
+        const message = failedEdit(err);
         if (painted) {
           // Whatever threw may have left the tree saying something the document does not — and,
           // since it threw after the paint, the screen too.
@@ -1270,7 +1280,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           liveModel();
         },
         findNode: (rowId) => findNode(uriString, rowId),
-        post: (message) => webview.postMessage(message),
+        post: (message) => webview.postMessage({ ...message, message: describe(message.message) }),
         broadcast: broadcastClipboardState,
       });
     };
@@ -1335,7 +1345,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         liveModel();
         node = findNode(uriString, rowId);
       } catch (err) {
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: failedEdit(err) });
         return;
       }
       if (!node) {
@@ -1393,7 +1403,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         remember({ submitted, replaced: currentText.slice(patch.offset, patch.offset + patch.length) });
       } catch (err) {
         hostEdit = null;
-        const message = 'Failed to apply edit: ' + (err as Error).message;
+        const message = failedEdit(err);
         // The tree was mutated and the rows painted for a write that did not happen, and the text
         // is the truth in this format.
         if (painted) undoPaint(painted, message);
@@ -1440,7 +1450,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         });
       } catch (err) {
         paintedWrite = null;
-        const message = 'Failed to apply edit: ' + (err as Error).message;
+        const message = failedEdit(err);
         if (painted) resyncWide(message);
         else webview.postMessage({ type: 'error', message });
       }
@@ -1469,6 +1479,12 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         const plan = planDeletion(rowIds, (rowId) => findNode(uriString, rowId));
         if (!plan.entries.length && !plan.childGroups.length) {
           webview.postMessage({ type: 'error', message: 'Could not locate the items in the model.' });
+          return;
+        }
+        // Asked of every row the plan removes, before any leaves (refusal.ts).
+        const refused = deleteRefusal([...plan.entries, ...plan.childGroups.flatMap((g) => g.children)].map((n) => n.id));
+        if (refused) {
+          postRefusal('delete', refused);
           return;
         }
 
@@ -1534,7 +1550,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         });
       } catch (err) {
         paintedWrite = null;
-        const message = 'Failed to apply edit: ' + (err as Error).message;
+        const message = failedEdit(err);
         // Unpainted, the rows still say what the text says, but the tree may not: the entries
         // leave it first, then each child group, and a group that throws leaves the ones before
         // it done. The text is the truth in this format, so the tree is re-read from it.
@@ -1549,15 +1565,22 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
       // array, or one child spliced into its entry. Both write one region the transform
       // NAMED, which is cheaper and better-tested than a whole-text diff.
       if (rowIds.length === 1) {
-        return onStructuralTarget(rowIds[0], (node) =>
-          node.isEntry ? applyDeleteEntry(node) : applyEntryStructural(node, deleteChild),
-        );
+        return onStructuralTarget(rowIds[0], async (node) => {
+          // Core's reason, asked before anything changes (refusal.ts).
+          const refused = deleteRefusal([node.id]);
+          if (refused) postRefusal('delete', refused);
+          else await (node.isEntry ? applyDeleteEntry(node) : applyEntryStructural(node, deleteChild));
+        });
       }
       return applyDeleteMany(rowIds);
     };
 
     const applyAddChild = (msg: { rowId: string }): Promise<void> =>
-      onStructuralTarget(msg.rowId, (node) => applyEntryStructural(node, addChildEdit));
+      onStructuralTarget(msg.rowId, async (node) => {
+        const refused = addChildRefusal(node.id);
+        if (refused) postRefusal('addChild', refused);
+        else await applyEntryStructural(node, addChildEdit);
+      });
 
     // Cut is LAZY: it only marks the entry on the clipboard (in cut mode) and
     // makes no text edit yet. The source is removed at PASTE time — so a
@@ -1604,7 +1627,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           preview: false,
         });
       } catch (err) {
-        webview.postMessage({ type: 'error', message: `Failed to locate in text: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: `Failed to locate in text: ${describe((err as Error).message)}` });
       }
     };
 
@@ -1729,13 +1752,13 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         },
         onFailure: (err) => {
           paintedWrite = null;
-          const message = `Failed to apply edit: ${(err as Error).message}`;
+          const message = failedEdit(err);
           // Rows for entries that arrived or left cannot be put back one run at a time — the wide
           // repaint is the repair, and it is only ever reached by an edit that did not happen.
           if (painted) resyncWide(message);
           else refusedStructural(message);
         },
-        report: (message) => void webview.postMessage({ type: 'error', message }),
+        report: (message) => void webview.postMessage({ type: 'error', message: describe(message) }),
       };
     };
     // A move that left its original behind is said where it stays, not only in the banner a row
@@ -1776,6 +1799,12 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
           return;
         }
+        // Core's reason, asked before anything changes (refusal.ts).
+        const refused = addEntryRefusal(section.id, msg.className);
+        if (refused) {
+          postRefusal('add', refused);
+          return;
+        }
         const currentText = document.getText();
         // Read BEFORE the add, for the reason the paste reads it after its removals: this is
         // the mark the new tail is measured from.
@@ -1806,7 +1835,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         });
       } catch (err) {
         paintedWrite = null;
-        const message = `Failed to apply edit: ${(err as Error).message}`;
+        const message = failedEdit(err);
         // An entry may be in the tree and not in the file — `addEntry` attaches it before the
         // splice can fail — so both arms have to put the text's answer back. Painted, the rows
         // named an entry that does not exist and only a wide repaint can withdraw them;
@@ -1874,7 +1903,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         findNode: (rowId) => findNode(uriString, rowId),
         // Said, as a failed copy is: the snapshot that fails is the serialize of every dragged
         // entry, so this is where a value core will not write (a MatWriteError) says so.
-        post: (message) => webview.postMessage(message),
+        post: (message) => webview.postMessage({ ...message, message: describe(message.message) }),
         broadcast: broadcastDragState,
       });
     };

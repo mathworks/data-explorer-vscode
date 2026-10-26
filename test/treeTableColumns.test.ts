@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
 import { COLUMNS, COLUMN_GROUPS } from '../src/host/rowBuilder.js';
 
-const HOST_COLUMNS = ['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class', 'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit', 'storageClass', 'headerFile', 'alignment', 'definitionFile', 'preStatement', 'postStatement', 'qualifier', 'bankName', 'variantConditions', 'allChoicesCoderInfo', 'activeChoiceCoderInfo', 'lastModified', 'lastModifiedBy'];
+const HOST_COLUMNS = ['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class', 'Description', 'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit', 'storageClass', 'headerFile', 'alignment', 'definitionFile', 'preStatement', 'postStatement', 'qualifier', 'bankName', 'variantConditions', 'allChoicesCoderInfo', 'activeChoiceCoderInfo', 'lastModified', 'lastModifiedBy'];
 
 function makeTable(): DexTreeTable {
   const table = new DexTreeTable();
@@ -43,9 +43,9 @@ describe('default column configuration', () => {
     expect(cols).toContain('DataType');
   });
 
-  it('orders visible columns Name, Value, Data Type, Usage, Status by default', () => {
+  it('orders visible columns Name, Value, Data Type, Usage, Status, Description by default', () => {
     const table = makeTable();
-    expect(visibleCols(table)).toEqual(['Name', 'Value', 'DataType', 'UsedBy', 'Status']);
+    expect(visibleCols(table)).toEqual(['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Description']);
   });
 
   it('Name is always first', () => {
@@ -124,7 +124,7 @@ describe('reset to default', () => {
 
     (table as any)._resetColumns({ stopPropagation() {} } as Event);
 
-    expect(visibleCols(table)).toEqual(['Name', 'Value', 'DataType', 'UsedBy', 'Status']);
+    expect(visibleCols(table)).toEqual(['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Description']);
   });
 });
 
@@ -285,7 +285,7 @@ describe('schema-driven object-property columns', () => {
   it('the schema columns ship hidden by default', () => {
     const table = makeTable();
     // Default visible set is the legacy arrangement; the schema columns are hidden.
-    expect(visibleCols(table)).toEqual(['Name', 'Value', 'DataType', 'UsedBy', 'Status']);
+    expect(visibleCols(table)).toEqual(['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Description']);
     for (const col of SCHEMA_COLS) {
       expect(visibleCols(table)).not.toContain(col);
     }
@@ -357,7 +357,7 @@ describe('the Variant Bank and coder info columns', () => {
 
   it('ship hidden by default, and are in the picker to be shown', () => {
     const table = makeTable();
-    expect(visibleCols(table)).toEqual(['Name', 'Value', 'DataType', 'UsedBy', 'Status']);
+    expect(visibleCols(table)).toEqual(['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Description']);
     for (const col of NEW_COLS) {
       expect((table as any)._orderedColumns, col).toContain(col);
       expect(visibleCols(table), col).not.toContain(col);
@@ -422,7 +422,7 @@ describe('dictionary metadata columns', () => {
 
   it('the metadata columns ship hidden by default', () => {
     const table = makeTable();
-    expect(visibleCols(table)).toEqual(['Name', 'Value', 'DataType', 'UsedBy', 'Status']);
+    expect(visibleCols(table)).toEqual(['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Description']);
     for (const col of META_COLS) {
       expect(visibleCols(table)).not.toContain(col);
     }
