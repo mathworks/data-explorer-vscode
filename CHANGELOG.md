@@ -2,6 +2,12 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## [1.45.2] — 2026-10-26
+
+- In a MAT-file, a cell holding strings, such as `{1, "a"}`, can now be typed, pasted or dragged in, and stays editable as text.
+- Numbers of other classes inside a cell now show their class, such as `int8(3)`, so editing the cell keeps it.
+- Bug fixes.
+
 ## [1.45.1] — 2026-10-25
 
 - In a MAT-file, a struct field or cell element can now be set to a string, and back to a number.
