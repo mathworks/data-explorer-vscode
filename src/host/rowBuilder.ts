@@ -14,8 +14,11 @@ import { sharedIdTest, stampRow, type ClipMark, type EntryStamp } from './rowSta
 // definitionFile..qualifier are a Simulink.VariantBankCoderInfo's own fields (its HeaderFile
 // is the headerFile column), and bankName..activeChoiceCoderInfo a Simulink.VariantBank's,
 // node-owned like Min/Max/Unit: core sends each as an editable cell under this key.
+// Description is shown, where the webview's default order puts it (after Class), for every row:
+// core says of each whether its object has one (`_descriptionApplies`), and the table draws the
+// cell not applicable, and offers no editor, where it does not.
 export const COLUMNS = [
-  'Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class',
+  'Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class', 'Description',
   'dimensions', 'dimensionsMode', 'complexity', 'Min', 'Max', 'Unit',
   'storageClass', 'headerFile', 'alignment',
   'definitionFile', 'preStatement', 'postStatement', 'qualifier',
@@ -30,7 +33,7 @@ export const COLUMNS = [
 // VariantBank and VariantBankCoderInfo fields, labelled as core's Property Inspector labels them.
 export const COLUMN_LABELS: Record<string, string> = {
   Name: 'Name', Value: 'Value', Class: 'Class', Kind: 'Kind', DataType: 'Data Type', Status: 'Status', UsedBy: 'Usage',
-  Min: 'Min', Max: 'Max', Unit: 'Unit',
+  Description: 'Description', Min: 'Min', Max: 'Max', Unit: 'Unit',
   definitionFile: 'Definition File', preStatement: 'Pre Statement', postStatement: 'Post Statement', qualifier: 'Qualifier',
   bankName: 'Bank Name', variantConditions: 'Variant Conditions',
   allChoicesCoderInfo: 'All Choices Coder Info', activeChoiceCoderInfo: 'Active Choice Coder Info',

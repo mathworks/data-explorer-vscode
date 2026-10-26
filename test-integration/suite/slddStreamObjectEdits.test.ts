@@ -55,37 +55,57 @@ const STREAMS = ['arr', 'cPh', 'nested', 'pSp', 'pStruct', 'sPh', 'sTh', 'shared
 
 /**
  * What core takes an edit of, node by node, in every entry of the binary fixture: the stream
- * entries' objects, by the property the stream stores a value for and a rule writes, and the two
- * XML entries, as they always edited. Every node not listed takes none. Core's own test of the same
+ * entries' objects, by the property the stream stores a value for and a rule writes, the parts of
+ * the value that are no object (a field's name, an element's value), and the two XML entries, as
+ * they always edited. Every node not listed takes none. Core's own test of the same
  * fixture (test/slddStreamObjects.test.ts there) holds getPropInfo to this.
  */
 const OFFERED: Record<string, string[]> = {
   'arr': ['Name'],
+  'arr.ps': ['Name'],
   'arr.ps(1)': ['Value', 'Description'],
   'arr.ps(2)': ['Value', 'Description'],
+  'arr.sp': ['Name'],
+  'arr.sp(1,2)': ['Value'],
   'cPh': ['Name'],
   'cPh{1}': ['Value', 'Description'],
   'cPh{1}.Value': ['Value'],
   'cPh{1}.Value(1)': ['Value'],
   'cPh{1}.Value(2)': ['Value'],
   'cPh{1}.Value(3)': ['Value'],
+  'cPh{2}(1,2)': ['Value'],
   'nested': ['Name'],
-  'nested.inner.p': ['Value', 'Description'],
+  'nested.inner': ['Name'],
+  'nested.inner.p': ['Name', 'Value', 'Description'],
+  'nested.sp': ['Name'],
+  'nested.sp(1,2)': ['Value'],
   'pSp': ['Name', 'Min', 'Max', 'Description'],
   'pStruct': ['Name'],
+  'pStruct.p': ['Name'],
   'pStruct.p.Value.a': ['Name', 'Value'],
   'pStruct.p.Value.b': ['Name', 'Value'],
   'pStruct.p.Value.b(1)': ['Value'],
   'pStruct.p.Value.b(2)': ['Value'],
+  'pStruct.sp': ['Name'],
+  'pStruct.sp(1,2)': ['Value'],
   'sPh': ['Name'],
-  'sPh.p': ['Value', 'Min', 'Max', 'Description'],
+  'sPh.p': ['Name', 'Value', 'Min', 'Max', 'Description'],
+  'sPh.q': ['Name', 'Value'],
+  'sPh.sp': ['Name'],
+  'sPh.sp(1,2)': ['Value'],
   'sTh': ['Name'],
-  'sTh.t': ['Value', 'Max'],
+  'sTh.t': ['Name', 'Value', 'Max'],
+  'sTh.sp': ['Name'],
+  'sTh.sp(1,2)': ['Value'],
   'shared': ['Name'],
-  'shared.a': ['Value', 'Description'],
-  'shared.b': ['Value', 'Description'],
+  'shared.a': ['Name', 'Value', 'Description'],
+  'shared.b': ['Name', 'Value', 'Description'],
+  'shared.sp': ['Name'],
+  'shared.sp(1,2)': ['Value'],
   'sigH': ['Name'],
-  'sigH.sig': ['Min', 'Max', 'Description'],
+  'sigH.sig': ['Name', 'Min', 'Max', 'Description'],
+  'sigH.sp': ['Name'],
+  'sigH.sp(1,2)': ['Value'],
   'plainP': ['Name', 'Value', 'Min', 'Max', 'Description', 'storageClass'],
   'plainS': ['Name'],
   'plainS.x': ['Name', 'Value'],
@@ -426,11 +446,11 @@ suite('An object inside a binary .sldd value stream, edited in the binary editor
 
   test("what core refuses in a stream is refused by the table in core's words, and nothing is written", async () => {
     const REFUSED: [Edit, RegExp][] = [
-      // No rule writes a Parameter's DataType, its Name, or a plain value beside the objects.
+      // No rule writes a Parameter's DataType, nor the stream's whole value typed over it; and a
+      // string beside the objects is one the value written anew could not hold.
       [['sPh.p', 'DataType', 'single'], ENCODED_REASON],
-      [['sPh.p', 'Name', 'pp'], ENCODED_REASON],
-      [['sPh.q', 'Value', '6'], ENCODED_REASON],
-      [['sPh.sp(1,2)', 'Value', '8'], ENCODED_REASON],
+      [['sPh', 'Value', '1'], ENCODED_REASON],
+      [['sPh.q', 'Value', '"abc"'], /^Cannot edit "sPh": sPh\.q would hold a string, which a save does not write into its MAT stream\.$/],
       // An allow-listed property the stream holds no value for, and one the rules refuse.
       [['sTh.t', 'Description', 'x'], /^Cannot edit "sTh": sTh\.t\.Description is at its class default/],
       [['sPh.p', 'Min', '20'], /^Cannot edit "sPh": sPh\.p\.Min \(20\) would be greater than its Max \(10\)/],
@@ -779,7 +799,7 @@ suite('An object inside a text .sldd value stream (pasted cdata), edited in the 
   test("what core refuses in a stream is refused by the table in core's words, and nothing is written", async () => {
     const REFUSED: [Edit, RegExp][] = [
       [['sPh.p', 'DataType', 'single'], ENCODED_REASON],
-      [['sPh.q', 'Value', '6'], ENCODED_REASON],
+      [['sPh.q', 'Value', '"abc"'], /^Cannot edit "sPh": sPh\.q would hold a string, which a save does not write into its MAT stream\.$/],
       [['sTh.t', 'Description', 'x'], /^Cannot edit "sTh": sTh\.t\.Description is at its class default/],
       [['sPh.p', 'Min', '20'], /^Cannot edit "sPh": sPh\.p\.Min \(20\) would be greater than its Max \(10\)/],
     ];

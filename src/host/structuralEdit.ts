@@ -27,6 +27,7 @@ import {
   generateUuid,
   getSectionMetadata,
   owningEntryOf,
+  textDictionaryJson,
   type EntrySelector,
   type TextPatch,
 } from 'data-explorer-core';
@@ -36,7 +37,6 @@ import type { ClipboardItem } from './clipboard.js';
 import { dropFactsOf } from './dropFacts.js';
 import { TransferRefused, type TransferTarget } from './transfer.js';
 import { recordCopy } from './entryOps.js';
-import { addChildRefused, addRefused, deleteRefused } from './refusal.js';
 
 // One byte-scoped replacement of a document's text, and the one applier — both now core's
 // (`src/edit/textPatch.ts`), because WHICH REGION a text edit covers is a property of the two
@@ -358,9 +358,13 @@ export function reserializeEntry(entry: any, indent: string, elementIndent = ind
   return recordText(entry.serialize(), indent, elementIndent);
 }
 
-// The text of one serialized record, laid out as reserializeEntry lays out an entry's.
+// The text of one serialized record, laid out as reserializeEntry lays out an entry's: the one
+// place this editor writes an entry's text (a cell edit, an Add or Delete in it, a paste, an Add).
+// Its numbers are spelled as MATLAB spells them in a text dictionary, by core's own writer, which
+// its save uses too (textDictionaryJson): JSON.stringify wrote a double of 2^64 - 1 or -2^63 as an
+// integer literal past what a 64-bit integer holds, and MATLAB could not open the dictionary.
 function recordText(record: unknown, indent: string, elementIndent: string): string {
-  const lines = JSON.stringify(record, null, indent).split('\n');
+  const lines = textDictionaryJson(record, indent).split('\n');
   return lines.map((line, i) => (i === 0 ? line : elementIndent + line)).join('\n');
 }
 
@@ -399,7 +403,8 @@ function unwrittenNumberIn(value: unknown, path: string[] = []): { value: number
  * it takes a pasted entry in (SectionNode.parseEntry), at an entry's value, a struct's field, a
  * cell's element and an object's property alike: so a paste never reaches this with one. This is
  * the safety net for a record core handed back as it was — a value it could not take apart, one
- * past its writer's budget — whose bare number this writer, JSON.stringify, would write as null:
+ * past its writer's budget — whose bare number this writer (textDictionaryJson, as JSON.stringify
+ * does) would write as null:
  * the pasted entry would then read, and save, as another value, with nothing said. Refused
  * instead, naming the entry and where in it the number is; nothing is written.
  *
@@ -468,11 +473,10 @@ function removableChild(node: any): boolean {
  * a nested delete that decides what the edit MEANS — which nodes may be removed,
  * which entry owns the row, where the selection goes — so both .sldd formats
  * share it and only the splicing differs (see the header of xmlStructuralEdit.ts).
- * A child its parent will not give up is refused (EditRefused) before anything changes.
  */
 export function removeChildFromModel(node: any): { entry: any; selectId: string } {
   const parent = node.parent;
-  if (!removableChild(node)) throw deleteRefused();
+  if (!removableChild(node)) throw new Error('This item cannot be deleted.');
   // PRECONDITION (untested): the canRemoveChild guard above already restricts
   // `node` to a child of a container (Bus/Struct/Enum), and every container in a
   // parsed model sits under a top-level entry — a SECTION has no canRemoveChild,
@@ -488,10 +492,12 @@ export function removeChildFromModel(node: any): { entry: any; selectId: string 
 /**
  * Add a child to a container node in the in-memory model, reporting the owning
  * entry and the new child's id (which the caller selects). Shared by both .sldd
- * formats, for the same reason as removeChildFromModel, and refuses the same way.
+ * formats, for the same reason as removeChildFromModel.
  */
 export function addChildToModel(node: any): { entry: any; selectId: string } {
-  if (typeof node.canAddChild !== 'function' || !node.canAddChild()) throw addChildRefused();
+  if (typeof node.canAddChild !== 'function' || !node.canAddChild()) {
+    throw new Error('This item cannot have children added.');
+  }
   // PRECONDITION (untested): as in removeChildFromModel, every container node in
   // a parsed model has an owning entry — a SECTION's canAddChild() returns false,
   // so the guard above already excludes the only node kind with no entry above it.
@@ -503,7 +509,7 @@ export function addChildToModel(node: any): { entry: any; selectId: string } {
   // unconditionally, so the guard above already excludes every node that could
   // yield null here. Kept as a belt-and-braces net for a future container type.
   const child = node.addChildNode();
-  if (!child) throw addChildRefused();
+  if (!child) throw new Error('Failed to add a child element.');
   return { entry, selectId: child.id };
 }
 
@@ -550,7 +556,7 @@ export function removeChildrenFromModel(nodes: readonly any[]): { entry: any; se
     if (findOwningEntry(node) !== entry) {
       throw new Error('These items are not all in the same entry.');
     }
-    if (!removableChild(node)) throw deleteRefused();
+    if (!removableChild(node)) throw new Error('This item cannot be deleted.');
   }
   // Removals first, one splice after: the text must be rewritten from the entry as it
   // ends up, not once per child.
@@ -754,7 +760,7 @@ export function createEntry(section: any, className: string): any {
     // Reached when the section refuses the class. Worth a real message rather than a
     // silent no-op: the gallery only offers legal tiles (its guard test creates every
     // one), so a refusal here means the catalog and core have gone out of step.
-    throw addRefused(`${className} cannot be added to ${section.displayName || section.name}.`);
+    throw new Error(`${className} cannot be added to ${section.displayName || section.name}.`);
   }
   return node;
 }

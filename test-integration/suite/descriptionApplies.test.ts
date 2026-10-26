@@ -57,6 +57,13 @@ suite('A Description is shown and saved where the object has one, and refused wh
     return posts.find((p) => p.type === 'validationError');
   };
 
+  /** The view offers a Description column, labelled: every host's posted columns left it out. */
+  const assertDescriptionColumn = (posts: any[]) => {
+    const payload = posts.filter((p) => p.type === 'setRows').pop();
+    assert.ok(payload?.columns?.includes('Description'), `the Description column is offered (${payload?.columns})`);
+    assert.strictEqual(payload.columnLabels?.Description, 'Description');
+  };
+
   const editDescription = (view: { send(m: any): void }, row: any, newValue: string) =>
     view.send({ type: 'edit', rowId: row.ID, columnId: 'Description', oldValue: String(row.Description ?? ''), newValue });
 
@@ -71,6 +78,7 @@ suite('A Description is shown and saved where the object has one, and refused wh
 
   test('in a JSON dictionary', async () => {
     const j = await openJson(opened, dir, 'desc.sldd');
+    assertDescriptionColumn(j.view.posts);
     // Read off the first paint before any case clears the posts it searches.
     const [scalarD, lut, gravity] = ['scalarD', 'MyLUT', 'gravity'].map((n) => entryRow(j.view.posts, n));
 
@@ -99,6 +107,7 @@ suite('A Description is shown and saved where the object has one, and refused wh
 
   test('in a binary dictionary', async () => {
     const b = await openBinary(opened, dir, 'desc.sldd');
+    assertDescriptionColumn(b.view.posts);
     const [scalarD, lut, gravity] = ['scalarD', 'MyLUT', 'gravity'].map((n) => entryRow(b.view.posts, n));
 
     for (const [name, row] of [['scalarD', scalarD], ['MyLUT', lut]] as const) {
@@ -125,6 +134,7 @@ suite('A Description is shown and saved where the object has one, and refused wh
 
   test('in a MAT-file', async () => {
     const m = await openMat(opened, dir, 'desc.mat', matFixture('pv_basic.mat'));
+    assertDescriptionColumn(m.view.posts);
 
     const [x, p] = ['x', 'p'].map((n) => variableRow(m.view.posts, n));
     assert.strictEqual(x._descriptionApplies, false, 'a plain variable has no Description');

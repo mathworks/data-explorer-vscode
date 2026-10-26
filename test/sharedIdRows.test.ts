@@ -109,10 +109,11 @@ describe("a MAT-file's variable whose name the file holds twice", () => {
     const rows = buildMatRowsPlanned(node, Infinity, undefined, { canCopy: true }).rows;
     expect(flags(rows)).toEqual([
       ...twin,
-      // The variable between them, under a name of its own: copied, deleted, a field added.
+      // The variable between them, under a name of its own: copied, deleted, a field added, and
+      // each field deleted (a MAT-file's struct gives up a field, as MATLAB's rmfield does).
       ['structScalar', true, true, true],
-      ['a', true, false, false],
-      ['b', true, false, false],
+      ['a', true, true, false],
+      ['b', true, true, false],
       ...twin,
     ]);
     expect(flags(buildMatVariableRows(node.children[2], Infinity, undefined, { canCopy: true }))).toEqual(twin);

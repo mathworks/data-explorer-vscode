@@ -59,20 +59,20 @@ export function mutateEntry<T>(entry: any, mutate: () => T): T {
 }
 
 /**
- * A cell edit: `columnId` of `node` (in `entry`) set to `newValue` through mutateEntry. `result`
- * is the setter's answer; `unchanged` says the setter took the text the cell already showed.
+ * A cell edit: `columnId` of `node` (in `entry`) set to `newValue` through mutateEntry, answering
+ * the setter's result; or `unchanged`, with the setter not called, where core says the text is
+ * the cell's own.
  *
- * Core takes a cell's own shown text, set back, as no edit: its setter answers `true` having
- * changed nothing (DataNode._isUnchangedCommit), and the session's editProperty, which the
- * MAT-file editor edits through, writes nothing for it. A dictionary's editor that went on to
- * write the entry would rewrite it, in core's spelling, and dirty the document, for an edit the
- * user never made. The shown text is read before the setter, which is what changes it.
+ * Core takes a cell's own text, set back, as no edit (isUnchangedEdit, the rule of the session's
+ * editProperty, which the MAT-file editor edits through and which writes nothing for it). A
+ * dictionary's editor that wrote the entry anyway rewrote it, in core's spelling, and dirtied the
+ * document, for an edit the user never made. Asked of core, and before the setter rather than read
+ * off its `true`: a setter can change the model for the text the cell shows (an object given the
+ * empty Description it had none of), and what it changed must then be written.
  */
 export function cellEdit(entry: any, node: any, columnId: string, newValue: string): { result: any; unchanged: boolean } {
-  const cell = node.toRow()?.[columnId];
-  const shown = cell !== null && typeof cell === 'object' ? String(cell.text ?? cell.label ?? '') : String(cell ?? '');
-  const result = mutateEntry(entry, () => node.setProperty(columnId, newValue));
-  return { result, unchanged: result === true && newValue === shown };
+  if (DataModel.isUnchangedEdit(node.id, columnId, newValue)) return { result: true, unchanged: true };
+  return { result: mutateEntry(entry, () => node.setProperty(columnId, newValue)), unchanged: false };
 }
 
 /**

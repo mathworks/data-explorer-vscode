@@ -1,45 +1,51 @@
 // Copyright 2026 The MathWorks, Inc.
-// A structural gesture refused before it changed anything (Add Child, Delete, Add), said the same
-// way by every table editor: in the dialog a refused cell edit is shown in, titled by the gesture.
-// Not the banner, which the next repaint clears, and a refusal is often followed by one. The
-// reason is core's where core gives one (an Add a MAT-file will not take: addEntryRefusal), and
-// else the sentence the context menu shows for the row it greys (common/refusals.ts). Each
-// editor spells the source ids in it as the file's name, as the MAT-file editor's describe does.
+// A structural gesture refused before it changes anything (Add Child, Delete, Add), said the same
+// way by every table editor. Each asks core why first, through this module, the one place core's
+// reasons come in: `Cannot add to "s.a": ... Nothing was added.`, naming the row by its MATLAB
+// path, in the same words for a MAT-file and both dictionary formats. The reason is shown in the
+// dialog a refused cell edit is shown in, titled by the gesture, and not in the banner, which the
+// next repaint clears; a refusal is often followed by one.
+//
+// What a transform throws AFTER core said yes is a failure, not a refusal, and is reported as one
+// ("Failed to apply edit: ..."): core and the editor disagreeing is a bug to see, not a reason.
+import { DataModel } from 'data-explorer-core';
 import type { RefusedMessage } from '../common/protocol.js';
-import { NOT_REMOVABLE, TAKES_NO_CHILDREN } from '../common/refusals.js';
+
+export type RefusedGesture = 'addChild' | 'delete' | 'add';
+
+const TITLES: Record<RefusedGesture, string> = { addChild: 'Cannot Add Child', delete: 'Cannot Delete', add: 'Cannot Add' };
+
+/** Why core adds no child to the row `nodeId` names (addChildTo), or null where it adds one. */
+export const addChildRefusal = (nodeId: string): string | null => DataModel.addChildRefusal(nodeId);
 
 /**
- * A refusal that changed nothing: a message, and no repair. Thrown by the structural transforms
- * (structuralEdit.ts) only while the model is still exactly as it was, so a provider answers it
- * with `refusedMessage` and nothing else.
+ * Why core would not delete every row of `nodeIds`, or null where it deletes them all. The rows
+ * are those the gesture deletes, after its plan has dropped any under another row it deletes, and
+ * each is asked as deleteNodeById takes it: every editor removes a child on its own, and core's
+ * answer for a batch (deleteNodesById) is about entries only.
  */
-export class EditRefused extends Error {
-  constructor(
-    readonly title: string,
-    reason: string,
-  ) {
-    super(reason);
-    this.name = 'EditRefused';
+export function deleteRefusal(nodeIds: readonly string[]): string | null {
+  for (const id of nodeIds) {
+    const why = DataModel.deleteRefusal(id);
+    if (why !== null) return why;
   }
-}
-
-/** An Add Child refused. Core gives no reason for one. */
-export const addChildRefused = (): EditRefused => new EditRefused('Cannot Add Child', `${TAKES_NO_CHILDREN}.`);
-
-/** A Delete refused. Core gives no reason for one. */
-export const deleteRefused = (): EditRefused => new EditRefused('Cannot Delete', `${NOT_REMOVABLE}.`);
-
-/** An Add (the gallery's) refused, for `reason`. */
-export const addRefused = (reason: string): EditRefused => new EditRefused('Cannot Add', reason);
-
-/** The message that shows `refusal`, with its reason described (`describe`: srcId -> file name). */
-export function refusedMessage(refusal: EditRefused, describe: (text: string) => string): RefusedMessage {
-  return { type: 'refused', title: refusal.title, reason: describe(refusal.message) };
+  return null;
 }
 
 /**
- * `text` with `srcId` spelled as `name`: a dictionary editor's describe, as the MAT-file editor's
- * (MatDocument.describe). A node's id begins with its source's id, and a message of core's can
- * carry one.
+ * Why core adds no `className` to `containerId` (a dictionary's section by its id, a MAT-file by
+ * its srcId), or null where it adds one.
+ */
+export const addEntryRefusal = (containerId: string, className: string): string | null =>
+  DataModel.addEntryRefusal(containerId, className);
+
+/** The message that shows `reason`, core's refusal of `gesture`, described (srcId -> file name). */
+export function refusedMessage(gesture: RefusedGesture, reason: string, describe: (text: string) => string): RefusedMessage {
+  return { type: 'refused', title: TITLES[gesture], reason: describe(reason) };
+}
+
+/**
+ * `text` with `srcId` spelled as `name`: what every editor shows of a message of core's, which can
+ * name the source by its id (a node's id begins with it). The MAT-file editor's describe is this.
  */
 export const describeSource = (srcId: string, name: string) => (text: string): string => text.split(srcId).join(name);

@@ -79,7 +79,7 @@ import { binaryEditSrcId } from '../common/srcId.js';
 import { basename } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
-import { addChildRefused, addRefused, deleteRefused, refusedMessage, type EditRefused } from './refusal.js';
+import { addChildRefusal, addEntryRefusal, deleteRefusal, describeSource, refusedMessage, type RefusedGesture } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 import { matCatalog } from '../common/addCatalog.js';
 
@@ -281,8 +281,7 @@ class MatDocument implements vscode.CustomDocument, FollowedDocument {
    * core's comes through here.
    */
   describe(err: unknown): string {
-    const message = err instanceof Error ? err.message : String(err);
-    return message.split(this.srcId).join(this.metaPath);
+    return describeSource(this.srcId, this.metaPath)(err instanceof Error ? err.message : String(err));
   }
 
   /** A warning banner with core's messages described (see `describe`). */
@@ -942,8 +941,10 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       if (msg.columnId === 'Name') webview.postMessage({ type: 'selectRows', rowIds: [node.id] });
     };
 
-    // A refused Add Child, Delete or Add, said as every table editor says one (refusal.ts).
-    const postRefusal = (refusal: EditRefused) => webview.postMessage(refusedMessage(refusal, (text) => document.describe(text)));
+    // A refused Add Child, Delete or Add, in core's words, said as every table editor says one
+    // (refusal.ts).
+    const postRefusal = (gesture: RefusedGesture, reason: string) =>
+      webview.postMessage(refusedMessage(gesture, reason, (text) => document.describe(text)));
 
     // Delete the rows the gesture named, as ONE edit: the variables in one batch (one step), and
     // each row under a variable on its own (one step each). Nodes are resolved first and each is
@@ -962,6 +963,12 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
         return false;
       };
       const children = nodes.filter((n) => n.parent !== mat && !inVariables(n));
+      // Asked of every row it would remove, before any is: a delete core refuses removes nothing.
+      const refused = deleteRefusal([...children, ...variables].map((n) => n.id));
+      if (refused) {
+        postRefusal('delete', refused);
+        return;
+      }
       // Where the selection lands: the row after the last one removed, else the one before, else
       // its parent.
       const last = nodes[nodes.length - 1];
@@ -982,7 +989,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       );
       if (!observed) return;
       if (observed.steps === 0) {
-        postRefusal(deleteRefused());
+        webview.postMessage({ type: 'error', message: 'Nothing was deleted: this file does not let the selected items be removed.' });
         return;
       }
       if (landing && !doomed.has(landing)) webview.postMessage({ type: 'selectRows', rowIds: [landing.id] });
@@ -993,20 +1000,25 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     // makes MATLAB's default value of it — the double 0, a struct of no field, or MATLAB's own
     // default object of a Simulink class or a `string`. Then its name editor, unless the gallery is
     // pinned. An add core refuses (a class the file takes no new variable of, a file no save of
-    // which can be written, objects no new one can join) adds nothing, and says core's reason.
+    // which can be written, objects no new one can join) adds nothing, and says core's reason,
+    // asked before the add (refusal.ts). One that fails after core said yes is a failure.
     const applyAddEntry = (msg: { className?: string; rename: boolean }) => {
       const className = msg.className || 'MatlabVariable';
+      const refused = addEntryRefusal(document.srcId, className);
+      if (refused) {
+        postRefusal('add', refused);
+        return;
+      }
       let added: any = null;
       let refusal: string | null = null;
       const observed = gesture('Add', (mat) => {
         DataModel.setActiveContext(mat);
         added = DataModel.addEntry('', className);
-        if (!added) refusal = (DataModel as any).addEntryRefusal?.() ?? null;
+        if (!added) refusal = DataModel.addEntryRefusal();
       });
       if (!observed) return;
       if (!added) {
-        const reason = refusal ?? `${tileLabelOf(className)} cannot be added to ${name}.`;
-        postRefusal(addRefused(reason));
+        webview.postMessage({ type: 'error', message: refusal ? document.describe(refusal) : `Could not add a ${tileLabelOf(className)} to ${name}.` });
         return;
       }
       webview.postMessage({ type: 'selectRows', rowIds: [added.id] });
@@ -1020,13 +1032,18 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
         webview.postMessage({ type: 'error', message: 'Could not locate the item in the model.' });
         return;
       }
+      const refused = addChildRefusal(node.id);
+      if (refused) {
+        postRefusal('addChild', refused);
+        return;
+      }
       let child: any = null;
       const observed = gesture('Add child', () => {
         child = DataModel.addChildTo(node.id);
       });
       if (!observed) return;
       if (!child) {
-        postRefusal(addChildRefused());
+        webview.postMessage({ type: 'error', message: 'Could not add a child to this item.' });
         return;
       }
       webview.postMessage({ type: 'selectRows', rowIds: [child.id] });

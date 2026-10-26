@@ -258,6 +258,20 @@ describe('withHeldLineBreaks', () => {
     expect(withHeldLineBreaks('ab', 'a\r\nb')).toBe('ab');
   });
 
+  it('in a text mixing two kinds, a line added or removed leaves every other break as it was', () => {
+    // Matched by the lines around a break, not by its place in the list: paired by place, a line
+    // added at the top shifted every later break onto the wrong line.
+    expect(withHeldLineBreaks('X\nA\nB\nC', 'A\nB\r\nC')).toBe('X\nA\nB\r\nC');
+    expect(withHeldLineBreaks('A\nB\nX\nC', 'A\nB\r\nC')).toBe('A\nB\r\nX\r\nC');
+    expect(withHeldLineBreaks('ab\nc', 'a\r\nb\nc')).toBe('ab\nc');
+    expect(withHeldLineBreaks('a\nc', 'a\r\nb\nc')).toBe('a\r\nc');
+  });
+
+  it('spells a break between edited lines as most of the held ones are', () => {
+    expect(withHeldLineBreaks('x\ny', 'a\r\nb\r\nc\nd')).toBe('x\r\ny');
+    expect(withHeldLineBreaks('x\ny', 'a\nb\r\nc')).toBe('x\ny');
+  });
+
   it('hasLineBreak sees LF, CRLF and a lone CR', () => {
     expect([hasLineBreak('a\nb'), hasLineBreak('a\r\nb'), hasLineBreak('a\rb'), hasLineBreak('ab')]).toEqual([true, true, true, false]);
   });

@@ -3,7 +3,6 @@ import type { ContextMenuItem } from './components/dex-context-menu.js';
 import { isNoopMove, rejectReason, type DragItem, type DropTarget } from './dropDecision.js';
 import { resolveOperands, type OperandRow } from './operands.js';
 import { isSectionRowId } from '../common/sectionRowId.js';
-import { NOT_REMOVABLE, TAKES_NO_CHILDREN } from '../common/refusals.js';
 
 // The subset of row data the menu builder needs. The host attaches the capability
 // flags in rowStamp.stampRow, for both row builders; section rows lack them (all falsy),
@@ -281,7 +280,7 @@ export function buildContextMenuItems(input: MenuInput): ContextMenuItem[] {
     ...(n > 1
       ? { reason: 'Select a single item to add a child' }
       : soleRow && !soleRow._canAddChild
-        ? { reason: TAKES_NO_CHILDREN }
+        ? { reason: 'This item takes no children' }
         : {}),
   };
 
@@ -291,7 +290,7 @@ export function buildContextMenuItems(input: MenuInput): ContextMenuItem[] {
     shortcut: navigatorIsMac() ? '⌫' : 'Del',
     disabled: !editable || !!undeletableRow,
     ...operandLabel('Delete', 'Items', deleteNames),
-    ...(undeletableRow ? { reason: NOT_REMOVABLE } : {}),
+    ...(undeletableRow ? { reason: "This element can't be removed from its parent" } : {}),
   };
 
   // "Location in Text" reveals the row in the plain-text view. A compressed-binary

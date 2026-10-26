@@ -30,6 +30,22 @@ describe('cellEdit', () => {
     expect(p.toRow().Description).toBe(shown);
   });
 
+  it("the shown text is judged by core before the setter, which is not called for it", () => {
+    // A setter may change the model for the text the cell shows (an object given the empty
+    // Description it had none of); read off its `true`, that change would go unwritten.
+    const p = entry('pLF');
+    let calls = 0;
+    const setProperty = p.setProperty.bind(p);
+    p.setProperty = (...args: unknown[]) => {
+      calls++;
+      return setProperty(...args);
+    };
+    expect(cellEdit(p, p, 'Description', p.toRow().Description).unchanged).toBe(true);
+    expect(calls).toBe(0);
+    expect(cellEdit(p, p, 'Description', 'other').unchanged).toBe(false);
+    expect(calls).toBe(1);
+  });
+
   it('a Description with its line break dropped is an edit', () => {
     const p = entry('pLF');
     const flattened = String(p.toRow().Description).replace('\n', '');

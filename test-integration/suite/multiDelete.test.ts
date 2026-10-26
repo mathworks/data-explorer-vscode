@@ -29,8 +29,8 @@
 //
 // HOW it breaks was measured rather than assumed, by deleting that check and running this
 // file: the redundant child ids are then planned as work of their own against an entry that
-// is about to leave the tree, and the model op refuses — "This element can't be removed from
-// its parent" (a refusal, in its dialog) on the JSON path, "\"StructType\" is not in a section" on the binary one. So the gesture is
+// is about to leave the tree, and the model op refuses — "This item cannot be deleted" on
+// the JSON path, "\"StructType\" is not in a section" on the binary one. So the gesture is
 // rejected outright rather than half-applied, and what catches it is the no-error guard
 // every run in this file passes through. The file comparison is kept as the assertion
 // anyway: it is the invariant that has to hold, and a future provider that swallowed that
