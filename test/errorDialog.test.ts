@@ -369,3 +369,34 @@ describe('keyboard focus', () => {
     expect(ev.defaultPrevented).toBe(false);
   });
 });
+
+describe('a value of 200,000 characters', () => {
+  // The dialog showed the value refused and the one kept in full, so a long array typed into a
+  // Value and refused put the OK button tens of thousands of pixels below the window: the dialog
+  // could be closed only by a key. Each value now shows a few lines and scrolls, and the body
+  // scrolls under the buttons. (happy-dom lays nothing out; that the button stays on screen is
+  // measured in a browser.)
+  const HUGE = '[' + '1 '.repeat(99_999) + ']';
+
+  it('shows each value in a box of a few lines that scrolls', async () => {
+    const el = await makeDialog({ reason: 'Cannot edit "v": refused.', invalidValue: HUGE, validValue: HUGE });
+    const values = [...el.shadowRoot!.querySelectorAll<HTMLElement>('.value')];
+    expect(values.map((v) => v.textContent?.length)).toEqual([HUGE.length, HUGE.length]);
+    for (const v of values) {
+      const style = getComputedStyle(v);
+      expect(style.overflow).toBe('auto');
+      expect(style.maxHeight).not.toBe('none');
+      expect(parseFloat(style.maxHeight)).toBeLessThan(200);
+    }
+  });
+
+  it('scrolls the body, and not the footer, so OK is always there to press', async () => {
+    const el = await makeDialog({ reason: 'Cannot edit "v": refused.', invalidValue: HUGE, validValue: HUGE });
+    const body = getComputedStyle(el.shadowRoot!.querySelector<HTMLElement>('.body')!);
+    expect(body.overflow).toBe('auto');
+    expect(body.maxHeight).not.toBe('none');
+    const ok = buttonNamed(el, 'OK');
+    expect(ok.closest('.body')).toBeNull();
+    expect(ok.closest('.footer')).not.toBeNull();
+  });
+});
