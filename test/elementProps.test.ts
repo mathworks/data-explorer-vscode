@@ -56,13 +56,13 @@ for (const variant of ['elem_text', 'elem_binary'] as const) {
       expect(x.Dimensions).toBe(2);
     });
 
-    it('surfaces Complexity/DimensionsMode as selects and Dimensions as a label', () => {
+    it('surfaces Complexity/DimensionsMode as selects and Dimensions as text', () => {
       const { MyBus } = loadElements(variant);
       const x = MyBus.children.find((c: Entry) => c.name === 'x');
       const props = x.getProperties();
       // MATLAB constrains a BusElement's Complexity and DimensionsMode to a
-      // closed enum, so each is a dropdown; Dimensions is a free numeric value
-      // and stays read-only. A Signal's complexity and dimensionsMode are selects
+      // closed enum, so each is a dropdown; Dimensions is a free numeric value,
+      // a label of the schema. A Signal's complexity and dimensionsMode are selects
       // too, over the Signal's own sets, which add 'auto' — see dimensionsMode.test.ts.
       for (const [key, editor] of Object.entries({ complexity: 'select', dimensions: 'label', dimensionsMode: 'select' })) {
         const prop = props.find((p: any) => p.key === key);
@@ -75,7 +75,9 @@ for (const variant of ['elem_text', 'elem_binary'] as const) {
       const row: Entry = x.toRow();
       expect(row.complexity).toEqual({ text: 'complex', editable: true, editor: 'select', options: ['real', 'complex'] });
       expect(row.dimensionsMode).toEqual({ text: 'Fixed', editable: true, editor: 'select', options: ['Fixed', 'Variable'] });
-      expect(row.dimensions).toBe('2');
+      // Dimensions is a label of the schema, and the dictionary offers it as text, as a MAT-file
+      // edits an object's property (core's sourceOfferedEditor).
+      expect(row.dimensions).toEqual({ text: '2', editable: true, editor: 'text', options: undefined });
     });
 
     it('a default (empty) element y renders its columns without crashing', () => {

@@ -253,6 +253,13 @@ function propertyAbsent(row: TreeTableRow, columnId: string): boolean {
 // blanking the ENTIRE table rather than the one bad cell. A shapeless `{}` (which
 // a partial parse does produce) yields undefined, which sorting then lowercases
 // and throws on. Both collapse to ''.
+// Whether the row's Value is shown as a summary for its size (`<1x500 double>`) and edited as the
+// whole of its text, which the host sends as the editor opens (`_hasEditText`; core's editText):
+// the row carries only this marker, as the text can run to 200,000 characters.
+function hasWholeValueText(row: TreeTableRow): boolean {
+  return (row as { _hasEditText?: unknown })._hasEditText === true;
+}
+
 function cellText(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (typeof value === 'object') return String((value as { text?: unknown }).text ?? '');
@@ -1509,6 +1516,8 @@ export class DexTreeTable extends LitElement {
   // edited them there. Written by installRows (table-main.ts) on every repaint from
   // nextStickyIds; dropped here the moment the user searches again.
   private _stickyRowIds: Set<string> = new Set();
+  // The row whose whole Value text this table asked the host for last (openWholeValueEditor).
+  private _awaitedWholeValue: string | null = null;
   @state() private _editingCell: {
     rowId: string;
     columnId: string;
@@ -3115,7 +3124,7 @@ export class DexTreeTable extends LitElement {
   private _cellEditTarget(
     row: TreeTableRow,
     columnId: string,
-  ): { text: string; editor?: string; options?: string[] } | null {
+  ): { text: string; editor?: string; options?: string[]; fetch?: boolean } | null {
     if (columnId === 'Name') {
       return row.Name?.editable ? { text: row.Name?.label || '' } : null;
     }
@@ -3124,6 +3133,9 @@ export class DexTreeTable extends LitElement {
         ? (row.Value as { text: string; editable?: boolean })
         : { text: cellText(row.Value), editable: row._valueEditable ?? false };
       if (!val.editable) return null;
+      // A Value shown as a summary is edited as its whole text, asked of the host as the editor
+      // opens (openWholeValueEditor); the cell goes on showing the summary.
+      if (hasWholeValueText(row)) return { text: '', fetch: true };
       return {
         text: val.text || '',
         editor: (val as { editor?: string }).editor,
@@ -3188,7 +3200,31 @@ export class DexTreeTable extends LitElement {
   private _onCellDblClickIfEditable(row: TreeTableRow, columnId: string): void {
     const target = this._cellEditTarget(row, columnId);
     if (!target) return;
+    if (target.fetch) {
+      this._awaitedWholeValue = row.ID;
+      this.dispatchEvent(
+        new CustomEvent('dex-edit-text-request', { detail: { rowId: row.ID }, bubbles: true, composed: true }),
+      );
+      return;
+    }
     this._onCellDblClick(row.ID, columnId, target.text, target.editor, target.options);
+  }
+
+  /**
+   * Open the Value editor of `rowId` on `text`, the whole value its summary stands for, which the
+   * host sent in answer to this table's `dex-edit-text-request`. In the textarea, as the text is one
+   * long line of up to 200,000 characters; committed unchanged it posts nothing, and changed it
+   * posts the whole text. Only the answer to the last request opens an editor, and only while no
+   * other editor is open and the cell still takes this one: an answer that arrives after the user
+   * moved on opens nothing.
+   */
+  openWholeValueEditor(rowId: string, text: string): void {
+    if (this._awaitedWholeValue !== rowId) return;
+    this._awaitedWholeValue = null;
+    if (this._editingCell) return;
+    const row = (this.rows ?? []).find((r) => r.ID === rowId);
+    if (!row || !this._cellEditTarget(row, 'Value')?.fetch) return;
+    this._onCellDblClick(rowId, 'Value', text, undefined, undefined, true);
   }
 
   private _onTableKeyDown(e: KeyboardEvent): void {
@@ -3367,6 +3403,7 @@ export class DexTreeTable extends LitElement {
     currentValue: string,
     editor?: string,
     options?: string[],
+    wide = false,
   ): void {
     // A textarea where the text may hold a line break, an <input> elsewhere: an <input> drops
     // every line break from the value it is given, so a two-line text opened in one and merely
@@ -3376,7 +3413,9 @@ export class DexTreeTable extends LitElement {
     // MATLAB takes any text there, a line break included, so a one-line Description can be
     // given a second line (Shift+Enter, _onTextAreaKeyDown). A Value never holds one: core
     // spells a line break in a char or a string as `newline`.
-    const multiline = editor !== 'select' && (editor === 'textArea' || columnId === 'Description' || hasLineBreak(currentValue));
+    // And a `wide` one: a Value's whole text, one long line.
+    const multiline =
+      editor !== 'select' && (wide || editor === 'textArea' || columnId === 'Description' || hasLineBreak(currentValue));
     this._editingCell = { rowId, columnId, value: currentValue, editor, options, multiline };
     this.updateComplete.then(() => {
       const input = this.shadowRoot?.querySelector('.edit-input') as HTMLInputElement | HTMLSelectElement;
@@ -3729,7 +3768,7 @@ export class DexTreeTable extends LitElement {
       const text = cellText(val);
       const linkTarget = (val as { linkTarget?: string }).linkTarget;
 
-      if (isEditing) return this._renderEditor(text);
+      if (isEditing) return this._renderEditor(hasWholeValueText(row) ? (this._editingCell?.value ?? text) : text);
 
       if (linkTarget) {
         return html`<a class="value-link" href="#" @click=${(e: Event) => this._onLinkClick(linkTarget, e)}

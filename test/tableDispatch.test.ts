@@ -16,6 +16,7 @@ function recording(without: (keyof CommonHandlers)[] = []) {
     navigate: (target) => void calls.push(['navigate', target]),
     requestMatrix: (nodeId) => void calls.push(['requestMatrix', nodeId]),
     requestChildren: (nodeId) => void calls.push(['requestChildren', nodeId]),
+    requestEditText: (rowId) => void calls.push(['requestEditText', rowId]),
     undo: () => void calls.push(['undo']),
     redo: () => void calls.push(['redo']),
   };
@@ -32,6 +33,7 @@ describe('dispatchCommon', () => {
       { type: 'navigate', target: 'gains.mat:kp' },
       { type: 'requestMatrix', nodeId: 'n1' },
       { type: 'requestChildren', nodeId: 'n2' },
+      { type: 'requestEditText', rowId: 'r1' },
       { type: 'undo' },
       { type: 'redo' },
     ];
@@ -42,6 +44,7 @@ describe('dispatchCommon', () => {
       ['navigate', 'gains.mat:kp'],
       ['requestMatrix', 'n1'],
       ['requestChildren', 'n2'],
+      ['requestEditText', 'r1'],
       ['undo'],
       ['redo'],
     ]);
@@ -60,8 +63,10 @@ describe('dispatchCommon', () => {
   });
 
   it('leaves to the provider what its table leaves out: a fetch, an undo, a redo', () => {
-    const { calls, handlers } = recording(['requestChildren', 'undo', 'redo']);
-    for (const type of ['requestChildren', 'undo', 'redo']) expect(dispatchCommon({ type, nodeId: 'n' }, handlers), type).toBe(false);
+    const { calls, handlers } = recording(['requestChildren', 'requestEditText', 'undo', 'redo']);
+    for (const type of ['requestChildren', 'requestEditText', 'undo', 'redo']) {
+      expect(dispatchCommon({ type, nodeId: 'n', rowId: 'n' }, handlers), type).toBe(false);
+    }
     expect(calls).toEqual([]);
   });
 
@@ -86,5 +91,15 @@ describe('dispatchCommon', () => {
     };
     dispatchCommon({ type: 'undo' }, handlers);
     expect(seen).toBe(handlers);
+  });
+});
+
+describe('requestEditText', () => {
+  it('asks for the text of a row named by a string, and still answers a message that names none', () => {
+    const { calls, handlers } = recording();
+    for (const rowId of [undefined, null, 7, ['r']]) expect(dispatchCommon({ type: 'requestEditText', rowId }, handlers)).toBe(true);
+    expect(calls).toEqual([]);
+    dispatchCommon({ type: 'requestEditText', rowId: 'm/v' }, handlers);
+    expect(calls).toEqual([['requestEditText', 'm/v']]);
   });
 });
