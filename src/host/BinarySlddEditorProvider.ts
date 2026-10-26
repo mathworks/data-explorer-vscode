@@ -48,6 +48,7 @@ import { sectionRules } from './sectionRules.js';
 import {
   DataModel,
   DATA_PART_XML,
+  editRefusalText,
   findEntryObjectSpan,
   entrySelectorOf,
   planDeletion,
@@ -1257,7 +1258,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         if (result && typeof result === 'object' && result.error) {
           webview.postMessage({
             type: 'validationError',
-            reason: describe(result.reason),
+            // Named as the session's editProperty names one, which the MAT-file editor shows:
+            // `Cannot edit "<row>": <why>.` (core's editRefusalText).
+            reason: describe(editRefusalText(node, msg.columnId, result.reason)),
             invalidValue: msg.newValue,
             previousValue: msg.oldValue,
           });

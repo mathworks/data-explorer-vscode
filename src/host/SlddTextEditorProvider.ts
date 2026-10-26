@@ -92,7 +92,7 @@ import {
   type StructuralResult,
   type TextPatch,
 } from './structuralEdit.js';
-import { entrySelectorOf, minimalReplacement, planDeletion, type EntrySelector } from 'data-explorer-core';
+import { editRefusalText, entrySelectorOf, minimalReplacement, planDeletion, type EntrySelector } from 'data-explorer-core';
 import { copyEntriesToClipboard, dragEntries } from './clipboardAction.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { subscribeUsageRepost } from './usageRepostWatch.js';
@@ -1153,7 +1153,9 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           // what the text says.
           webview.postMessage({
             type: 'validationError',
-            reason: describe(result.reason),
+            // Named as the session's editProperty names one, which the MAT-file editor shows:
+            // `Cannot edit "<row>": <why>.` (core's editRefusalText).
+            reason: describe(editRefusalText(node, msg.columnId, result.reason)),
             invalidValue: msg.newValue,
             previousValue: msg.oldValue,
           });

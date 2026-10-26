@@ -72,7 +72,7 @@ suite('A Description is shown and saved where the object has one, and refused wh
   // own error for setting an unknown property takes.
   const REFUSAL: Record<string, RegExp> = {
     scalarD: /^Cannot edit "scalarD": an? \S.* has no Description\.$/,
-    MyLUT: /^Unrecognized property 'Description' for class 'Simulink\.LookupTable'\.$/,
+    MyLUT: /^Cannot edit "MyLUT": Unrecognized property 'Description' for class 'Simulink\.LookupTable'\.$/,
     x: /^Cannot edit "x": an? \S.* has no Description\.$/,
   };
 

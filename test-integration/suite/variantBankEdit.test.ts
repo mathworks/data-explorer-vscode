@@ -413,7 +413,8 @@ suite('A VariantBank and a VariantBankCoderInfo are edited in their own columns,
         assertOffered(opened, r.column);
         const { after, refusal, repaint } = await edit(opened, r.entry, r.column, r.from, r.typed);
         assert.ok(refusal, `${r.column} ${JSON.stringify(r.typed)}: refused`);
-        assert.strictEqual(refusal.reason, r.reason, `${r.column}: in MATLAB's words, as core gives them`);
+        // Named as core names a refused edit of a row (editRefusalText).
+        assert.strictEqual(refusal.reason, `Cannot edit "${r.entry}": ${r.reason}`, `${r.column}: in MATLAB's words, as core gives them`);
         assert.strictEqual(refusal.invalidValue, r.typed, `${r.column}: naming what was typed`);
         assert.strictEqual(refusal.previousValue, r.from, `${r.column}: and what the cell held`);
         assert.strictEqual(after, original, `${r.column}: the ${format} dictionary is unchanged`);
