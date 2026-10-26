@@ -28,7 +28,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
-import { SC_PART_XML, createSession, ingest } from 'data-explorer-core';
+import { SC_PART_XML, createSession, editRefusalText, ingest } from 'data-explorer-core';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 import { childrenOf, ctx, fakePanel, isEntryRow, nameOf, token, waitFor, ws } from './tools/hostHarness';
@@ -124,10 +124,13 @@ function coreSaved(content: Uint8Array, filename: string, steps: Step[]): any {
 function coreRefusal(content: Uint8Array, filename: string, step: Step): string {
   const session = createSession();
   const src: any = ingest(session, content, { filename });
-  const result = nodeOf(src, step).setProperty('Name', step.to);
-  session.removeDataSource(src.name);
+  const node = nodeOf(src, step);
+  const result = node.setProperty('Name', step.to);
   assert.ok(result && typeof result === 'object' && result.error, 'core refuses this rename too');
-  return String(result.reason);
+  // As every editor shows it, naming the row (editRefusalText).
+  const said = editRefusalText(node, 'Name', String(result.reason));
+  session.removeDataSource(src.name);
+  return said;
 }
 
 /** The row the table holds for `step`, from the newest paint that carries it. */
@@ -288,7 +291,7 @@ suite('A service function rename through the text editor carries into the catalo
       const refusals = refusalsIn(posts);
       assert.strictEqual(refusals.length, 1, `one validationError (${JSON.stringify(posts.map((m) => m.type))})`);
       const reason = coreRefusal(enc(t.original), TEXT_FIXTURE, ONE_RENAME[0]);
-      assert.ok(reason.startsWith("'f' cannot be renamed: its Prototype 'y = step(u,v)'"), reason);
+      assert.ok(reason.includes("'f' cannot be renamed: its Prototype 'y = step(u,v)'"), reason);
       assert.strictEqual(refusals[0].reason, reason, 'carrying core’s own reason');
       assert.strictEqual(t.changes.length, 0, 'no write');
       assert.strictEqual(t.doc.getText(), t.original);
@@ -464,7 +467,7 @@ suite('A service function rename through the binary editor carries into the cata
       const refusals = refusalsIn(posts);
       assert.strictEqual(refusals.length, 1, `one validationError (${JSON.stringify(posts.map((m) => m.type))})`);
       const reason = coreRefusal(b.bytes, BINARY_FIXTURE, ONE_RENAME[0]);
-      assert.ok(reason.startsWith("'f' cannot be renamed: its Prototype 'y = step(u)'"), reason);
+      assert.ok(reason.includes("'f' cannot be renamed: its Prototype 'y = step(u)'"), reason);
       assert.strictEqual(refusals[0].reason, reason, 'carrying core’s own reason');
       assert.strictEqual(b.edits.length, 0, 'no edit');
       assert.strictEqual(b.doc.chunkXml, chunk, 'the chunk is as read');

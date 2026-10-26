@@ -206,10 +206,11 @@ suite('MAT-file editor: struct field rename', () => {
   });
 
   for (const [what, newValue, reason] of [
-    ['a name another field of the struct has', 'b', /^'b' already names another member of structScalar$/],
-    ['a name MATLAB cannot load', '1x', /^Invalid MATLAB name\. Must start with a letter/],
-    ['a keyword', 'end', /^'end' is a reserved MATLAB keyword$/],
-    ['an empty name', '', /^Name cannot be empty$/],
+    // Each named as core names a refused edit of a row (editRefusalText): `Cannot rename "<row>": <why>.`
+    ['a name another field of the struct has', 'b', /^Cannot rename "structScalar\.a": 'b' already names another member of structScalar\.$/],
+    ['a name MATLAB cannot load', '1x', /^Cannot rename "structScalar\.a": Invalid MATLAB name\. Must start with a letter/],
+    ['a keyword', 'end', /^Cannot rename "structScalar\.a": 'end' is a reserved MATLAB keyword\.$/],
+    ['an empty name', '', /^Cannot rename "structScalar\.a": Name cannot be empty\.$/],
     ['a name longer than MATLAB takes', 'x'.repeat(64), /maximum length of 63 characters/],
   ] as const) {
     test(`a rename to ${what} is refused in core's words, and records nothing`, async () => {

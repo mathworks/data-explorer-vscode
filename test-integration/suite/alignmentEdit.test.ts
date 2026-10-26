@@ -191,7 +191,8 @@ suite('a Parameter or Signal Alignment is edited in its table cell, as MATLAB ed
     const opened = await open();
     const { before, after, refusal, repaint } = await edit(opened, 'pSC', 'alignment', '-1', '3');
     assert.ok(refusal, 'the edit was refused');
-    assert.strictEqual(refusal.reason, invalid(3), "MATLAB's reason, without its inaccurate 128 bound");
+    // Named as core names a refused edit of a row (editRefusalText).
+    assert.strictEqual(refusal.reason, `Cannot edit "pSC": ${invalid(3)}`, "MATLAB's reason, without its inaccurate 128 bound");
     assert.strictEqual(refusal.invalidValue, '3', 'naming what was typed');
     assert.strictEqual(after, before, 'the document is unchanged');
     assert.strictEqual(repaint?.alignment?.text, '-1', 'and the cell is repainted back to -1');
@@ -201,7 +202,8 @@ suite('a Parameter or Signal Alignment is edited in its table cell, as MATLAB ed
     const opened = await open();
     const { before, after, refusal } = await edit(opened, 'pNo', 'alignment', '-1', '8');
     assert.ok(refusal, 'the edit was refused');
-    assert.strictEqual(refusal.reason, AUTO, "MATLAB's reason");
+    // MATLAB's words name no row, so core names it (editRefusalText).
+    assert.strictEqual(refusal.reason, `Cannot edit "pNo": ${AUTO}`, "MATLAB's reason");
     assert.strictEqual(after, before, 'the document is unchanged');
   });
 
