@@ -19,10 +19,10 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-// A commit of core's main, between releases: the release that carries it is tagged later.
-const REF = 'ec902f5afd50b19ea99dcc273b007a6520a3e64e';
-const COMMIT = 'ec902f5afd50b19ea99dcc273b007a6520a3e64e';
-const VERSION = '1.46.2';
+// A release tag, and the commit it points at.
+const REF = 'v1.47.0';
+const COMMIT = 'b15599989f7e5eac0c63ea867515830a48966a98';
+const VERSION = '1.47.0';
 
 const SPEC = `github:mathworks/data-explorer-core#${REF}`;
 
