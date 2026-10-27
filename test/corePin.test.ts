@@ -20,8 +20,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 // A commit of core's main, between releases: the release that carries it is tagged later.
-const REF = '5a51815ee5f81d0a158dcf59332fd8042bd576d7';
-const COMMIT = '5a51815ee5f81d0a158dcf59332fd8042bd576d7';
+const REF = 'ec902f5afd50b19ea99dcc273b007a6520a3e64e';
+const COMMIT = 'ec902f5afd50b19ea99dcc273b007a6520a3e64e';
 const VERSION = '1.46.2';
 
 const SPEC = `github:mathworks/data-explorer-core#${REF}`;
