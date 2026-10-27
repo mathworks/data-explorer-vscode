@@ -2,6 +2,16 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## [1.46.0] — 2026-10-27
+
+- MAT-files now take the same edits as data dictionaries: delete a struct field, and add or delete elements of a string array.
+- Object properties such as a Bus's header file or a Signal's sample time can now be edited in data dictionaries, as in MAT-files.
+- Typed values now mean what they mean in MATLAB: `int8(5)`, `single(2.5)` or `double(x)` work anywhere, and a number typed over an integer value keeps its type.
+- A long value, an empty cell, or a Parameter whose Value MATLAB saved as a string stays editable after an edit.
+- The table now shows a Description column, and editing a Description keeps its line breaks.
+- A refused edit now says which item it was and why.
+- Bug fixes.
+
 ## [1.45.2] — 2026-10-26
 
 - In a MAT-file, a cell holding strings, such as `{1, "a"}`, can now be typed, pasted or dragged in, and stays editable as text.
