@@ -15,10 +15,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { getModel, invalidate } from '../src/host/SlddModel.js';
-import { buildRows, COLUMNS, COLUMN_LABELS } from '../src/host/rowBuilder.js';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
-import { isSectionRowId } from '../src/common/sectionRowId.js';
+import { getModel, invalidate } from '../src/view/model/workspace/SlddModel.js';
+import { buildRows, COLUMNS, COLUMN_LABELS } from '../src/view/model/rows/rowBuilder.js';
+import { DexTreeTable, type TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
+import { isSectionRowId } from '../src/view/model/ids/sectionRowId.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

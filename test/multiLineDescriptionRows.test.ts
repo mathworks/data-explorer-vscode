@@ -16,9 +16,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DataModel, parseBinarySldd } from 'data-explorer-core';
-import { buildRows } from '../src/host/rowBuilder.js';
-import { buildMatRows } from '../src/host/matRowBuilder.js';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import { buildRows } from '../src/view/model/rows/rowBuilder.js';
+import { buildMatRows } from '../src/view/model/rows/matRowBuilder.js';
+import { DexTreeTable, type TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

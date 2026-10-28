@@ -1,7 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
-import { shouldOpenCellEditor } from '../src/webview/menuItems.js';
+import { shouldOpenCellEditor } from '../src/view/widgets/tree-table/menuItems.js';
 
 // The vendored dex-tree-table opens its inline cell editor from handlers bound
 // INSIDE its shadow DOM (on the <td> cells) for both double-click and Enter.

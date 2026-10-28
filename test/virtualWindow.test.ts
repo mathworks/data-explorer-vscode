@@ -20,7 +20,7 @@
 // CAN be tested without a layout engine — happy-dom reports every height as zero.
 // What the function does with that is itself a case below.
 import { describe, it, expect } from 'vitest';
-import { virtualWindow } from '../src/webview/virtualWindow.js';
+import { virtualWindow } from '../src/view/widgets/shared/virtualWindow.js';
 
 describe('a run that fits', () => {
   it('is rendered whole, with no padding either side', () => {

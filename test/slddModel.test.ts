@@ -14,8 +14,8 @@ import {
   openSourceView,
   releaseSourceView,
   releaseIfUnviewed,
-} from '../src/host/SlddModel.js';
-import { sourceWarnings, warningBanner } from '../src/host/parseWarnings.js';
+} from '../src/view/model/workspace/SlddModel.js';
+import { sourceWarnings, warningBanner } from '../src/view/model/rows/parseWarnings.js';
 
 function bytes(name: string): ArrayBuffer {
   const b = readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));

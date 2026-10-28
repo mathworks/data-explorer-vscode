@@ -8,7 +8,7 @@
 // nodes rebuilt under the same ids, and the inspector went on showing the one it was handed, so
 // it said a value the table no longer did until the user clicked another row. The provider now
 // says when the document's tree changed (`onChanged`), and extension.ts answers that with the
-// inspector's one re-resolve (src/host/inspectorSelection.ts, unit-tested on its own), as it
+// inspector's one re-resolve (src/view/model/inspector/inspectorSelection.ts, unit-tested on its own), as it
 // answers the MAT-file editor's (matInspectorRefresh.test.ts). There is no route to the
 // registered provider here (activate() returns no API), so this test wires its own provider to
 // its own InspectorSelection the way activate() does, and reads what the inspector was asked to
@@ -21,9 +21,9 @@ import { tmpdir } from 'os';
 import { unzipSync, zipSync } from 'fflate';
 import { DataModel } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { InspectorSelection } from '../../src/host/inspectorSelection';
-import { buildPropertyGroups } from '../../src/host/piBuilder';
-import { findNode } from '../../src/host/SlddModel';
+import { InspectorSelection } from '../../src/view/model/inspector/inspectorSelection';
+import { buildPropertyGroups } from '../../src/view/model/inspector/piBuilder';
+import { findNode } from '../../src/view/model/workspace/SlddModel';
 import { ctx, fakePanel, quiet, token, waitFor } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

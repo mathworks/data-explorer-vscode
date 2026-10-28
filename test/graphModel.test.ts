@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 import { describe, it, expect } from 'vitest';
-import { RelGraph, type GraphSource, type GraphNode } from '../src/host/graphModel.js';
+import { RelGraph, type GraphSource, type GraphNode } from '../src/view/model/hierarchy/graphModel.js';
 
 // Build a graph from a compact spec. uriStrings are file:///<path>.
 function src(path: string, extra: Partial<GraphSource> = {}): GraphSource {

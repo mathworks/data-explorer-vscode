@@ -8,9 +8,9 @@
 // payload SAY so instead of going quiet.
 import { describe, it, expect, vi } from 'vitest';
 import { DataModel } from 'data-explorer-core';
-import { capRows, rowCapBanner, MAX_TABLE_ROWS } from '../src/host/rowCap.js';
-import { postOrReport } from '../src/host/postPayload.js';
-import { buildMatRows } from '../src/host/matRowBuilder.js';
+import { capRows, rowCapBanner, MAX_TABLE_ROWS } from '../src/view/model/rows/rowCap.js';
+import { postOrReport } from '../src/view/model/rows/postPayload.js';
+import { buildMatRows } from '../src/view/model/rows/matRowBuilder.js';
 
 const row = (id: string, parent?: string) => ({ ID: id, parent, Name: id });
 

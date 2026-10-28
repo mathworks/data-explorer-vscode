@@ -3,7 +3,7 @@
 //
 // The table's Status "Modified" mark takes its colour from the theme, and from the SAME
 // theme colour as the sections tree's Modified badge (DECORATIONS.modified in
-// src/host/health.ts), so "modified" is one colour on both surfaces.
+// src/view/model/hierarchy/health.ts), so "modified" is one colour on both surfaces.
 //
 // It used to be the literal #b45309, chosen against a light background: 3.54:1 on Dark
 // Modern's #181818 and 4.18:1 on HC Black's #000, both under WCAG AA's 4.5. A theme colour
@@ -16,8 +16,8 @@
 // the real render path produces; the rendered contrast was measured in a browser against
 // the shipped bundle.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
-import { DECORATIONS } from '../src/host/health.js';
+import { DexTreeTable, type TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
+import { DECORATIONS } from '../src/view/model/hierarchy/health.js';
 
 beforeEach(() => localStorage.clear());
 

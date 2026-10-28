@@ -19,7 +19,7 @@ describe('schemaColumnLabels', () => {
   });
 });
 
-import { COLUMN_LABELS } from '../../src/host/rowBuilder.js';
+import { COLUMN_LABELS } from '../../src/view/model/rows/rowBuilder.js';
 
 describe('rowBuilder COLUMN_LABELS', () => {
   it('carries the schema-derived labels for schema-driven columns', () => {

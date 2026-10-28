@@ -8,7 +8,7 @@
 // the right entry to the wrong value, and the user finds out later. So these
 // tests check the payload identity as carefully as the values.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import { DexTreeTable, type TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
 
 const HOST_COLUMNS = ['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'storageClass', 'Description'];
 

@@ -11,9 +11,9 @@
 // And the MAT-file gallery standing alone (its `classes` given): no tile names a destination,
 // to the eye or to a screen reader, and the add it asks for names no section.
 import { describe, it, expect, beforeEach } from 'vitest';
-import '../src/webview/components/dex-add-gallery.js';
-import type { DexAddGallery } from '../src/webview/components/dex-add-gallery.js';
-import { ADD_CATALOG, matCatalog } from '../src/common/addCatalog.js';
+import '../src/view/widgets/tree-table/dex-add-gallery.js';
+import type { DexAddGallery } from '../src/view/widgets/tree-table/dex-add-gallery.js';
+import { ADD_CATALOG, matCatalog } from '../src/view/model/ids/addCatalog.js';
 
 const $$ = (el: Element, sel: string) => [...el.shadowRoot!.querySelectorAll(sel)] as HTMLElement[];
 

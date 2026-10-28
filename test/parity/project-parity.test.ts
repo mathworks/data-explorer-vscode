@@ -7,7 +7,7 @@ import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseProject, DataModel } from 'data-explorer-core';
-import { buildRows } from '../../src/host/rowBuilder.js';
+import { buildRows } from '../../src/view/model/rows/rowBuilder.js';
 
 type ParsedProject = ReturnType<typeof parseProject>;
 

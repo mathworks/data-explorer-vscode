@@ -35,12 +35,12 @@
 import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
 import { renderTableWebview } from './webviewHtml.js';
-import { buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
+import { buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from '../view/model/rows/rowBuilder.js';
 import { clipMarkChange, clipMarkOfDoc } from './clipMarks.js';
-import { rowPlannerFor } from './rowPlanner.js';
-import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
-import { answerChildRequest } from './childRequest.js';
-import { sectionRules } from './sectionRules.js';
+import { rowPlannerFor } from '../view/model/rows/rowPlanner.js';
+import { LAZY_ROW_BUDGET, lazyRowsBanner } from '../view/model/rows/lazyRows.js';
+import { answerChildRequest } from '../view/model/rows/childRequest.js';
+import { sectionRules } from '../view/model/actions/sectionRules.js';
 // DATA_PART_XML is core's name for the one zip member holding the entries, and the three
 // sites below are three roles of one rule: the lookup in `chunkOf`, the exclusion in
 // `passThroughParts`, and the re-insert in `writeTo`. Drift between them does not throw —
@@ -58,12 +58,12 @@ import {
 // Never parseBinarySlddParts directly: readSlddParts is the same read plus the rule
 // that a dictionary this host could not read is not passed on as an empty one, which
 // the reader itself no longer enforces (it recovers and warns instead).
-import { readSlddParts } from './slddContent.js';
+import { readSlddParts } from '../view/model/workspace/slddContent.js';
 import { changedEntryKeys, savedChunkRefusal, SavedChunk, uncheckableEntries } from './binarySaveGate.js';
 import { chunkEntryKey, entryKey, scanChunkEntries } from './chunkEntries.js';
 import { isZipBytes } from './slddFormat.js';
-import { sourceWarnings, warningBanner } from './parseWarnings.js';
-import { postOrReport } from './postPayload.js';
+import { sourceWarnings, warningBanner } from '../view/model/rows/parseWarnings.js';
+import { postOrReport } from '../view/model/rows/postPayload.js';
 import {
   findOwningEntry,
   refuseDisallowedPaste,
@@ -110,7 +110,7 @@ import {
   type EntryPatch,
   type EntryRecord,
 } from './entryOps.js';
-import { buildSectionRowId } from '../common/sectionRowId.js';
+import { buildSectionRowId } from '../view/model/ids/sectionRowId.js';
 import { clipboardState } from './clipboard.js';
 import { getDrag, clearDrag } from './dragState.js';
 import {
@@ -125,12 +125,12 @@ import {
   deleteFromSource,
   NOT_FOUND_REASON,
 } from './editorHub.js';
-import { basename } from '../common/pathUtil.js';
+import { basename } from '../view/model/ids/pathUtil.js';
 import { runTransfer, type TransferAdapter, type TransferDeps } from './transfer.js';
 import { clipboardRegister, dragRegister } from './transferRegisters.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
-import { answerMatrixRequest } from './matrixRequest.js';
-import { binaryEditSrcId } from '../common/srcId.js';
+import { answerMatrixRequest } from '../view/model/matrix/matrixRequest.js';
+import { binaryEditSrcId } from '../view/model/ids/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { addChildRefusal, addEntryRefusal, deleteRefusal, describeSource, refusedMessage, type RefusedGesture } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
@@ -458,7 +458,7 @@ class BinarySlddDocument implements vscode.CustomDocument, FollowedDocument {
 
   // Prefixed, so this editable model never collides with the read-only
   // BinaryEditorProvider's cached model of the same uri (DataModel is a singleton). The
-  // prefix and its removal live together in common/srcId.ts — a link target core builds out
+  // prefix and its removal live together in view/model/ids/srcId.ts — a link target core builds out
   // of this srcId has to be read back as a document, which is what needs the pair to agree.
   get srcId(): string {
     return binaryEditSrcId(this.uri.toString());
@@ -1109,7 +1109,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     /**
      * Delete SEVERAL rows as ONE edit.
      *
-     * Delete acts on ROWS (see webview/operands.ts), so its operands can mix whole entries
+     * Delete acts on ROWS (see view/model/actions/operands.ts), so its operands can mix whole entries
      * with nested children of other entries. This format's undo stack is this document's
      * own and steps by pushEdit, so the whole gesture is ONE push: one `after` string built
      * by folding every removal, and one op list describing all of them. The transfer's commit

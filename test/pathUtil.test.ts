@@ -1,7 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
-// Unit tests for the shared path utilities in src/common/pathUtil.ts.
+// Unit tests for the shared path utilities in src/view/model/ids/pathUtil.ts.
 import { describe, it, expect } from 'vitest';
-import { basename, dirname, projectPathSegments, uriBasename } from '../src/common/pathUtil.js';
+import { basename, dirname, projectPathSegments, uriBasename } from '../src/view/model/ids/pathUtil.js';
 
 describe('pathUtil', () => {
   describe('basename', () => {

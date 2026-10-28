@@ -10,8 +10,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
-import { dropFactsOf } from '../src/host/dropFacts.js';
+import { getModel, findNode, invalidate } from '../src/view/model/workspace/SlddModel.js';
+import { dropFactsOf } from '../src/view/model/actions/dropFacts.js';
 import { buildDragSnapshot } from '../src/host/structuralEdit.js';
 
 const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');

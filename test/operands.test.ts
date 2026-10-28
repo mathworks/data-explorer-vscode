@@ -4,7 +4,7 @@
 // "which rows does this action act on". These cases are the shapes a real selection
 // takes; the menu/keyboard agreement itself is pinned in multiSelectInvariants.test.ts.
 import { describe, it, expect } from 'vitest';
-import { resolveOperands, sectionRowIdOf, type OperandRow } from '../src/webview/operands.js';
+import { resolveOperands, sectionRowIdOf, type OperandRow } from '../src/view/model/actions/operands.js';
 
 // A minimal two-section table: Design Data holds Bus A (children x, y) and plain V;
 // Architectural Data holds Bus B (child z).

@@ -9,13 +9,13 @@ import {
   openSourceView,
   parseDetached,
   releaseSourceView,
-} from './SlddModel.js';
+} from '../view/model/workspace/SlddModel.js';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
-import { buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
+import { buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from '../view/model/rows/rowBuilder.js';
 import { clipMarkChange, clipMarkOfDoc } from './clipMarks.js';
-import { rowPlannerFor } from './rowPlanner.js';
-import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
-import { answerChildRequest } from './childRequest.js';
+import { rowPlannerFor } from '../view/model/rows/rowPlanner.js';
+import { LAZY_ROW_BUDGET, lazyRowsBanner } from '../view/model/rows/lazyRows.js';
+import { answerChildRequest } from '../view/model/rows/childRequest.js';
 import {
   baselineOwed,
   captureBaseline,
@@ -73,7 +73,7 @@ import {
 } from './editorHub.js';
 import { runTransfer, type TransferAdapter, type TransferDeps } from './transfer.js';
 import { clipboardRegister, dragRegister } from './transferRegisters.js';
-import { sectionRules } from './sectionRules.js';
+import { sectionRules } from '../view/model/actions/sectionRules.js';
 import {
   deleteEntry,
   deleteChild,
@@ -96,15 +96,15 @@ import { editRefusalText, entrySelectorOf, minimalReplacement, planDeletion, typ
 import { copyEntriesToClipboard, dragEntries } from './clipboardAction.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { subscribeUsageRepost } from './usageRepostWatch.js';
-import { sourceWarnings, warningBanner } from './parseWarnings.js';
-import { postOrReport } from './postPayload.js';
+import { sourceWarnings, warningBanner } from '../view/model/rows/parseWarnings.js';
+import { postOrReport } from '../view/model/rows/postPayload.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
-import { answerMatrixRequest } from './matrixRequest.js';
+import { answerMatrixRequest } from '../view/model/matrix/matrixRequest.js';
 import { parsesAsJson } from './slddFormat.js';
 import { wideLanding } from './wideRepaint.js';
 import { catalogFunctionRenameOf, catalogRenameOf, scJsonFunctionRenameEdits, scJsonRenameEdits } from './scRename.js';
-import { buildSectionRowId } from '../common/sectionRowId.js';
-import { basename } from '../common/pathUtil.js';
+import { buildSectionRowId } from '../view/model/ids/sectionRowId.js';
+import { basename } from '../view/model/ids/pathUtil.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { addChildRefusal, addEntryRefusal, deleteRefusal, describeSource, refusedMessage, type RefusedGesture } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
@@ -1462,7 +1462,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     /**
      * Delete SEVERAL rows as ONE edit.
      *
-     * Delete is the row-granular action (see webview/operands.ts): its operands can be a
+     * Delete is the row-granular action (see view/model/actions/operands.ts): its operands can be a
      * mix of whole entries and nested children, across sections, and all of it has to land
      * in a single write. This format's undo stack is VS Code's own, and it steps by WRITE —
      * so two writes would mean Cmd+Z taking back part of one gesture and leaving the rest.

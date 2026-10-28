@@ -14,7 +14,7 @@
 // (payload, mode, veto, drop-target state); it does NOT cover the browser's
 // native drag pipeline or the real drag image, which need a live browser.
 import { describe, it, expect } from 'vitest';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import { DexTreeTable, type TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
 
 function makeRow(id: string, parent: string | null, name = id): TreeTableRow {
   return { ID: id, parent, Name: { label: name }, Value: '', DataType: '', Description: '', Status: '' };

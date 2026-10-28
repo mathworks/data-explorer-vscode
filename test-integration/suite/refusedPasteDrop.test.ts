@@ -25,7 +25,7 @@ import * as vscode from 'vscode';
 import { DataModel } from 'data-explorer-core';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { peekModel } from '../../src/host/SlddModel';
+import { peekModel } from '../../src/view/model/workspace/SlddModel';
 import { clearClipboard } from '../../src/host/clipboard';
 import { clearDrag, getDrag } from '../../src/host/dragState';
 import { chunkOf, ctx, entryNames, fakePanel, isEntryRow, nameOf, quiet, token, waitFor, ws, wsUri } from './tools/hostHarness';

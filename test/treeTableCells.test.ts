@@ -9,7 +9,7 @@
 // `_getCellText` is the same text sorting and searching read, so a shape that
 // returns undefined there breaks both.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import { DexTreeTable, type TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
 
 const HOST_COLUMNS = ['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class', 'storageClass', 'Description'];
 
@@ -841,7 +841,7 @@ describe('cell text for sorting and searching', () => {
 // search marking a run the filter never matched. Adding a cell shape in the host
 // layer, or an arm in core's toRow, produces exactly that gap and nothing raises.
 //
-// So: walk every cell shape the host can emit (src/host/rowBuilder.ts,
+// So: walk every cell shape the host can emit (src/view/model/rows/rowBuilder.ts,
 // usageCells.ts, matrixPayload.ts) and assert the searched text IS the painted
 // text. Deliberately no expected strings — pinning the two readings to each other
 // is the whole point, so a shape whose flattening rule legitimately changes stays

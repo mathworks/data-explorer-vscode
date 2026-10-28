@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
-import { InspectorPage } from './inspectorPage.js';
+import { InspectorPage } from '../view/model/inspector/inspectorPage.js';
 import { renderWebviewHtml } from './webviewHtml.js';
 import type { PropsToHostMessage } from '../common/protocol.js';
 

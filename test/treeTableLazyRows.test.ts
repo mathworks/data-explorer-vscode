@@ -19,8 +19,8 @@
 //    answer has not arrived must not re-ask, and a row that came back with children
 //    must stop being askable at all.
 import { describe, it, expect } from 'vitest';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
-import { mergeChildRows } from '../src/webview/rowUpdates.js';
+import { DexTreeTable, type TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
+import { mergeChildRows } from '../src/view/model/actions/rowUpdates.js';
 
 function makeRow(id: string, parent: string | null, extra: Partial<TreeTableRow> = {}): TreeTableRow {
   return { ID: id, parent, Name: { label: id }, Value: '', DataType: '', Description: '', Status: '', ...extra };

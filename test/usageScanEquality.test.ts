@@ -46,7 +46,7 @@ import {
 } from 'data-explorer-core';
 import { namesFromMat, namesFromSldd, type NameRecord } from '../src/host/nameExtract.js';
 import { namesOfFile, type NameReader } from '../src/host/nameScan.js';
-import { readSlddContent, scanSldd } from '../src/host/slddContent.js';
+import { readSlddContent, scanSldd } from '../src/view/model/workspace/slddContent.js';
 import {
   cheapOne,
   newSourceCache,

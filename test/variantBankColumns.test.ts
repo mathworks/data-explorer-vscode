@@ -12,8 +12,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel } from 'data-explorer-core';
-import { getModel, getModelFromBytes } from '../src/host/SlddModel.js';
-import { buildEntryRows, COLUMNS, COLUMN_GROUPS, COLUMN_LABELS } from '../src/host/rowBuilder.js';
+import { getModel, getModelFromBytes } from '../src/view/model/workspace/SlddModel.js';
+import { buildEntryRows, COLUMNS, COLUMN_GROUPS, COLUMN_LABELS } from '../src/view/model/rows/rowBuilder.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

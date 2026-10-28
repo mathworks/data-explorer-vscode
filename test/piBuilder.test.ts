@@ -2,8 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, getModelFromBytes, invalidate } from '../src/host/SlddModel.js';
-import { buildPropertyGroups } from '../src/host/piBuilder.js';
+import { getModel, getModelFromBytes, invalidate } from '../src/view/model/workspace/SlddModel.js';
+import { buildPropertyGroups } from '../src/view/model/inspector/piBuilder.js';
 import { DataModel } from 'data-explorer-core';
 
 function fixturePath(name: string): string {
