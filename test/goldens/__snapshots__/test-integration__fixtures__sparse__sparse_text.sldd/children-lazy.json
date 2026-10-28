@@ -1,0 +1,32 @@
+{
+ "digested": true,
+ "sha256": "c2d241a02954614ff7c07e7b83c3598c1bea4a6bfb22564f1e04297063b22e64",
+ "entryCount": 25,
+ "entries": {
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/c": "6feb3c59faf4c685",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dAllZero": "ca5b71907b4270a4",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dCol": "5cb00a7334acdb02",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dComplex": "dd635b96f863360a",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dDiag": "3ed7093063f07f2d",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dLogical": "6876a725d56c22b1",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dNonFinite": "f540434268b253dc",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dRow": "05fff2690d703cac",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dSingle": "41bfdc92188b4421",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/fhAlias": "401bf2e0417befb4",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/numAlias": "91f64e1469e3cb9c",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/pDense": "16b54b3b4b454e00",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/pSp": "75fd6a4a78ac47d2",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/pSpComplex": "05b6bab6fb928bdd",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/pSpLogical": "f4de7b99b2f23ae3",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/spBig": "710159abceeb539a",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/spCol": "7ce0cd1426b8d9b6",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/spComplex": "2d5e3302c7deb939",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/spDiag": "e8aa0cbbd505204d",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/spLogical": "4c361a65d0aa4d33",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/spNonFinite": "592df575d21c4062",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/spRow": "7092ebc63f68717b",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/spSingle": "755cf8156473fac3",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/spTall": "2eda876dcdea5e20",
+  "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/st": "be19f631d61f4c5d"
+ }
+}

@@ -1,0 +1,554 @@
+{
+ "binedit:file:///fx/test-integration/fixtures/typelink/typelink_binary.sldd/design/MyAlias": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "MyAlias",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Base Type",
+      "value": "uint8",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Alias Type",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.AliasType",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Data Scope",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/typelink/typelink_binary.sldd/design/Kp": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Kp",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "MyAlias",
+      "editable": false,
+      "type": "text",
+      "valueLink": "MyAlias@binedit:file:///fx/test-integration/fixtures/typelink/typelink_binary.sldd"
+     },
+     {
+      "name": "Kind",
+      "value": "Simulink Parameter",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Parameter",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Min",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Max",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Storage Class",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Identifier",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Alignment",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Custom Attributes",
+    "properties": [
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Definition File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Owner",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Preserve Array Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Struct Name",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Get Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Set Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/typelink/typelink_binary.sldd/design/Gain": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Gain",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "2",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Simulink Parameter",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Parameter",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Min",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Max",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Storage Class",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Identifier",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Alignment",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Custom Attributes",
+    "properties": [
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Definition File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Owner",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Preserve Array Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Struct Name",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Get Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Set Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/typelink/typelink_binary.sldd/design/Borrowed": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Borrowed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "3",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "Kp",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Simulink Parameter",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Parameter",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Min",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Max",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Storage Class",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Identifier",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Alignment",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Custom Attributes",
+    "properties": [
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Definition File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Owner",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Preserve Array Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Struct Name",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Get Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Set Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

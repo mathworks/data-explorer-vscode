@@ -1,0 +1,32 @@
+{
+ "digested": true,
+ "sha256": "e438b7a5555bd0ee13f20272ccb605915f16d3bd70fd8b0de0bd03d115821125",
+ "entryCount": 25,
+ "entries": {
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/c": "08ce9248caff97c4",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/dAllZero": "5298df232ce6e7c2",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/dCol": "427f259787dfaee7",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/dComplex": "57e466b4aa0ce477",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/dDiag": "536ba6de5fe3588a",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/dLogical": "a74b7808797e3948",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/dNonFinite": "adfde893d4df9c73",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/dRow": "2c7319ac22dd57c9",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/dSingle": "9a3c2628e245c04e",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/fhAlias": "98b5325b96c114c3",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/numAlias": "2bac87f5033819ec",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/pDense": "8b13b49c96195fc7",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/pSp": "2af425b8377caf6c",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/pSpComplex": "0574eb91a86d6325",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/pSpLogical": "ff7e828f7c306446",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/spBig": "ae6ee9648194d2d3",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/spCol": "21aeab90992b03a0",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/spComplex": "480f4029c2db6baf",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/spDiag": "6e392faa0dbc6b6e",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/spLogical": "a0a6e39dd9ea5c4e",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/spNonFinite": "187831c1e4528d34",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/spRow": "8bc64f3cc72fb7b2",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/spSingle": "4b0c8480c96173e3",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/spTall": "1197b5f6df9a3dfc",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd/design/st": "992bc0ccd47dca58"
+ }
+}

@@ -1,0 +1,13 @@
+{
+ "file:///fx/test-integration/fixtures/caserefs/ExtraDict.sldd/design/ExtraVar": {
+  "blockLinks": [
+   {
+    "blockName": "Gain3",
+    "blockPath": "Gain3",
+    "modelName": "caseRefs",
+    "modelUri": "file:///fx/test-integration/fixtures/caserefs/caseRefs.slx",
+    "linkTarget": "blocks:3@file:///fx/test-integration/fixtures/caserefs/caseRefs.slx"
+   }
+  ]
+ }
+}

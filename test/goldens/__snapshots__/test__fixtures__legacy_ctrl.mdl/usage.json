@@ -1,0 +1,22 @@
+{
+ "file:///fx/test/fixtures/legacy_ctrl.mdl/blocks/Gain1": {
+  "paramLinks": [
+   {
+    "property": "Gain",
+    "paramName": "Kp",
+    "source": "params.sldd",
+    "linkTarget": "Kp@file:///fx/test/fixtures/params.sldd"
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/legacy_ctrl.mdl/blocks/Setpoint": {
+  "paramLinks": [
+   {
+    "property": "Value",
+    "paramName": "Uo",
+    "source": "params.sldd",
+    "linkTarget": "Uo@file:///fx/test/fixtures/params.sldd"
+   }
+  ]
+ }
+}

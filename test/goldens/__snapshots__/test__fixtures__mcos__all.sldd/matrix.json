@@ -1,0 +1,44 @@
+{
+ "file:///fx/test/fixtures/mcos/all.sldd/design/ParamMat": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test/fixtures/mcos/all.sldd/design/ParamMat",
+  "matrix": {
+   "name": "ParamMat.Value",
+   "className": "double",
+   "dims": [
+    2,
+    3
+   ],
+   "nodeId": "file:///fx/test/fixtures/mcos/all.sldd/design/ParamMat",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+   ]
+  }
+ },
+ "file:///fx/test/fixtures/mcos/all.sldd/design/ParamMat/Value": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test/fixtures/mcos/all.sldd/design/ParamMat/Value",
+  "matrix": {
+   "name": "Value",
+   "className": "double",
+   "dims": [
+    2,
+    3
+   ],
+   "nodeId": "file:///fx/test/fixtures/mcos/all.sldd/design/ParamMat/Value",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+   ]
+  }
+ }
+}

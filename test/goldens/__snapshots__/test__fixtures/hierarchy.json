@@ -1,0 +1,487 @@
+[
+ {
+  "label": "fixtures",
+  "kind": "group",
+  "groupKind": "folder",
+  "collapsible": "collapsed",
+  "children": [
+   {
+    "label": "arch_binary.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/arch_binary.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "arch_service_binary.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/arch_service_binary.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "arch.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/arch.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "chain_model.slx",
+    "kind": "model",
+    "id": "file:///fx/test/fixtures/chain_model.slx",
+    "health": null,
+    "collapsible": "collapsed",
+    "children": [
+     {
+      "label": "External Data",
+      "kind": "group",
+      "groupKind": "external-data",
+      "collapsible": "collapsed",
+      "children": [
+       {
+        "label": "chain_top.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test/fixtures/chain_top.sldd",
+        "health": null,
+        "collapsible": "collapsed",
+        "children": [
+         {
+          "label": "chain_leaf.sldd",
+          "kind": "sldd",
+          "id": "file:///fx/test/fixtures/chain_leaf.sldd",
+          "health": null,
+          "collapsible": "none"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "label": "compressed.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/compressed.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "empty_bin.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/empty_bin.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "empty_text.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/empty_text.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "legacy_ctrl.mdl",
+    "kind": "model",
+    "id": "file:///fx/test/fixtures/legacy_ctrl.mdl",
+    "health": null,
+    "collapsible": "collapsed",
+    "children": [
+     {
+      "label": "plant.mdl",
+      "kind": "missing",
+      "collapsible": "none",
+      "description": "unresolved reference"
+     },
+     {
+      "label": "External Data",
+      "kind": "group",
+      "groupKind": "external-data",
+      "collapsible": "collapsed",
+      "children": [
+       {
+        "label": "params.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test/fixtures/params.sldd",
+        "health": null,
+        "collapsible": "none"
+       },
+       {
+        "label": "signals.mat",
+        "kind": "missing",
+        "collapsible": "none",
+        "description": "unresolved reference"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "label": "model_with_refs.mdl",
+    "kind": "model",
+    "id": "file:///fx/test/fixtures/model_with_refs.mdl",
+    "health": null,
+    "collapsible": "collapsed",
+    "children": [
+     {
+      "label": "plant.slx",
+      "kind": "missing",
+      "collapsible": "none",
+      "description": "unresolved reference"
+     },
+     {
+      "label": "External Data",
+      "kind": "group",
+      "groupKind": "external-data",
+      "collapsible": "collapsed",
+      "children": [
+       {
+        "label": "params.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test/fixtures/params.sldd",
+        "health": null,
+        "collapsible": "none"
+       },
+       {
+        "label": "signals.mat",
+        "kind": "missing",
+        "collapsible": "none",
+        "description": "unresolved reference"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "label": "model_with_refs.slx",
+    "kind": "model",
+    "id": "file:///fx/test/fixtures/model_with_refs.slx",
+    "health": null,
+    "collapsible": "collapsed",
+    "children": [
+     {
+      "label": "plant.slx",
+      "kind": "missing",
+      "collapsible": "none",
+      "description": "unresolved reference"
+     },
+     {
+      "label": "External Data",
+      "kind": "group",
+      "groupKind": "external-data",
+      "collapsible": "collapsed",
+      "children": [
+       {
+        "label": "params.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test/fixtures/params.sldd",
+        "health": null,
+        "collapsible": "none"
+       },
+       {
+        "label": "signals.mat",
+        "kind": "missing",
+        "collapsible": "none",
+        "description": "unresolved reference"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "label": "nd_numeric.mat",
+    "kind": "mat",
+    "id": "file:///fx/test/fixtures/nd_numeric.mat",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "nested_objects.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/nested_objects.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "numeric_json.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/numeric_json.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "object_array_binary.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/object_array_binary.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "object_array_text.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/object_array_text.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "object_props_binary.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/object_props_binary.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "object_props_text.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/object_props_text.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "rt_bin.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/rt_bin.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "rt_text.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/rt_text.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "shadow_pair.slx",
+    "kind": "model",
+    "id": "file:///fx/test/fixtures/shadow_pair.slx",
+    "health": null,
+    "collapsible": "collapsed",
+    "children": [
+     {
+      "label": "External Data",
+      "kind": "group",
+      "groupKind": "external-data",
+      "collapsible": "collapsed",
+      "children": [
+       {
+        "label": "shadow_first.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test/fixtures/shadow_first.sldd",
+        "health": null,
+        "collapsible": "none"
+       },
+       {
+        "label": "shadow_second.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test/fixtures/shadow_second.sldd",
+        "health": null,
+        "collapsible": "none"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "label": "shadow_ws.slx",
+    "kind": "model",
+    "id": "file:///fx/test/fixtures/shadow_ws.slx",
+    "health": null,
+    "collapsible": "collapsed",
+    "children": [
+     {
+      "label": "External Data",
+      "kind": "group",
+      "groupKind": "external-data",
+      "collapsible": "collapsed",
+      "children": [
+       {
+        "label": "params.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test/fixtures/params.sldd",
+        "health": null,
+        "collapsible": "none"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "label": "shared_gain.slx",
+    "kind": "model",
+    "id": "file:///fx/test/fixtures/shared_gain.slx",
+    "health": null,
+    "collapsible": "collapsed",
+    "children": [
+     {
+      "label": "External Data",
+      "kind": "group",
+      "groupKind": "external-data",
+      "collapsible": "collapsed",
+      "children": [
+       {
+        "label": "params.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test/fixtures/params.sldd",
+        "health": null,
+        "collapsible": "none"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "label": "sid_blocks.slx",
+    "kind": "model",
+    "id": "file:///fx/test/fixtures/sid_blocks.slx",
+    "health": null,
+    "collapsible": "collapsed",
+    "children": [
+     {
+      "label": "External Data",
+      "kind": "group",
+      "groupKind": "external-data",
+      "collapsible": "collapsed",
+      "children": [
+       {
+        "label": "params.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test/fixtures/params.sldd",
+        "health": null,
+        "collapsible": "none"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "label": "mcos",
+  "kind": "group",
+  "groupKind": "folder",
+  "collapsible": "collapsed",
+  "children": [
+   {
+    "label": "Alias.mat",
+    "kind": "mat",
+    "id": "file:///fx/test/fixtures/mcos/Alias.mat",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "all.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/mcos/all.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "Bp.mat",
+    "kind": "mat",
+    "id": "file:///fx/test/fixtures/mcos/Bp.mat",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "busArray.mat",
+    "kind": "mat",
+    "id": "file:///fx/test/fixtures/mcos/busArray.mat",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "deep_objs.mat",
+    "kind": "mat",
+    "id": "file:///fx/test/fixtures/mcos/deep_objs.mat",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "Lut.mat",
+    "kind": "mat",
+    "id": "file:///fx/test/fixtures/mcos/Lut.mat",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "mcosfix.slx",
+    "kind": "model",
+    "id": "file:///fx/test/fixtures/mcos/mcosfix.slx",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "Numeric.mat",
+    "kind": "mat",
+    "id": "file:///fx/test/fixtures/mcos/Numeric.mat",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "object_props.mat",
+    "kind": "mat",
+    "id": "file:///fx/test/fixtures/mcos/object_props.mat",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "Param.mat",
+    "kind": "mat",
+    "id": "file:///fx/test/fixtures/mcos/Param.mat",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "paramArray.mat",
+    "kind": "mat",
+    "id": "file:///fx/test/fixtures/mcos/paramArray.mat",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "ParamMat.mat",
+    "kind": "mat",
+    "id": "file:///fx/test/fixtures/mcos/ParamMat.mat",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "Sig.mat",
+    "kind": "mat",
+    "id": "file:///fx/test/fixtures/mcos/Sig.mat",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "variableUsageArray.mat",
+    "kind": "mat",
+    "id": "file:///fx/test/fixtures/mcos/variableUsageArray.mat",
+    "health": null,
+    "collapsible": "none"
+   }
+  ]
+ },
+ {
+  "label": "sldd-stream-objects",
+  "kind": "group",
+  "groupKind": "folder",
+  "collapsible": "collapsed",
+  "children": [
+   {
+    "label": "stream_objects_binary.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/sldd-stream-objects/stream_objects_binary.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "stream_objects_text.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test/fixtures/sldd-stream-objects/stream_objects_text.sldd",
+    "health": null,
+    "collapsible": "none"
+   }
+  ]
+ }
+]

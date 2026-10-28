@@ -1,0 +1,78 @@
+{
+ "file:///fx/test-integration/fixtures/workspace/data.sldd/design/CellMatrix": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/data.sldd/design/CellMatrix",
+  "matrix": {
+   "name": "CellMatrix",
+   "className": "cell",
+   "dims": [
+    2,
+    2
+   ],
+   "nodeId": "file:///fx/test-integration/fixtures/workspace/data.sldd/design/CellMatrix",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4"
+   ]
+  }
+ },
+ "file:///fx/test-integration/fixtures/workspace/data.sldd/design/Hybrid/1/field": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/data.sldd/design/Hybrid/1/field",
+  "matrix": {
+   "name": "field",
+   "className": "double",
+   "dims": [
+    2,
+    2
+   ],
+   "nodeId": "file:///fx/test-integration/fixtures/workspace/data.sldd/design/Hybrid/1/field",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4"
+   ]
+  }
+ },
+ "file:///fx/test-integration/fixtures/workspace/data.sldd/design/Matrix": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/data.sldd/design/Matrix",
+  "matrix": {
+   "name": "Matrix",
+   "className": "double",
+   "dims": [
+    2,
+    2
+   ],
+   "nodeId": "file:///fx/test-integration/fixtures/workspace/data.sldd/design/Matrix",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4"
+   ]
+  }
+ },
+ "file:///fx/test-integration/fixtures/workspace/data.sldd/design/stringMatrix": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/data.sldd/design/stringMatrix",
+  "matrix": {
+   "name": "stringMatrix",
+   "className": "string",
+   "dims": [
+    2,
+    2
+   ],
+   "nodeId": "file:///fx/test-integration/fixtures/workspace/data.sldd/design/stringMatrix",
+   "cells": [
+    "\"abc\"",
+    "\"de\"",
+    "\"f\"",
+    "\"gh i\""
+   ]
+  }
+ }
+}

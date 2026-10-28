@@ -1,0 +1,231 @@
+{
+ "binedit:file:///fx/test/fixtures/mcos/Sig.mat/Sig": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Sig",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "single",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Simulink Signal",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Signal",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Dimensions Mode",
+      "value": "auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Initial Value",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "-5",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "5",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "V",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Sample Time",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Sampling Mode",
+      "value": "auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "sigdesc",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Storage Class",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Identifier",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Alignment",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Stored Integer Min",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Max",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Scope",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Definition File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Owner",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Preserve Array Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Struct Name",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Get Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Set Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "LoggingInfo.DataLogging",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "LoggingInfo.NameMode",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "LoggingInfo.LoggingName",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "LoggingInfo.DecimateData",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "LoggingInfo.Decimation",
+      "value": "2",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "LoggingInfo.LimitDataPoints",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "LoggingInfo.MaxPoints",
+      "value": "5000",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

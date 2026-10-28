@@ -1,0 +1,195 @@
+{
+ "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/CellWithParam": {
+  "type": "childRows",
+  "nodeId": "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/CellWithParam",
+  "rows": [
+   {
+    "ID": "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/CellWithParam/1",
+    "parent": "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/CellWithParam",
+    "Status": "",
+    "Name": {
+     "label": "CellWithParam{1}",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "1",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/CellWithParam/2",
+    "parent": "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/CellWithParam",
+    "Status": "",
+    "Name": {
+     "label": "CellWithParam{2}",
+     "iconId": "wsParameters",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "7",
+    "_valueEditable": true,
+    "DataType": "int32",
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "dimensions": "[1 1]",
+    "complexity": "real",
+    "storageClass": {
+     "text": "Auto",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Auto",
+      "SimulinkGlobal",
+      "ExportedGlobal",
+      "ImportedExtern",
+      "ImportedExternPointer",
+      "Custom"
+     ]
+    },
+    "headerFile": "",
+    "alignment": "-1",
+    "Class": "Simulink.Parameter",
+    "Kind": "Simulink Parameter",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/CellWithParam/3",
+    "parent": "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/CellWithParam",
+    "Status": "",
+    "Name": {
+     "label": "CellWithParam{3}",
+     "iconId": "wsCharacter",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "'txt'",
+    "_valueEditable": true,
+    "DataType": "char",
+    "Description": "",
+    "Class": "char",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/StructWithParam": {
+  "type": "childRows",
+  "nodeId": "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/StructWithParam",
+  "rows": [
+   {
+    "ID": "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/StructWithParam/plain",
+    "parent": "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/StructWithParam",
+    "Status": "",
+    "Name": {
+     "label": "plain",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "5",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/StructWithParam/paramField",
+    "parent": "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/StructWithParam",
+    "Status": "",
+    "Name": {
+     "label": "paramField",
+     "iconId": "wsParameters",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "3.14",
+    "_valueEditable": true,
+    "DataType": "auto",
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "dimensions": "[1 1]",
+    "complexity": "real",
+    "storageClass": {
+     "text": "Auto",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Auto",
+      "SimulinkGlobal",
+      "ExportedGlobal",
+      "ImportedExtern",
+      "ImportedExternPointer",
+      "Custom"
+     ]
+    },
+    "headerFile": "",
+    "alignment": "-1",
+    "Class": "Simulink.Parameter",
+    "Kind": "Simulink Parameter",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ }
+}

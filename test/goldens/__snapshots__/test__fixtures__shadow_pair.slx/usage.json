@@ -1,0 +1,12 @@
+{
+ "file:///fx/test/fixtures/shadow_pair.slx/blocks/1": {
+  "paramLinks": [
+   {
+    "property": "Gain",
+    "paramName": "PairVar",
+    "source": "shadow_first.sldd",
+    "linkTarget": "PairVar@file:///fx/test/fixtures/shadow_first.sldd"
+   }
+  ]
+ }
+}

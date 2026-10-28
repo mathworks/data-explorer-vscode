@@ -1,0 +1,31 @@
+[
+ {
+  "label": "classes",
+  "kind": "group",
+  "groupKind": "folder",
+  "collapsible": "collapsed",
+  "children": [
+   {
+    "label": "classes_r2027a_text.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test-integration/fixtures/classes/classes_r2027a_text.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "variantbank_r2027a_binary.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test-integration/fixtures/classes/variantbank_r2027a_binary.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "variantbank_r2027a_text.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test-integration/fixtures/classes/variantbank_r2027a_text.sldd",
+    "health": null,
+    "collapsible": "none"
+   }
+  ]
+ }
+]

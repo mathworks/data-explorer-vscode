@@ -1,0 +1,64 @@
+[
+ {
+  "label": "legacy",
+  "kind": "group",
+  "groupKind": "folder",
+  "collapsible": "collapsed",
+  "children": [
+   {
+    "label": "legacyClassic.mdl",
+    "kind": "model",
+    "id": "file:///fx/test-integration/fixtures/legacy/legacyClassic.mdl",
+    "health": null,
+    "collapsible": "collapsed",
+    "children": [
+     {
+      "label": "plant.mdl",
+      "kind": "missing",
+      "collapsible": "none",
+      "description": "unresolved reference"
+     },
+     {
+      "label": "External Data",
+      "kind": "group",
+      "groupKind": "external-data",
+      "collapsible": "collapsed",
+      "children": [
+       {
+        "label": "legacyParams.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test-integration/fixtures/legacy/legacyParams.sldd",
+        "health": null,
+        "collapsible": "none"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "label": "legacyModern.mdl",
+    "kind": "model",
+    "id": "file:///fx/test-integration/fixtures/legacy/legacyModern.mdl",
+    "health": null,
+    "collapsible": "collapsed",
+    "children": [
+     {
+      "label": "External Data",
+      "kind": "group",
+      "groupKind": "external-data",
+      "collapsible": "collapsed",
+      "children": [
+       {
+        "label": "legacyParams.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test-integration/fixtures/legacy/legacyParams.sldd",
+        "health": null,
+        "collapsible": "none"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+]

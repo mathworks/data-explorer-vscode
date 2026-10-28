@@ -1,0 +1,33 @@
+{
+ "file:///fx/test/fixtures/shadow_ws.slx/blocks/1": {
+  "paramLinks": [
+   {
+    "property": "Gain",
+    "paramName": "Kp",
+    "source": "",
+    "linkTarget": "workspace:Kp@file:///fx/test/fixtures/shadow_ws.slx"
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/shadow_ws.slx/blocks/2": {
+  "paramLinks": [
+   {
+    "property": "Value",
+    "paramName": "Uo",
+    "source": "params.sldd",
+    "linkTarget": "Uo@file:///fx/test/fixtures/params.sldd"
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/shadow_ws.slx/workspace/Kp": {
+  "blockLinks": [
+   {
+    "blockName": "WsGain",
+    "blockPath": "WsGain",
+    "modelName": "",
+    "modelUri": "file:///fx/test/fixtures/shadow_ws.slx",
+    "linkTarget": "blocks:1@file:///fx/test/fixtures/shadow_ws.slx"
+   }
+  ]
+ }
+}

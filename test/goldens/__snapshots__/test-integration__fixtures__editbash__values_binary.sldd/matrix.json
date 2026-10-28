@@ -1,0 +1,251 @@
+{
+ "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/c2x2": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/c2x2",
+  "matrix": {
+   "name": "c2x2",
+   "className": "cell",
+   "dims": [
+    2,
+    2
+   ],
+   "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/c2x2",
+   "cells": [
+    "1",
+    "'a'",
+    "\"b\"",
+    "int8(2)"
+   ]
+  }
+ },
+ "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/cLeaves/3": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/cLeaves/3",
+  "matrix": {
+   "name": "cLeaves{3}",
+   "className": "double",
+   "dims": [
+    2,
+    3
+   ],
+   "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/cLeaves/3",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+   ]
+  }
+ },
+ "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/cLeaves/32": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/cLeaves/32",
+  "matrix": {
+   "name": "cLeaves{32}",
+   "className": "string",
+   "dims": [
+    2,
+    2
+   ],
+   "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/cLeaves/32",
+   "cells": [
+    "\"a\"",
+    "\"b\"",
+    "\"c\"",
+    "\"d\""
+   ]
+  }
+ },
+ "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/cLeaves/38": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/cLeaves/38",
+  "matrix": {
+   "name": "cLeaves{38}",
+   "className": "double",
+   "dims": [
+    2,
+    2,
+    2
+   ],
+   "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/cLeaves/38",
+   "cells": [
+    "1",
+    "3",
+    "2",
+    "4",
+    "5",
+    "7",
+    "6",
+    "8"
+   ]
+  }
+ },
+ "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/d2x3": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/d2x3",
+  "matrix": {
+   "name": "d2x3",
+   "className": "double",
+   "dims": [
+    2,
+    3
+   ],
+   "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/d2x3",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+   ]
+  }
+ },
+ "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/nd2x2x2": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/nd2x2x2",
+  "matrix": {
+   "name": "nd2x2x2",
+   "className": "double",
+   "dims": [
+    2,
+    2,
+    2
+   ],
+   "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/nd2x2x2",
+   "cells": [
+    "1",
+    "3",
+    "2",
+    "4",
+    "5",
+    "7",
+    "6",
+    "8"
+   ]
+  }
+ },
+ "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/pMatrix": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/pMatrix",
+  "matrix": {
+   "name": "pMatrix.Value",
+   "className": "double",
+   "dims": [
+    2,
+    2
+   ],
+   "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/pMatrix",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4"
+   ]
+  }
+ },
+ "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/pMatrix/Value": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/pMatrix/Value",
+  "matrix": {
+   "name": "Value",
+   "className": "double",
+   "dims": [
+    2,
+    2
+   ],
+   "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/pMatrix/Value",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4"
+   ]
+  }
+ },
+ "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/sLeaves/d2x3": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/sLeaves/d2x3",
+  "matrix": {
+   "name": "d2x3",
+   "className": "double",
+   "dims": [
+    2,
+    3
+   ],
+   "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/sLeaves/d2x3",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+   ]
+  }
+ },
+ "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/sLeaves/str2x2": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/sLeaves/str2x2",
+  "matrix": {
+   "name": "str2x2",
+   "className": "string",
+   "dims": [
+    2,
+    2
+   ],
+   "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/sLeaves/str2x2",
+   "cells": [
+    "\"a\"",
+    "\"b\"",
+    "\"c\"",
+    "\"d\""
+   ]
+  }
+ },
+ "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/sLeaves/nd2x2x2": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/sLeaves/nd2x2x2",
+  "matrix": {
+   "name": "nd2x2x2",
+   "className": "double",
+   "dims": [
+    2,
+    2,
+    2
+   ],
+   "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/sLeaves/nd2x2x2",
+   "cells": [
+    "1",
+    "3",
+    "2",
+    "4",
+    "5",
+    "7",
+    "6",
+    "8"
+   ]
+  }
+ },
+ "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/str2x2": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/str2x2",
+  "matrix": {
+   "name": "str2x2",
+   "className": "string",
+   "dims": [
+    2,
+    2
+   ],
+   "nodeId": "binedit:file:///fx/test-integration/fixtures/editbash/values_binary.sldd/design/str2x2",
+   "cells": [
+    "\"a\"",
+    "\"b\"",
+    "\"c\"",
+    "\"d\""
+   ]
+  }
+ }
+}

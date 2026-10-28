@@ -1,0 +1,232 @@
+[
+ {
+  "type": "setRows",
+  "docUri": "file:///fx/test/fixtures/empty_bin.sldd",
+  "rows": [
+   {
+    "ID": "section:design",
+    "parent": null,
+    "Name": {
+     "label": "Design Data",
+     "iconId": "databaseFolderDesign",
+     "editable": false,
+     "disabled": false,
+     "element": false
+    },
+    "Value": "",
+    "Class": "",
+    "Kind": "",
+    "DataType": "",
+    "Status": "",
+    "UsedBy": ""
+   },
+   {
+    "ID": "section:arch",
+    "parent": null,
+    "Name": {
+     "label": "Architectural Data",
+     "iconId": "databaseFolderArchitecture",
+     "editable": false,
+     "disabled": false,
+     "element": false
+    },
+    "Value": "",
+    "Class": "",
+    "Kind": "",
+    "DataType": "",
+    "Status": "",
+    "UsedBy": ""
+   },
+   {
+    "ID": "section:config",
+    "parent": null,
+    "Name": {
+     "label": "Configurations",
+     "iconId": "databaseFolderConfiguration",
+     "editable": false,
+     "disabled": false,
+     "element": false
+    },
+    "Value": "",
+    "Class": "",
+    "Kind": "",
+    "DataType": "",
+    "Status": "",
+    "UsedBy": ""
+   },
+   {
+    "ID": "section:other",
+    "parent": null,
+    "Name": {
+     "label": "Other Data",
+     "iconId": "databaseFolder",
+     "editable": false,
+     "disabled": false,
+     "element": false
+    },
+    "Value": "",
+    "Class": "",
+    "Kind": "",
+    "DataType": "",
+    "Status": "",
+    "UsedBy": ""
+   }
+  ],
+  "columns": [
+   "Name",
+   "Value",
+   "DataType",
+   "UsedBy",
+   "Status",
+   "Kind",
+   "Class",
+   "Description",
+   "dimensions",
+   "dimensionsMode",
+   "complexity",
+   "Min",
+   "Max",
+   "Unit",
+   "storageClass",
+   "headerFile",
+   "alignment",
+   "definitionFile",
+   "preStatement",
+   "postStatement",
+   "qualifier",
+   "bankName",
+   "variantConditions",
+   "allChoicesCoderInfo",
+   "activeChoiceCoderInfo",
+   "lastModified",
+   "lastModifiedBy"
+  ],
+  "columnLabels": {
+   "Name": "Name",
+   "Value": "Value",
+   "Class": "Class",
+   "Kind": "Kind",
+   "DataType": "Data Type",
+   "Status": "Status",
+   "UsedBy": "Usage",
+   "Description": "Description",
+   "Min": "Min",
+   "Max": "Max",
+   "Unit": "Unit",
+   "definitionFile": "Definition File",
+   "preStatement": "Pre Statement",
+   "postStatement": "Post Statement",
+   "qualifier": "Qualifier",
+   "bankName": "Bank Name",
+   "variantConditions": "Variant Conditions",
+   "allChoicesCoderInfo": "All Choices Coder Info",
+   "activeChoiceCoderInfo": "Active Choice Coder Info",
+   "lastModified": "Last Modified",
+   "lastModifiedBy": "Last Modified By",
+   "dimensions": "Dimensions",
+   "complexity": "Complexity",
+   "storageClass": "Storage Class",
+   "headerFile": "Header File",
+   "alignment": "Alignment",
+   "dimensionsMode": "Dimensions Mode"
+  },
+  "columnGroups": {
+   "Min": "Data Object",
+   "Max": "Data Object",
+   "Unit": "Data Object",
+   "dimensions": "Data Object",
+   "complexity": "Data Object",
+   "dimensionsMode": "Data Object",
+   "storageClass": "Code Generation",
+   "headerFile": "Code Generation",
+   "alignment": "Code Generation",
+   "definitionFile": "Code Generation",
+   "preStatement": "Code Generation",
+   "postStatement": "Code Generation",
+   "qualifier": "Code Generation",
+   "bankName": "Variant Bank",
+   "variantConditions": "Variant Bank",
+   "allChoicesCoderInfo": "Variant Bank",
+   "activeChoiceCoderInfo": "Variant Bank",
+   "lastModified": "Data Dictionary",
+   "lastModifiedBy": "Data Dictionary"
+  },
+  "editable": true
+ },
+ {
+  "type": "sectionRules",
+  "docUri": "file:///fx/test/fixtures/empty_bin.sldd",
+  "rules": [
+   {
+    "sectionName": "design",
+    "sectionLabel": "Design Data",
+    "isDerived": false,
+    "allowedTypes": [
+     "MatlabVariable",
+     "MatlabStruct",
+     "Simulink.Parameter",
+     "Simulink.LookupTable",
+     "Simulink.Breakpoint",
+     "Simulink.Signal",
+     "Simulink.Bus",
+     "Simulink.ConnectionBus",
+     "Simulink.NumericType",
+     "Simulink.AliasType",
+     "Simulink.ValueType",
+     "Simulink.data.dictionary.EnumTypeDefinition",
+     "Simulink.VariantExpression",
+     "Simulink.VariantControl",
+     "Simulink.VariantVariable",
+     "Simulink.VariantBank",
+     "Simulink.VariantBankCoderInfo",
+     "Simulink.VariantConfigurationData",
+     "Simulink.VariantConfigurations",
+     "CustomObject",
+     "mpt.Parameter",
+     "mpt.Signal"
+    ]
+   },
+   {
+    "sectionName": "arch",
+    "sectionLabel": "Architectural Data",
+    "isDerived": true,
+    "allowedTypes": [
+     "Constant",
+     "Simulink.Bus",
+     "Simulink.ConnectionBus",
+     "Simulink.ServiceBus",
+     "Simulink.data.dictionary.EnumTypeDefinition",
+     "Simulink.AliasType",
+     "Simulink.ValueType",
+     "Simulink.NumericType"
+    ]
+   },
+   {
+    "sectionName": "config",
+    "sectionLabel": "Configurations",
+    "isDerived": false,
+    "allowedTypes": [
+     "Simulink.ConfigSet",
+     "Simulink.ConfigSetRef"
+    ]
+   },
+   {
+    "sectionName": "other",
+    "sectionLabel": "Other Data",
+    "isDerived": false,
+    "allowedTypes": [
+     "MatlabVariable",
+     "Simulink.VariantExpression",
+     "Simulink.VariantVariable",
+     "CustomObject"
+    ]
+   }
+  ]
+ },
+ {
+  "type": "clipboardState",
+  "canPaste": false,
+  "mode": null,
+  "items": []
+ }
+]

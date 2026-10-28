@@ -1,0 +1,9 @@
+[
+ {
+  "label": "tomlproject",
+  "kind": "group",
+  "groupKind": "project",
+  "id": "file:///fx/test-integration/fixtures/tomlproject/matlab.toml",
+  "collapsible": "none"
+ }
+]

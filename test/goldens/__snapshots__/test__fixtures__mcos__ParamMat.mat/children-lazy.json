@@ -1,0 +1,147 @@
+{
+ "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value": {
+  "type": "childRows",
+  "nodeId": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value",
+  "rows": [
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value/1",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value",
+    "Status": "",
+    "Name": {
+     "label": "Value(1,1)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "1",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value/2",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value",
+    "Status": "",
+    "Name": {
+     "label": "Value(1,2)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "2",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value/3",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value",
+    "Status": "",
+    "Name": {
+     "label": "Value(1,3)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "3",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value/4",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value",
+    "Status": "",
+    "Name": {
+     "label": "Value(2,1)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "4",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value/5",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value",
+    "Status": "",
+    "Name": {
+     "label": "Value(2,2)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "5",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value/6",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value",
+    "Status": "",
+    "Name": {
+     "label": "Value(2,3)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "6",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ }
+}

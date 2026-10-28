@@ -1,0 +1,760 @@
+[
+ {
+  "type": "setRows",
+  "docUri": "file:///fx/test-integration/fixtures/editbash/values_text.sldd",
+  "rows": {
+   "digested": true,
+   "sha256": "537bd5d66c6b3e9fe3d000f3cb8b57e2b46e2c190f4cce72b337bf78c92c91ae",
+   "rowCount": 322,
+   "firstRows": [
+    {
+     "ID": "section:design",
+     "parent": null,
+     "Name": {
+      "label": "Design Data",
+      "iconId": "databaseFolderDesign",
+      "editable": false,
+      "disabled": false,
+      "element": false
+     },
+     "Value": "",
+     "Class": "",
+     "Kind": "",
+     "DataType": "",
+     "Status": "",
+     "UsedBy": ""
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/bus",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "bus",
+      "iconId": "wsBus",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "DataType": "",
+     "Description": "",
+     "Value": "",
+     "_valueEditable": false,
+     "Class": "Simulink.Bus",
+     "Kind": "Bus",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "lastModified": "2026-10-26T02:44:54Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": true
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/bus/e1",
+     "parent": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/bus",
+     "Status": "",
+     "Name": {
+      "label": "e1",
+      "iconId": "wsBusElement",
+      "disabled": true,
+      "editable": true,
+      "element": false
+     },
+     "DataType": "double",
+     "dimensions": {
+      "text": "[1 2]",
+      "editable": true,
+      "editor": "text"
+     },
+     "complexity": {
+      "text": "real",
+      "editable": true,
+      "editor": "select",
+      "options": [
+       "real",
+       "complex"
+      ]
+     },
+     "dimensionsMode": {
+      "text": "Fixed",
+      "editable": true,
+      "editor": "select",
+      "options": [
+       "Fixed",
+       "Variable"
+      ]
+     },
+     "Min": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Max": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Unit": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Description": "",
+     "Value": "",
+     "_valueEditable": false,
+     "Class": "Simulink.BusElement",
+     "Kind": "Bus Element",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/bus/e2",
+     "parent": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/bus",
+     "Status": "",
+     "Name": {
+      "label": "e2",
+      "iconId": "wsBusElement",
+      "disabled": true,
+      "editable": true,
+      "element": false
+     },
+     "DataType": "int8",
+     "dimensions": {
+      "text": "1",
+      "editable": true,
+      "editor": "text"
+     },
+     "complexity": {
+      "text": "real",
+      "editable": true,
+      "editor": "select",
+      "options": [
+       "real",
+       "complex"
+      ]
+     },
+     "dimensionsMode": {
+      "text": "Fixed",
+      "editable": true,
+      "editor": "select",
+      "options": [
+       "Fixed",
+       "Variable"
+      ]
+     },
+     "Min": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Max": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Unit": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Description": "",
+     "Value": "",
+     "_valueEditable": false,
+     "Class": "Simulink.BusElement",
+     "Kind": "Bus Element",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/c2x2",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "c2x2",
+      "iconId": "wsBrackets",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "Value": "{1, 'a'; \"b\", int8(2)}",
+     "_valueEditable": true,
+     "DataType": "cell",
+     "Description": "",
+     "Class": "cell",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "lastModified": "2026-10-26T02:44:54Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false,
+     "_matrix": {
+      "name": "c2x2",
+      "className": "cell",
+      "dims": [
+       2,
+       2
+      ],
+      "nodeId": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/c2x2"
+     }
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/c2x2/1",
+     "parent": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/c2x2",
+     "Status": "",
+     "Name": {
+      "label": "c2x2{1,1}",
+      "iconId": "wsDefault",
+      "disabled": true,
+      "editable": false,
+      "element": true
+     },
+     "Value": "1",
+     "_valueEditable": true,
+     "DataType": "double",
+     "Description": "",
+     "Class": "double",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "_canCopy": true,
+     "_canDelete": false,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/c2x2/2",
+     "parent": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/c2x2",
+     "Status": "",
+     "Name": {
+      "label": "c2x2{2,1}",
+      "iconId": "wsString",
+      "disabled": true,
+      "editable": false,
+      "element": true
+     },
+     "Value": "\"b\"",
+     "_valueEditable": true,
+     "DataType": "string",
+     "Description": "",
+     "Class": "string",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "_canCopy": true,
+     "_canDelete": false,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/c2x2/3",
+     "parent": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/c2x2",
+     "Status": "",
+     "Name": {
+      "label": "c2x2{1,2}",
+      "iconId": "wsCharacter",
+      "disabled": true,
+      "editable": false,
+      "element": true
+     },
+     "Value": "'a'",
+     "_valueEditable": true,
+     "DataType": "char",
+     "Description": "",
+     "Class": "char",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "_canCopy": true,
+     "_canDelete": false,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/c2x2/4",
+     "parent": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/c2x2",
+     "Status": "",
+     "Name": {
+      "label": "c2x2{2,2}",
+      "iconId": "wsDefault",
+      "disabled": true,
+      "editable": false,
+      "element": true
+     },
+     "Value": "2",
+     "_valueEditable": true,
+     "DataType": "int8",
+     "Description": "",
+     "Class": "int8",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "_canCopy": true,
+     "_canDelete": false,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cEmpty",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "cEmpty",
+      "iconId": "wsBrackets",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "Value": "{}",
+     "_valueEditable": true,
+     "DataType": "cell",
+     "Description": "",
+     "Class": "cell",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "lastModified": "2026-10-26T02:44:54Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": true
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cHoldsParam",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "cHoldsParam",
+      "iconId": "wsBrackets",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "Value": "{<1x1 Simulink.Parameter>, 'x'}",
+     "_valueEditable": false,
+     "DataType": "cell",
+     "Description": "",
+     "Class": "cell",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "lastModified": "2026-10-26T02:44:54Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": true
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cHoldsParam/1",
+     "parent": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cHoldsParam",
+     "Status": "",
+     "Name": {
+      "label": "cHoldsParam{1}",
+      "iconId": "wsParameters",
+      "disabled": true,
+      "editable": false,
+      "element": true
+     },
+     "Value": "3",
+     "_valueEditable": true,
+     "DataType": "auto",
+     "Min": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Max": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Unit": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Description": "",
+     "dimensions": "[1 1]",
+     "complexity": "real",
+     "storageClass": {
+      "text": "Auto",
+      "editable": true,
+      "editor": "select",
+      "options": [
+       "Auto",
+       "SimulinkGlobal",
+       "ExportedGlobal",
+       "ImportedExtern",
+       "ImportedExternPointer",
+       "Custom"
+      ]
+     },
+     "headerFile": "",
+     "alignment": "-1",
+     "Class": "Simulink.Parameter",
+     "Kind": "Simulink Parameter",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cHoldsParam/2",
+     "parent": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cHoldsParam",
+     "Status": "",
+     "Name": {
+      "label": "cHoldsParam{2}",
+      "iconId": "wsCharacter",
+      "disabled": true,
+      "editable": false,
+      "element": true
+     },
+     "Value": "'x'",
+     "_valueEditable": true,
+     "DataType": "char",
+     "Description": "",
+     "Class": "char",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cLeaves",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "cLeaves",
+      "iconId": "wsBrackets",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "Value": "<1x38 cell>",
+     "_valueEditable": false,
+     "DataType": "cell",
+     "Description": "",
+     "Class": "cell",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "lastModified": "2026-10-26T02:44:54Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": true
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cLeaves/1",
+     "parent": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cLeaves",
+     "Status": "",
+     "Name": {
+      "label": "cLeaves{1}",
+      "iconId": "wsDefault",
+      "disabled": true,
+      "editable": false,
+      "element": true
+     },
+     "Value": "3.5",
+     "_valueEditable": true,
+     "DataType": "double",
+     "Description": "",
+     "Class": "double",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cLeaves/2",
+     "parent": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cLeaves",
+     "Status": "",
+     "Name": {
+      "label": "cLeaves{2}",
+      "iconId": "wsDefault",
+      "disabled": true,
+      "editable": false,
+      "element": true
+     },
+     "Value": "[1 2 3]",
+     "_valueEditable": true,
+     "DataType": "double",
+     "Description": "",
+     "Class": "double",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": true
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cLeaves/2/1",
+     "parent": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cLeaves/2",
+     "Status": "",
+     "Name": {
+      "label": "cLeaves{2}(1)",
+      "iconId": "wsDefault",
+      "disabled": true,
+      "editable": false,
+      "element": true
+     },
+     "Value": "1",
+     "_valueEditable": true,
+     "DataType": "double",
+     "Description": "",
+     "Class": "double",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cLeaves/2/2",
+     "parent": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cLeaves/2",
+     "Status": "",
+     "Name": {
+      "label": "cLeaves{2}(2)",
+      "iconId": "wsDefault",
+      "disabled": true,
+      "editable": false,
+      "element": true
+     },
+     "Value": "2",
+     "_valueEditable": true,
+     "DataType": "double",
+     "Description": "",
+     "Class": "double",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cLeaves/2/3",
+     "parent": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cLeaves/2",
+     "Status": "",
+     "Name": {
+      "label": "cLeaves{2}(3)",
+      "iconId": "wsDefault",
+      "disabled": true,
+      "editable": false,
+      "element": true
+     },
+     "Value": "3",
+     "_valueEditable": true,
+     "DataType": "double",
+     "Description": "",
+     "Class": "double",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cLeaves/3",
+     "parent": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cLeaves",
+     "Status": "",
+     "Name": {
+      "label": "cLeaves{3}",
+      "iconId": "wsDefault",
+      "disabled": true,
+      "editable": false,
+      "element": true
+     },
+     "Value": "[1 2 3; 4 5 6]",
+     "_valueEditable": true,
+     "DataType": "double",
+     "Description": "",
+     "Class": "double",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false,
+     "_matrix": {
+      "name": "cLeaves{3}",
+      "className": "double",
+      "dims": [
+       2,
+       3
+      ],
+      "nodeId": "file:///fx/test-integration/fixtures/editbash/values_text.sldd/design/cLeaves/3"
+     }
+    }
+   ]
+  },
+  "columns": [
+   "Name",
+   "Value",
+   "DataType",
+   "UsedBy",
+   "Status",
+   "Kind",
+   "Class",
+   "Description",
+   "dimensions",
+   "dimensionsMode",
+   "complexity",
+   "Min",
+   "Max",
+   "Unit",
+   "storageClass",
+   "headerFile",
+   "alignment",
+   "definitionFile",
+   "preStatement",
+   "postStatement",
+   "qualifier",
+   "bankName",
+   "variantConditions",
+   "allChoicesCoderInfo",
+   "activeChoiceCoderInfo",
+   "lastModified",
+   "lastModifiedBy"
+  ],
+  "columnLabels": {
+   "Name": "Name",
+   "Value": "Value",
+   "Class": "Class",
+   "Kind": "Kind",
+   "DataType": "Data Type",
+   "Status": "Status",
+   "UsedBy": "Usage",
+   "Description": "Description",
+   "Min": "Min",
+   "Max": "Max",
+   "Unit": "Unit",
+   "definitionFile": "Definition File",
+   "preStatement": "Pre Statement",
+   "postStatement": "Post Statement",
+   "qualifier": "Qualifier",
+   "bankName": "Bank Name",
+   "variantConditions": "Variant Conditions",
+   "allChoicesCoderInfo": "All Choices Coder Info",
+   "activeChoiceCoderInfo": "Active Choice Coder Info",
+   "lastModified": "Last Modified",
+   "lastModifiedBy": "Last Modified By",
+   "dimensions": "Dimensions",
+   "complexity": "Complexity",
+   "storageClass": "Storage Class",
+   "headerFile": "Header File",
+   "alignment": "Alignment",
+   "dimensionsMode": "Dimensions Mode"
+  },
+  "columnGroups": {
+   "Min": "Data Object",
+   "Max": "Data Object",
+   "Unit": "Data Object",
+   "dimensions": "Data Object",
+   "complexity": "Data Object",
+   "dimensionsMode": "Data Object",
+   "storageClass": "Code Generation",
+   "headerFile": "Code Generation",
+   "alignment": "Code Generation",
+   "definitionFile": "Code Generation",
+   "preStatement": "Code Generation",
+   "postStatement": "Code Generation",
+   "qualifier": "Code Generation",
+   "bankName": "Variant Bank",
+   "variantConditions": "Variant Bank",
+   "allChoicesCoderInfo": "Variant Bank",
+   "activeChoiceCoderInfo": "Variant Bank",
+   "lastModified": "Data Dictionary",
+   "lastModifiedBy": "Data Dictionary"
+  },
+  "editable": true,
+  "hasTextView": true
+ },
+ {
+  "type": "sectionRules",
+  "docUri": "file:///fx/test-integration/fixtures/editbash/values_text.sldd",
+  "rules": [
+   {
+    "sectionName": "design",
+    "sectionLabel": "Design Data",
+    "isDerived": false,
+    "allowedTypes": [
+     "MatlabVariable",
+     "MatlabStruct",
+     "Simulink.Parameter",
+     "Simulink.LookupTable",
+     "Simulink.Breakpoint",
+     "Simulink.Signal",
+     "Simulink.Bus",
+     "Simulink.ConnectionBus",
+     "Simulink.NumericType",
+     "Simulink.AliasType",
+     "Simulink.ValueType",
+     "Simulink.data.dictionary.EnumTypeDefinition",
+     "Simulink.VariantExpression",
+     "Simulink.VariantControl",
+     "Simulink.VariantVariable",
+     "Simulink.VariantBank",
+     "Simulink.VariantBankCoderInfo",
+     "Simulink.VariantConfigurationData",
+     "Simulink.VariantConfigurations",
+     "CustomObject",
+     "mpt.Parameter",
+     "mpt.Signal"
+    ]
+   },
+   {
+    "sectionName": "arch",
+    "sectionLabel": "Architectural Data",
+    "isDerived": true,
+    "allowedTypes": [
+     "Constant",
+     "Simulink.Bus",
+     "Simulink.ConnectionBus",
+     "Simulink.ServiceBus",
+     "Simulink.data.dictionary.EnumTypeDefinition",
+     "Simulink.AliasType",
+     "Simulink.ValueType",
+     "Simulink.NumericType"
+    ]
+   },
+   {
+    "sectionName": "config",
+    "sectionLabel": "Configurations",
+    "isDerived": false,
+    "allowedTypes": [
+     "Simulink.ConfigSet",
+     "Simulink.ConfigSetRef"
+    ]
+   },
+   {
+    "sectionName": "other",
+    "sectionLabel": "Other Data",
+    "isDerived": false,
+    "allowedTypes": [
+     "MatlabVariable",
+     "Simulink.VariantExpression",
+     "Simulink.VariantVariable",
+     "CustomObject"
+    ]
+   }
+  ]
+ },
+ {
+  "type": "clipboardState",
+  "canPaste": false,
+  "mode": null,
+  "items": []
+ }
+]

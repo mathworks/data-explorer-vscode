@@ -1,0 +1,42 @@
+{
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x2": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x2",
+  "matrix": {
+   "name": "mat2x2",
+   "className": "double",
+   "dims": [
+    2,
+    2
+   ],
+   "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x2",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4"
+   ]
+  }
+ },
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3",
+  "matrix": {
+   "name": "mat2x3",
+   "className": "double",
+   "dims": [
+    2,
+    3
+   ],
+   "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+   ]
+  }
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "file:///fx/test/fixtures/sid_blocks.slx/blocks/15": {
+  "paramLinks": [
+   {
+    "property": "Gain",
+    "paramName": "Kp",
+    "source": "params.sldd",
+    "linkTarget": "Kp@file:///fx/test/fixtures/params.sldd"
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/sid_blocks.slx/blocks/24": {
+  "paramLinks": [
+   {
+    "property": "Gain",
+    "paramName": "Ki",
+    "source": "params.sldd",
+    "linkTarget": "Ki@file:///fx/test/fixtures/params.sldd"
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/sid_blocks.slx/blocks/65": {
+  "paramLinks": [
+   {
+    "property": "Value",
+    "paramName": "Uo",
+    "source": "params.sldd",
+    "linkTarget": "Uo@file:///fx/test/fixtures/params.sldd"
+   }
+  ]
+ }
+}

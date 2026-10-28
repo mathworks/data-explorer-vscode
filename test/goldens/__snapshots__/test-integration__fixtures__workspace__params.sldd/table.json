@@ -1,0 +1,773 @@
+[
+ {
+  "type": "setRows",
+  "docUri": "file:///fx/test-integration/fixtures/workspace/params.sldd",
+  "rows": {
+   "digested": true,
+   "sha256": "f651f4ef399baa516aa58ca0c9765067598db33624a924e0ffc77e8c48e6e388",
+   "rowCount": 96,
+   "firstRows": [
+    {
+     "ID": "section:design",
+     "parent": null,
+     "Name": {
+      "label": "Design Data",
+      "iconId": "databaseFolderDesign",
+      "editable": false,
+      "disabled": false,
+      "element": false
+     },
+     "Value": "",
+     "Class": "",
+     "Kind": "",
+     "DataType": "",
+     "Status": "",
+     "UsedBy": ""
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyAlias",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "MyAlias",
+      "iconId": "wsAlias",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "DataType": "int32",
+     "Description": "",
+     "Value": "",
+     "_valueEditable": false,
+     "Class": "Simulink.AliasType",
+     "Kind": "Alias Type",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "lastModified": "2026-07-04T01:52:02Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyBkpt",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "MyBkpt",
+      "iconId": "wsSimulinkBreakpoint",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "DataType": "",
+     "Value": "",
+     "_valueEditable": false,
+     "Class": "Simulink.Breakpoint",
+     "Kind": "Breakpoint",
+     "Description": "",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "lastModified": "2026-07-04T01:52:02Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyBus",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "MyBus",
+      "iconId": "wsBus",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "DataType": "",
+     "Description": "",
+     "Value": "",
+     "_valueEditable": false,
+     "Class": "Simulink.Bus",
+     "Kind": "Bus",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "lastModified": "2026-07-04T01:52:02Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": true
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyBus/x",
+     "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyBus",
+     "Status": "",
+     "Name": {
+      "label": "x",
+      "iconId": "wsBusElement",
+      "disabled": true,
+      "editable": true,
+      "element": false
+     },
+     "DataType": "double",
+     "dimensions": {
+      "text": "1",
+      "editable": true,
+      "editor": "text"
+     },
+     "complexity": {
+      "text": "real",
+      "editable": true,
+      "editor": "select",
+      "options": [
+       "real",
+       "complex"
+      ]
+     },
+     "dimensionsMode": {
+      "text": "Fixed",
+      "editable": true,
+      "editor": "select",
+      "options": [
+       "Fixed",
+       "Variable"
+      ]
+     },
+     "Min": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Max": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Unit": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Description": "",
+     "Value": "",
+     "_valueEditable": false,
+     "Class": "Simulink.BusElement",
+     "Kind": "Bus Element",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyBus/y",
+     "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyBus",
+     "Status": "",
+     "Name": {
+      "label": "y",
+      "iconId": "wsBusElement",
+      "disabled": true,
+      "editable": true,
+      "element": false
+     },
+     "DataType": "int32",
+     "dimensions": {
+      "text": "1",
+      "editable": true,
+      "editor": "text"
+     },
+     "complexity": {
+      "text": "real",
+      "editable": true,
+      "editor": "select",
+      "options": [
+       "real",
+       "complex"
+      ]
+     },
+     "dimensionsMode": {
+      "text": "Fixed",
+      "editable": true,
+      "editor": "select",
+      "options": [
+       "Fixed",
+       "Variable"
+      ]
+     },
+     "Min": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Max": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Unit": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Description": "",
+     "Value": "",
+     "_valueEditable": false,
+     "Class": "Simulink.BusElement",
+     "Kind": "Bus Element",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyConnBus",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "MyConnBus",
+      "iconId": "wsConnectionBus",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "DataType": "",
+     "Description": "",
+     "Value": "",
+     "_valueEditable": false,
+     "Class": "Simulink.ConnectionBus",
+     "Kind": "Connection Bus",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "lastModified": "2026-07-04T01:52:02Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": true
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyConnBus/c1",
+     "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyConnBus",
+     "Status": "",
+     "Name": {
+      "label": "c1",
+      "iconId": "wsConnectionElement",
+      "disabled": true,
+      "editable": true,
+      "element": false
+     },
+     "DataType": "Connection: <domain name>",
+     "Description": "",
+     "Value": "",
+     "_valueEditable": false,
+     "Class": "Simulink.ConnectionElement",
+     "Kind": "Connection Element",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyEnum",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "MyEnum",
+      "iconId": "wsEnum",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "Value": {
+      "text": "enum1",
+      "editable": true,
+      "editor": "select",
+      "options": [
+       "enum1",
+       "Red",
+       "Green"
+      ]
+     },
+     "_valueEditable": true,
+     "DataType": "",
+     "Description": "",
+     "Class": "Simulink.data.dictionary.EnumTypeDefinition",
+     "Kind": "Enumerated Type",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "lastModified": "2026-07-04T01:52:02Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": true
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyEnum/enum1",
+     "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyEnum",
+     "Status": "",
+     "Name": {
+      "label": "enum1",
+      "iconId": "wsElement",
+      "disabled": true,
+      "editable": true,
+      "element": false
+     },
+     "Value": "0",
+     "_valueEditable": true,
+     "Description": "",
+     "DataType": "",
+     "Class": "Simulink.data.dictionary.EnumTypeDefinition",
+     "Kind": "Enumerated Type",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyEnum/Red",
+     "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyEnum",
+     "Status": "",
+     "Name": {
+      "label": "Red",
+      "iconId": "busElement",
+      "disabled": true,
+      "editable": true,
+      "element": false
+     },
+     "Value": "0",
+     "_valueEditable": true,
+     "Description": "red state",
+     "DataType": "",
+     "Class": "Simulink.data.dictionary.EnumTypeDefinition",
+     "Kind": "Enumerated Type",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyEnum/Green",
+     "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyEnum",
+     "Status": "",
+     "Name": {
+      "label": "Green",
+      "iconId": "busElement",
+      "disabled": true,
+      "editable": true,
+      "element": false
+     },
+     "Value": "1",
+     "_valueEditable": true,
+     "Description": "green state",
+     "DataType": "",
+     "Class": "Simulink.data.dictionary.EnumTypeDefinition",
+     "Kind": "Enumerated Type",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyLUT",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "MyLUT",
+      "iconId": "wsLookup",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "DataType": "",
+     "Value": "",
+     "_valueEditable": false,
+     "Class": "Simulink.LookupTable",
+     "Kind": "Lookup Table",
+     "Description": "",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "lastModified": "2026-07-04T01:52:02Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyNumType",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "MyNumType",
+      "iconId": "wsNumeric",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "DataType": "",
+     "Description": "",
+     "Value": "",
+     "_valueEditable": false,
+     "Class": "Simulink.NumericType",
+     "Kind": "Numeric Type",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "lastModified": "2026-07-04T01:52:02Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyValueType",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "MyValueType",
+      "iconId": "wsValue",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "DataType": "double",
+     "dimensions": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "complexity": {
+      "text": "real",
+      "editable": true,
+      "editor": "select",
+      "options": [
+       "real",
+       "complex"
+      ]
+     },
+     "dimensionsMode": {
+      "text": "Fixed",
+      "editable": true,
+      "editor": "select",
+      "options": [
+       "Fixed",
+       "Variable"
+      ]
+     },
+     "Min": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Max": {
+      "text": "",
+      "editable": true,
+      "editor": "text"
+     },
+     "Unit": {
+      "text": "m",
+      "editable": true,
+      "editor": "text"
+     },
+     "Description": "",
+     "Value": "",
+     "_valueEditable": false,
+     "Class": "Simulink.ValueType",
+     "Kind": "Value Type",
+     "_descriptionEditable": true,
+     "_descriptionApplies": true,
+     "lastModified": "2026-07-04T01:52:02Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyVarCtrl",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "MyVarCtrl",
+      "iconId": "twoConnected_wsDefault",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "Value": "1",
+     "_valueEditable": true,
+     "DataType": "",
+     "Class": "Simulink.VariantControl",
+     "Kind": "Variant Control",
+     "Description": "",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "lastModified": "2026-07-04T01:52:02Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyVarExpr",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "MyVarExpr",
+      "iconId": "wsVariant",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "Value": "'A == 1'",
+     "_valueEditable": true,
+     "DataType": "",
+     "Class": "Simulink.VariantExpression",
+     "Kind": "Variant Expression",
+     "Description": "",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "lastModified": "2026-07-04T01:52:02Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyVarVar",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "MyVarVar",
+      "iconId": "variant_wsParameters",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "Value": "",
+     "_valueEditable": true,
+     "DataType": "",
+     "Class": "Simulink.VariantVariable",
+     "Kind": "Variant Variable",
+     "Description": "",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "lastModified": "2026-07-04T01:52:02Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/boolFlag",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "boolFlag",
+      "iconId": "wsCheck",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "Value": "true",
+     "_valueEditable": true,
+     "DataType": "logical",
+     "Description": "",
+     "Class": "logical",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "lastModified": "2026-07-04T01:52:02Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": false
+    },
+    {
+     "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/boolVec",
+     "parent": "section:design",
+     "Status": "",
+     "Name": {
+      "label": "boolVec",
+      "iconId": "wsCheck",
+      "disabled": false,
+      "editable": true,
+      "element": false
+     },
+     "Value": "[true false true]",
+     "_valueEditable": true,
+     "DataType": "logical",
+     "Description": "",
+     "Class": "logical",
+     "Kind": "MATLAB Variable",
+     "_descriptionEditable": false,
+     "_descriptionApplies": false,
+     "lastModified": "2026-07-04T01:52:02Z",
+     "lastModifiedBy": "weiwang",
+     "_canCopy": true,
+     "_canDelete": true,
+     "_canAddChild": true
+    }
+   ]
+  },
+  "columns": [
+   "Name",
+   "Value",
+   "DataType",
+   "UsedBy",
+   "Status",
+   "Kind",
+   "Class",
+   "Description",
+   "dimensions",
+   "dimensionsMode",
+   "complexity",
+   "Min",
+   "Max",
+   "Unit",
+   "storageClass",
+   "headerFile",
+   "alignment",
+   "definitionFile",
+   "preStatement",
+   "postStatement",
+   "qualifier",
+   "bankName",
+   "variantConditions",
+   "allChoicesCoderInfo",
+   "activeChoiceCoderInfo",
+   "lastModified",
+   "lastModifiedBy"
+  ],
+  "columnLabels": {
+   "Name": "Name",
+   "Value": "Value",
+   "Class": "Class",
+   "Kind": "Kind",
+   "DataType": "Data Type",
+   "Status": "Status",
+   "UsedBy": "Usage",
+   "Description": "Description",
+   "Min": "Min",
+   "Max": "Max",
+   "Unit": "Unit",
+   "definitionFile": "Definition File",
+   "preStatement": "Pre Statement",
+   "postStatement": "Post Statement",
+   "qualifier": "Qualifier",
+   "bankName": "Bank Name",
+   "variantConditions": "Variant Conditions",
+   "allChoicesCoderInfo": "All Choices Coder Info",
+   "activeChoiceCoderInfo": "Active Choice Coder Info",
+   "lastModified": "Last Modified",
+   "lastModifiedBy": "Last Modified By",
+   "dimensions": "Dimensions",
+   "complexity": "Complexity",
+   "storageClass": "Storage Class",
+   "headerFile": "Header File",
+   "alignment": "Alignment",
+   "dimensionsMode": "Dimensions Mode"
+  },
+  "columnGroups": {
+   "Min": "Data Object",
+   "Max": "Data Object",
+   "Unit": "Data Object",
+   "dimensions": "Data Object",
+   "complexity": "Data Object",
+   "dimensionsMode": "Data Object",
+   "storageClass": "Code Generation",
+   "headerFile": "Code Generation",
+   "alignment": "Code Generation",
+   "definitionFile": "Code Generation",
+   "preStatement": "Code Generation",
+   "postStatement": "Code Generation",
+   "qualifier": "Code Generation",
+   "bankName": "Variant Bank",
+   "variantConditions": "Variant Bank",
+   "allChoicesCoderInfo": "Variant Bank",
+   "activeChoiceCoderInfo": "Variant Bank",
+   "lastModified": "Data Dictionary",
+   "lastModifiedBy": "Data Dictionary"
+  },
+  "editable": true,
+  "hasTextView": true
+ },
+ {
+  "type": "sectionRules",
+  "docUri": "file:///fx/test-integration/fixtures/workspace/params.sldd",
+  "rules": [
+   {
+    "sectionName": "design",
+    "sectionLabel": "Design Data",
+    "isDerived": false,
+    "allowedTypes": [
+     "MatlabVariable",
+     "MatlabStruct",
+     "Simulink.Parameter",
+     "Simulink.LookupTable",
+     "Simulink.Breakpoint",
+     "Simulink.Signal",
+     "Simulink.Bus",
+     "Simulink.ConnectionBus",
+     "Simulink.NumericType",
+     "Simulink.AliasType",
+     "Simulink.ValueType",
+     "Simulink.data.dictionary.EnumTypeDefinition",
+     "Simulink.VariantExpression",
+     "Simulink.VariantControl",
+     "Simulink.VariantVariable",
+     "Simulink.VariantBank",
+     "Simulink.VariantBankCoderInfo",
+     "Simulink.VariantConfigurationData",
+     "Simulink.VariantConfigurations",
+     "CustomObject",
+     "mpt.Parameter",
+     "mpt.Signal"
+    ]
+   },
+   {
+    "sectionName": "arch",
+    "sectionLabel": "Architectural Data",
+    "isDerived": true,
+    "allowedTypes": [
+     "Constant",
+     "Simulink.Bus",
+     "Simulink.ConnectionBus",
+     "Simulink.ServiceBus",
+     "Simulink.data.dictionary.EnumTypeDefinition",
+     "Simulink.AliasType",
+     "Simulink.ValueType",
+     "Simulink.NumericType"
+    ]
+   },
+   {
+    "sectionName": "config",
+    "sectionLabel": "Configurations",
+    "isDerived": false,
+    "allowedTypes": [
+     "Simulink.ConfigSet",
+     "Simulink.ConfigSetRef"
+    ]
+   },
+   {
+    "sectionName": "other",
+    "sectionLabel": "Other Data",
+    "isDerived": false,
+    "allowedTypes": [
+     "MatlabVariable",
+     "Simulink.VariantExpression",
+     "Simulink.VariantVariable",
+     "CustomObject"
+    ]
+   }
+  ]
+ },
+ {
+  "type": "clipboardState",
+  "canPaste": false,
+  "mode": null,
+  "items": []
+ }
+]

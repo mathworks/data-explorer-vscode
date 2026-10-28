@@ -1,0 +1,84 @@
+{
+ "binedit:file:///fx/test/fixtures/nd_numeric.mat/Mat": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test/fixtures/nd_numeric.mat/Mat",
+  "matrix": {
+   "name": "Mat",
+   "className": "double",
+   "dims": [
+    2,
+    3
+   ],
+   "nodeId": "binedit:file:///fx/test/fixtures/nd_numeric.mat/Mat",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+   ]
+  }
+ },
+ "binedit:file:///fx/test/fixtures/nd_numeric.mat/Nd": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test/fixtures/nd_numeric.mat/Nd",
+  "matrix": {
+   "name": "Nd",
+   "className": "double",
+   "dims": [
+    2,
+    3,
+    2
+   ],
+   "nodeId": "binedit:file:///fx/test/fixtures/nd_numeric.mat/Nd",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "11",
+    "12"
+   ]
+  }
+ },
+ "binedit:file:///fx/test/fixtures/nd_numeric.mat/Nd4": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test/fixtures/nd_numeric.mat/Nd4",
+  "matrix": {
+   "name": "Nd4",
+   "className": "double",
+   "dims": [
+    2,
+    2,
+    2,
+    2
+   ],
+   "nodeId": "binedit:file:///fx/test/fixtures/nd_numeric.mat/Nd4",
+   "cells": [
+    "1",
+    "1",
+    "1",
+    "1",
+    "2",
+    "2",
+    "2",
+    "2",
+    "3",
+    "3",
+    "3",
+    "3",
+    "4",
+    "4",
+    "4",
+    "4"
+   ]
+  }
+ }
+}

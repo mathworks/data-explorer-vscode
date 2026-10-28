@@ -1,0 +1,12 @@
+{
+ "file:///fx/test-integration/fixtures/legacy/legacyModern.mdl/blocks/1": {
+  "paramLinks": [
+   {
+    "property": "Gain",
+    "paramName": "Kp",
+    "source": "legacyParams.sldd",
+    "linkTarget": "Kp@file:///fx/test-integration/fixtures/legacy/legacyParams.sldd"
+   }
+  ]
+ }
+}

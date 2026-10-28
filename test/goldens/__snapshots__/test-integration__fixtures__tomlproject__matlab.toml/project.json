@@ -1,0 +1,77 @@
+{
+ "type": "setProject",
+ "page": {
+  "name": "parityProject",
+  "format": "toml",
+  "formatLabel": "matlab.toml",
+  "memberCount": null,
+  "labelledCount": null,
+  "startup": [
+   {
+    "name": "startup_one",
+    "file": "startup_one.m"
+   },
+   {
+    "name": "startup_two",
+    "file": "startup_two.m"
+   }
+  ],
+  "shutdown": [
+   {
+    "name": "shutdown_parity",
+    "file": "shutdown_parity.m"
+   }
+  ],
+  "shortcuts": [
+   {
+    "name": "main",
+    "file": "main.m",
+    "group": ""
+   }
+  ],
+  "pathFolders": [
+   "utils"
+  ],
+  "locations": [
+   {
+    "key": "ProjectStartupFolder",
+    "label": "Startup folder",
+    "ref": "utils"
+   },
+   {
+    "key": "SimulinkCacheFolder",
+    "label": "Simulation cache",
+    "ref": "cache"
+   },
+   {
+    "key": "SimulinkCodeGenFolder",
+    "label": "Code generation",
+    "ref": "codegen"
+   }
+  ],
+  "categories": [
+   {
+    "name": "Review",
+    "labels": [
+     {
+      "id": "Review/Checked",
+      "name": "Checked",
+      "count": null,
+      "custom": true,
+      "declaredFiles": [
+       "utils/helper.m"
+      ]
+     }
+    ]
+   }
+  ],
+  "references": [
+   {
+    "name": "parityLib",
+    "path": "../parityLib"
+   }
+  ],
+  "warnings": []
+ },
+ "root": "<root>"
+}
