@@ -22,13 +22,14 @@
 // hierarchy.json, the sidebar's relationship tree (hierarchy.test.ts).
 //
 // A snapshot that is supposed to change is rewritten with `npx vitest run test/goldens -u`, and
-// the diff is the review.
+// the diff is the review. `GOLDENS_FULL_DIR=<dir>` also writes every payload whole, never
+// digested, in the same layout under <dir> (fixtures.ts expectGolden).
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DataModel, isProjectFile } from 'data-explorer-core';
 import { LAZY_ROW_BUDGET } from '../../src/host/lazyRows.js';
 import { clearClipboard } from '../../src/host/clipboard.js';
 import { isSectionRowId } from '../../src/common/sectionRowId.js';
-import { bytesOf, fixtureFiles, nameOf, snapshotPath, snapshotText } from './fixtures.js';
+import { bytesOf, expectGolden, fixtureFiles, nameOf } from './fixtures.js';
 import { openTable, routeOf, type TableView } from './views.js';
 
 /**
@@ -97,18 +98,18 @@ describe('golden table payloads', { timeout: 60_000 }, () => {
   for (const rel of TABLES) {
     it(rel, async () => {
       await withTable(rel, LAZY_ROW_BUDGET, async (view) => {
-        await expect(snapshotText(view.messages)).toMatchFileSnapshot(snapshotPath(rel, 'table'));
+        await expectGolden(view.messages, rel, 'table');
         // Every row the user can click, as the table reports a click: one row id. A section
         // header shows nothing (InspectorSelection), so it is not asked.
         const inspector = keyed(view, view.rows, (row) => (isSectionRowId(String(row.ID)) ? undefined : view.select(row.ID)));
-        await expect(snapshotText(inspector)).toMatchFileSnapshot(snapshotPath(rel, 'inspector'));
+        await expectGolden(inspector, rel, 'inspector');
         // The id the panel asks with is the descriptor's (matrixOpen.ts), not the row's.
         const matrix = keyed(view, view.rows, (row) => (row._matrix ? view.matrix(row._matrix.nodeId) : undefined));
-        await expect(snapshotText(matrix)).toMatchFileSnapshot(snapshotPath(rel, 'matrix'));
+        await expectGolden(matrix, rel, 'matrix');
       });
 
       await withTable(rel, SMALL_BUDGET, async (view) => {
-        await expect(snapshotText(view.messages)).toMatchFileSnapshot(snapshotPath(rel, 'table-lazy'));
+        await expectGolden(view.messages, rel, 'table-lazy');
         const children: Record<string, unknown> = {};
         for (const row of view.rows.filter((r) => r._lazy)) {
           const id = String(row.ID);
@@ -116,7 +117,7 @@ describe('golden table payloads', { timeout: 60_000 }, () => {
           // One at a time and in row order, as a user opening each twisty in turn would ask.
           children[id] = await view.children(id);
         }
-        await expect(snapshotText(children)).toMatchFileSnapshot(snapshotPath(rel, 'children-lazy'));
+        await expectGolden(children, rel, 'children-lazy');
       });
     });
   }

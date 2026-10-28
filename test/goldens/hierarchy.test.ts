@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
 import { RelGraph, type GraphNode } from '../../src/host/graphModel.js';
 import { graphSourcesOf } from '../../src/host/structuralIndex.js';
 import { newSourceCache } from '../../src/host/sourceCache.js';
-import { fakeFile, filesUnder, fixtureFolders, snapshotPath, snapshotText } from './fixtures.js';
+import { expectGolden, fakeFile, filesUnder, fixtureFolders } from './fixtures.js';
 import { nodeReader } from './nodeReads.js';
 
 /** One row of the tree, as drawn, with what expanding it shows. */
@@ -75,7 +75,7 @@ describe('golden relationship trees', { timeout: 60_000 }, () => {
       const files = filesUnder(folder).map(fakeFile);
       expect(files.length, `${folder} has files to draw`).toBeGreaterThan(0);
       const graph = new RelGraph(await graphSourcesOf(newSourceCache(), nodeReader(files), files));
-      await expect(snapshotText(expanded(graph, graph.roots()))).toMatchFileSnapshot(snapshotPath(folder, 'hierarchy'));
+      await expectGolden(expanded(graph, graph.roots()), folder, 'hierarchy');
     });
   }
 });

@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { buildProjectPage, isProjectFile, isTomlProjectFile, parseProject, projectFallbackName } from 'data-explorer-core';
 import { warningBanner } from '../../src/host/parseWarnings.js';
 import { detectMsp, MSP_CONFIG } from '../../src/host/mspProject.js';
-import { fakeFile, fixtureFiles, nameOf, REPO, snapshotPath, snapshotText } from './fixtures.js';
+import { expectGolden, fakeFile, fixtureFiles, nameOf, REPO } from './fixtures.js';
 import { readProjectStore, readTextIfPresent } from './nodeReads.js';
 
 const PROJECTS = fixtureFiles().filter((rel) => isProjectFile(nameOf(rel)));
@@ -35,7 +35,7 @@ describe('golden project pages', () => {
         msp: detectMsp(parsed, readTextIfPresent(join(REPO, dirname(rel), MSP_CONFIG))),
         warnings: warningBanner(parsed.warnings),
       };
-      await expect(snapshotText(message)).toMatchFileSnapshot(snapshotPath(rel, 'project'));
+      await expectGolden(message, rel, 'project');
     });
   }
 });
