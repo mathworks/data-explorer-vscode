@@ -1,0 +1,74 @@
+{
+ "file:///fx/test/fixtures/shared_gain.slx/blocks/1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "PlantGain",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Block Path",
+      "value": "PlantGain",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/shared_gain.slx/blocks/2": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Trim",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Block Path",
+      "value": "Trim",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/shared_gain.slx/dataSources/Params.SLDD@Params.SLDD": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Params.SLDD",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Path",
+      "value": "Params.SLDD",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Status",
+      "value": "Not Loaded",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

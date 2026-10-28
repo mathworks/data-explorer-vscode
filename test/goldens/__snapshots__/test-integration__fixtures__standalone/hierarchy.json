@@ -1,0 +1,17 @@
+[
+ {
+  "label": "standalone",
+  "kind": "group",
+  "groupKind": "folder",
+  "collapsible": "collapsed",
+  "children": [
+   {
+    "label": "selfContained.slx",
+    "kind": "model",
+    "id": "file:///fx/test-integration/fixtures/standalone/selfContained.slx",
+    "health": null,
+    "collapsible": "none"
+   }
+  ]
+ }
+]

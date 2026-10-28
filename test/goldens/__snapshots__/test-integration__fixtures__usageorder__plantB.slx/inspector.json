@@ -1,0 +1,52 @@
+{
+ "file:///fx/test-integration/fixtures/usageorder/plantB.slx/blocks/1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "GainB",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Block Path",
+      "value": "GainB",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/usageorder/plantB.slx/dataSources/sharedParams.sldd@sharedParams.sldd": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "sharedParams.sldd",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Path",
+      "value": "sharedParams.sldd",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Status",
+      "value": "Not Loaded",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

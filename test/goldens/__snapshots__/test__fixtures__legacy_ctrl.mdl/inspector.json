@@ -1,0 +1,130 @@
+{
+ "file:///fx/test/fixtures/legacy_ctrl.mdl/blocks/Gain1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Gain1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Block Path",
+      "value": "Gain1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/legacy_ctrl.mdl/blocks/Setpoint": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Setpoint",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Block Path",
+      "value": "Setpoint",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/legacy_ctrl.mdl/references/plant.mdl@$bdroot/Plant": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "plant.mdl",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Block Path",
+      "value": "$bdroot/Plant",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Status",
+      "value": "Not Loaded",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/legacy_ctrl.mdl/dataSources/params.sldd@params.sldd": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "params.sldd",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Path",
+      "value": "params.sldd",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Status",
+      "value": "Not Loaded",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/legacy_ctrl.mdl/dataSources/signals.mat@signals.mat": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "signals.mat",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Path",
+      "value": "signals.mat",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Status",
+      "value": "Not Loaded",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,13 @@
+{
+ "file:///fx/test-integration/fixtures/caserefs/chained.sldd/design/ChainedVar": {
+  "blockLinks": [
+   {
+    "blockName": "Gain2",
+    "blockPath": "Gain2",
+    "modelName": "caseRefs",
+    "modelUri": "file:///fx/test-integration/fixtures/caserefs/caseRefs.slx",
+    "linkTarget": "blocks:2@file:///fx/test-integration/fixtures/caserefs/caseRefs.slx"
+   }
+  ]
+ }
+}

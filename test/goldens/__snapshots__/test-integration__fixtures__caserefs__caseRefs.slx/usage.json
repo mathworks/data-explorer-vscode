@@ -1,0 +1,42 @@
+{
+ "file:///fx/test-integration/fixtures/caserefs/caseRefs.slx/blocks/1": {
+  "paramLinks": [
+   {
+    "property": "Gain",
+    "paramName": "CaseVar",
+    "source": "CaseParams.sldd",
+    "linkTarget": "CaseVar@file:///fx/test-integration/fixtures/caserefs/CaseParams.sldd"
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/caserefs/caseRefs.slx/blocks/2": {
+  "paramLinks": [
+   {
+    "property": "Gain",
+    "paramName": "ChainedVar",
+    "source": "chained.sldd",
+    "linkTarget": "ChainedVar@file:///fx/test-integration/fixtures/caserefs/chained.sldd"
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/caserefs/caseRefs.slx/blocks/3": {
+  "paramLinks": [
+   {
+    "property": "Gain",
+    "paramName": "ExtraVar",
+    "source": "ExtraDict.sldd",
+    "linkTarget": "ExtraVar@file:///fx/test-integration/fixtures/caserefs/ExtraDict.sldd"
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/caserefs/caseRefs.slx/blocks/4": {
+  "paramLinks": [
+   {
+    "property": "Value",
+    "paramName": "Bp",
+    "source": "CaseBp.mat",
+    "linkTarget": "Bp@file:///fx/test-integration/fixtures/caserefs/CaseBp.mat"
+   }
+  ]
+ }
+}

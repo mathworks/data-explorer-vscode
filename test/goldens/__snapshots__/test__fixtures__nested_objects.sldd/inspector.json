@@ -1,0 +1,528 @@
+{
+ "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/CellWithParam": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "CellWithParam",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "{1, <1x1 Simulink.Parameter>, 'txt'}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "cell",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "cell",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/CellWithParam/1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "CellWithParam{1}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/CellWithParam/2": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "CellWithParam{2}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "7",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "int32",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Simulink Parameter",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Parameter",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "[1 1]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Min",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Max",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Storage Class",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Identifier",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Alignment",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Custom Attributes",
+    "properties": [
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Definition File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Owner",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Preserve Array Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Struct Name",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Get Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Set Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/CellWithParam/3": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "CellWithParam{3}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "'txt'",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "char",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "char",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/StructWithParam": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "StructWithParam",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "<1x1 struct>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/StructWithParam/plain": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "plain",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "5",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/nested_objects.sldd/design/StructWithParam/paramField": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "paramField",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "3.14",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Simulink Parameter",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Parameter",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "[1 1]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Min",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Max",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Storage Class",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Identifier",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Alignment",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Custom Attributes",
+    "properties": [
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Definition File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Owner",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Preserve Array Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Struct Name",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Get Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Set Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

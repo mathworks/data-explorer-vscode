@@ -1,0 +1,42 @@
+{
+ "file:///fx/test-integration/fixtures/caserefs/ExtraDict.sldd/design/ExtraVar": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "ExtraVar",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

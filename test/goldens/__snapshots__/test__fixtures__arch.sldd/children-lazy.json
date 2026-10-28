@@ -1,0 +1,549 @@
+{
+ "file:///fx/test/fixtures/arch.sldd/arch/DataInterface": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test/fixtures/arch.sldd/arch/DataInterface",
+  "rows": [
+   {
+    "ID": "file:///fx/test/fixtures/arch.sldd/arch/DataInterface/Element",
+    "parent": "file:///fx/test/fixtures/arch.sldd/arch/DataInterface",
+    "Status": "",
+    "Name": {
+     "label": "Element",
+     "iconId": "typeBusElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "double",
+    "dimensions": {
+     "text": "1",
+     "editable": true,
+     "editor": "text"
+    },
+    "complexity": {
+     "text": "real",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "real",
+      "complex"
+     ]
+    },
+    "dimensionsMode": {
+     "text": "Fixed",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Fixed",
+      "Variable"
+     ]
+    },
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.BusElement",
+    "Kind": "Bus Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/arch.sldd/arch/DataInterface/Element1",
+    "parent": "file:///fx/test/fixtures/arch.sldd/arch/DataInterface",
+    "Status": "",
+    "Name": {
+     "label": "Element1",
+     "iconId": "typeBusElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "int8",
+    "dimensions": {
+     "text": "1",
+     "editable": true,
+     "editor": "text"
+    },
+    "complexity": {
+     "text": "complex",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "real",
+      "complex"
+     ]
+    },
+    "dimensionsMode": {
+     "text": "Variable",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Fixed",
+      "Variable"
+     ]
+    },
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.BusElement",
+    "Kind": "Bus Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/arch.sldd/arch/DataInterface/a",
+    "parent": "file:///fx/test/fixtures/arch.sldd/arch/DataInterface",
+    "Status": "",
+    "Name": {
+     "label": "a",
+     "iconId": "typeBusElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "double",
+    "dimensions": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "complexity": {
+     "text": "real",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "real",
+      "complex"
+     ]
+    },
+    "dimensionsMode": {
+     "text": "Fixed",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Fixed",
+      "Variable"
+     ]
+    },
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.BusElement",
+    "Kind": "Bus Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/EnumType": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test/fixtures/arch.sldd/arch/EnumType",
+  "rows": [
+   {
+    "ID": "file:///fx/test/fixtures/arch.sldd/arch/EnumType/enum1",
+    "parent": "file:///fx/test/fixtures/arch.sldd/arch/EnumType",
+    "Status": "",
+    "Name": {
+     "label": "enum1",
+     "iconId": "busElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "0",
+    "_valueEditable": true,
+    "Description": "",
+    "DataType": "",
+    "Class": "Simulink.data.dictionary.EnumTypeDefinition",
+    "Kind": "Enumerated Type",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/arch.sldd/arch/EnumType/enum2",
+    "parent": "file:///fx/test/fixtures/arch.sldd/arch/EnumType",
+    "Status": "",
+    "Name": {
+     "label": "enum2",
+     "iconId": "typeElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "1",
+    "_valueEditable": true,
+    "Description": "",
+    "DataType": "",
+    "Class": "Simulink.data.dictionary.EnumTypeDefinition",
+    "Kind": "Enumerated Type",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/arch.sldd/arch/EnumType/enum3",
+    "parent": "file:///fx/test/fixtures/arch.sldd/arch/EnumType",
+    "Status": "",
+    "Name": {
+     "label": "enum3",
+     "iconId": "busElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "2",
+    "_valueEditable": true,
+    "Description": "",
+    "DataType": "",
+    "Class": "Simulink.data.dictionary.EnumTypeDefinition",
+    "Kind": "Enumerated Type",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/PhysicalInterface": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test/fixtures/arch.sldd/arch/PhysicalInterface",
+  "rows": [
+   {
+    "ID": "file:///fx/test/fixtures/arch.sldd/arch/PhysicalInterface/Element",
+    "parent": "file:///fx/test/fixtures/arch.sldd/arch/PhysicalInterface",
+    "Status": "",
+    "Name": {
+     "label": "Element",
+     "iconId": "typeConnectionElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "Connection: <domain name>",
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.ConnectionElement",
+    "Kind": "Connection Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/arch.sldd/arch/PhysicalInterface/Element1",
+    "parent": "file:///fx/test/fixtures/arch.sldd/arch/PhysicalInterface",
+    "Status": "",
+    "Name": {
+     "label": "Element1",
+     "iconId": "typeConnectionElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "Connection: foundation.electrical.electrical",
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.ConnectionElement",
+    "Kind": "Connection Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/arch.sldd/arch/PhysicalInterface/a",
+    "parent": "file:///fx/test/fixtures/arch.sldd/arch/PhysicalInterface",
+    "Status": "",
+    "Name": {
+     "label": "a",
+     "iconId": "typeConnectionElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "Connection: <domain name>",
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.ConnectionElement",
+    "Kind": "Connection Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/ServiceInterface": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test/fixtures/arch.sldd/arch/ServiceInterface",
+  "rows": [
+   {
+    "ID": "file:///fx/test/fixtures/arch.sldd/arch/ServiceInterface/f",
+    "parent": "file:///fx/test/fixtures/arch.sldd/arch/ServiceInterface",
+    "Status": "",
+    "Name": {
+     "label": "f",
+     "iconId": "function",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "y = f(u,v)",
+    "_valueEditable": false,
+    "DataType": "",
+    "Class": "Simulink.FunctionElement",
+    "Kind": "Function Element",
+    "Description": "",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/arch.sldd/arch/ServiceInterface/f1",
+    "parent": "file:///fx/test/fixtures/arch.sldd/arch/ServiceInterface",
+    "Status": "",
+    "Name": {
+     "label": "f1",
+     "iconId": "function",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "y = f1(u,v,w,y)",
+    "_valueEditable": false,
+    "DataType": "",
+    "Class": "Simulink.FunctionElement",
+    "Kind": "Function Element",
+    "Description": "",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/arch.sldd/arch/ServiceInterface/f2",
+    "parent": "file:///fx/test/fixtures/arch.sldd/arch/ServiceInterface",
+    "Status": "",
+    "Name": {
+     "label": "f2",
+     "iconId": "function",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "y = f2(u,v)",
+    "_valueEditable": false,
+    "DataType": "",
+    "Class": "Simulink.FunctionElement",
+    "Kind": "Function Element",
+    "Description": "",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/StructType": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test/fixtures/arch.sldd/arch/StructType",
+  "rows": [
+   {
+    "ID": "file:///fx/test/fixtures/arch.sldd/arch/StructType/Element",
+    "parent": "file:///fx/test/fixtures/arch.sldd/arch/StructType",
+    "Status": "",
+    "Name": {
+     "label": "Element",
+     "iconId": "typeStructElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "double",
+    "dimensions": {
+     "text": "1",
+     "editable": true,
+     "editor": "text"
+    },
+    "complexity": {
+     "text": "real",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "real",
+      "complex"
+     ]
+    },
+    "dimensionsMode": {
+     "text": "Fixed",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Fixed",
+      "Variable"
+     ]
+    },
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.BusElement",
+    "Kind": "Bus Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/arch.sldd/arch/StructType/Element1",
+    "parent": "file:///fx/test/fixtures/arch.sldd/arch/StructType",
+    "Status": "",
+    "Name": {
+     "label": "Element1",
+     "iconId": "typeStructElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "half",
+    "dimensions": {
+     "text": "1",
+     "editable": true,
+     "editor": "text"
+    },
+    "complexity": {
+     "text": "real",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "real",
+      "complex"
+     ]
+    },
+    "dimensionsMode": {
+     "text": "Fixed",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Fixed",
+      "Variable"
+     ]
+    },
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.BusElement",
+    "Kind": "Bus Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ }
+}

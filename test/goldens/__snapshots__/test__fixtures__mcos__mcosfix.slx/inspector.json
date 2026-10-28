@@ -1,0 +1,1450 @@
+{
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/Alias": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Alias",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Base Type",
+      "value": "int16",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Alias Type",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.AliasType",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Description",
+      "value": "aliasdesc",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Data Scope",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/Bp": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Bp",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Breakpoint",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Breakpoint",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Storage Class",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Name",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Scope",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Advanced",
+    "properties": [
+     {
+      "name": "Support Tunable Size",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Breakpoints.Value",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.TunableSizeValue",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Dimensions",
+      "value": "[0, 0]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Min",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Max",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.TunableSizeName",
+      "value": "N",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.DataType",
+      "value": "auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.FieldName",
+      "value": "BP",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/Lut": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Lut",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Lookup Table",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.LookupTable",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Breakpoints Specification",
+      "value": "Explicit values",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Storage Class",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Name",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Scope",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Advanced",
+    "properties": [
+     {
+      "name": "Allow Multiple Instances Of Type To Have Different Table Breakpoint Sizes",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Support Tunable Size",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Table.Value",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Table.Dimensions",
+      "value": "[0, 0]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Table.Min",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Table.Max",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Table.DataType",
+      "value": "auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Table.Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Table.FieldName",
+      "value": "Table",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Table.Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Value",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.TunableSizeValue",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Dimensions",
+      "value": "[0, 0]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Min",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Max",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.TunableSizeName",
+      "value": "N1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.DataType",
+      "value": "auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.FieldName",
+      "value": "BP1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/Numeric": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Numeric",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Numeric Type",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.NumericType",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Data Type Mode",
+      "value": "Double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Signedness",
+      "value": "Signed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Word Length",
+      "value": "64",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Fraction Length",
+      "value": "0",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Slope",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Bias",
+      "value": "0",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type Override",
+      "value": "Inherit",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Is Alias",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "numdesc",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Data Scope",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "SignednessBool",
+      "value": "true",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "FixedExponent",
+      "value": "0",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "SlopeAdjustmentFactor",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/Param": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Param",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "42",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "int32",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Simulink Parameter",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Parameter",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "[1 1]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "100",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Min",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Max",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "m/s",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "hello",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Storage Class",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Identifier",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Alignment",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Custom Attributes",
+    "properties": [
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Definition File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Owner",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Preserve Array Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Struct Name",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Get Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Set Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "ParamMat",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "[1 2 3; 4 5 6]",
+      "editable": false,
+      "type": "text",
+      "matrix": {
+       "name": "ParamMat.Value",
+       "className": "double",
+       "dims": [
+        2,
+        3
+       ],
+       "nodeId": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat"
+      }
+     },
+     {
+      "name": "Data Type",
+      "value": "auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Simulink Parameter",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Parameter",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "[2 3]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Min",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Max",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "matrix",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Storage Class",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Identifier",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Alignment",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Custom Attributes",
+    "properties": [
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Definition File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Owner",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Preserve Array Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Struct Name",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Get Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Set Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Value",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "[1 2 3; 4 5 6]",
+      "editable": false,
+      "type": "text",
+      "matrix": {
+       "name": "Value",
+       "className": "double",
+       "dims": [
+        2,
+        3
+       ],
+       "nodeId": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value"
+      }
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value/1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Value(1,1)",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value/2": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Value(1,2)",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "2",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value/3": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Value(1,3)",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "3",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value/4": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Value(2,1)",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "4",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value/5": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Value(2,2)",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "5",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value/6": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Value(2,3)",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "6",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/Sig": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Sig",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "single",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Simulink Signal",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Signal",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Dimensions Mode",
+      "value": "auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Initial Value",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "-5",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "5",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Min",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Max",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "V",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Sample Time",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Sampling Mode",
+      "value": "auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "sigdesc",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Storage Class",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Identifier",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Alignment",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Custom Attributes",
+    "properties": [
+     {
+      "name": "Data Scope",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Definition File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Owner",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Preserve Array Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Struct Name",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Get Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Set Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "LoggingInfo.DataLogging",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "LoggingInfo.NameMode",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "LoggingInfo.LoggingName",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "LoggingInfo.DecimateData",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "LoggingInfo.Decimation",
+      "value": "2",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "LoggingInfo.LimitDataPoints",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "LoggingInfo.MaxPoints",
+      "value": "5000",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/config/Configuration": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Configuration",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Configuration Set",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.ConfigSet",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,329 @@
+{
+ "file:///fx/test/fixtures/object_array_text.sldd/design/paramArray": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test/fixtures/object_array_text.sldd/design/paramArray",
+  "rows": [
+   {
+    "ID": "file:///fx/test/fixtures/object_array_text.sldd/design/paramArray/1",
+    "parent": "file:///fx/test/fixtures/object_array_text.sldd/design/paramArray",
+    "Status": "",
+    "Name": {
+     "label": "paramArray(1)",
+     "iconId": "wsParameters",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "10",
+    "_valueEditable": true,
+    "DataType": "int32",
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "first",
+    "dimensions": "",
+    "complexity": "real",
+    "storageClass": "Auto",
+    "headerFile": "",
+    "alignment": "-1",
+    "Class": "Simulink.Parameter",
+    "Kind": "Simulink Parameter",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/object_array_text.sldd/design/paramArray/2",
+    "parent": "file:///fx/test/fixtures/object_array_text.sldd/design/paramArray",
+    "Status": "",
+    "Name": {
+     "label": "paramArray(2)",
+     "iconId": "wsParameters",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "20",
+    "_valueEditable": true,
+    "DataType": "int32",
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "second",
+    "dimensions": "",
+    "complexity": "real",
+    "storageClass": "Auto",
+    "headerFile": "",
+    "alignment": "-1",
+    "Class": "Simulink.Parameter",
+    "Kind": "Simulink Parameter",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/object_array_text.sldd/design/paramArray/3",
+    "parent": "file:///fx/test/fixtures/object_array_text.sldd/design/paramArray",
+    "Status": "",
+    "Name": {
+     "label": "paramArray(3)",
+     "iconId": "wsParameters",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "30",
+    "_valueEditable": true,
+    "DataType": "int32",
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "third",
+    "dimensions": "",
+    "complexity": "real",
+    "storageClass": "Auto",
+    "headerFile": "",
+    "alignment": "-1",
+    "Class": "Simulink.Parameter",
+    "Kind": "Simulink Parameter",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray",
+  "rows": [
+   {
+    "ID": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray/1",
+    "parent": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray",
+    "Status": "",
+    "Name": {
+     "label": "usageArray(1)",
+     "iconId": "ws3d",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "<1x1 Simulink.VariableUsage>",
+    "_valueEditable": false,
+    "DataType": "",
+    "Description": "",
+    "Class": "Simulink.VariableUsage",
+    "Kind": "Simulink.VariableUsage",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray/1/Name",
+    "parent": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray/1",
+    "Status": "",
+    "Name": {
+     "label": "Name",
+     "iconId": "wsString",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "\"Ka\"",
+    "_valueEditable": true,
+    "DataType": "string",
+    "Description": "",
+    "Class": "string",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray/1/Source",
+    "parent": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray/1",
+    "Status": "",
+    "Name": {
+     "label": "Source",
+     "iconId": "wsString",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "\"f14\"",
+    "_valueEditable": true,
+    "DataType": "string",
+    "Description": "",
+    "Class": "string",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray/1/SourceType",
+    "parent": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray/1",
+    "Status": "",
+    "Name": {
+     "label": "SourceType",
+     "iconId": "wsString",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "\"model workspace\"",
+    "_valueEditable": true,
+    "DataType": "string",
+    "Description": "",
+    "Class": "string",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray/2",
+    "parent": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray",
+    "Status": "",
+    "Name": {
+     "label": "usageArray(2)",
+     "iconId": "ws3d",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "<1x1 Simulink.VariableUsage>",
+    "_valueEditable": false,
+    "DataType": "",
+    "Description": "",
+    "Class": "Simulink.VariableUsage",
+    "Kind": "Simulink.VariableUsage",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray/2/Name",
+    "parent": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray/2",
+    "Status": "",
+    "Name": {
+     "label": "Name",
+     "iconId": "wsString",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "\"Kf\"",
+    "_valueEditable": true,
+    "DataType": "string",
+    "Description": "",
+    "Class": "string",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray/2/Source",
+    "parent": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray/2",
+    "Status": "",
+    "Name": {
+     "label": "Source",
+     "iconId": "wsString",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "\"f14\"",
+    "_valueEditable": true,
+    "DataType": "string",
+    "Description": "",
+    "Class": "string",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray/2/SourceType",
+    "parent": "file:///fx/test/fixtures/object_array_text.sldd/other/usageArray/2",
+    "Status": "",
+    "Name": {
+     "label": "SourceType",
+     "iconId": "wsString",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "\"model workspace\"",
+    "_valueEditable": true,
+    "DataType": "string",
+    "Description": "",
+    "Class": "string",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ }
+}

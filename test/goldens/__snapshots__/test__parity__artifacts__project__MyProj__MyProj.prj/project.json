@@ -1,0 +1,98 @@
+{
+ "type": "setProject",
+ "page": {
+  "name": "MyProj",
+  "format": "fixedPathV2",
+  "formatLabel": "multiple XML files",
+  "memberCount": 7,
+  "labelledCount": 3,
+  "startup": [
+   {
+    "name": "startup",
+    "file": "startup.m"
+   }
+  ],
+  "shutdown": [],
+  "shortcuts": [],
+  "pathFolders": [
+   "utils"
+  ],
+  "locations": [],
+  "categories": [
+   {
+    "name": "Classification",
+    "labels": [
+     {
+      "id": "design",
+      "name": "Design",
+      "count": 3,
+      "custom": false,
+      "declaredFiles": []
+     },
+     {
+      "id": "artifact",
+      "name": "Artifact",
+      "count": 0,
+      "custom": false,
+      "declaredFiles": []
+     },
+     {
+      "id": "convenience",
+      "name": "Convenience",
+      "count": 0,
+      "custom": false,
+      "declaredFiles": []
+     },
+     {
+      "id": "derived",
+      "name": "Derived",
+      "count": 0,
+      "custom": false,
+      "declaredFiles": []
+     },
+     {
+      "id": "none",
+      "name": "None",
+      "count": 0,
+      "custom": false,
+      "declaredFiles": []
+     },
+     {
+      "id": "other",
+      "name": "Other",
+      "count": 0,
+      "custom": false,
+      "declaredFiles": []
+     },
+     {
+      "id": "test",
+      "name": "Test",
+      "count": 0,
+      "custom": false,
+      "declaredFiles": []
+     }
+    ]
+   },
+   {
+    "name": "Status",
+    "labels": [
+     {
+      "id": "75cc2b02-0d19-468d-9e22-785a05474d1a",
+      "name": "Reviewed",
+      "count": 1,
+      "custom": true,
+      "declaredFiles": []
+     }
+    ]
+   }
+  ],
+  "references": [
+   {
+    "name": "LibProj",
+    "path": "../LibProj"
+   }
+  ],
+  "warnings": []
+ },
+ "root": "<root>"
+}

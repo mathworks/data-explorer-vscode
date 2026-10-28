@@ -1,0 +1,24 @@
+[
+ {
+  "label": "typelink",
+  "kind": "group",
+  "groupKind": "folder",
+  "collapsible": "collapsed",
+  "children": [
+   {
+    "label": "typelink_binary.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test-integration/fixtures/typelink/typelink_binary.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "typelink.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test-integration/fixtures/typelink/typelink.sldd",
+    "health": null,
+    "collapsible": "none"
+   }
+  ]
+ }
+]

@@ -1,0 +1,1555 @@
+{
+ "file:///fx/test/fixtures/arch.sldd/arch/AliasType": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "AliasType",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Base Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Alias Type",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.AliasType",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Data Scope",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/Constant": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Constant",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "0",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Constant",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/DataInterface": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "DataInterface",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Data Interface",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Bus",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Data Scope",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Alignment",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Preserve Element Dimensions",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Elements_internal",
+      "value": "<3x1 Simulink.BusElement>",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/DataInterface/Element": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Bus Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.BusElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Dimensions Mode",
+      "value": "Fixed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/DataInterface/Element1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Element1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "int8",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Bus Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.BusElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "complex",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Dimensions Mode",
+      "value": "Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/DataInterface/a": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "a",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Bus Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.BusElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Dimensions Mode",
+      "value": "Fixed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/EnumType": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "EnumType",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Enumerated Type",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.data.dictionary.EnumTypeDefinition",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Value",
+      "value": "enum2",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Storage Type",
+      "value": "int32",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Data Scope",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Add Class Name To Enum Names",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Is Tunable In Code",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Enumerals",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/EnumType/enum1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "enum1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "0",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Enumerated Type",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.data.dictionary.EnumTypeDefinition",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/EnumType/enum2": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "enum2",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Enumerated Type",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.data.dictionary.EnumTypeDefinition",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/EnumType/enum3": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "enum3",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "2",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Enumerated Type",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.data.dictionary.EnumTypeDefinition",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/NumericType": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "NumericType",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Numeric Type",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.NumericType",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Data Type Mode",
+      "value": "Double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Signedness",
+      "value": "Signed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Word Length",
+      "value": "64",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Fraction Length",
+      "value": "0",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Slope",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Bias",
+      "value": "0",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type Override",
+      "value": "Inherit",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Is Alias",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Data Scope",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "FixedExponent",
+      "value": "0",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "SignednessBool",
+      "value": "true",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "SlopeAdjustmentFactor",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/PhysicalInterface": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "PhysicalInterface",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Physical Interface",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.ConnectionBus",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Elements_internal",
+      "value": "<3x1 Simulink.ConnectionElement>",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/PhysicalInterface/Element": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "Connection: <domain name>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Connection Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.ConnectionElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/PhysicalInterface/Element1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Element1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "Connection: foundation.electrical.electrical",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Connection Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.ConnectionElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/PhysicalInterface/a": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "a",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "Connection: <domain name>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Connection Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.ConnectionElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/ServiceInterface": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "ServiceInterface",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Service Interface",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.ServiceBus",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Elements_internal",
+      "value": "<3x1 Simulink.FunctionElement>",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/ServiceInterface/f": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "f",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Function Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.FunctionElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Arguments",
+      "value": "<3x1 Simulink.BusElement>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Asynchronous",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Prototype",
+      "value": "y = f(u,v)",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/ServiceInterface/f1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "f1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Function Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.FunctionElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Arguments",
+      "value": "<4x1 Simulink.BusElement>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Asynchronous",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Prototype",
+      "value": "y = f1(u,v,w,y)",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/ServiceInterface/f2": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "f2",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Function Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.FunctionElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Arguments",
+      "value": "<3x1 Simulink.BusElement>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Asynchronous",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Prototype",
+      "value": "y = f2(u,v)",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/StructType": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "StructType",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Struct Type",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Bus",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Data Scope",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Alignment",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Preserve Element Dimensions",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Elements_internal",
+      "value": "<2x1 Simulink.BusElement>",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/StructType/Element": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Bus Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.BusElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Dimensions Mode",
+      "value": "Fixed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/StructType/Element1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Element1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "half",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Bus Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.BusElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Dimensions Mode",
+      "value": "Fixed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/ValueType": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "ValueType",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Value Type",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.ValueType",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Dimensions Mode",
+      "value": "Fixed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/arch.sldd/arch/ValueType1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "ValueType1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "uint32",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Value Type",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.ValueType",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Dimensions Mode",
+      "value": "Fixed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

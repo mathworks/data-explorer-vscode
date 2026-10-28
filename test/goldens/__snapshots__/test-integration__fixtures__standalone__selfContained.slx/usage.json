@@ -1,0 +1,44 @@
+{
+ "file:///fx/test-integration/fixtures/standalone/selfContained.slx/blocks/1": {
+  "paramLinks": [
+   {
+    "property": "Gain",
+    "paramName": "Bp",
+    "source": "",
+    "linkTarget": "workspace:Bp@file:///fx/test-integration/fixtures/standalone/selfContained.slx"
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/standalone/selfContained.slx/blocks/2": {
+  "paramLinks": [
+   {
+    "property": "Value",
+    "paramName": "Numeric",
+    "source": "",
+    "linkTarget": "workspace:Numeric@file:///fx/test-integration/fixtures/standalone/selfContained.slx"
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/standalone/selfContained.slx/workspace/Bp": {
+  "blockLinks": [
+   {
+    "blockName": "Gain1",
+    "blockPath": "Gain1",
+    "modelName": "",
+    "modelUri": "file:///fx/test-integration/fixtures/standalone/selfContained.slx",
+    "linkTarget": "blocks:1@file:///fx/test-integration/fixtures/standalone/selfContained.slx"
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/standalone/selfContained.slx/workspace/Numeric": {
+  "blockLinks": [
+   {
+    "blockName": "Const1",
+    "blockPath": "Const1",
+    "modelName": "",
+    "modelUri": "file:///fx/test-integration/fixtures/standalone/selfContained.slx",
+    "linkTarget": "blocks:2@file:///fx/test-integration/fixtures/standalone/selfContained.slx"
+   }
+  ]
+ }
+}

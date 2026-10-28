@@ -1,0 +1,290 @@
+[
+ {
+  "type": "setRows",
+  "docUri": "file:///fx/test/fixtures/shadow_ws.slx",
+  "rows": [
+   {
+    "ID": "section:blocks",
+    "parent": null,
+    "Name": {
+     "label": "Model Elements",
+     "iconId": "blocks",
+     "editable": false,
+     "disabled": false,
+     "element": false
+    },
+    "Value": "",
+    "Class": "",
+    "Kind": "",
+    "DataType": "",
+    "Status": "",
+    "UsedBy": ""
+   },
+   {
+    "ID": "file:///fx/test/fixtures/shadow_ws.slx/blocks/1",
+    "parent": "section:blocks",
+    "Status": "",
+    "Name": {
+     "label": "WsGain",
+     "iconId": "block",
+     "disabled": false,
+     "editable": false,
+     "element": false
+    },
+    "Value": "",
+    "DataType": "Gain",
+    "_valueEditable": false,
+    "Description": "",
+    "_descriptionEditable": false,
+    "_descriptionApplies": true,
+    "_graphTarget": "file:///fx/test/fixtures/shadow_ws.slx",
+    "_blockKey": "1",
+    "_systemPath": "",
+    "_blockPath": "WsGain",
+    "UsedBy": {
+     "text": "Gain=Kp",
+     "linkTarget": "Kp@params.sldd"
+    },
+    "_isBlockRow": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/shadow_ws.slx/blocks/2",
+    "parent": "section:blocks",
+    "Status": "",
+    "Name": {
+     "label": "DictOnly",
+     "iconId": "block",
+     "disabled": false,
+     "editable": false,
+     "element": false
+    },
+    "Value": "",
+    "DataType": "Constant",
+    "_valueEditable": false,
+    "Description": "",
+    "_descriptionEditable": false,
+    "_descriptionApplies": true,
+    "_graphTarget": "file:///fx/test/fixtures/shadow_ws.slx",
+    "_blockKey": "2",
+    "_systemPath": "",
+    "_blockPath": "DictOnly",
+    "UsedBy": {
+     "text": "Value=Uo",
+     "linkTarget": "Uo@params.sldd"
+    },
+    "_isBlockRow": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "section:workspace",
+    "parent": null,
+    "Name": {
+     "label": "Model Workspace",
+     "iconId": "databaseFolderWorkspace",
+     "editable": false,
+     "disabled": false,
+     "element": false
+    },
+    "Value": "",
+    "Class": "",
+    "Kind": "",
+    "DataType": "",
+    "Status": "",
+    "UsedBy": ""
+   },
+   {
+    "ID": "file:///fx/test/fixtures/shadow_ws.slx/workspace/Kp",
+    "parent": "section:workspace",
+    "Status": "",
+    "Name": {
+     "label": "Kp",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "7",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "UsedBy": {
+     "links": [
+      {
+       "text": "WsGain",
+       "linkTarget": "1@file:///fx/test/fixtures/shadow_ws.slx"
+      }
+     ]
+    },
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "section:config",
+    "parent": null,
+    "Name": {
+     "label": "Configurations",
+     "iconId": "databaseFolderConfiguration",
+     "editable": false,
+     "disabled": false,
+     "element": false
+    },
+    "Value": "",
+    "Class": "",
+    "Kind": "",
+    "DataType": "",
+    "Status": "",
+    "UsedBy": ""
+   },
+   {
+    "ID": "section:references",
+    "parent": null,
+    "Name": {
+     "label": "Model References",
+     "iconId": "modelReference",
+     "editable": false,
+     "disabled": false,
+     "element": false
+    },
+    "Value": "",
+    "Class": "",
+    "Kind": "",
+    "DataType": "",
+    "Status": "",
+    "UsedBy": ""
+   },
+   {
+    "ID": "section:dataSources",
+    "parent": null,
+    "Name": {
+     "label": "External Data",
+     "iconId": "link_database",
+     "editable": false,
+     "disabled": false,
+     "element": false
+    },
+    "Value": "",
+    "Class": "",
+    "Kind": "",
+    "DataType": "",
+    "Status": "",
+    "UsedBy": ""
+   },
+   {
+    "ID": "file:///fx/test/fixtures/shadow_ws.slx/dataSources/params.sldd@params.sldd",
+    "parent": "section:dataSources",
+    "Status": "",
+    "Name": {
+     "label": "params.sldd",
+     "iconId": "simulinkDataDictionary_FT",
+     "disabled": false,
+     "editable": false,
+     "element": false
+    },
+    "Value": {
+     "text": "params.sldd",
+     "linkTarget": "params.sldd"
+    },
+    "_valueEditable": false,
+    "DataType": "Data Dictionary",
+    "Class": "Data Dictionary",
+    "Kind": "Data Dictionary",
+    "Description": "",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "columns": [
+   "Name",
+   "Value",
+   "DataType",
+   "UsedBy",
+   "Status",
+   "Kind",
+   "Class",
+   "Description",
+   "dimensions",
+   "dimensionsMode",
+   "complexity",
+   "Min",
+   "Max",
+   "Unit",
+   "storageClass",
+   "headerFile",
+   "alignment",
+   "definitionFile",
+   "preStatement",
+   "postStatement",
+   "qualifier",
+   "bankName",
+   "variantConditions",
+   "allChoicesCoderInfo",
+   "activeChoiceCoderInfo",
+   "lastModified",
+   "lastModifiedBy"
+  ],
+  "columnLabels": {
+   "Name": "Name",
+   "Value": "Value",
+   "Class": "Class",
+   "Kind": "Kind",
+   "DataType": "Data Type",
+   "Status": "Status",
+   "UsedBy": "Usage",
+   "Description": "Description",
+   "Min": "Min",
+   "Max": "Max",
+   "Unit": "Unit",
+   "definitionFile": "Definition File",
+   "preStatement": "Pre Statement",
+   "postStatement": "Post Statement",
+   "qualifier": "Qualifier",
+   "bankName": "Bank Name",
+   "variantConditions": "Variant Conditions",
+   "allChoicesCoderInfo": "All Choices Coder Info",
+   "activeChoiceCoderInfo": "Active Choice Coder Info",
+   "lastModified": "Last Modified",
+   "lastModifiedBy": "Last Modified By",
+   "dimensions": "Dimensions",
+   "complexity": "Complexity",
+   "storageClass": "Storage Class",
+   "headerFile": "Header File",
+   "alignment": "Alignment",
+   "dimensionsMode": "Dimensions Mode"
+  },
+  "columnGroups": {
+   "Min": "Data Object",
+   "Max": "Data Object",
+   "Unit": "Data Object",
+   "dimensions": "Data Object",
+   "complexity": "Data Object",
+   "dimensionsMode": "Data Object",
+   "storageClass": "Code Generation",
+   "headerFile": "Code Generation",
+   "alignment": "Code Generation",
+   "definitionFile": "Code Generation",
+   "preStatement": "Code Generation",
+   "postStatement": "Code Generation",
+   "qualifier": "Code Generation",
+   "bankName": "Variant Bank",
+   "variantConditions": "Variant Bank",
+   "allChoicesCoderInfo": "Variant Bank",
+   "activeChoiceCoderInfo": "Variant Bank",
+   "lastModified": "Data Dictionary",
+   "lastModifiedBy": "Data Dictionary"
+  },
+  "editable": false
+ }
+]

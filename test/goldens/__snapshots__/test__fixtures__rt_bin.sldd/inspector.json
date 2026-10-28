@@ -1,0 +1,522 @@
+{
+ "binedit:file:///fx/test/fixtures/rt_bin.sldd/other/gadget": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "gadget",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "<1x1 MyGadget>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MyGadget",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "MyGadget",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/rt_bin.sldd/other/gadget/Wheels": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Wheels",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "4",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/rt_bin.sldd/other/gadget/Name": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Name",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "'Roadster'",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "char",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "char",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/rt_bin.sldd/other/gadget/Engine": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Engine",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "<1x1 MyEngine>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MyEngine",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "MyEngine",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/rt_bin.sldd/other/gadget/Engine/Cylinders": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Cylinders",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "12",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/rt_bin.sldd/other/gadget/Engine/Displacement": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Displacement",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "6.2",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/rt_bin.sldd/other/gadget/Specs": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Specs",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "<1x1 struct>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/rt_bin.sldd/other/gadget/Specs/mass": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "mass",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "1500",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/rt_bin.sldd/other/gadget/Specs/color": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "color",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "'red'",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "char",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "char",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/rt_bin.sldd/other/gadget/Tags": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Tags",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "{'coupe', 'fast', 'v12'}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "cell",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "cell",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/rt_bin.sldd/other/gadget/Tags/1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Tags{1}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "'coupe'",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "char",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "char",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/rt_bin.sldd/other/gadget/Tags/2": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Tags{2}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "'fast'",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "char",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "char",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/rt_bin.sldd/other/gadget/Tags/3": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Tags{3}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "'v12'",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "char",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "char",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

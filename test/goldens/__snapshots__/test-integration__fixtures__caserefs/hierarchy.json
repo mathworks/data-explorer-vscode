@@ -1,0 +1,57 @@
+[
+ {
+  "label": "caserefs",
+  "kind": "group",
+  "groupKind": "folder",
+  "collapsible": "collapsed",
+  "children": [
+   {
+    "label": "caseRefs.slx",
+    "kind": "model",
+    "id": "file:///fx/test-integration/fixtures/caserefs/caseRefs.slx",
+    "health": null,
+    "collapsible": "collapsed",
+    "children": [
+     {
+      "label": "External Data",
+      "kind": "group",
+      "groupKind": "external-data",
+      "collapsible": "collapsed",
+      "children": [
+       {
+        "label": "CaseParams.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test-integration/fixtures/caserefs/CaseParams.sldd",
+        "health": null,
+        "collapsible": "collapsed",
+        "children": [
+         {
+          "label": "chained.sldd",
+          "kind": "sldd",
+          "id": "file:///fx/test-integration/fixtures/caserefs/chained.sldd",
+          "health": null,
+          "collapsible": "none"
+         }
+        ]
+       },
+       {
+        "label": "ExtraDict.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test-integration/fixtures/caserefs/ExtraDict.sldd",
+        "health": null,
+        "collapsible": "none"
+       },
+       {
+        "label": "CaseBp.mat",
+        "kind": "mat",
+        "id": "file:///fx/test-integration/fixtures/caserefs/CaseBp.mat",
+        "health": null,
+        "collapsible": "none"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+]

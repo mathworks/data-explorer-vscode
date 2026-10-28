@@ -1,0 +1,55 @@
+{
+ "binedit:file:///fx/test/fixtures/arch_service_binary.sldd/arch/ServiceInterface": {
+  "type": "childRows",
+  "nodeId": "binedit:file:///fx/test/fixtures/arch_service_binary.sldd/arch/ServiceInterface",
+  "rows": [
+   {
+    "ID": "binedit:file:///fx/test/fixtures/arch_service_binary.sldd/arch/ServiceInterface/f",
+    "parent": "binedit:file:///fx/test/fixtures/arch_service_binary.sldd/arch/ServiceInterface",
+    "Status": "",
+    "Name": {
+     "label": "f",
+     "iconId": "function",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "y = f(u)",
+    "_valueEditable": false,
+    "DataType": "",
+    "Class": "Simulink.FunctionElement",
+    "Kind": "Function Element",
+    "Description": "",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/arch_service_binary.sldd/arch/ServiceInterface/g",
+    "parent": "binedit:file:///fx/test/fixtures/arch_service_binary.sldd/arch/ServiceInterface",
+    "Status": "",
+    "Name": {
+     "label": "g",
+     "iconId": "function",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "[a,b] = g(g)",
+    "_valueEditable": false,
+    "DataType": "",
+    "Class": "Simulink.FunctionElement",
+    "Kind": "Function Element",
+    "Description": "",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ }
+}

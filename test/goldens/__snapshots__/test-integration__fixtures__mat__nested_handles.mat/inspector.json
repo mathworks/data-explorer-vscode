@@ -1,0 +1,842 @@
+{
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/s_fh": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "s_fh",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "<1x1 struct>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/s_fh/named": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "named",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "@sin",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/s_fh/anon": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "anon",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "@(x)x.^2+1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/s_fh/none": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "none",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "[ ]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/s_fh/num": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "num",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "3",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/c_fh": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "c_fh",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "{@sin, @(x)x.^2+1, [ ], 3}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "cell",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "cell",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/c_fh/1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "c_fh{1}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "@sin",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/c_fh/2": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "c_fh{2}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "@(x)x.^2+1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/c_fh/3": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "c_fh{3}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "[ ]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/c_fh/4": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "c_fh{4}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "3",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "deep_fh",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "<1x1 struct>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh/inner": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "inner",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "<1x1 struct>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh/inner/h": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "h",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "@cos",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh/list": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "list",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "{{@tan}}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "cell",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "cell",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh/list/1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "list{1}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "{@tan}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "cell",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "cell",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh/list/1/1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "list{1}{1}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "@tan",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/sa_fh": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "sa_fh",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "<1x2 struct>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/sa_fh/1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "sa_fh(1)",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "<1x1 struct>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/sa_fh/1/h": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "h",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "@sin",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/sa_fh/2": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "sa_fh(2)",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "<1x1 struct>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "struct",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/sa_fh/2/h": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "h",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "@cos",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "function_handle",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

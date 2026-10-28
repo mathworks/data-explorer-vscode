@@ -1,0 +1,31 @@
+[
+ {
+  "label": "mat",
+  "kind": "group",
+  "groupKind": "folder",
+  "collapsible": "collapsed",
+  "children": [
+   {
+    "label": "cases.mat",
+    "kind": "mat",
+    "id": "file:///fx/test-integration/fixtures/mat/cases.mat",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "nested_handles.mat",
+    "kind": "mat",
+    "id": "file:///fx/test-integration/fixtures/mat/nested_handles.mat",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "pv_basic.mat",
+    "kind": "mat",
+    "id": "file:///fx/test-integration/fixtures/mat/pv_basic.mat",
+    "health": null,
+    "collapsible": "none"
+   }
+  ]
+ }
+]

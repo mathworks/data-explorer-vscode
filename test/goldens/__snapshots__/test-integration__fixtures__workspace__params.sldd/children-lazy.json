@@ -1,0 +1,1379 @@
+{
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyBus": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyBus",
+  "rows": [
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyBus/x",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyBus",
+    "Status": "",
+    "Name": {
+     "label": "x",
+     "iconId": "wsBusElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "double",
+    "dimensions": {
+     "text": "1",
+     "editable": true,
+     "editor": "text"
+    },
+    "complexity": {
+     "text": "real",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "real",
+      "complex"
+     ]
+    },
+    "dimensionsMode": {
+     "text": "Fixed",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Fixed",
+      "Variable"
+     ]
+    },
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.BusElement",
+    "Kind": "Bus Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyBus/y",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyBus",
+    "Status": "",
+    "Name": {
+     "label": "y",
+     "iconId": "wsBusElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "int32",
+    "dimensions": {
+     "text": "1",
+     "editable": true,
+     "editor": "text"
+    },
+    "complexity": {
+     "text": "real",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "real",
+      "complex"
+     ]
+    },
+    "dimensionsMode": {
+     "text": "Fixed",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Fixed",
+      "Variable"
+     ]
+    },
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.BusElement",
+    "Kind": "Bus Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyConnBus": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyConnBus",
+  "rows": [
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyConnBus/c1",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyConnBus",
+    "Status": "",
+    "Name": {
+     "label": "c1",
+     "iconId": "wsConnectionElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "Connection: <domain name>",
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.ConnectionElement",
+    "Kind": "Connection Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyEnum": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyEnum",
+  "rows": [
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyEnum/enum1",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyEnum",
+    "Status": "",
+    "Name": {
+     "label": "enum1",
+     "iconId": "wsElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "0",
+    "_valueEditable": true,
+    "Description": "",
+    "DataType": "",
+    "Class": "Simulink.data.dictionary.EnumTypeDefinition",
+    "Kind": "Enumerated Type",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyEnum/Red",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyEnum",
+    "Status": "",
+    "Name": {
+     "label": "Red",
+     "iconId": "busElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "0",
+    "_valueEditable": true,
+    "Description": "red state",
+    "DataType": "",
+    "Class": "Simulink.data.dictionary.EnumTypeDefinition",
+    "Kind": "Enumerated Type",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyEnum/Green",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/MyEnum",
+    "Status": "",
+    "Name": {
+     "label": "Green",
+     "iconId": "busElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "1",
+    "_valueEditable": true,
+    "Description": "green state",
+    "DataType": "",
+    "Class": "Simulink.data.dictionary.EnumTypeDefinition",
+    "Kind": "Enumerated Type",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/boolVec": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/boolVec",
+  "rows": [
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/boolVec/1",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/boolVec",
+    "Status": "",
+    "Name": {
+     "label": "boolVec(1)",
+     "iconId": "wsCheck",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "true",
+    "_valueEditable": true,
+    "DataType": "logical",
+    "Description": "",
+    "Class": "logical",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/boolVec/2",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/boolVec",
+    "Status": "",
+    "Name": {
+     "label": "boolVec(2)",
+     "iconId": "wsCheck",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "false",
+    "_valueEditable": true,
+    "DataType": "logical",
+    "Description": "",
+    "Class": "logical",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/boolVec/3",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/boolVec",
+    "Status": "",
+    "Name": {
+     "label": "boolVec(3)",
+     "iconId": "wsCheck",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "true",
+    "_valueEditable": true,
+    "DataType": "logical",
+    "Description": "",
+    "Class": "logical",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/colVec": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/colVec",
+  "rows": [
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/colVec/1",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/colVec",
+    "Status": "",
+    "Name": {
+     "label": "colVec(1)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "1",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/colVec/2",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/colVec",
+    "Status": "",
+    "Name": {
+     "label": "colVec(2)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "2",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/colVec/3",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/colVec",
+    "Status": "",
+    "Name": {
+     "label": "colVec(3)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "3",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/cplxVec": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/cplxVec",
+  "rows": [
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/cplxVec/1",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/cplxVec",
+    "Status": "",
+    "Name": {
+     "label": "cplxVec(1)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "1+1i",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double (complex)",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/cplxVec/2",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/cplxVec",
+    "Status": "",
+    "Name": {
+     "label": "cplxVec(2)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "2-2i",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double (complex)",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/i32Vec": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/i32Vec",
+  "rows": [
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/i32Vec/1",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/i32Vec",
+    "Status": "",
+    "Name": {
+     "label": "i32Vec(1)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "5",
+    "_valueEditable": true,
+    "DataType": "int32",
+    "Description": "",
+    "Class": "int32",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/i32Vec/2",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/i32Vec",
+    "Status": "",
+    "Name": {
+     "label": "i32Vec(2)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "6",
+    "_valueEditable": true,
+    "DataType": "int32",
+    "Description": "",
+    "Class": "int32",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/i32Vec/3",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/i32Vec",
+    "Status": "",
+    "Name": {
+     "label": "i32Vec(3)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "7",
+    "_valueEditable": true,
+    "DataType": "int32",
+    "Description": "",
+    "Class": "int32",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x2": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x2",
+  "rows": [
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x2/1",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x2",
+    "Status": "",
+    "Name": {
+     "label": "mat2x2(1,1)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "1",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x2/2",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x2",
+    "Status": "",
+    "Name": {
+     "label": "mat2x2(1,2)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "2",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x2/3",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x2",
+    "Status": "",
+    "Name": {
+     "label": "mat2x2(2,1)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "3",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x2/4",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x2",
+    "Status": "",
+    "Name": {
+     "label": "mat2x2(2,2)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "4",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3",
+  "rows": [
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3/1",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3",
+    "Status": "",
+    "Name": {
+     "label": "mat2x3(1,1)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "1",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3/2",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3",
+    "Status": "",
+    "Name": {
+     "label": "mat2x3(1,2)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "2",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3/3",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3",
+    "Status": "",
+    "Name": {
+     "label": "mat2x3(1,3)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "3",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3/4",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3",
+    "Status": "",
+    "Name": {
+     "label": "mat2x3(2,1)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "4",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3/5",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3",
+    "Status": "",
+    "Name": {
+     "label": "mat2x3(2,2)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "5",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3/6",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/mat2x3",
+    "Status": "",
+    "Name": {
+     "label": "mat2x3(2,3)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "6",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myCell": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myCell",
+  "rows": [
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myCell/1",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myCell",
+    "Status": "",
+    "Name": {
+     "label": "myCell{1}",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "1",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myCell/2",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myCell",
+    "Status": "",
+    "Name": {
+     "label": "myCell{2}",
+     "iconId": "wsCharacter",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "'two'",
+    "_valueEditable": true,
+    "DataType": "char",
+    "Description": "",
+    "Class": "char",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myCell/3",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myCell",
+    "Status": "",
+    "Name": {
+     "label": "myCell{3}",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "[3 4]",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": true
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myCell/3/1",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myCell/3",
+    "Status": "",
+    "Name": {
+     "label": "myCell{3}(1)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "3",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myCell/3/2",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myCell/3",
+    "Status": "",
+    "Name": {
+     "label": "myCell{3}(2)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "4",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myStruct": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myStruct",
+  "rows": [
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myStruct/a",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myStruct",
+    "Status": "",
+    "Name": {
+     "label": "a",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "1",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myStruct/b",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myStruct",
+    "Status": "",
+    "Name": {
+     "label": "b",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "[2 3]",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": true
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myStruct/b/1",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myStruct/b",
+    "Status": "",
+    "Name": {
+     "label": "b(1)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "2",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myStruct/b/2",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myStruct/b",
+    "Status": "",
+    "Name": {
+     "label": "b(2)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "3",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myStruct/c",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/myStruct",
+    "Status": "",
+    "Name": {
+     "label": "c",
+     "iconId": "wsCharacter",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "'txt'",
+    "_valueEditable": true,
+    "DataType": "char",
+    "Description": "",
+    "Class": "char",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/nestedStruct": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/nestedStruct",
+  "rows": [
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/nestedStruct/inner",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/nestedStruct",
+    "Status": "",
+    "Name": {
+     "label": "inner",
+     "iconId": "wsTree",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<1x1 struct>",
+    "_valueEditable": false,
+    "DataType": "struct",
+    "Description": "",
+    "Class": "struct",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": true
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/nestedStruct/inner/x",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/nestedStruct/inner",
+    "Status": "",
+    "Name": {
+     "label": "x",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "1",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/nestedStruct/inner/y",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/nestedStruct/inner",
+    "Status": "",
+    "Name": {
+     "label": "y",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "2",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/nestedStruct/name",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/nestedStruct",
+    "Status": "",
+    "Name": {
+     "label": "name",
+     "iconId": "wsCharacter",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "'n'",
+    "_valueEditable": true,
+    "DataType": "char",
+    "Description": "",
+    "Class": "char",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/rowVec": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/rowVec",
+  "rows": [
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/rowVec/1",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/rowVec",
+    "Status": "",
+    "Name": {
+     "label": "rowVec(1)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "10",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/rowVec/2",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/rowVec",
+    "Status": "",
+    "Name": {
+     "label": "rowVec(2)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "20",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/rowVec/3",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/rowVec",
+    "Status": "",
+    "Name": {
+     "label": "rowVec(3)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "30",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/rowVec/4",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/rowVec",
+    "Status": "",
+    "Name": {
+     "label": "rowVec(4)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "40",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/strArray": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/strArray",
+  "rows": [
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/strArray/1",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/strArray",
+    "Status": "",
+    "Name": {
+     "label": "strArray(1)",
+     "iconId": "wsString",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "\"a\"",
+    "_valueEditable": true,
+    "DataType": "string",
+    "Description": "",
+    "Class": "string",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/strArray/2",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/strArray",
+    "Status": "",
+    "Name": {
+     "label": "strArray(2)",
+     "iconId": "wsString",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "\"bb\"",
+    "_valueEditable": true,
+    "DataType": "string",
+    "Description": "",
+    "Class": "string",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/strArray/3",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/strArray",
+    "Status": "",
+    "Name": {
+     "label": "strArray(3)",
+     "iconId": "wsString",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "\"ccc\"",
+    "_valueEditable": true,
+    "DataType": "string",
+    "Description": "",
+    "Class": "string",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "file:///fx/test-integration/fixtures/workspace/params.sldd/design/structArray": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/structArray",
+  "rows": [
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/structArray/1",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/structArray",
+    "Status": "",
+    "Name": {
+     "label": "structArray(1)",
+     "iconId": "wsTree",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "<1x1 struct>",
+    "_valueEditable": false,
+    "DataType": "struct",
+    "Description": "",
+    "Class": "struct",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/structArray/1/v",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/structArray/1",
+    "Status": "",
+    "Name": {
+     "label": "v",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "1",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/structArray/2",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/structArray",
+    "Status": "",
+    "Name": {
+     "label": "structArray(2)",
+     "iconId": "wsTree",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "<1x1 struct>",
+    "_valueEditable": false,
+    "DataType": "struct",
+    "Description": "",
+    "Class": "struct",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/structArray/2/v",
+    "parent": "file:///fx/test-integration/fixtures/workspace/params.sldd/design/structArray/2",
+    "Status": "",
+    "Name": {
+     "label": "v",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "2",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ }
+}

@@ -1,0 +1,154 @@
+{
+ "binedit:file:///fx/test/fixtures/arch_service_binary.sldd/arch/ServiceInterface": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "ServiceInterface",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Service Interface",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.ServiceBus",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Elements_internal",
+      "value": "<2x1 Simulink.FunctionElement>",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/arch_service_binary.sldd/arch/ServiceInterface/f": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "f",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Function Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.FunctionElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Prototype",
+      "value": "y = f(u)",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Asynchronous",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Arguments",
+      "value": "<2x1 Simulink.BusElement>",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/arch_service_binary.sldd/arch/ServiceInterface/g": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "g",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Function Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.FunctionElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Prototype",
+      "value": "[a,b] = g(g)",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Asynchronous",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Arguments",
+      "value": "<3x1 Simulink.BusElement>",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,52 @@
+{
+ "file:///fx/test-integration/fixtures/legacy/legacyModern.mdl/blocks/1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "ModernGain",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Block Path",
+      "value": "ModernGain",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/legacy/legacyModern.mdl/dataSources/legacyParams.sldd@legacyParams.sldd": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "legacyParams.sldd",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Path",
+      "value": "legacyParams.sldd",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Status",
+      "value": "Not Loaded",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

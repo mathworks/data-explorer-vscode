@@ -1,0 +1,68 @@
+[
+ {
+  "label": "workspace",
+  "kind": "group",
+  "groupKind": "folder",
+  "collapsible": "collapsed",
+  "children": [
+   {
+    "label": "binary.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test-integration/fixtures/workspace/binary.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "data.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test-integration/fixtures/workspace/data.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "model.slx",
+    "kind": "model",
+    "id": "file:///fx/test-integration/fixtures/workspace/model.slx",
+    "health": null,
+    "collapsible": "collapsed",
+    "children": [
+     {
+      "label": "plant.slx",
+      "kind": "missing",
+      "collapsible": "none",
+      "description": "unresolved reference"
+     },
+     {
+      "label": "External Data",
+      "kind": "group",
+      "groupKind": "external-data",
+      "collapsible": "collapsed",
+      "children": [
+       {
+        "label": "params.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test-integration/fixtures/workspace/params.sldd",
+        "health": null,
+        "collapsible": "collapsed",
+        "children": [
+         {
+          "label": "common.sldd",
+          "kind": "missing",
+          "collapsible": "none",
+          "description": "unresolved reference"
+         }
+        ]
+       },
+       {
+        "label": "signals.mat",
+        "kind": "missing",
+        "collapsible": "none",
+        "description": "unresolved reference"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+]

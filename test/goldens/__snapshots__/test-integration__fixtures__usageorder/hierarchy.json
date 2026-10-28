@@ -1,0 +1,58 @@
+[
+ {
+  "label": "usageorder",
+  "kind": "group",
+  "groupKind": "folder",
+  "collapsible": "collapsed",
+  "children": [
+   {
+    "label": "ctrlA.slx",
+    "kind": "model",
+    "id": "file:///fx/test-integration/fixtures/usageorder/ctrlA.slx",
+    "health": null,
+    "collapsible": "collapsed",
+    "children": [
+     {
+      "label": "External Data",
+      "kind": "group",
+      "groupKind": "external-data",
+      "collapsible": "collapsed",
+      "children": [
+       {
+        "label": "sharedParams.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test-integration/fixtures/usageorder/sharedParams.sldd",
+        "health": null,
+        "collapsible": "none"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "label": "plantB.slx",
+    "kind": "model",
+    "id": "file:///fx/test-integration/fixtures/usageorder/plantB.slx",
+    "health": null,
+    "collapsible": "collapsed",
+    "children": [
+     {
+      "label": "External Data",
+      "kind": "group",
+      "groupKind": "external-data",
+      "collapsible": "collapsed",
+      "children": [
+       {
+        "label": "sharedParams.sldd",
+        "kind": "sldd",
+        "id": "file:///fx/test-integration/fixtures/usageorder/sharedParams.sldd",
+        "health": null,
+        "collapsible": "none"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ }
+]

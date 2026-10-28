@@ -1,0 +1,137 @@
+{
+ "binedit:file:///fx/test/fixtures/mcos/Bp.mat/Bp": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Bp",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Breakpoint",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Breakpoint",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Value",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Storage Class",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Name",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Scope",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Support Tunable Size",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Value",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.TunableSizeValue",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Dimensions",
+      "value": "[0, 0]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Min",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Max",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.TunableSizeName",
+      "value": "N",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.DataType",
+      "value": "auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.FieldName",
+      "value": "BP",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

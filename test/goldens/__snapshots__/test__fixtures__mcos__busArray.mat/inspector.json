@@ -1,0 +1,834 @@
+{
+ "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "buses",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "<1x3 Simulink.Bus>",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Bus",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Bus",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "buses(1)",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Bus",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Bus",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Data Scope",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Alignment",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Preserve Element Dimensions",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/1/a": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "a",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Bus Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.BusElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Dimensions Mode",
+      "value": "Fixed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "SamplingMode",
+      "value": "Sample based",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "SampleTime",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/2": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "buses(2)",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Bus",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Bus",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Data Scope",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Alignment",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Preserve Element Dimensions",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/2/x": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "x",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "single",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Bus Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.BusElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Dimensions Mode",
+      "value": "Fixed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "SamplingMode",
+      "value": "Sample based",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "SampleTime",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/2/y": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "y",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "int32",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Bus Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.BusElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Dimensions Mode",
+      "value": "Fixed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "SamplingMode",
+      "value": "Sample based",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "SampleTime",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/3": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "buses(3)",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Bus",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Bus",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Data Scope",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Alignment",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Preserve Element Dimensions",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/3/p": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "p",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "uint8",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Bus Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.BusElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Dimensions Mode",
+      "value": "Fixed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "SamplingMode",
+      "value": "Sample based",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "SampleTime",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/3/q": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "q",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "boolean",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Bus Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.BusElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Dimensions Mode",
+      "value": "Fixed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "SamplingMode",
+      "value": "Sample based",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "SampleTime",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/3/r": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "r",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Bus Element",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.BusElement",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Dimensions Mode",
+      "value": "Fixed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Minimum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "SamplingMode",
+      "value": "Sample based",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "SampleTime",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

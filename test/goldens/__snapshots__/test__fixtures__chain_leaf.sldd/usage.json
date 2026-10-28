@@ -1,0 +1,13 @@
+{
+ "file:///fx/test/fixtures/chain_leaf.sldd/design/ChainVar": {
+  "blockLinks": [
+   {
+    "blockName": "ChainGain",
+    "blockPath": "ChainGain",
+    "modelName": "chain_model",
+    "modelUri": "file:///fx/test/fixtures/chain_model.slx",
+    "linkTarget": "blocks:1@file:///fx/test/fixtures/chain_model.slx"
+   }
+  ]
+ }
+}

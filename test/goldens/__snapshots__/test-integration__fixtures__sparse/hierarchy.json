@@ -1,0 +1,38 @@
+[
+ {
+  "label": "sparse",
+  "kind": "group",
+  "groupKind": "folder",
+  "collapsible": "collapsed",
+  "children": [
+   {
+    "label": "sparse_binary.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test-integration/fixtures/sparse/sparse_binary.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "sparse_text.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "sparse_values.mat",
+    "kind": "mat",
+    "id": "file:///fx/test-integration/fixtures/sparse/sparse_values.mat",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "sparse_ws.slx",
+    "kind": "model",
+    "id": "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx",
+    "health": null,
+    "collapsible": "none"
+   }
+  ]
+ }
+]

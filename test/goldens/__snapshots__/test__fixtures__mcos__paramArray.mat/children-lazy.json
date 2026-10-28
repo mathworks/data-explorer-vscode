@@ -1,0 +1,154 @@
+{
+ "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/2": {
+  "type": "childRows",
+  "nodeId": "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/2",
+  "rows": [
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/2/Value",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/2",
+    "Status": "",
+    "Name": {
+     "label": "Value",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "[1 2 3]",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": true
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/2/Value/1",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/2/Value",
+    "Status": "",
+    "Name": {
+     "label": "Value(1)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "1",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/2/Value/2",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/2/Value",
+    "Status": "",
+    "Name": {
+     "label": "Value(2)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "2",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/2/Value/3",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/2/Value",
+    "Status": "",
+    "Name": {
+     "label": "Value(3)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "3",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/3": {
+  "type": "childRows",
+  "nodeId": "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/3",
+  "rows": [
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/3/Value",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/3",
+    "Status": "",
+    "Name": {
+     "label": "Value",
+     "iconId": "wsTree",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "<1x1 struct>",
+    "_valueEditable": false,
+    "DataType": "struct",
+    "Description": "",
+    "Class": "struct",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": true
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/3/Value/a",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/paramArray.mat/arr/3/Value",
+    "Status": "",
+    "Name": {
+     "label": "a",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "1",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ }
+}

@@ -1,0 +1,30 @@
+{
+ "digested": true,
+ "sha256": "e543aa20b6659f64fdd2eb3ac0bb09a2b34e1e1a1c5163dfa04fe2fecf85355f",
+ "entryCount": 23,
+ "entries": {
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spDiag": "4122fb0054e7db3e",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spComplex": "8e87523e9632b774",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spLogical": "77d7f1aa027384c8",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spSingle": "78960481cc4ef17f",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spRow": "0242aeb7a72c0cfb",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spCol": "5683492480584bc6",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spNonFinite": "27949502bb1d5851",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spBig": "13635baad92767e2",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spTall": "866e03352cb14213",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dDiag": "2799252352fee3f3",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dComplex": "c97724d0f72149cf",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dLogical": "cebdc0c5254d0910",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dSingle": "1a4add6cd79cbcce",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dAllZero": "e9e39b293d55e606",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dRow": "ef693502b4f9c999",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dCol": "0c18e761e5f9b5b4",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dNonFinite": "0492fb0d0eb50939",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/pSp": "49d3d25ee5eca7d7",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/pSpLogical": "e2e25c94c661dc05",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/pSpComplex": "e3e95870cc0d0665",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/pDense": "a338fefe2246490f",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/st": "c55827d4649a17bd",
+  "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/c": "7ab908f3d162cda8"
+ }
+}
