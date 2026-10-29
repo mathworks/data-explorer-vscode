@@ -53,7 +53,7 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DataModel, applyScEdits, entrySelectorOf } from 'data-explorer-core';
+import { DataModel, applyScEdits, catalogRenameOf, entrySelectorOf, scJsonRenameEdits } from 'data-explorer-core';
 import { buildEntryRows, spliceEntryRows } from 'data-explorer-view/model';
 import { getModel, findNode, invalidate } from 'data-explorer-view/host';
 import { findEntrySpan, detectIndent } from '../src/host/entrySplice.js';
@@ -61,7 +61,6 @@ import { indexEntries } from '../src/host/jsonEntryScan.js';
 import { reserializeEntry } from '../src/host/structuralEdit.js';
 import { mutateEntry, applyEntryOps } from '../src/host/entryOps.js';
 import { planEntrySync, isEchoOfEdit, isPaintedEcho, hintFor, planOwnEdit } from '../src/host/jsonEntrySync.js';
-import { catalogRenameOf, scJsonRenameEdits } from '../src/host/scRename.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
