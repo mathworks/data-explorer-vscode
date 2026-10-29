@@ -6,6 +6,7 @@ import { defineTreeTable } from 'data-explorer-view/widgets/tree-table/dex-tree-
 import { defineContextMenu } from 'data-explorer-view/widgets/context-menu/dex-context-menu.js';
 import { defineErrorDialog } from 'data-explorer-view/widgets/error-dialog/dex-error-dialog.js';
 import { defineVariableEditor } from 'data-explorer-view/widgets/variable-editor/dex-variable-editor.js';
+import { setIconBase } from 'data-explorer-view/widgets/shared/dex-icon.js';
 import { installMatrixOpen } from './matrixOpen.js';
 import { renderBanners, renderError } from './banners.js';
 import {
@@ -27,7 +28,10 @@ import { isSectionRowId, sectionNameFromRowId, WHOLE_FILE_SECTION } from 'data-e
 import type { HostToTableMessage } from '../common/protocol.js';
 
 // Importing a widget no longer registers it, so this comes first: before the shell's table is
-// looked up and before any overlay is created, each finds its element already defined.
+// looked up and before any overlay is created, each finds its element already defined. The icon
+// base too, before the first row draws one: the icons copy:icons puts in dist/webview/icons,
+// relative to the shell's <base href> (dist/webview).
+setIconBase('./icons/');
 defineTreeTable();
 defineContextMenu();
 defineErrorDialog();

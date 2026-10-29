@@ -3,10 +3,11 @@
 // Where the icon SVGs live INSIDE THE INSTALLED EXTENSION, as path segments
 // relative to `extensionUri`.
 //
-// This is deliberately not `media/icons`, which is where the sources live in the
-// repo: `.vscodeignore` excludes `media/icons/**` so the 116 assets are not shipped
-// twice, and `npm run copy:icons` copies them here for the webview to load. The
-// host's tree resolved `media/icons/<id>.svg` anyway — a path that exists in a dev
+// This is deliberately not `media/icons`, which holds the few icons only this tree
+// draws, nor data-explorer-view's `icons/`, which holds every icon its widgets draw:
+// `npm run copy:icons` (scripts/copy-icons.mjs) copies both here for the webview to
+// load, and `.vscodeignore` excludes `media/icons/**` so they are not shipped twice.
+// The host's tree resolved `media/icons/<id>.svg` once — a path that existed in a dev
 // checkout and in every integration run, and in no published VSIX, so the Simulink
 // Data tree had no icons at all for users while looking correct to us.
 //

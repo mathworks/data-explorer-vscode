@@ -15,8 +15,6 @@
 // four tiles whose class and section disagreed with core, one tile that silently
 // created a different class, and one tile whose art differed from the row it produced.
 import { describe, it, expect } from 'vitest';
-import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { SlddNode } from 'data-explorer-core';
 import {
   ADD_CATALOG,
@@ -28,6 +26,7 @@ import {
   labelLinesOf,
 } from 'data-explorer-view/model/ids/addCatalog.js';
 import type { GalleryTile, SectionKey } from 'data-explorer-view/model/ids/addCatalog.js';
+import { shippedIcon } from './tools/shippedIcons.js';
 
 /** Every section of a fresh, empty dictionary — one per tile, so names never collide. */
 function sectionsOf(): Record<string, any> {
@@ -143,8 +142,7 @@ describe('the Add gallery catalog agrees with core', () => {
       });
 
       it('draws a glyph this extension ships', () => {
-        const file = fileURLToPath(new URL(`../media/icons/${tile.iconId}.svg`, import.meta.url));
-        expect(existsSync(file)).toBe(true);
+        expect(shippedIcon(tile.iconId), `${tile.iconId}.svg`).toBeDefined();
       });
     });
   }

@@ -35,8 +35,9 @@ export function buildCsp(cspSource: string, nonce: string): string {
 
 // Vite bundles every webview CSS import into one shared, unhashed asset named
 // `property.css`, so every entry links the same file. dex-icon renders relative
-// img src `./icons/x.svg` (vite base:'./'), so <base href> points at the
-// dist/webview root; the absolute asWebviewUri script/style tags ignore <base>.
+// img src `./icons/x.svg` (the base table-main and pi-main set), so <base href>
+// points at the dist/webview root; the absolute asWebviewUri script/style tags
+// ignore <base>.
 export function renderShell(uris: ShellUris, options: { title: string; body: string }): string {
   const csp = buildCsp(uris.cspSource, uris.nonce);
   return `<!doctype html>

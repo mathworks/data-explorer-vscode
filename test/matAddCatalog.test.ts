@@ -11,10 +11,11 @@
 // own: the gallery shows a tile for every class core lists and is not told to leave out, and for
 // nothing else, and the dictionary's gallery is exactly the one it was.
 import { describe, it, expect } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel, MAT_CREATABLE_CLASSES } from 'data-explorer-core';
 import { ADD_CATALOG, MAT_OMITTED, allTiles, matCatalog } from 'data-explorer-view/model/ids/addCatalog.js';
+import { shippedIcon } from './tools/shippedIcons.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -100,7 +101,7 @@ describe('the MAT-file gallery agrees with core', () => {
           });
 
           it('draws a glyph this extension ships', () => {
-            expect(existsSync(fileURLToPath(new URL(`../media/icons/${tile.iconId}.svg`, import.meta.url)))).toBe(true);
+            expect(shippedIcon(tile.iconId), `${tile.iconId}.svg`).toBeDefined();
           });
         });
       }
