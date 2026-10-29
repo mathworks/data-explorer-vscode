@@ -38,10 +38,12 @@ const under = (dir: string, file: string): boolean => file === `${dir}.ts` || fi
 
 // A walker that silently read nothing would make every assertion below pass. Floors,
 // not counts — they fail if the tree moves or the matcher stops matching, and are not
-// meant to be bumped whenever a file is added.
+// meant to be bumped whenever a file is added. The module floor was 60 until the folder
+// reads, the hierarchy, Usage, search and the project page's model moved to core and view,
+// which left the tree at 60; 40 is still far above a walker that read nothing.
 describe('the walker is actually reading this tree', () => {
   it('finds the modules and the imports between them', () => {
-    expect(graph.files.length).toBeGreaterThan(60);
+    expect(graph.files.length).toBeGreaterThan(40);
     expect(graph.files).toContain('extension.ts');
     expect(runtimeEdges(graph).length).toBeGreaterThan(100);
   });
