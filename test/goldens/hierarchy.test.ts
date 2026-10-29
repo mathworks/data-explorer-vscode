@@ -10,9 +10,9 @@
 // row a user can expand is expanded, as a user clicking every twisty would; a cycle row offers no
 // twisty, and that is where an expansion ends.
 import { describe, expect, it } from 'vitest';
+import { newSourceCache } from 'data-explorer-core';
 import { RelGraph, type GraphNode } from 'data-explorer-view/model';
 import { graphSourcesOf } from '../../src/host/structuralIndex.js';
-import { newSourceCache } from '../../src/host/sourceCache.js';
 import { expectGolden, fakeFile, filesUnder, fixtureFolders } from './fixtures.js';
 import { nodeReader } from './nodeReads.js';
 

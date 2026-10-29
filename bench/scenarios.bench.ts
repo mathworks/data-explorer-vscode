@@ -91,40 +91,33 @@ vi.mock('../node_modules/data-explorer-core/dist/datamodel/parser/ModelParser.js
 
 import { readdirSync, readFileSync, realpathSync, statSync, utimesSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { DataModel } from 'data-explorer-core';
+import {
+  DataModel,
+  GRAPH_EXTS,
+  mapLimited,
+  MAX_SCAN_BYTES,
+  newSourceCache,
+  parsedModelOf,
+  planSummaries,
+  SUPPORTED_EXTS,
+  type SourceCache,
+  type SourceFile,
+  type SourceReader,
+} from 'data-explorer-core';
 import { toArrayBuffer } from '../src/common/bytes.js';
 import { basename, RelGraph, scanSldd } from 'data-explorer-view/model';
-import { GRAPH_EXTS, SUPPORTED_EXTS } from '../src/common/fileTypes.js';
-import { mapLimited } from '../src/host/mapLimited.js';
 import type { NameRecord } from '../src/host/nameExtract.js';
 import { namesOfFile, type NameReader } from '../src/host/nameScan.js';
 import { isZipBytes } from '../src/host/slddFormat.js';
-import { parsedModelOf } from '../src/host/sourceCache.js';
 import { graphSourcesOf, type GraphReader } from '../src/host/structuralIndex.js';
 import * as SlddModel from 'data-explorer-view/model';
-import {
-  newUsageCache,
-  planSummaries,
-  type PlanFile,
-  type PlanReader,
-  type UsageCache,
-} from '../src/host/usagePlan.js';
 
 const CORPUS = fileURLToPath(new URL('corpus/', import.meta.url));
 const REPEATS = Math.max(1, Number(process.env.BENCH_REPEATS ?? 3));
 
-/**
- * The largest file a scan will read — src/host/scanRead.ts's `MAX_SCAN_BYTES`, which
- * cannot be imported here because that module imports `vscode`. Copied rather than
- * dropped so the reader below makes the same two refusals the real one does; nothing
- * in the corpus is near it, so it changes no number, but a reader without it would be
- * a different reader.
- */
-const MAX_SCAN_BYTES = 0x1fffffe8;
-
 // --- The corpus, as the extension's two globs see it --------------------------
 
-interface CorpusFile extends PlanFile {
+interface CorpusFile extends SourceFile {
   /** Absolute filesystem path — what node `fs` is given. */
   fsPath: string;
 }
@@ -186,7 +179,7 @@ function projectStore(): Record<string, string> {
  * than per process, for the same reason as above.
  */
 class World {
-  readonly cache: UsageCache = newUsageCache();
+  readonly cache: SourceCache = newSourceCache();
   /** `parseModel` calls, counted off `cache.parsed` — see `counting`. */
   parses = 0;
   /** The same, per file basename — scenario 3's headline is one file's count. */
@@ -217,7 +210,7 @@ class World {
    * The reader the plan is given: `version` from the `stat` alone, `bytes` counted.
    * Mirrors usageSources.readerFor over node `fs`.
    */
-  reader(): PlanReader {
+  reader(): SourceReader {
     const byUri = new Map(TREE_FILES.map((f) => [f.uriString, f]));
     return {
       version: async (file) => {
@@ -258,7 +251,7 @@ class World {
 
   /**
    * The tree's reader: this world's, plus the project store — SectionsTreeProvider.reader's
-   * own literal. A `.prj` is fetched per build and never cached (sourceCache.ts says why),
+   * own literal. A `.prj` is fetched per build and never cached (core's sourceCache.ts says why),
    * so the walk below is outside the read counters exactly as it was before: it is not a
    * read of a versioned source file.
    */
@@ -272,7 +265,7 @@ class World {
    * `sourceCache.parsedModelOf` is the only place this host calls `parseModel`, and it
    * stores what it parsed under the file's content version — so a `cache.parsed` entry
    * that is a NEW OBJECT is one parse and an entry that is the same object is none. This
-   * is the same ledger `parseOnce.test.ts` and `nameScan.test.ts` count with, and it
+   * is the same ledger `nameScan.test.ts` and core's `parseOnce.test.ts` count with, and it
    * replaces the pre-phase-2 counting off `cache.models`: a model summarised from a parse
    * someone else made now adds a `models` entry with no parse behind it, so that counter
    * would over-report from here on.

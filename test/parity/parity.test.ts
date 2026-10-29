@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DataModel, isModelFile, isSlddFile } from 'data-explorer-core';
+import { DataModel, extractSlxStructure, isModelFile, isSlddFile } from 'data-explorer-core';
 import { buildGraphSource } from '../../src/host/structuralIndex.js';
 import {
   scanSldd,
@@ -21,7 +21,6 @@ import {
   getModelFromBytes,
   invalidate,
 } from 'data-explorer-view/model';
-import { extractSlxStructure } from '../../src/host/slxStructure.js';
 import { parseMat } from 'data-explorer-core';
 import { parseSlx } from 'data-explorer-core';
 
@@ -55,9 +54,10 @@ const FILES = ['common.sldd', 'util.sldd', 'params.sldd', 'plant.slx', 'sub.slx'
 // `scanSldd` covers BOTH on-disk dictionary formats behind core's own format
 // sniff, so this no longer tests the first two bytes for 'PK' itself; the
 // text/binary split is what the `variant` axis of this suite drives. It is also
-// the exact call the shipped cheap tier makes for a dictionary (`dataCheapOf` in
-// sourceCache.ts), so what this suite holds against MATLAB's ground truth is the
-// code that runs in the extension and not a second reader written for the test.
+// the read the shipped cheap tier makes for a dictionary (core's `scanSldd` with
+// the same unreadable-source refusal, `dataCheapOf` in core's sourceCache.ts), so
+// what this suite holds against MATLAB's ground truth is the code that runs in the
+// extension and not a second reader written for the test.
 function graphSourceFor(variant: string, name: string): GraphSource {
   const path = ART(variant, name);
   const uriString = `test://${variant}/${name}`;

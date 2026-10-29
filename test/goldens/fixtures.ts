@@ -18,8 +18,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { expect } from 'vitest';
-import { isSupportedPath } from '../../src/common/fileTypes.js';
-import type { SourceFile } from '../../src/host/sourceCache.js';
+import { isSupportedPath, type SourceFile } from 'data-explorer-core';
 
 /** The repository root, which every fixture path below is relative to. */
 export const REPO = resolve(import.meta.dirname, '../..');

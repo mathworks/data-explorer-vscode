@@ -26,11 +26,19 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { zipSync, strToU8 } from 'fflate';
-import { isModelFile, isProjectFile, isSlddFile } from 'data-explorer-core';
+import {
+  extractSlxStructure,
+  isModelFile,
+  isProjectFile,
+  isSlddFile,
+  mapLimited,
+  newSourceCache,
+  planSummaries,
+  type SourceCache,
+  type SourceFile,
+} from 'data-explorer-core';
 import { toArrayBuffer } from '../src/common/bytes.js';
-import { mapLimited } from '../src/host/mapLimited.js';
 import { scanSldd, RelGraph, type GraphNode, type GraphSource } from 'data-explorer-view/model';
-import { extractSlxStructure } from '../src/host/slxStructure.js';
 import {
   buildGraphSource,
   graphSourcesOf,
@@ -38,8 +46,6 @@ import {
   type ProjectStore,
   type RawFile,
 } from '../src/host/structuralIndex.js';
-import { newSourceCache, type SourceCache, type SourceFile } from '../src/host/sourceCache.js';
-import { planSummaries } from '../src/host/usagePlan.js';
 
 const dir = join(import.meta.dirname, 'fixtures');
 const fixture = (name: string): Uint8Array => new Uint8Array(readFileSync(join(dir, name)));
@@ -170,7 +176,7 @@ const reader = (): GraphReader => ({
  * The tree's own reads, the way it made them before the cheap tier owned them.
  *
  * Written out rather than imported because it lives in SectionsTreeProvider.ts, which imports
- * `vscode` — the same reason parseOnce.test.ts writes out a tab's sequence. It is the reference
+ * `vscode` — the same reason nameScan.test.ts writes out a tab's sequence. It is the reference
  * the shared-cache path is swept against, so what matters is that it is faithful: `readForScan`
  * refuses the same file the reader's `version` refuses (`stamp` answers both), a JSON `.sldd`
  * is read as TEXT and a compressed one out of its bytes, a `.prj` gets its store and never a
@@ -304,9 +310,9 @@ describe('what a tree build reads', () => {
     // The 13 is taken SEQUENTIALLY — the plan runs after the build here, as it does when a view
     // becomes visible after a tab has settled — and it is what two OVERLAPPING passes cost as
     // well: a miss goes through the cache's in-flight map, so the second pass to reach a file
-    // joins the first one's read rather than making its own (sourceCache.test.ts, 'reads each file
-    // once for two passes running at the same time'). Before that map existed this figure held
-    // only while the flows did not overlap, and folder open is exactly where they do.
+    // joins the first one's read rather than making its own (core's sourceCache.test.ts, 'reads
+    // each file once for two passes running at the same time'). Before that map existed this
+    // figure held only while the flows did not overlap, and folder open is exactly where they do.
     expect({ separate: separate.length, shared: reads.length }).toEqual({ separate: 22, shared: 13 });
     // And per file, which is the shape of it: every dictionary in the folder was read twice for
     // one tab, whatever its size.

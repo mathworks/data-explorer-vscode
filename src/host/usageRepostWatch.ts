@@ -47,7 +47,7 @@ function start(): { bus: UsageRepostBus; watcher: vscode.Disposable; tabs: numbe
  *
  * For a tab that fills a DATA file's Usage column — a dictionary or a `.mat`. A model's own tab
  * does not need it: its Usage is its own blocks and its own workspace, which no other model can
- * change (usageScope.ts). `busy`, when given, defers the repost while it answers true; see
+ * change (core's `usageScope`). `busy`, when given, defers the repost while it answers true; see
  * usageRepost.ts.
  *
  * Dispose it with the tab.

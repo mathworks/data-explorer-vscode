@@ -36,17 +36,18 @@ export default defineConfig({
         'src/host/nameIndex.ts',
         'src/host/scanRead.ts',
         'src/host/searchSources.ts',
-        // The reading half of the shared source cache; the cache itself is sourceCache.ts.
+        // The reading half of the shared source cache; the cache itself is core's.
         'src/host/sourceReads.ts',
         'src/host/usageGraph.ts',
         // The watcher half of the Usage repost; the bus and its timing are usageRepost.ts.
         'src/host/usageRepostWatch.ts',
-        // The Usage question over that cache; which files it needs is usagePlan.ts.
+        // The Usage question over that cache; which files it needs is core's planSummaries.
         'src/host/usageSources.ts',
-        // The workspace watcher's change handler; the forget decision is sourceCache.ts.
+        // The workspace watcher's change handler; the forget decision is core's forgetUnseenWrite.
         'src/host/workspaceChange.ts',
         'src/host/navigate.ts',
         'src/host/iconMap.ts',
+        // The `workspace.fs` half of reading a project's definition; the walk is core's.
         'src/host/projectStore.ts',
         // Thin `vscode` Uri-resolution shim; its shell/CSP core is webviewShell.ts.
         'src/host/webviewHtml.ts',

@@ -14,20 +14,20 @@
 //   - miss the name index's glob  → it appears, but search cannot find its entries
 // No single feature test covers all four, so the guard has to be the list itself.
 //
-// The list is now only HALF the rule. WHICH KIND a file is belongs to core, which
+// The list is only HALF the rule. WHICH KIND a file is belongs to core, which
 // publishes `isModelFile`/`isSlddFile`/`isMatFile`/`isProjectFile` and dispatches its
 // own parsers on them; this host asks core rather than keeping a second opinion about
-// whether `Params.SLDD` is a dictionary. What is left here is the extension LIST, for
-// the two things only vscode needs it for: a `findFiles` glob and the `package.json`
-// selector.
+// whether `Params.SLDD` is a dictionary. The extension LIST is core's too now
+// (`SUPPORTED_EXTS` and the rest, beside the kind tests); what is left here is what only
+// vscode needs it for: a `findFiles` glob and the `package.json` selector.
 //
-// Splitting the rule that way creates the failure this file has to catch, because the
-// halves are not independent:
+// The halves are not independent, which is the failure this file has to catch:
 //   - in the list, in none of core's tests → discovered, then classified as nothing
 //   - in core's tests, absent from the list → never discovered at all
-// Neither half can see the other, so this is the only place that agreement is
-// checkable, and it is pinned in BOTH directions below. The scan at the bottom then
-// covers the third case: a consumer that quietly grows its own copy of either half.
+// Core pins the two against each other (its test/fileKindLists.test.ts); they are pinned
+// again here in BOTH directions because core is a PINNED dependency, and a consumer-side pin
+// is the only kind that notices when the pin moves. The scan at the bottom then covers the
+// third case: a consumer that quietly grows its own copy of either half.
 //
 // R2026b added a format identified by NAME rather than by extension — `matlab.toml`, the whole
 // definition of a project stored in the one file, with no `.prj` and no `resources/` beside it —
@@ -40,26 +40,23 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
+  GRAPH_EXTS,
+  isGraphPath,
   isMatFile,
   isModelFile,
   isProjectFile,
   isSlddFile,
+  isSupportedPath,
   isTomlProjectFile,
+  MODEL_EXTS,
   projectFallbackName,
   projectNameOf,
   refModelExt,
-  TOML_PROJECT_FILE,
-} from 'data-explorer-core';
-import {
-  MODEL_EXTS,
   SUPPORTED_EXTS,
   SUPPORTED_NAMES,
-  GRAPH_EXTS,
-  SUPPORTED_GLOB,
-  GRAPH_GLOB,
-  isSupportedPath,
-  isGraphPath,
-} from '../src/common/fileTypes.js';
+  TOML_PROJECT_FILE,
+} from 'data-explorer-core';
+import { SUPPORTED_GLOB, GRAPH_GLOB } from '../src/common/fileTypes.js';
 
 const root = join(import.meta.dirname, '..');
 const read = (p: string) => readFileSync(join(root, p), 'utf8');
@@ -330,7 +327,10 @@ describe('no consumer keeps its own copy of the list', () => {
     // cache, and the scan has to follow it, not the file it left.
     'src/host/nameScan.ts',
     'src/host/structuralIndex.ts',
-    'src/host/slxStructure.ts',
+    // The model relationships the tree draws, which moved to core beside the kind tests and the
+    // lists. Scanned where they ship, as view's files below are: the tree still draws its edges
+    // from this module, so a copy of the rule growing in it is still a copy this host runs.
+    'node_modules/data-explorer-core/dist/datamodel/parser/SlxStructure.js',
     'node_modules/data-explorer-view/dist/model/workspace/SlddModel.js',
     'src/host/BinaryEditorProvider.ts',
     // graphModel.ts classifies nothing — it is handed a `type` already decided — but it
@@ -472,8 +472,12 @@ describe('no consumer keeps its own copy of the list', () => {
     // literal scan above and this check bracket between them.
     for (const file of CONSUMERS) {
       const src = read(file);
+      // Inside core the shared module is core's own: its kind tests are `../fileKinds.js`.
+      const shared = file.startsWith('node_modules/data-explorer-core/')
+        ? "'../fileKinds.js'"
+        : "'data-explorer-core'";
       expect(
-        src.includes('fileTypes.js') || src.includes("'data-explorer-core'"),
+        src.includes('fileTypes.js') || src.includes(shared),
         `${file} must take its globs from common/fileTypes or its kind tests from core`,
       ).toBe(true);
     }
@@ -487,13 +491,13 @@ describe('no consumer keeps its own copy of the list', () => {
     // TWO core readers qualify, and what they have in common is the point: `parseModel`
     // and `scanModelStructure` dispatch on the same ZIP magic in the same core module,
     // the second being the first narrowed to three relationship fields over a filtered
-    // set of OPC parts. So slxStructure.ts reads models with the scanner and
+    // set of OPC parts. So core's SlxStructure reads models with the scanner and
     // nameScan.ts with the full parse — it needs block parameters, which the scanner
     // deliberately does not carry — and neither is choosing a format on this host's
     // behalf. What is barred is reaching PAST the sniff to a single-format reader.
     //
     // nameScan.ts, not nameIndex.ts: the name index's model read is the SHARED parse now
-    // (sourceCache.parsedModelOf), and the only model read left in this repo outside that
+    // (core's `parsedModelOf`), and the only model read left in this repo outside that
     // one accessor is the buffer of an unsaved document, which nameScan owns.
     //
     // The usage graph's model read is no longer in this repo at all — it is core's
@@ -502,7 +506,10 @@ describe('no consumer keeps its own copy of the list', () => {
     // is pinned by BEHAVIOUR instead: test/usageEndToEnd.test.ts runs a classic
     // legacy_ctrl.mdl through the graph and expects its blocks, and parseSlx on a
     // `.mdl` throws rather than returning nothing.
-    for (const file of ['src/host/nameScan.ts', 'src/host/slxStructure.ts']) {
+    for (const file of [
+      'src/host/nameScan.ts',
+      'node_modules/data-explorer-core/dist/datamodel/parser/SlxStructure.js',
+    ]) {
       const src = code(file);
       expect(
         src.includes('parseModel') || src.includes('scanModelStructure'),

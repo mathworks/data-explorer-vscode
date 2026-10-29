@@ -3,27 +3,27 @@
 // ONE cache a window keeps.
 //
 // The reasoning — the tiers, the version key, why a data file is summarised whether or not
-// anyone asked for its names — is all in sourceCache.ts, which is vscode-free so that it can
-// be tested over real fixture bytes. This module supplies `readForScan`/`scanVersion` and the
-// cache instance, and nothing else: the same split nameIndex->nameExtract and
-// searchSources->searchFilter already make here, and it exists so the properties the design
-// rests on are pinned in the fast suite rather than only in the integration suite. The one
-// thing decided here rather than there is the difference between how a SCAN reads a file and
-// how a TAB does — see `parsedModelForTab`.
+// anyone asked for its names — is all in core's source cache (`newSourceCache` and the calls
+// beside it), which is vscode-free so that it can be tested over real fixture bytes. This
+// module supplies `readForScan`/`scanVersion` and the cache instance, and nothing else: the
+// same split nameIndex->nameExtract and searchSources->searchFilter already make here, and it
+// exists so the properties the design rests on are pinned in the fast suite rather than only
+// in the integration suite. The one thing decided here rather than there is the difference
+// between how a SCAN reads a file and how a TAB does — see `parsedModelForTab`.
 import * as vscode from 'vscode';
-import type { ParsedSlx } from 'data-explorer-core';
-import { toArrayBuffer } from '../common/bytes.js';
-import { readForScan, scanVersion } from './scanRead.js';
 import {
   clearSourceCache,
   forgetSource,
   forgetUnseenWrite,
   newSourceCache,
   parsedModelForOpenTab,
+  type ParsedSlx,
   type SourceCache,
   type SourceFile,
   type SourceReader,
-} from './sourceCache.js';
+} from 'data-explorer-core';
+import { toArrayBuffer } from '../common/bytes.js';
+import { readForScan, scanVersion } from './scanRead.js';
 
 /**
  * One cache for the window, shared by every consumer that reads the folder.
@@ -121,8 +121,8 @@ export async function parsedModelForTab(uri: vscode.Uri): Promise<ParsedSlx> {
   // pass that stats it re-reads: self-healing, which is what lets this cache have no invalidation
   // protocol at all. A version taken after the bytes can be NEWER than the content it keys, and
   // then every later pass sees a version that matches and hits forever, on content the file no
-  // longer has. Pinned as an order in sourceCache.test.ts, since this module cannot be loaded in
-  // the unit suite.
+  // longer has. Pinned as an order in test/sourceCache.test.ts, since this module cannot be loaded
+  // in the unit suite.
   const version = await scanVersion(uri);
   const parsed = await parsedModelForOpenTab(sourceCache, file, version, async () =>
     toArrayBuffer(await vscode.workspace.fs.readFile(uri)),

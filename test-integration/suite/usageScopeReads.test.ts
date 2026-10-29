@@ -8,7 +8,7 @@
 //
 // There is now one graph per file being VIEWED, built over only the files that can change
 // that file's answers: the models whose reference chain reaches it, plus those models'
-// chains. The arithmetic is unit-tested (test/usageScope.test.ts) and the claim that makes
+// chains. The arithmetic is unit-tested (core's test/usageScope.test.ts) and the claim that makes
 // it safe — a scoped answer equals the whole-folder answer, for every file in a corpus of
 // real fixture bytes — is pinned in test/usageScopeEquality.test.ts.
 //

@@ -4,7 +4,7 @@
 //
 // ONE SHAPER, AND IT TAKES THE ARTIFACT. `graphSourcesOf` is what the tree uses: a pass over
 // the SHARED cheap tier, so a folder the usage plan or the name index has already looked at
-// costs a `stat` per file and no reads at all (sourceCache.ts). `buildGraphSource` is the
+// costs a `stat` per file and no reads at all (core's sourceCache.ts). `buildGraphSource` is the
 // shaping itself, and what it accepts is what the cheap tier already extracted — a model's
 // `SlxStructure`, a dictionary's reference list, a project's store — never bytes.
 //
@@ -19,10 +19,18 @@
 // does through the cache. The relationship fields are then one mapping and the failure policy
 // one `catch`, with nothing left to drift against.
 import { type GraphSource, type SourceType, basename } from 'data-explorer-view/model';
-import { mapLimited } from './mapLimited.js';
-import { type SlxStructure } from './slxStructure.js';
-import { cheapAll, sourceKind, type SourceCache, type SourceFile, type SourceReader } from './sourceCache.js';
-import { isProjectFile, parseProject, projectFallbackName } from 'data-explorer-core';
+import {
+  cheapAll,
+  isProjectFile,
+  mapLimited,
+  parseProject,
+  projectFallbackName,
+  sourceKind,
+  type SlxStructure,
+  type SourceCache,
+  type SourceFile,
+  type SourceReader,
+} from 'data-explorer-core';
 
 /** A project's structure, keyed by store-relative POSIX path — see projectStore.ts. */
 export type ProjectStore = Record<string, string>;
@@ -55,7 +63,7 @@ export interface RawFile {
  * How the tree reads: the shared cache's own reader, plus the one source the cache has no
  * concept of.
  *
- * A project is FETCHED, never cached (sourceCache.ts says why: for a `.prj` the store is a
+ * A project is FETCHED, never cached (core's sourceCache.ts says why: for a `.prj` the store is a
  * directory tree beside the marker file, and the marker's `mtime:size` cannot key it — a
  * `matlab.toml` could be keyed, but one text file read per build is not worth a second rule
  * here). So the definition arrives here, per build, from the consumer that wants one — the
@@ -70,7 +78,7 @@ export interface GraphReader extends SourceReader {
  * What kind of node `path` draws as — a MAPPING of the one classifier's answer, not a second
  * reading of the path.
  *
- * `sourceKind` is that classifier (sourceCache.ts), and this used to be a rival to it: it
+ * `sourceKind` is that classifier (core's sourceCache.ts), and this used to be a rival to it: it
  * tested `isModelFile`/`isMatFile`/`isProjectFile` itself, never asked `isSlddFile` at all, and
  * answered `'sldd'` for anything left over — which is precisely the fallback `sourceKind`'s own
  * doc calls "the trap this replaces". Two classifiers for one question is this repo's recurring
@@ -92,9 +100,10 @@ export interface GraphReader extends SourceReader {
  *
  *   Safe, because production cannot reach it. `graphSourcesOf` is the only caller, its files come
  *   out of the supported glob (`SUPPORTED_GLOB`, whose extensions `sourceKind` all name — pinned
- *   from `SUPPORTED_EXTS` in sourceCache.test.ts and again in structuralIndex.test.ts), and every
- *   relationship field it fills comes off an already-classified cheap artifact. An unknown
- *   extension arriving here would carry no artifact anyway, so what it gets is the empty node.
+ *   from `SUPPORTED_EXTS` in core's sourceCache.test.ts and again in structuralIndex.test.ts),
+ *   and every relationship field it fills comes off an already-classified cheap artifact. An
+ *   unknown extension arriving here would carry no artifact anyway, so what it gets is the empty
+ *   node.
  *
  *   Kept, and not `null`, because the graph needs a `SourceType` for EVERY file the tree lists.
  *   A file in the folder and absent from the view is the worst failure available here (see
@@ -177,8 +186,8 @@ export function buildGraphSource(file: RawFile): GraphSource {
     // One file that will not shape must not fail the whole build: the pass this is the body of
     // runs over a folder, and the graph above it has one failure mode and it is "no graph". The
     // extraction throws are gone from in here — the caller runs those, and both callers catch
-    // (see `dataCheapOf` in sourceCache.ts) — so what is left to throw is `parseProject` over a
-    // malformed store, which is a real file on disk and reachable.
+    // (see `dataCheapOf` in core's sourceCache.ts) — so what is left to throw is `parseProject`
+    // over a malformed store, which is a real file on disk and reachable.
     return base;
   }
 }
@@ -213,8 +222,8 @@ export async function graphSourcesOf(
     else if (entry?.kind === 'sldd') raw.slddRefs = entry.refs;
     else if (isProjectFile(file.path)) {
       // Fetched every build, and deliberately: a project is the one source whose structure the
-      // cache cannot key (sourceCache.ts). Cheap to fetch — a `.prj`'s own bytes are not read
-      // at all, this is a walk of the sibling `resources/project/` tree, and a `matlab.toml`
+      // cache cannot key (core's sourceCache.ts). Cheap to fetch — a `.prj`'s own bytes are not
+      // read at all, this is a walk of the sibling `resources/project/` tree, and a `matlab.toml`
       // is one small text file.
       try {
         raw.projectFiles = (await reader.projectStore(file)) ?? undefined;

@@ -15,13 +15,12 @@
 // .mat, and an unsaved buffer over both — is nameScan.ts, and the pure
 // name-extraction core is nameExtract.ts. Both are vscode-free and unit-tested.
 import * as vscode from 'vscode';
-import { mapLimited } from './scanRead.js';
+import { mapLimited, type SourceFile } from 'data-explorer-core';
 import { toArrayBuffer } from '../common/bytes.js';
 import { GRAPH_GLOB } from '../common/fileTypes.js';
 import type { NameRecord } from './nameExtract.js';
 import { namesOfFile, type NameReader } from './nameScan.js';
 import { readerFor, sourceCache, sourceFilesOf } from './sourceReads.js';
-import type { SourceFile } from './sourceCache.js';
 
 export type { EntryKind, NameRecord } from './nameExtract.js';
 

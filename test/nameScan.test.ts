@@ -12,8 +12,8 @@
 // occurrence-ordered names off the cheap artifact the tree and the usage plan already wanted —
 // one scan per data file per content version, whichever consumer asked first.
 //
-// Counted the way parseOnce.test.ts counts, and for the same reason: `parsedModelOf` is the only
-// place this host parses a model, and every parse stores a NEW `{version, parsed}` entry in
+// Counted the way core's parseOnce.test.ts counts, and for the same reason: `parsedModelOf` is the
+// only place this host parses a model, and every parse stores a NEW `{version, parsed}` entry in
 // `cache.parsed`, so "what was parsed between here and there" is the set of entries whose object
 // identity moved. A second parse yields an equal-but-distinct object that no deep comparison
 // catches, which is why the assertions below are identity and counts rather than names.
@@ -30,15 +30,15 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { NameRecord } from '../src/host/nameExtract.js';
-import { mapLimited } from '../src/host/mapLimited.js';
-import { namesOfFile, type NameReader } from '../src/host/nameScan.js';
 import {
+  mapLimited,
   newSourceCache,
   parsedModelForOpenTab,
   type SourceCache,
   type SourceFile,
-} from '../src/host/sourceCache.js';
+} from 'data-explorer-core';
+import type { NameRecord } from '../src/host/nameExtract.js';
+import { namesOfFile, type NameReader } from '../src/host/nameScan.js';
 
 const dir = join(import.meta.dirname, 'fixtures');
 
