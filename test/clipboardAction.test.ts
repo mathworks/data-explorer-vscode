@@ -16,7 +16,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { copyEntriesToClipboard } from '../src/host/clipboardAction.js';
 import { getClipboard, clearClipboard, setClipboard } from '../src/host/clipboard.js';
-import { getModel, findNode, invalidate, buildRows } from 'data-explorer-view/model';
+import { buildRows } from 'data-explorer-view/model';
+import { getModel, findNode, invalidate } from 'data-explorer-view/host';
 
 const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');
 

@@ -2,13 +2,6 @@
 import * as vscode from 'vscode';
 import { renderTableWebview } from './webviewHtml.js';
 import {
-  getModel,
-  invalidate,
-  findNode,
-  peekModel,
-  openSourceView,
-  parseDetached,
-  releaseSourceView,
   buildEntryRows,
   COLUMNS,
   COLUMN_LABELS,
@@ -17,15 +10,24 @@ import {
   rowPlannerFor,
   LAZY_ROW_BUDGET,
   lazyRowsBanner,
-  answerChildRequest,
   sectionRules,
   sourceWarnings,
   warningBanner,
-  postOrReport,
-  answerMatrixRequest,
   buildSectionRowId,
   basename,
 } from 'data-explorer-view/model';
+import {
+  getModel,
+  invalidate,
+  findNode,
+  peekModel,
+  openSourceView,
+  parseDetached,
+  releaseSourceView,
+  answerChildRequest,
+  postOrReport,
+  answerMatrixRequest,
+} from 'data-explorer-view/host';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
 import { clipMarkChange, clipMarkOfDoc } from './clipMarks.js';
 import {

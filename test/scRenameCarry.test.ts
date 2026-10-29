@@ -47,7 +47,8 @@ import {
   entrySelectorOf,
   findEntryObjectSpan,
 } from 'data-explorer-core';
-import { getModel, findNode, invalidate, readSlddParts } from 'data-explorer-view/model';
+import { readSlddParts } from 'data-explorer-view/model';
+import { getModel, findNode, invalidate } from 'data-explorer-view/host';
 import { findEntrySpan, detectIndent } from '../src/host/entrySplice.js';
 import { reserializeEntry, findOwningEntry } from '../src/host/structuralEdit.js';
 import { mutateEntry } from '../src/host/entryOps.js';

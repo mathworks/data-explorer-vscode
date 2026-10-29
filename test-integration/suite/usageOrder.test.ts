@@ -41,7 +41,8 @@ import {
   blocksUsingVariable,
   invalidateUsageGraph,
 } from '../../src/host/usageGraph';
-import { getModel, getModelFromBytes, invalidate, buildRows } from 'data-explorer-view/model';
+import { buildRows } from 'data-explorer-view/model';
+import { getModel, getModelFromBytes, invalidate } from 'data-explorer-view/host';
 import { toArrayBuffer } from '../../src/common/bytes';
 import { waitFor } from './tools/hostHarness';
 

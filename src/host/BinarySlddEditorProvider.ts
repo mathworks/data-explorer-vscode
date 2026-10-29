@@ -44,16 +44,14 @@ import {
   rowPlannerFor,
   LAZY_ROW_BUDGET,
   lazyRowsBanner,
-  answerChildRequest,
   sectionRules,
   sourceWarnings,
   warningBanner,
-  postOrReport,
   buildSectionRowId,
   basename,
-  answerMatrixRequest,
   binaryEditSrcId,
 } from 'data-explorer-view/model';
+import { answerChildRequest, postOrReport, answerMatrixRequest } from 'data-explorer-view/host';
 import { clipMarkChange, clipMarkOfDoc } from './clipMarks.js';
 // DATA_PART_XML is core's name for the one zip member holding the entries, and the three
 // sites below are three roles of one rule: the lookup in `chunkOf`, the exclusion in

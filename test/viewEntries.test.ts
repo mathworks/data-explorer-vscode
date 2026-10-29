@@ -1,7 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 // This extension reaches data-explorer-view only through the package's designed entries:
-// `data-explorer-view/model`, one entry per widget (`/tree-table`, `/property-inspector`, …),
-// `/theme.css` and `/icons/<id>.svg`.
+// `data-explorer-view/model`, `/host` (the host's plumbing), one entry per widget (`/tree-table`,
+// `/property-inspector`, …), `/theme.css` and `/icons/<id>.svg`.
 //
 // View 0.x still exports every module by its path (`data-explorer-view/model/rows/rowBuilder.js`,
 // `…/widgets/tree-table/dex-tree-table.js`), and those paths go before view 1.0. An import of
@@ -103,5 +103,45 @@ describe('data-explorer-view is imported through its entries only', () => {
   it('leaves the icons-as-bundle-assets entry out: the folder ships as files', () => {
     const assets = ofView.filter(({ specifier }) => specifier === `${VIEW}/icon-assets`);
     expect(assets.map(({ file, line }) => `${file}:${line}`)).toEqual([]);
+  });
+});
+
+// A host's plumbing (the document registry over core's module-level session, the answers posted
+// on a webview, the inspector's page) is data-explorer-view/host's. View's ./model still exports
+// each of those names during 0.x, deprecated, and drops them at 1.0, so this extension takes them
+// from /host already, and the bump to 1.0 has nothing here to break. A webview is not a host: it
+// takes none of it.
+describe("a host's plumbing comes from data-explorer-view/host", () => {
+  const hostTypes = (exportsOfView['./host'] as { types: string }).types;
+  const HOST_NAMES = new Set(
+    [...readFileSync(join(ROOT, 'node_modules', VIEW, hostTypes), 'utf8').matchAll(/export (?:type )?\{([^}]*)\}/g)].flatMap((m) =>
+      m[1]!.split(',').map((s) => s.trim().split(/\s+as\s+/).pop()!).filter(Boolean),
+    ),
+  );
+
+  /** The names each file imports from data-explorer-view/model, by the parser. */
+  function modelNames(path: string): { file: string; name: string }[] {
+    const source = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true);
+    return source.statements.flatMap((st) => {
+      if (!ts.isImportDeclaration(st) || !ts.isStringLiteral(st.moduleSpecifier) || st.moduleSpecifier.text !== `${VIEW}/model`) return [];
+      const bindings = st.importClause?.namedBindings;
+      if (!bindings || !ts.isNamedImports(bindings)) return [];
+      return bindings.elements.map((e) => ({ file: relative(ROOT, path), name: (e.propertyName ?? e.name).text }));
+    });
+  }
+
+  it('reads the host entry off the installed package', () => {
+    expect(HOST_NAMES.size).toBeGreaterThan(20);
+    expect([...HOST_NAMES]).toEqual(expect.arrayContaining(['getModel', 'findNode', 'answerChildRequest', 'InspectorPage']));
+  });
+
+  it('imports none of its names from data-explorer-view/model', () => {
+    const fromModel = DIRS.flatMap((dir) => filesIn(join(ROOT, dir))).flatMap(modelNames).filter(({ name }) => HOST_NAMES.has(name));
+    expect(fromModel.map(({ file, name }) => `${file} ${name}`)).toEqual([]);
+  });
+
+  it('is imported by no webview', () => {
+    const inWebview = ofView.filter(({ file, specifier }) => file.startsWith('src/webview/') && specifier === `${VIEW}/host`);
+    expect(inWebview.map(({ file, line }) => `${file}:${line}`)).toEqual([]);
   });
 });

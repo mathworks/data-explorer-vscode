@@ -19,7 +19,8 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { DataModel } from 'data-explorer-core';
 import { MatEditorProvider } from '../../src/host/MatEditorProvider';
-import { InspectorSelection, buildPropertyGroups, findNode } from 'data-explorer-view/model';
+import { InspectorSelection, buildPropertyGroups } from 'data-explorer-view/model';
+import { findNode } from 'data-explorer-view/host';
 import { clearClipboard } from '../../src/host/clipboard';
 import { ctx, fakePanel, quiet, token, waitFor } from './tools/hostHarness';
 

@@ -28,7 +28,8 @@ import { fileURLToPath } from 'node:url';
 import { planEntrySync } from '../src/host/jsonEntrySync.js';
 import { findEntriesArrayStart } from '../src/host/jsonEntryScan.js';
 import { applyEntryOps } from '../src/host/entryOps.js';
-import { getModel, invalidate, buildRows } from 'data-explorer-view/model';
+import { buildRows } from 'data-explorer-view/model';
+import { getModel, invalidate } from 'data-explorer-view/host';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

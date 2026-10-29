@@ -44,13 +44,10 @@ import {
   buildMatVariableRows,
   LAZY_ROW_BUDGET,
   lazyRowsBanner,
-  answerChildRequest,
-  answerMatrixRequest,
   refuseIfUnreadable,
   sourceWarnings,
   warningBanner,
   type WarningBanner,
-  postOrReport,
   WHOLE_FILE_SECTION,
   wholeFileRules,
   type ClipMark,
@@ -58,6 +55,7 @@ import {
   basename,
   matCatalog,
 } from 'data-explorer-view/model';
+import { answerChildRequest, answerMatrixRequest, postOrReport } from 'data-explorer-view/host';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { subscribeUsageRepost } from './usageRepostWatch.js';

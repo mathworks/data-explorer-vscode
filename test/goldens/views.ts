@@ -28,11 +28,6 @@ import {
   type ParseWarning,
 } from 'data-explorer-core';
 import {
-  getModel,
-  getModelForBinaryTab,
-  findNode,
-  invalidate,
-  releaseIfUnviewed,
   rowPlannerFor,
   type PlanOptions,
   type RowPlanner,
@@ -47,12 +42,19 @@ import {
   sectionRules,
   wholeFileRules,
   readSlddParts,
-  answerChildRequest,
-  answerMatrixRequest,
   InspectorSelection,
-  InspectorPage,
   binaryEditSrcId,
 } from 'data-explorer-view/model';
+import {
+  getModel,
+  getModelForBinaryTab,
+  findNode,
+  invalidate,
+  releaseIfUnviewed,
+  answerChildRequest,
+  answerMatrixRequest,
+  InspectorPage,
+} from 'data-explorer-view/host';
 import { captureBaseline, clearBaseline, computeModified } from '../../src/host/slddBaseline.js';
 import { clipMarkOfDoc } from '../../src/host/clipMarks.js';
 import { clipboardState } from '../../src/host/clipboard.js';
