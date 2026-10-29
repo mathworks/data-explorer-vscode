@@ -23,9 +23,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-// A commit of view's main, between releases: its own commit.
-const REF = '3d1c03356944d01f59dbefc8086a5aa7df8e25ae';
-const COMMIT = '3d1c03356944d01f59dbefc8086a5aa7df8e25ae';
+// A release tag, and the commit it points at.
+const REF = 'v1.0.0';
+const COMMIT = '8760d9f02f1a730292e97a6e388d5ed15c5eb514';
 const VERSION = '1.0.0';
 
 const SPEC = `github:mathworks/data-explorer-view#${REF}`;
