@@ -16,8 +16,8 @@
 // But the wash was a SYMPTOM. The cause is that these three files read a token family
 // nobody declares — --dex-fg, --dex-popover-bg, --dex-muted-fg, --dex-hover-bg,
 // --dex-matrix-header-bg, --dex-matrix-header-fg, --dex-matrix-grid-line — while the rest
-// of the webview reads the one global.css declares and vscode-theme.css remaps onto
-// --vscode-*. An undeclared token is not a missing colour, it is a SILENT one: every
+// of the webview reads the one the view's theme.css declares and vscode-theme.css remaps
+// onto --vscode-*. An undeclared token is not a missing colour, it is a SILENT one: every
 // `var()` takes its own literal fallback, those literals are light-theme greys, and
 // nothing anywhere says a variable was missing. Measured in a dark theme, the panel
 // painted rgba(252, 252, 252, 0.98) under #1f1f1f ink — a light-theme island in a dark
@@ -47,11 +47,10 @@ const read = (rel: string): string =>
     // so matching against it would let a token pass on the strength of its own obituary.
     .replace(/\/\*[\s\S]*?\*\//g, '');
 
-// Where a --dex-* token is allowed to come from. Two files, because vscode-theme.css
-// REPLACES some of global.css's values and adds none of its own names — a token declared
-// only in the theme file would be undeclared in a webview whose theme file never loaded.
+// Where a --dex-* token is allowed to come from: the view's theme.css (src/theme/tokens.css)
+// and vscode-theme.css, which maps every token onto VS Code (viewTokensMapped.test.ts).
 const DECLARED = new Set(
-  [read('../node_modules/data-explorer-view/src/theme/global.css'), read('../src/webview/vscode-theme.css')]
+  [read('../node_modules/data-explorer-view/src/theme/tokens.css'), read('../src/webview/vscode-theme.css')]
     .flatMap((css) => [...css.matchAll(/(--dex-[a-z0-9-]+)\s*:/g)].map((m) => m[1])),
 );
 
@@ -63,10 +62,10 @@ const FILES = {
   'dex-matrix-open.ts': read('../node_modules/data-explorer-view/dist/widgets/shared/dex-matrix-open.js'),
 };
 
-// Tokens this feature reads that NOTHING declares on purpose. Every one is a LENGTH, and
-// that distinction is the whole of why they are exempt: a length is a layout knob, and the
-// literal beside it is the design — the panel really is capped at 640x320 and a cell
-// really is one line of text tall. A COLOUR is not a design, it is the theme's to choose,
+// Tokens this feature reads that need no declaration. Every one is a LENGTH, and that
+// distinction is the whole of why they are exempt: a length is a layout knob, and the
+// literal beside it is the design — the panel really is capped at 640x320 (both themes now
+// declare those two at the same value) and a cell really is one line of text tall. A COLOUR is not a design, it is the theme's to choose,
 // so an undeclared colour token means a grey nobody picked ships in every theme.
 // test/matrixGridWindow.test.ts drives the grid's geometry through four of these, because
 // happy-dom measures everything as zero.
@@ -119,7 +118,7 @@ describe('a sticky header cell paints an opaque surface', () => {
 });
 
 describe('--dex-focus-ring is a shadow, so it cannot be an outline colour', () => {
-  // `--dex-focus-ring: 0 0 0 1px #0078D4` (vscode-theme.css; global.css declares the same
+  // `--dex-focus-ring: 0 0 0 1px #0078D4` (vscode-theme.css; theme.css declares the same
   // shape). Read as `outline: 2px solid var(--dex-focus-ring, …)` the declaration is
   // invalid at computed-value time and the browser drops it ENTIRELY — measured on the
   // shipped bundle, a focused cell in the mini table reported outlineStyle: none, i.e. a

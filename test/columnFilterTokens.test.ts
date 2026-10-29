@@ -10,8 +10,8 @@
 //
 // Two of them shipped here, and the colour one was severe. `.op-button[aria-pressed=true]`
 // — the button that says WHICH comparison Apply is about to write, i.e. the popup's entire
-// state display — read `--dex-bg-selected`, which neither global.css nor vscode-theme.css
-// declares. So it painted #cce4f7 in every theme. Measured on the shipped bundle through
+// state display — read `--dex-bg-selected`, which neither the view's theme.css nor
+// vscode-theme.css declares. So it painted #cce4f7 in every theme. Measured on the shipped bundle through
 // the browser harness (scenarios/column-filter-tokens.mjs), pressed button vs its own ink:
 //
 //   Dark Modern   #cce4f7 under #cccccc   1.22:1   fails AA *and* AA-Large
@@ -25,7 +25,7 @@
 //
 // The declared token for this surface already existed and is two characters away:
 // --dex-color-accent-bg, which vscode-theme.css aliases onto --dex-selection-bg (pinned in
-// vscodeThemeTokens.test.ts) and global.css declares per theme kind. Its light value is
+// vscodeThemeTokens.test.ts) and the view's theme.css declares per theme kind. Its light value is
 // #cde4f7 — the shipped literal was that value with one hex digit changed, which is the
 // evidence that the token name was a slip and not a design.
 //
@@ -50,11 +50,10 @@ const read = (rel: string): string =>
     // own obituary.
     .replace(/\/\*[\s\S]*?\*\//g, '');
 
-// Where a --dex-* token is allowed to come from. Two files, because vscode-theme.css
-// REPLACES some of global.css's values and adds no names of its own — a token declared
-// only in the theme file would be undeclared in a webview whose theme file never loaded.
+// Where a --dex-* token is allowed to come from: the view's theme.css (src/theme/tokens.css)
+// and vscode-theme.css, which maps every token onto VS Code (viewTokensMapped.test.ts).
 const DECLARED = new Set(
-  [read('../node_modules/data-explorer-view/src/theme/global.css'), read('../src/webview/vscode-theme.css')]
+  [read('../node_modules/data-explorer-view/src/theme/tokens.css'), read('../src/webview/vscode-theme.css')]
     .flatMap((css) => [...css.matchAll(/(--dex-[a-z0-9-]+)\s*:/g)].map((m) => m[1])),
 );
 
@@ -95,7 +94,7 @@ describe('the column filter popup and the filter bar read no token that nothing 
 
 describe('the two tokens that shipped undeclared stay gone', () => {
   // Named individually, on top of the sweep above, because the sweep passes the moment a
-  // name is DECLARED — and declaring --dex-bg-selected in global.css would be the wrong
+  // name is DECLARED — and declaring --dex-bg-selected in theme.css would be the wrong
   // repair: it would add a fourth spelling of "the selected surface" beside
   // --dex-selection-bg, --dex-color-accent-bg and --dex-bg-active, which is the drift
   // vscodeThemeTokens.test.ts exists to prevent. The requirement is that this component
@@ -127,15 +126,16 @@ describe('the filter bar chip wash is declared, at the value it was measured at'
   // the browser on 2026-10-04 (11.47 / 8.16 / 17.92 / 14.88 :1 across Dark Modern, Light
   // Modern, HC Black, HC White) was taken at exactly this value. A theme override, or a
   // remap onto a VS Code colour (--vscode-badge-background is a SOLID colour), would change
-  // every chip and void those numbers, so this pins ONE declaration, in :root, and holds the
-  // chip's own fallback to the same value so the two cannot drift apart.
+  // every chip and void those numbers, so this pins every declaration — vscode-theme.css's
+  // :root, which decides what VS Code paints, and each set of the view's theme.css — to that
+  // one value, and holds the chip's own fallback to it so none of them can drift apart.
   const WASH = 'rgba(128, 128, 128, 0.18)';
   const sheets = {
-    'global.css': read('../node_modules/data-explorer-view/src/theme/global.css'),
+    'theme.css': read('../node_modules/data-explorer-view/src/theme/tokens.css'),
     'vscode-theme.css': read('../src/webview/vscode-theme.css'),
   };
 
-  it(`.chip reads --dex-bg-badge, which global.css :root alone declares, as ${WASH}`, () => {
+  it(`.chip reads --dex-bg-badge, which every theme declares as ${WASH}`, () => {
     const rule = /\.chip\s*\{([^}]*)\}/.exec(FILES['dex-filter-bar.ts']);
     expect(rule, 'no rule styling .chip').not.toBeNull();
     const background = /background:([^;]*);/.exec(rule![1]);
@@ -146,9 +146,10 @@ describe('the filter bar chip wash is declared, at the value it was measured at'
     const declarations = Object.entries(sheets).flatMap(([name, css]) =>
       [...css.matchAll(/--dex-bg-badge\s*:\s*([^;]*);/g)].map((m) => `${name}: ${m[1].trim()}`),
     );
-    expect(declarations, 'every declaration of --dex-bg-badge').toEqual([`global.css: ${WASH}`]);
-    const root = /:root\s*\{([^}]*)\}/.exec(sheets['global.css']);
-    expect(root, 'global.css has no :root block').not.toBeNull();
+    expect(declarations.length, 'declarations of --dex-bg-badge').toBeGreaterThan(1);
+    for (const declaration of declarations) expect(declaration.split(': ')[1], declaration).toBe(WASH);
+    const root = /:root\s*\{([^}]*)\}/.exec(sheets['vscode-theme.css']);
+    expect(root, 'vscode-theme.css has no :root block').not.toBeNull();
     expect(root![1]).toContain(`--dex-bg-badge: ${WASH};`);
 
     if (reads![1] !== undefined) expect(reads![1].trim(), 'the .chip fallback').toBe(WASH);

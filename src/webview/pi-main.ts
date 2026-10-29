@@ -1,5 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
-import 'data-explorer-view/theme/global.css';
+import 'data-explorer-view/theme.css';
+import './webview-page.css';
 import './vscode-theme.css';
 import { definePropertyInspector } from 'data-explorer-view/widgets/property-inspector/dex-property-inspector.js';
 import { defineVariableEditor } from 'data-explorer-view/widgets/variable-editor/dex-variable-editor.js';
