@@ -2,8 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, getModelFromBytes } from '../src/host/SlddModel.js';
-import { buildRows, buildEntryRows, clipMarkKey } from '../src/host/rowBuilder.js';
+import { getModel, getModelFromBytes } from '../src/view/model/workspace/SlddModel.js';
+import { buildRows, buildEntryRows, clipMarkKey } from '../src/view/model/rows/rowBuilder.js';
 
 function fixturePath(name: string): string {
   return fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));

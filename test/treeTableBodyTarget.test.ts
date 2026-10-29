@@ -12,7 +12,7 @@
 // happy-dom has no drag implementation, so drags are DragEvent-shaped events with a stub
 // dataTransfer, as in treeTableDragDrop.test.ts.
 import { describe, it, expect } from 'vitest';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import { DexTreeTable, type TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
 
 function makeRow(id: string, parent: string | null, name = id): TreeTableRow {
   return { ID: id, parent, Name: { label: name }, Value: '', DataType: '', Description: '', Status: '' };

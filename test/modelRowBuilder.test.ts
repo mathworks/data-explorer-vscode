@@ -2,8 +2,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModelFromBytes } from '../src/host/SlddModel.js';
-import { buildRows } from '../src/host/rowBuilder.js';
+import { getModelFromBytes } from '../src/view/model/workspace/SlddModel.js';
+import { buildRows } from '../src/view/model/rows/rowBuilder.js';
 
 function bytes(name: string): ArrayBuffer {
   const b = readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));

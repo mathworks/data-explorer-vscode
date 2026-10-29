@@ -14,15 +14,15 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel, RowCellPool } from 'data-explorer-core';
 import { blankCommentsAndKeepLines } from './tools/moduleGraph.js';
-import { capabilityFlags, stampRow, clipMarkKey, type ClipMark } from '../src/host/rowStamp.js';
-import { buildChildRows, buildEntryRows, clipMarkKey as reexportedKey } from '../src/host/rowBuilder.js';
-import { buildMatRowsPlanned, buildMatVariableRows } from '../src/host/matRowBuilder.js';
-import { rowPlannerFor } from '../src/host/rowPlanner.js';
+import { capabilityFlags, stampRow, clipMarkKey, type ClipMark } from '../src/view/model/rows/rowStamp.js';
+import { buildChildRows, buildEntryRows, clipMarkKey as reexportedKey } from '../src/view/model/rows/rowBuilder.js';
+import { buildMatRowsPlanned, buildMatVariableRows } from '../src/view/model/rows/matRowBuilder.js';
+import { rowPlannerFor } from '../src/view/model/rows/rowPlanner.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 const src = (p: string) =>
-  blankCommentsAndKeepLines(readFileSync(fileURLToPath(new URL(`../src/host/${p}`, import.meta.url)), 'utf8'));
+  blankCommentsAndKeepLines(readFileSync(fileURLToPath(new URL(`../src/view/model/rows/${p}`, import.meta.url)), 'utf8'));
 
 const mark = (mode: 'cut' | 'copy', ...pairs: Array<[string, string]>): ClipMark => ({
   keys: new Set(pairs.map(([s, n]) => clipMarkKey(s, n))),

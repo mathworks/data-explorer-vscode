@@ -18,17 +18,17 @@
 // `postMessage` refuses a payload, which no fixture comes near.
 import { unzipSync } from 'fflate';
 import { DATA_PART_XML, DataModel, isMatFile, isModelFile, isSlddFile, type ParseWarning } from 'data-explorer-core';
-import { getModel, getModelForBinaryTab, findNode, invalidate, releaseIfUnviewed } from '../../src/host/SlddModel.js';
+import { getModel, getModelForBinaryTab, findNode, invalidate, releaseIfUnviewed } from '../../src/view/model/workspace/SlddModel.js';
 import { newSourceCache, parsedModelForOpenTab } from '../../src/host/sourceCache.js';
-import { rowPlannerFor, type PlanOptions, type RowPlanner } from '../../src/host/rowPlanner.js';
-import { COLUMNS, COLUMN_LABELS, COLUMN_GROUPS } from '../../src/host/rowBuilder.js';
-import { lazyRowsBanner } from '../../src/host/lazyRows.js';
-import { refuseIfUnreadable, sourceWarnings, warningBanner, type WarningBanner } from '../../src/host/parseWarnings.js';
+import { rowPlannerFor, type PlanOptions, type RowPlanner } from '../../src/view/model/rows/rowPlanner.js';
+import { COLUMNS, COLUMN_LABELS, COLUMN_GROUPS } from '../../src/view/model/rows/rowBuilder.js';
+import { lazyRowsBanner } from '../../src/view/model/rows/lazyRows.js';
+import { refuseIfUnreadable, sourceWarnings, warningBanner, type WarningBanner } from '../../src/view/model/rows/parseWarnings.js';
 import { captureBaseline, clearBaseline, computeModified } from '../../src/host/slddBaseline.js';
 import { clipMarkOfDoc } from '../../src/host/clipMarks.js';
 import { clipboardState } from '../../src/host/clipboard.js';
-import { sectionRules, wholeFileRules } from '../../src/host/sectionRules.js';
-import { readSlddParts } from '../../src/host/slddContent.js';
+import { sectionRules, wholeFileRules } from '../../src/view/model/actions/sectionRules.js';
+import { readSlddParts } from '../../src/view/model/workspace/slddContent.js';
 import {
   exceedsStringDecodeLimit,
   exceedsTextSyncLimit,
@@ -37,11 +37,11 @@ import {
 } from '../../src/host/slddFormat.js';
 import { describeSource } from '../../src/host/refusal.js';
 import { SaveMarks } from '../../src/host/saveMarks.js';
-import { answerChildRequest } from '../../src/host/childRequest.js';
-import { answerMatrixRequest } from '../../src/host/matrixRequest.js';
-import { InspectorSelection } from '../../src/host/inspectorSelection.js';
-import { InspectorPage } from '../../src/host/inspectorPage.js';
-import { binaryEditSrcId } from '../../src/common/srcId.js';
+import { answerChildRequest } from '../../src/view/model/rows/childRequest.js';
+import { answerMatrixRequest } from '../../src/view/model/matrix/matrixRequest.js';
+import { InspectorSelection } from '../../src/view/model/inspector/inspectorSelection.js';
+import { InspectorPage } from '../../src/view/model/inspector/inspectorPage.js';
+import { binaryEditSrcId } from '../../src/view/model/ids/srcId.js';
 import { bytesOf, fakeFile, nameOf } from './fixtures.js';
 
 /**

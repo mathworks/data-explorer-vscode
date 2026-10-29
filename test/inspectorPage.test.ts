@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 //
-// The Property Inspector's page (src/host/inspectorPage.ts): what it is sent, on which `ready`,
+// The Property Inspector's page (src/view/model/inspector/inspectorPage.ts): what it is sent, on which `ready`,
 // and when a node handed to it again is not sent at all.
 //
 // The binary .sldd and MAT-file editors hand the inspector its node again whenever the document's
@@ -13,8 +13,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, invalidate } from '../src/host/SlddModel.js';
-import { InspectorPage } from '../src/host/inspectorPage.js';
+import { getModel, invalidate } from '../src/view/model/workspace/SlddModel.js';
+import { InspectorPage } from '../src/view/model/inspector/inspectorPage.js';
 
 const URI = 'pi://numeric_json.sldd';
 const FIXTURE = readFileSync(fileURLToPath(new URL('./fixtures/numeric_json.sldd', import.meta.url)), 'utf8');

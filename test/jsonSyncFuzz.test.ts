@@ -28,8 +28,8 @@ import { fileURLToPath } from 'node:url';
 import { planEntrySync } from '../src/host/jsonEntrySync.js';
 import { findEntriesArrayStart } from '../src/host/jsonEntryScan.js';
 import { applyEntryOps } from '../src/host/entryOps.js';
-import { getModel, invalidate } from '../src/host/SlddModel.js';
-import { buildRows } from '../src/host/rowBuilder.js';
+import { getModel, invalidate } from '../src/view/model/workspace/SlddModel.js';
+import { buildRows } from '../src/view/model/rows/rowBuilder.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

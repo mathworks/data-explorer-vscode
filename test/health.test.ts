@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 import { describe, it, expect } from 'vitest';
-import { encode, decode, DECORATIONS, HEALTH_QUERY, type HealthState } from '../src/host/health.js';
+import { encode, decode, DECORATIONS, HEALTH_QUERY, type HealthState } from '../src/view/model/hierarchy/health.js';
 
 describe('health encode/decode', () => {
   const states: HealthState[] = ['cycle', 'modified'];

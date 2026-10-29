@@ -14,7 +14,7 @@
 // NOT_APPLICABLE_WHEN_BLANK. A row from an older core carries no key, and is drawn and edited
 // exactly as before.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import { DexTreeTable, type TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

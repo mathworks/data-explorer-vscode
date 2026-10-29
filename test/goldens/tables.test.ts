@@ -25,9 +25,9 @@
 // the diff is the review.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DataModel, isProjectFile } from 'data-explorer-core';
-import { LAZY_ROW_BUDGET } from '../../src/host/lazyRows.js';
+import { LAZY_ROW_BUDGET } from '../../src/view/model/rows/lazyRows.js';
 import { clearClipboard } from '../../src/host/clipboard.js';
-import { isSectionRowId } from '../../src/common/sectionRowId.js';
+import { isSectionRowId } from '../../src/view/model/ids/sectionRowId.js';
 import { bytesOf, fixtureFiles, nameOf, snapshotPath, snapshotText } from './fixtures.js';
 import { openTable, routeOf, type TableView } from './views.js';
 

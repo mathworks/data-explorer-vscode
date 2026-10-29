@@ -6,7 +6,7 @@
 // renders them and reports back two things the host acts on: an edited value
 // (`dex-property-changed`) and a clicked cross-reference (`dex-pi-navigate`).
 import { describe, it, expect, afterEach } from 'vitest';
-import { DexPropertyInspector, type PropertyGroup } from '../src/webview/components/dex-property-inspector.js';
+import { DexPropertyInspector, type PropertyGroup } from '../src/view/widgets/property-inspector/dex-property-inspector.js';
 
 let pi: DexPropertyInspector | null = null;
 

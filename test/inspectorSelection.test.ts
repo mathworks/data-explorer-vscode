@@ -1,11 +1,11 @@
 // Copyright 2026 The MathWorks, Inc.
 //
-// What the Property Inspector is asked to show (src/host/inspectorSelection.ts): a table's
+// What the Property Inspector is asked to show (src/view/model/inspector/inspectorSelection.ts): a table's
 // selection, resolved to its first row's node, and that node resolved again whenever the
 // document's tree changes under it. The providers that tell it so are exercised in real VS Code
 // (test-integration/suite/binarySlddInspectorRefresh.test.ts, matEdit.test.ts).
 import { describe, it, expect } from 'vitest';
-import { InspectorSelection } from '../src/host/inspectorSelection.js';
+import { InspectorSelection } from '../src/view/model/inspector/inspectorSelection.js';
 
 const DOC = 'file:///work/params.sldd';
 const OTHER = 'file:///work/other.sldd';

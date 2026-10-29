@@ -31,10 +31,10 @@ import {
   type EntrySelector,
   type TextPatch,
 } from 'data-explorer-core';
-import { WHOLE_FILE_SECTION, buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
+import { WHOLE_FILE_SECTION, buildSectionRowId, isSectionRowId, sectionNameFromRowId } from '../view/model/ids/sectionRowId.js';
 import type { DragRegisterItem } from './dragState.js';
 import type { ClipboardItem } from './clipboard.js';
-import { dropFactsOf } from './dropFacts.js';
+import { dropFactsOf } from '../view/model/actions/dropFacts.js';
 import { TransferRefused, type TransferTarget } from './transfer.js';
 import { recordCopy } from './entryOps.js';
 

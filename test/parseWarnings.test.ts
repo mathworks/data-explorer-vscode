@@ -6,7 +6,7 @@ import {
   sourceWarnings,
   warningBanner,
   MAX_BANNER_DETAILS,
-} from '../src/host/parseWarnings.js';
+} from '../src/view/model/rows/parseWarnings.js';
 
 const part = (message: string, name?: string): ParseWarning => ({
   code: 'part-unreadable',

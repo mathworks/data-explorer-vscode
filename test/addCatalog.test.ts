@@ -26,8 +26,8 @@ import {
   badgeOf,
   categorySection,
   labelLinesOf,
-} from '../src/common/addCatalog.js';
-import type { GalleryTile, SectionKey } from '../src/common/addCatalog.js';
+} from '../src/view/model/ids/addCatalog.js';
+import type { GalleryTile, SectionKey } from '../src/view/model/ids/addCatalog.js';
 
 /** Every section of a fresh, empty dictionary — one per tile, so names never collide. */
 function sectionsOf(): Record<string, any> {

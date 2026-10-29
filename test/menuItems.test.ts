@@ -1,11 +1,11 @@
 // Copyright 2026 The MathWorks, Inc.
 import { describe, it, expect, afterEach } from 'vitest';
-import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type MenuRow, type ClipboardState, type MenuInput, type PasteTarget } from '../src/webview/menuItems.js';
-import type { ContextMenuItem } from '../src/webview/components/dex-context-menu.js';
+import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type MenuRow, type ClipboardState, type MenuInput, type PasteTarget } from '../src/view/widgets/tree-table/menuItems.js';
+import type { ContextMenuItem } from '../src/view/widgets/context-menu/dex-context-menu.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, invalidate } from '../src/host/SlddModel.js';
-import { sectionRules } from '../src/host/sectionRules.js';
+import { getModel, invalidate } from '../src/view/model/workspace/SlddModel.js';
+import { sectionRules } from '../src/view/model/actions/sectionRules.js';
 
 // The rows a menu is built over: one section holding an entry A with a child x, plus a
 // second entry B, plus a second section holding V. Enough to state every shape the spec

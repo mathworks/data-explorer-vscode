@@ -12,8 +12,8 @@
 // Deliberately one module. A webview that asked but never listened would open a
 // panel that waits forever, and splitting the pair across the two mains is how
 // that happens — the recurring defect here is one rule implemented twice.
-import type { MatrixOpenDetail } from './components/dex-matrix-open.js';
-import type { MatrixCellsAnswer } from './components/dex-variable-editor.js';
+import type { MatrixOpenDetail } from '../view/widgets/shared/dex-matrix-open.js';
+import type { MatrixCellsAnswer } from '../view/widgets/variable-editor/dex-variable-editor.js';
 // Type-only, so nothing host-side enters the webview bundle — the same import the
 // mains already make. It is what makes the request below a compile error if the
 // host's union ever spells the message differently.

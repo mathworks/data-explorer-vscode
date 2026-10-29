@@ -164,7 +164,7 @@ describe('the loading state belongs to the table component, not to any shell', (
   it('the component owns the spinner and its keyframes', () => {
     // A keyframe in a shell's light DOM does not reach a shadow tree, so the
     // animation has to live in the same stylesheet as the element it turns.
-    const src = read('src/webview/components/dex-tree-table.ts');
+    const src = read('src/view/widgets/tree-table/dex-tree-table.ts');
     expect(src).toContain('class="loading-spinner"');
     expect(src).toContain('@keyframes dex-spin');
   });

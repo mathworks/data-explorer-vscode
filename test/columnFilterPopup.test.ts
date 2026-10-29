@@ -7,10 +7,10 @@
 // A preview that could drift from what Apply writes would teach a syntax the box
 // does not accept, which is worse than showing nothing at all.
 import { describe, it, expect, beforeEach } from 'vitest';
-import '../src/webview/components/dex-column-filter.js';
-import type { DexColumnFilter } from '../src/webview/components/dex-column-filter.js';
-import '../src/webview/components/dex-tree-table.js';
-import type { DexTreeTable, TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import '../src/view/widgets/tree-table/dex-column-filter.js';
+import type { DexColumnFilter } from '../src/view/widgets/tree-table/dex-column-filter.js';
+import '../src/view/widgets/tree-table/dex-tree-table.js';
+import type { DexTreeTable, TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
 
 async function open(props: Partial<DexColumnFilter> = {}): Promise<DexColumnFilter> {
   const el = document.createElement('dex-column-filter') as DexColumnFilter;

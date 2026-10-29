@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync, zipSync } from 'fflate';
 import type { ParseWarning } from 'data-explorer-core';
-import { readSlddContent, readSlddParts, scanSldd } from '../src/host/slddContent.js';
+import { readSlddContent, readSlddParts, scanSldd } from '../src/view/model/workspace/slddContent.js';
 
 function bytes(relpath: string): ArrayBuffer {
   const b = readFileSync(fileURLToPath(new URL(relpath, import.meta.url)));

@@ -17,13 +17,13 @@
 // contravariant-callback errors rather than catch real bugs.
 
 import type { ProjectPage } from 'data-explorer-core';
-import type { MspProject } from './msp.js';
-import type { SectionRule } from '../host/sectionRules.js';
+import type { MspProject } from '../view/model/ids/msp.js';
+import type { SectionRule } from '../view/model/actions/sectionRules.js';
 import type { DragDescriptor } from '../host/dragState.js';
 import type { ClipboardMode } from '../host/clipboard.js';
-import type { DropFacts } from '../host/dropFacts.js';
-import type { WarningBanner } from '../host/parseWarnings.js';
-import type { MatrixPayload } from '../host/matrixPayload.js';
+import type { DropFacts } from '../view/model/actions/dropFacts.js';
+import type { WarningBanner } from '../view/model/rows/parseWarnings.js';
+import type { MatrixPayload } from '../view/model/matrix/matrixPayload.js';
 
 // --- Host -> Webview (table view: table-main.ts) ------------------------------
 
@@ -345,7 +345,7 @@ export interface SetProjectMessage {
   root: string;
   /**
    * What a Managed Simulink Project adds — absent for every project that is not one,
-   * which is every project this extension has ever opened until now. See common/msp.ts:
+   * which is every project this extension has ever opened until now. See view/model/ids/msp.ts:
    * the page's MSP markup hangs entirely off this key being present, so a non-MSP
    * project's page is unchanged by its existence.
    */

@@ -17,7 +17,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel } from 'data-explorer-core';
-import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
+import { getModel, findNode, invalidate } from '../src/view/model/workspace/SlddModel.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

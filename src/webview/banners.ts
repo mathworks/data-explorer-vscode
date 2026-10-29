@@ -24,7 +24,7 @@
 // the strip — in <body>'s normal flow, ahead of the absolutely-positioned table,
 // which therefore painted over it. The message was in the DOM and on screen
 // nowhere.
-import type { WarningBanner } from '../host/parseWarnings.js';
+import type { WarningBanner } from '../view/model/rows/parseWarnings.js';
 
 /** What a setRows payload can say about the strip. Both parts are optional. */
 export interface BannerPayload {
@@ -106,7 +106,7 @@ export function renderBanners(
  * Paint the error banner, or clear it when passed nothing.
  *
  * The host's last word when a view cannot be shown at all — including the payload
- * it could not deliver (see src/host/postPayload.ts), which is the only message
+ * it could not deliver (see src/view/model/rows/postPayload.ts), which is the only message
  * that ends the table's loading spinner on that path. So it has to be legible:
  * the same strip, the same measured offset, above the table rather than beneath it.
  */

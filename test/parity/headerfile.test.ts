@@ -12,7 +12,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, getModelFromBytes, invalidate } from '../../src/host/SlddModel.js';
+import { getModel, getModelFromBytes, invalidate } from '../../src/view/model/workspace/SlddModel.js';
 
 const ART = (variant: string) =>
   fileURLToPath(new URL(`./artifacts/${variant}/headerfile.sldd`, import.meta.url));

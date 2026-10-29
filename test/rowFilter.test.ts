@@ -9,7 +9,7 @@ import { describe, it, expect } from 'vitest';
 import {
   parseFilterExpression, filterRows, formatToken, removeToken, SUBSTRING_FILTER_COLUMNS,
   type ColumnVocabulary,
-} from '../src/webview/rowFilter.js';
+} from '../src/view/model/filter/rowFilter.js';
 
 interface Row {
   ID: string;

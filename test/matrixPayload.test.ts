@@ -11,11 +11,11 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel, effectiveDims as coreEffectiveDims } from 'data-explorer-core';
-import { getModel, getModelFromBytes, invalidate } from '../src/host/SlddModel.js';
+import { getModel, getModelFromBytes, invalidate } from '../src/view/model/workspace/SlddModel.js';
 import {
   matrixPayload, matrixDescriptor, matrixForRow, isGriddable, effectiveDims, subsOf, canonicalIndex,
   stampMatrix, MAX_MATRIX_ELEMENTS, GRIDDABLE_CLASSES,
-} from '../src/host/matrixPayload.js';
+} from '../src/view/model/matrix/matrixPayload.js';
 
 function fixturePath(name: string): string {
   return fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));

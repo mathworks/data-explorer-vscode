@@ -20,7 +20,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { serializeEntryToXml } from 'data-explorer-core';
-import { getModelFromBytes, invalidate } from '../src/host/SlddModel.js';
+import { getModelFromBytes, invalidate } from '../src/view/model/workspace/SlddModel.js';
 
 type Entry = Record<string, any>;
 

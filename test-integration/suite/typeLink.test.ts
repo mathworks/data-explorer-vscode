@@ -15,8 +15,8 @@
 // `node test-integration/fixtures/make-typelink.mjs`.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { getModel, invalidate } from '../../src/host/SlddModel';
-import { buildRows } from '../../src/host/rowBuilder';
+import { getModel, invalidate } from '../../src/view/model/workspace/SlddModel';
+import { buildRows } from '../../src/view/model/rows/rowBuilder';
 import { handleNavigate } from '../../src/host/navigate';
 
 function fixtureUri(): vscode.Uri {

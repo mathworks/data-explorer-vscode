@@ -10,7 +10,7 @@
 // relate. Duplicate names across files are preserved (each becomes its own record)
 // so a global "search entries by name" can list every occurrence.
 import { blockKey, blockLabel, joinBlockPath } from 'data-explorer-core';
-import { uriBasename } from '../common/pathUtil.js';
+import { uriBasename } from '../view/model/ids/pathUtil.js';
 
 export type EntryKind = 'sldd' | 'mat' | 'workspace' | 'block';
 

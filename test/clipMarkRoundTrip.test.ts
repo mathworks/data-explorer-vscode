@@ -16,8 +16,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
 import { DataModel, DATA_PART_XML, parseBinarySlddParts } from 'data-explorer-core';
-import { getModel, invalidate, findNode } from '../src/host/SlddModel.js';
-import { buildRows, clipMarkKey, splitClipMarkKey, type ClipMark } from '../src/host/rowBuilder.js';
+import { getModel, invalidate, findNode } from '../src/view/model/workspace/SlddModel.js';
+import { buildRows, clipMarkKey, splitClipMarkKey, type ClipMark } from '../src/view/model/rows/rowBuilder.js';
 import { buildClipboardSnapshot } from '../src/host/structuralEdit.js';
 import { findEntryByName } from '../src/host/entryOps.js';
 

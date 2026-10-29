@@ -14,7 +14,7 @@
 // working navigation into a click that selects nothing. A dictionary entry name cannot
 // contain a colon, which is what makes "has a colon in the name half" a sound test for
 // them — and the same fact core's first-colon split relies on.
-import { srcIdToUriString } from '../common/srcId.js';
+import { srcIdToUriString } from '../view/model/ids/srcId.js';
 
 export type LinkRoute = { kind: 'local'; name: string } | { kind: 'host' };
 

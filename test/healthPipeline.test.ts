@@ -6,8 +6,8 @@
 // the same functions both sides call (encode/decode from health.ts) and Node's
 // URL to model exactly how vscode.Uri exposes `.query`.
 import { describe, it, expect } from 'vitest';
-import { RelGraph, type GraphSource } from '../src/host/graphModel.js';
-import { encode, decode, DECORATIONS, type HealthState } from '../src/host/health.js';
+import { RelGraph, type GraphSource } from '../src/view/model/hierarchy/graphModel.js';
+import { encode, decode, DECORATIONS, type HealthState } from '../src/view/model/hierarchy/health.js';
 
 // Mimic vscode.Uri.with({ query }) → uri.query: the query is stored verbatim
 // (vscode does NOT percent-decode it for you in `.query`). Node's URL confirms

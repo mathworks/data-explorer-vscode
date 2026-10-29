@@ -62,9 +62,9 @@ import {
   type EntryOpPair,
 } from '../src/host/entryOps.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from '../src/host/slddBaseline.js';
-import { buildRows, buildEntryRows } from '../src/host/rowBuilder.js';
-import { spliceEntryRows, insertEntryRows } from '../src/webview/rowUpdates.js';
-import { buildSectionRowId } from '../src/common/sectionRowId.js';
+import { buildRows, buildEntryRows } from '../src/view/model/rows/rowBuilder.js';
+import { spliceEntryRows, insertEntryRows } from '../src/view/model/actions/rowUpdates.js';
+import { buildSectionRowId } from '../src/view/model/ids/sectionRowId.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

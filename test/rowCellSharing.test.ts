@@ -21,9 +21,9 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel } from 'data-explorer-core';
-import { getModel } from '../src/host/SlddModel.js';
-import { buildRows, buildEntryRows } from '../src/host/rowBuilder.js';
-import { buildMatRows } from '../src/host/matRowBuilder.js';
+import { getModel } from '../src/view/model/workspace/SlddModel.js';
+import { buildRows, buildEntryRows } from '../src/view/model/rows/rowBuilder.js';
+import { buildMatRows } from '../src/view/model/rows/matRowBuilder.js';
 
 const URI = 'rowshare://numeric_json.sldd';
 

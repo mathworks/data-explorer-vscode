@@ -48,6 +48,7 @@ esbuild.test.mjs
 vite.config.ts
 vitest.config.ts
 tsconfig.json
+tsconfig.view-model.json
 **/*.map
 media/screenshots/**
 media/icons/**

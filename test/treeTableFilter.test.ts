@@ -8,9 +8,9 @@
 // tests also pin the tree behaviour of a filtered view, since a matching child
 // is useless if its parent rows vanish.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
-import type { DexFilterBar } from '../src/webview/components/dex-filter-bar.js';
-import { nextStickyIds } from '../src/webview/rowUpdates.js';
+import { DexTreeTable, type TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
+import type { DexFilterBar } from '../src/view/widgets/tree-table/dex-filter-bar.js';
+import { nextStickyIds } from '../src/view/model/actions/rowUpdates.js';
 
 const HOST_COLUMNS = ['Name', 'Value', 'DataType', 'UsedBy', 'Status', 'Kind', 'Class'];
 

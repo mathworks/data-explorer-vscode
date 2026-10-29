@@ -19,12 +19,12 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
 import { DataModel, DATA_PART_XML, parseBinarySlddParts } from 'data-explorer-core';
-import { getModel, invalidate, findNode } from '../src/host/SlddModel.js';
-import { buildRows } from '../src/host/rowBuilder.js';
+import { getModel, invalidate, findNode } from '../src/view/model/workspace/SlddModel.js';
+import { buildRows } from '../src/view/model/rows/rowBuilder.js';
 import { resolveSectionForPaste } from '../src/host/structuralEdit.js';
-import { buildSectionRowId } from '../src/common/sectionRowId.js';
-import { sectionRowIdOf } from '../src/webview/operands.js';
-import { buildContextMenuItems, type MenuRow } from '../src/webview/menuItems.js';
+import { buildSectionRowId } from '../src/view/model/ids/sectionRowId.js';
+import { sectionRowIdOf } from '../src/view/model/actions/operands.js';
+import { buildContextMenuItems, type MenuRow } from '../src/view/widgets/tree-table/menuItems.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
