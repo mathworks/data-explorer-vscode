@@ -15,7 +15,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SectionsTreeProvider } from '../../src/host/SectionsTreeProvider';
-import { decode } from 'data-explorer-view/model';
+import { decode } from 'data-explorer-view/host';
 
 function extUri(): vscode.Uri {
   const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');

@@ -14,7 +14,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { DECORATIONS } from 'data-explorer-view/model';
+import { DECORATIONS } from 'data-explorer-view/host';
 
 // Off the cwd, as the other stylesheet tests here: vitest runs from the repo root.
 const VIEW = join(process.cwd(), 'node_modules', 'data-explorer-view');

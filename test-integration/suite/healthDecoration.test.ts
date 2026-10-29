@@ -8,7 +8,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { HealthDecorationProvider } from '../../src/host/HealthDecorationProvider';
-import { encode, DECORATIONS } from 'data-explorer-view/model';
+import { encode, DECORATIONS } from 'data-explorer-view/host';
 
 function fileUri(query?: string): vscode.Uri {
   const base = vscode.Uri.file('/tmp/x.sldd');
