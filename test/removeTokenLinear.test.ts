@@ -12,7 +12,7 @@
 // The text is the user's: typed or pasted into the filter bar, or a value typed into a
 // header popup, which formatToken quotes and keeps whole, inner spaces and all.
 import { describe, it, expect } from 'vitest';
-import { parseFilterExpression, removeToken } from '../src/webview/rowFilter.js';
+import { parseFilterExpression, removeToken } from '../src/view/model/filter/rowFilter.js';
 
 const COLUMNS = ['Name', 'Value', 'DataType', 'Class', 'Kind', 'Status'];
 const cell = (row: Record<string, string | undefined>, col: string): string => row[col] ?? '';

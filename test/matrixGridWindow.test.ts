@@ -9,7 +9,7 @@
 // capped at 640x320, which can show about sixteen columns and sixteen rows of it.
 //
 // So it now renders the window near the scroll position and pads the rest, by the
-// same rule dex-tree-table has always used for its rows (src/webview/virtualWindow.ts,
+// same rule dex-tree-table has always used for its rows (src/view/widgets/shared/virtualWindow.ts,
 // pinned in virtualWindow.test.ts). Both axes, because windowing rows alone would
 // still build a thousand cells per row — a 40x improvement where the panel's own
 // width says the honest figure is a thousand.
@@ -26,8 +26,8 @@
 // worker's heap — taking the readable failure down with it. 40x40 fails an
 // assertion instead.
 import { describe, it, expect, beforeEach } from 'vitest';
-import '../src/webview/components/dex-matrix-grid.js';
-import type { DexMatrixGrid, MatrixPayload } from '../src/webview/components/dex-matrix-grid.js';
+import '../src/view/widgets/variable-editor/dex-matrix-grid.js';
+import type { DexMatrixGrid, MatrixPayload } from '../src/view/widgets/variable-editor/dex-matrix-grid.js';
 
 const ROW_H = 20;
 const COL_W = 50;

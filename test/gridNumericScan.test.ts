@@ -17,9 +17,9 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
-import { getModelFromBytes, invalidate } from '../src/host/SlddModel.js';
-import { matrixPayload } from '../src/host/matrixPayload.js';
-import { DexMatrixGrid, type MatrixPayload } from '../src/webview/components/dex-matrix-grid.js';
+import { getModelFromBytes, invalidate } from '../src/view/model/workspace/SlddModel.js';
+import { matrixPayload } from '../src/view/model/matrix/matrixPayload.js';
+import { DexMatrixGrid, type MatrixPayload } from '../src/view/widgets/variable-editor/dex-matrix-grid.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

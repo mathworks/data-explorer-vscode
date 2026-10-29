@@ -28,7 +28,7 @@ import {
   type KnownEdit,
 } from '../src/host/jsonEntrySync.js';
 import { applyEntryOps, insertOp, replaceOp, type EntryOp } from '../src/host/entryOps.js';
-import { getModel, invalidate } from '../src/host/SlddModel.js';
+import { getModel, invalidate } from '../src/view/model/workspace/SlddModel.js';
 import { findEntrySpan } from '../src/host/entrySplice.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

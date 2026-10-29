@@ -19,7 +19,7 @@
 // folder (navTarget.resolveNavSource).
 import * as vscode from 'vscode';
 import { parseNavTarget, parseFileTarget, resolveNavSource, type ScopedResolve } from './navTarget.js';
-import { srcIdToUriString } from '../common/srcId.js';
+import { srcIdToUriString } from '../view/model/ids/srcId.js';
 
 export { parseNavTarget, parseFileTarget };
 

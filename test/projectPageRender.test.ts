@@ -1,5 +1,5 @@
 // Copyright 2026 The MathWorks, Inc.
-// The markup of a project's main page — src/webview/projectPage.ts, which is a pure
+// The markup of a project's main page — src/view/widgets/project-page/projectPage.ts, which is a pure
 // function of (payload, filter state), so this drives the SHIPPING renderer against a
 // string with no DOM at all. project-main.ts — the DOM, the events and the postMessage
 // boundary — is driven for real in projectMain.test.ts.
@@ -9,7 +9,7 @@
 // gets a filter box, and that a store written by someone else cannot inject markup.
 import { describe, it, expect } from 'vitest';
 import type { ProjectPage } from 'data-explorer-core';
-import type { WarningBanner } from '../src/host/parseWarnings.js';
+import type { WarningBanner } from '../src/view/model/rows/parseWarnings.js';
 import {
   FILTER_THRESHOLD,
   ROW_CAP,
@@ -17,8 +17,8 @@ import {
   filterTerms,
   highlight,
   renderProjectPage,
-} from '../src/webview/projectPage.js';
-import type { PageState } from '../src/webview/projectPage.js';
+} from '../src/view/widgets/project-page/projectPage.js';
+import type { PageState } from '../src/view/widgets/project-page/projectPage.js';
 
 function page(over: Partial<ProjectPage> = {}): ProjectPage {
   return {

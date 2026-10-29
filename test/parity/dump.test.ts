@@ -4,7 +4,7 @@
 import { describe, it } from 'vitest';
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, getModelFromBytes, invalidate } from '../../src/host/SlddModel.js';
+import { getModel, getModelFromBytes, invalidate } from '../../src/view/model/workspace/SlddModel.js';
 
 const ART = (v: string, n: string) => fileURLToPath(new URL(`./artifacts/${v}/${n}`, import.meta.url));
 const HAVE = existsSync(ART('text', 'params.sldd'));

@@ -8,7 +8,7 @@
 // on each row is the ONLY way assistive tech learns the hierarchy — indentation
 // and the ▶/▼ glyph are purely visual.
 import { describe, it, expect } from 'vitest';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import { DexTreeTable, type TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
 
 function makeRow(id: string, parent: string | null, name: string, extra: Partial<TreeTableRow> = {}): TreeTableRow {
   return { ID: id, parent, Name: { label: name }, Value: '', DataType: '', Description: '', Status: '', ...extra };

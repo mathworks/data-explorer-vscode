@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel } from 'data-explorer-core';
-import { getModel, getModelFromBytes, invalidate } from '../src/host/SlddModel.js';
+import { getModel, getModelFromBytes, invalidate } from '../src/view/model/workspace/SlddModel.js';
 
 function fixturePath(name: string): string {
   return fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));

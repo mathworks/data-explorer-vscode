@@ -2,9 +2,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { nextExpandedIds, nextStickyIds, pendingSelectionToApply, spliceEntryRows, insertEntryRows, mergeChildRows } from '../src/webview/rowUpdates.js';
-import { getModel } from '../src/host/SlddModel.js';
-import { buildRows, buildEntryRows } from '../src/host/rowBuilder.js';
+import { nextExpandedIds, nextStickyIds, pendingSelectionToApply, spliceEntryRows, insertEntryRows, mergeChildRows } from '../src/view/model/actions/rowUpdates.js';
+import { getModel } from '../src/view/model/workspace/SlddModel.js';
+import { buildRows, buildEntryRows } from '../src/view/model/rows/rowBuilder.js';
 
 type Row = { ID: string; parent: string | null; Value?: unknown; _lazy?: boolean };
 

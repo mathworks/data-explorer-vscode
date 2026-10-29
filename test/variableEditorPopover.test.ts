@@ -10,12 +10,12 @@
 // all zeros. Positioning tests therefore stub the rects they care about, which
 // is enough to pin the ARITHMETIC — the only part this file owns.
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { DexVariableEditor } from '../src/webview/components/dex-variable-editor.js';
-import type { MatrixCellsAnswer } from '../src/webview/components/dex-variable-editor.js';
+import { DexVariableEditor } from '../src/view/widgets/variable-editor/dex-variable-editor.js';
+import type { MatrixCellsAnswer } from '../src/view/widgets/variable-editor/dex-variable-editor.js';
 import type { MatrixCellsMessage } from '../src/common/protocol.js';
-import type { MatrixDescriptor, MatrixPayload } from '../src/webview/components/dex-matrix-grid.js';
-import { DexMatrixGrid } from '../src/webview/components/dex-matrix-grid.js';
-import { DexMatrixOpen } from '../src/webview/components/dex-matrix-open.js';
+import type { MatrixDescriptor, MatrixPayload } from '../src/view/widgets/variable-editor/dex-matrix-grid.js';
+import { DexMatrixGrid } from '../src/view/widgets/variable-editor/dex-matrix-grid.js';
+import { DexMatrixOpen } from '../src/view/widgets/shared/dex-matrix-open.js';
 import { installMatrixOpen } from '../src/webview/matrixOpen.js';
 
 const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));

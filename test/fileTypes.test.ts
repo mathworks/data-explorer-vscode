@@ -331,12 +331,12 @@ describe('no consumer keeps its own copy of the list', () => {
     'src/host/nameScan.ts',
     'src/host/structuralIndex.ts',
     'src/host/slxStructure.ts',
-    'src/host/SlddModel.ts',
+    'src/view/model/workspace/SlddModel.ts',
     'src/host/BinaryEditorProvider.ts',
     // graphModel.ts classifies nothing — it is handed a `type` already decided — but it
     // does REDUCE a name: a project group is labelled with its marker's name. That is the
     // same kind of second copy, so it is held to the same scan.
-    'src/host/graphModel.ts',
+    'src/view/model/hierarchy/graphModel.ts',
     // projectStore.ts is where a name-identified marker arrives first: it decides, from the
     // marker alone, whether there is a `resources/project/` tree to walk or a single file to
     // read. That is a kind test and a name, so it belongs under the scan — a `endsWith('.prj')`

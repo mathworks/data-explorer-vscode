@@ -11,16 +11,16 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
-import { buildRows } from '../src/host/rowBuilder.js';
+import { getModel, findNode, invalidate } from '../src/view/model/workspace/SlddModel.js';
+import { buildRows } from '../src/view/model/rows/rowBuilder.js';
 import {
   pasteEntries,
   deleteEntriesByName,
   resolveSectionForPaste,
   buildDragSnapshot,
 } from '../src/host/structuralEdit.js';
-import { sectionRules } from '../src/host/sectionRules.js';
-import { dropDecision, type DragSource } from '../src/webview/dropDecision.js';
+import { sectionRules } from '../src/view/model/actions/sectionRules.js';
+import { dropDecision, type DragSource } from '../src/view/model/actions/dropDecision.js';
 import { setDrag, clearDrag, dragDescriptor } from '../src/host/dragState.js';
 
 const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');

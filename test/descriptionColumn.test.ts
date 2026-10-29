@@ -11,8 +11,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DataModel } from 'data-explorer-core';
-import { buildRows, COLUMNS, COLUMN_LABELS } from '../src/host/rowBuilder.js';
-import { buildMatRows } from '../src/host/matRowBuilder.js';
+import { buildRows, COLUMNS, COLUMN_LABELS } from '../src/view/model/rows/rowBuilder.js';
+import { buildMatRows } from '../src/view/model/rows/matRowBuilder.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

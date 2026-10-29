@@ -6,7 +6,7 @@ import {
   buildSectionRowId,
   isSectionRowId,
   sectionNameFromRowId,
-} from '../src/common/sectionRowId.js';
+} from '../src/view/model/ids/sectionRowId.js';
 
 describe('sectionRowId', () => {
   describe('SECTION_ROW_PREFIX', () => {

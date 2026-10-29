@@ -13,7 +13,7 @@
 // per test FILE and this one wires a window listener and creates its own DOM.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import type { ProjectPage } from 'data-explorer-core';
-import { ROW_CAP } from '../src/webview/projectPage.js';
+import { ROW_CAP } from '../src/view/widgets/project-page/projectPage.js';
 
 const posted: Array<{ type: string; [k: string]: unknown }> = [];
 

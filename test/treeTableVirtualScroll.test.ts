@@ -13,7 +13,7 @@
 // height when the container has not been laid out — but a genuine end-to-end
 // check of painted geometry needs a real browser.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import { DexTreeTable, type TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
 
 const ROW_H = 26; // DEFAULT_ROW_HEIGHT; the header occupies one row of the same height
 

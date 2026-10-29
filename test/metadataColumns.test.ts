@@ -8,8 +8,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, getModelFromBytes, invalidate } from '../src/host/SlddModel.js';
-import { buildRows } from '../src/host/rowBuilder.js';
+import { getModel, getModelFromBytes, invalidate } from '../src/view/model/workspace/SlddModel.js';
+import { buildRows } from '../src/view/model/rows/rowBuilder.js';
 
 describe('Last Modified is refreshed on edit (_stampLastModified)', () => {
   const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;

@@ -20,7 +20,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { findEntrySpan, findEntryElementSpan, findEntriesArrayInsertion } from '../src/host/entrySplice.js';
 import { entrySelectorOf } from 'data-explorer-core';
-import { getModel, invalidate } from '../src/host/SlddModel.js';
+import { getModel, invalidate } from '../src/view/model/workspace/SlddModel.js';
 import { deleteEntry } from '../src/host/structuralEdit.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

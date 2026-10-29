@@ -33,8 +33,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { unzipSync } from 'fflate';
 import { DataModel } from 'data-explorer-core';
-import { readSlddParts } from '../src/host/slddContent.js';
-import { buildRows, COLUMNS, COLUMN_LABELS } from '../src/host/rowBuilder.js';
+import { readSlddParts } from '../src/view/model/workspace/slddContent.js';
+import { buildRows, COLUMNS, COLUMN_LABELS } from '../src/view/model/rows/rowBuilder.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

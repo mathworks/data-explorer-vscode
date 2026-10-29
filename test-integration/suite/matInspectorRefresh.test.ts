@@ -19,9 +19,9 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { DataModel } from 'data-explorer-core';
 import { MatEditorProvider } from '../../src/host/MatEditorProvider';
-import { InspectorSelection } from '../../src/host/inspectorSelection';
-import { buildPropertyGroups } from '../../src/host/piBuilder';
-import { findNode } from '../../src/host/SlddModel';
+import { InspectorSelection } from '../../src/view/model/inspector/inspectorSelection';
+import { buildPropertyGroups } from '../../src/view/model/inspector/piBuilder';
+import { findNode } from '../../src/view/model/workspace/SlddModel';
 import { clearClipboard } from '../../src/host/clipboard';
 import { ctx, fakePanel, quiet, token, waitFor } from './tools/hostHarness';
 

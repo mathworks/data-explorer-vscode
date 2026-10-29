@@ -64,20 +64,17 @@ describe('the shared stylesheet name is one constant, not two literals', () => {
 // build time, so two components sharing one can still ship two different numbers, while a var() is
 // resolved once at run time and cannot disagree with itself.
 describe('a component stylesheet is CSS, with no TS interpolated into it', () => {
-  const dir = 'src/webview/components';
-  const files = [
-    ...readdirSync(join(root, dir))
+  const dir = 'src/view/widgets';
+  const files = readdirSync(join(root, dir)).flatMap((widget) =>
+    readdirSync(join(root, dir, widget))
       .filter((f) => f.endsWith('.ts'))
-      .map((f) => `${dir}/${f}`),
-    ...readdirSync(join(root, dir, 'styles'))
-      .filter((f) => f.endsWith('.ts'))
-      .map((f) => `${dir}/styles/${f}`),
-  ];
+      .map((f) => `${dir}/${widget}/${f}`),
+  );
 
   // The guard is only as good as the set it runs over — an empty glob passes everything.
   it('finds the components at all', () => {
-    expect(files).toContain(`${dir}/dex-add-gallery.ts`);
-    expect(files).toContain(`${dir}/dex-tree-table.ts`);
+    expect(files).toContain(`${dir}/tree-table/dex-add-gallery.ts`);
+    expect(files).toContain(`${dir}/tree-table/dex-tree-table.ts`);
     expect(files.length).toBeGreaterThan(10);
   });
 

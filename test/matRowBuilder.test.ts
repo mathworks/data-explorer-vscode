@@ -1,7 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 import { describe, it, expect } from 'vitest';
 import { DataModel } from 'data-explorer-core';
-import { buildMatRows, buildMatRowsPlanned, buildMatVariableRows } from '../src/host/matRowBuilder.js';
+import { buildMatRows, buildMatRowsPlanned, buildMatVariableRows } from '../src/view/model/rows/matRowBuilder.js';
 
 // Build a MatNode from parsed variables (scalar + a struct with fields) the way
 // the extension does — through the core barrel (addMatSourceParsed builds the

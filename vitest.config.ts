@@ -9,7 +9,7 @@ export default defineConfig({
       reporter: ['text', 'html'],
       reportsDirectory: 'coverage',
       // Measure only the headless, vscode-free logic vitest can actually reach.
-      include: ['src/host/**/*.ts', 'src/webview/**/*.ts'],
+      include: ['src/host/**/*.ts', 'src/webview/**/*.ts', 'src/view/**/*.ts'],
       exclude: [
         // vscode-coupled host classes: import `vscode`, unavailable under vitest.
         // These are covered by the @vscode/test-electron suite (test-integration/).

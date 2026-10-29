@@ -14,7 +14,7 @@
 // Through a fake webview, because the decision is this function's. The provider's use of it
 // is driven through the real provider in the integration suite (everyNameDelivered.test.ts).
 import { describe, expect, it, vi } from 'vitest';
-import * as postPayload from '../src/host/postPayload.js';
+import * as postPayload from '../src/view/model/rows/postPayload.js';
 
 const whole = { type: 'setRows', rows: ['a', 'b', 'c'] };
 const capped = { type: 'setRows', rows: ['a'], warnings: { headline: 'first 1 of 3', details: [] } };

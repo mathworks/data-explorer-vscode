@@ -93,17 +93,17 @@ import { readdirSync, readFileSync, realpathSync, statSync, utimesSync } from 'n
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { DataModel } from 'data-explorer-core';
 import { toArrayBuffer } from '../src/common/bytes.js';
-import { basename } from '../src/common/pathUtil.js';
+import { basename } from '../src/view/model/ids/pathUtil.js';
 import { GRAPH_EXTS, SUPPORTED_EXTS } from '../src/common/fileTypes.js';
-import { RelGraph } from '../src/host/graphModel.js';
+import { RelGraph } from '../src/view/model/hierarchy/graphModel.js';
 import { mapLimited } from '../src/host/mapLimited.js';
 import type { NameRecord } from '../src/host/nameExtract.js';
 import { namesOfFile, type NameReader } from '../src/host/nameScan.js';
-import { scanSldd } from '../src/host/slddContent.js';
+import { scanSldd } from '../src/view/model/workspace/slddContent.js';
 import { isZipBytes } from '../src/host/slddFormat.js';
 import { parsedModelOf } from '../src/host/sourceCache.js';
 import { graphSourcesOf, type GraphReader } from '../src/host/structuralIndex.js';
-import * as SlddModel from '../src/host/SlddModel.js';
+import * as SlddModel from '../src/view/model/workspace/SlddModel.js';
 import {
   newUsageCache,
   planSummaries,

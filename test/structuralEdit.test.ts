@@ -8,8 +8,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
-import { buildRows } from '../src/host/rowBuilder.js';
+import { getModel, findNode, invalidate } from '../src/view/model/workspace/SlddModel.js';
+import { buildRows } from '../src/view/model/rows/rowBuilder.js';
 import { findEntrySpan } from '../src/host/entrySplice.js';
 import {
   deleteEntry,

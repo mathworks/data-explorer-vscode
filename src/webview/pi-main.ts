@@ -1,8 +1,8 @@
 // Copyright 2026 The MathWorks, Inc.
-import './components/styles/global.css';
+import '../view/theme/global.css';
 import './vscode-theme.css';
-import './components/dex-property-inspector.js';
-import './components/dex-variable-editor.js';
+import '../view/widgets/property-inspector/dex-property-inspector.js';
+import '../view/widgets/variable-editor/dex-variable-editor.js';
 import { installMatrixOpen } from './matrixOpen.js';
 import type { HostToPropsMessage } from '../common/protocol.js';
 

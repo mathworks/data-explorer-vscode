@@ -11,7 +11,7 @@
 // no-op and the webview's does not; the host never asks it of none (runTransfer answers
 // "Nothing to paste" first), and that ordering is pinned here too.
 import { describe, it, expect } from 'vitest';
-import { isNoopMove as webviewNoop, type DragItem } from '../src/webview/dropDecision.js';
+import { isNoopMove as webviewNoop, type DragItem } from '../src/view/model/actions/dropDecision.js';
 import { isNoopMove as hostNoop, runTransfer, type TransferAdapter } from '../src/host/transfer.js';
 
 const HERE = 'file:///w/here.sldd';

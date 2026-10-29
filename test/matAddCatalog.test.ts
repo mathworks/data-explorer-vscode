@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel, MAT_CREATABLE_CLASSES } from 'data-explorer-core';
-import { ADD_CATALOG, MAT_OMITTED, allTiles, matCatalog } from '../src/common/addCatalog.js';
+import { ADD_CATALOG, MAT_OMITTED, allTiles, matCatalog } from '../src/view/model/ids/addCatalog.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

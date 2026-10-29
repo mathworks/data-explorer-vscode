@@ -29,9 +29,9 @@ import { zipSync, strToU8 } from 'fflate';
 import { isModelFile, isProjectFile, isSlddFile } from 'data-explorer-core';
 import { toArrayBuffer } from '../src/common/bytes.js';
 import { mapLimited } from '../src/host/mapLimited.js';
-import { scanSldd } from '../src/host/slddContent.js';
+import { scanSldd } from '../src/view/model/workspace/slddContent.js';
 import { extractSlxStructure } from '../src/host/slxStructure.js';
-import { RelGraph, type GraphNode, type GraphSource } from '../src/host/graphModel.js';
+import { RelGraph, type GraphNode, type GraphSource } from '../src/view/model/hierarchy/graphModel.js';
 import {
   buildGraphSource,
   graphSourcesOf,

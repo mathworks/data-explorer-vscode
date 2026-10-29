@@ -9,9 +9,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dropDecision, isNoopMove, rejectReason } from '../src/webview/dropDecision.js';
-import { getModel, invalidate } from '../src/host/SlddModel.js';
-import { sectionRules } from '../src/host/sectionRules.js';
+import { dropDecision, isNoopMove, rejectReason } from '../src/view/model/actions/dropDecision.js';
+import { getModel, invalidate } from '../src/view/model/workspace/SlddModel.js';
+import { sectionRules } from '../src/view/model/actions/sectionRules.js';
 
 // Allow-lists mirror SectionNode.ALLOWED_TYPES (only the classes these tests use).
 // 'MatlabVariable' and 'Constant' are in the real lists too, and they matter here:

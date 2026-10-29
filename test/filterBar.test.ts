@@ -1,9 +1,9 @@
 // Copyright 2026 The MathWorks, Inc.
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach } from 'vitest';
-import '../src/webview/components/dex-filter-bar.js';
-import type { DexFilterBar } from '../src/webview/components/dex-filter-bar.js';
-import { parseFilterExpression } from '../src/webview/rowFilter.js';
+import '../src/view/widgets/tree-table/dex-filter-bar.js';
+import type { DexFilterBar } from '../src/view/widgets/tree-table/dex-filter-bar.js';
+import { parseFilterExpression } from '../src/view/model/filter/rowFilter.js';
 
 const COLUMNS = ['Name', 'Value', 'DataType'];
 const VOCAB = { labels: { Name: 'Name', Value: 'Value', DataType: 'Data Type' }, keys: COLUMNS };

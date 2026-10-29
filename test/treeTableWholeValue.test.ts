@@ -9,7 +9,7 @@
 // text is one long line; committed unchanged it posts nothing, and changed it posts the whole text.
 // Before, such a Value took no editor, and a row whose value had been saved long was locked.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import { DexTreeTable, type TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

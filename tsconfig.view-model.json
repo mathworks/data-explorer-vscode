@@ -1,0 +1,8 @@
+// The view model must compile where there is no DOM and no Node: a worker's lib, nothing more.
+// `vscode` is listed only for the global `Thenable` it declares, which postPayload.ts names; it
+// declares no DOM, and importing the `vscode` module itself is refused by check-view-boundary.mjs.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "lib": ["ES2022", "WebWorker"], "types": ["vscode"], "noEmit": true },
+  "include": ["src/view/model/**/*.ts"]
+}

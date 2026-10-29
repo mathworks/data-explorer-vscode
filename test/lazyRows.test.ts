@@ -11,10 +11,10 @@
 // visible in a row.
 import { describe, it, expect } from 'vitest';
 import { DataModel } from 'data-explorer-core';
-import { levelsThatFit, planRows, stampLazy, lazyRowsBanner, LAZY_ROW_BUDGET } from '../src/host/lazyRows.js';
-import { buildMatRowsPlanned, buildMatRows } from '../src/host/matRowBuilder.js';
-import { childRowsMessage, answerChildRequest } from '../src/host/childRequest.js';
-import { rowPlannerFor } from '../src/host/rowPlanner.js';
+import { levelsThatFit, planRows, stampLazy, lazyRowsBanner, LAZY_ROW_BUDGET } from '../src/view/model/rows/lazyRows.js';
+import { buildMatRowsPlanned, buildMatRows } from '../src/view/model/rows/matRowBuilder.js';
+import { childRowsMessage, answerChildRequest } from '../src/view/model/rows/childRequest.js';
+import { rowPlannerFor } from '../src/view/model/rows/rowPlanner.js';
 
 // The REAL planner for the file these tests are about, not a stub: the thing under test
 // in the fetch half is that the rows a fetch returns are the rows the payload would have

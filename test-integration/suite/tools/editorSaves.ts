@@ -9,7 +9,7 @@ import { readFileSync } from 'fs';
 import { DataModel, createSession, ingest } from 'data-explorer-core';
 import { SlddTextEditorProvider } from '../../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../../src/host/BinarySlddEditorProvider';
-import { peekModel } from '../../../src/host/SlddModel';
+import { peekModel } from '../../../src/view/model/workspace/SlddModel';
 import { addChildToModel, findOwningEntry, removeChildFromModel } from '../../../src/host/structuralEdit';
 import { ctx, fakePanel, quiet, token, waitFor } from './hostHarness';
 

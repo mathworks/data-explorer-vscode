@@ -51,16 +51,16 @@ const read = (rel: string): string =>
 // REPLACES some of global.css's values and adds none of its own names — a token declared
 // only in the theme file would be undeclared in a webview whose theme file never loaded.
 const DECLARED = new Set(
-  [read('../src/webview/components/styles/global.css'), read('../src/webview/vscode-theme.css')]
+  [read('../src/view/theme/global.css'), read('../src/webview/vscode-theme.css')]
     .flatMap((css) => [...css.matchAll(/(--dex-[a-z0-9-]+)\s*:/g)].map((m) => m[1])),
 );
 
 // The Variable Editor: the floating panel, the grid inside it, and the glyph in the table
 // that opens it. One feature, three files, one invented token family between them.
 const FILES = {
-  'dex-variable-editor.ts': read('../src/webview/components/dex-variable-editor.ts'),
-  'dex-matrix-grid.ts': read('../src/webview/components/dex-matrix-grid.ts'),
-  'dex-matrix-open.ts': read('../src/webview/components/dex-matrix-open.ts'),
+  'dex-variable-editor.ts': read('../src/view/widgets/variable-editor/dex-variable-editor.ts'),
+  'dex-matrix-grid.ts': read('../src/view/widgets/variable-editor/dex-matrix-grid.ts'),
+  'dex-matrix-open.ts': read('../src/view/widgets/shared/dex-matrix-open.ts'),
 };
 
 // Tokens this feature reads that NOTHING declares on purpose. Every one is a LENGTH, and

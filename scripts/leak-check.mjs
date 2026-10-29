@@ -49,7 +49,7 @@ process.exit(failed ? 1 : 0);
 //
 // Case-SENSITIVE, deliberately. Adding -i looks strictly safer and is not: `ipws` is
 // four characters and turns up inside ordinary camelCase, so -i flags every call to
-// `skipWs()` in src/webview/rowFilter.ts. A check that cries wolf on correct code gets
+// `skipWs()` in src/view/model/filter/rowFilter.ts. A check that cries wolf on correct code gets
 // muted, and a muted check guards nothing. The cost is that a shouted `GITLAB` would
 // pass; the needles are lowercase everywhere they legitimately occur.
 function checkNeedles() {

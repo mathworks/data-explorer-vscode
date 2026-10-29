@@ -19,9 +19,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { getModelFromBytes, invalidate } from '../src/host/SlddModel.js';
-import { matrixPayload } from '../src/host/matrixPayload.js';
-import { DexMatrixGrid } from '../src/webview/components/dex-matrix-grid.js';
+import { getModelFromBytes, invalidate } from '../src/view/model/workspace/SlddModel.js';
+import { matrixPayload } from '../src/view/model/matrix/matrixPayload.js';
+import { DexMatrixGrid } from '../src/view/widgets/variable-editor/dex-matrix-grid.js';
 
 // import.meta.dirname, not a URL relative to import.meta.url: under happy-dom
 // that resolves against a document base rather than the file, and every read
