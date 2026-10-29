@@ -40,6 +40,17 @@ function send(data: any): void {
 }
 
 /**
+ * The table asks about `nodeId`, as a click on its twisty does, and the host answers with
+ * `answer`; resolves once the table has taken it. An answer is matched to the question it
+ * answers (view's messageSource), so a test of the answer asks first, as the shipped table does.
+ */
+async function answer(nodeId: string, answer: any): Promise<void> {
+  table.dispatchEvent(new CustomEvent('dex-request-children', { detail: { nodeId } }));
+  send({ type: 'childRows', nodeId, ...answer });
+  await new Promise((done) => setTimeout(done, 0));
+}
+
+/**
  * A planned payload: one section, one entry whose children were held back.
  *
  * `_lazy` on `A` is the whole premise — the host stamped it because its children did not
@@ -98,49 +109,49 @@ describe('opening a deferred row asks the host about it', () => {
 });
 
 describe('an answer that fit', () => {
-  it('puts the children straight after their parent and unmarks it', () => {
-    send({ type: 'childRows', nodeId: 'A', rows: kids, truncated: 0 });
+  it('puts the children straight after their parent and unmarks it', async () => {
+    await answer('A', { rows: kids, truncated: 0 });
     expect(idsOf()).toEqual(['section:design', 'A', 'A.k0', 'A.k1', 'B']);
     // Unmarked, so the next expand of this row costs no round trip.
     expect(rowOf('A')._lazy).toBeUndefined();
   });
 
-  it('leaves the rest of the table alone — this is a merge, not a payload', () => {
+  it('leaves the rest of the table alone — this is a merge, not a payload', async () => {
     // Deliberately NOT routed through the `setRows` path: that one clears the error,
     // closes an open matrix grid and re-derives the columns. The user opened one row.
-    send({ type: 'childRows', nodeId: 'A', rows: kids, truncated: 0 });
+    await answer('A', { rows: kids, truncated: 0 });
     expect(rowOf('B')).toEqual({ ID: 'B', parent: 'section:design', Name: { label: 'B' } });
     expect(table.columns).toEqual(['Name', 'Value']);
   });
 
-  it('says nothing to the user, because nothing was lost', () => {
-    send({ type: 'childRows', nodeId: 'A', rows: kids, truncated: 0 });
+  it('says nothing to the user, because nothing was lost', async () => {
+    await answer('A', { rows: kids, truncated: 0 });
     expect(errorBanner().style.display).toBe('none');
   });
 
-  it('takes an empty answer as "no children after all"', () => {
-    send({ type: 'childRows', nodeId: 'A', rows: [], truncated: 0 });
+  it('takes an empty answer as "no children after all"', async () => {
+    await answer('A', { rows: [], truncated: 0 });
     expect(idsOf()).toEqual(['section:design', 'A', 'B']);
     expect(errorBanner().style.display).toBe('none');
   });
 });
 
 describe('an answer the host could not fit', () => {
-  it('names the rows that are not there, because they have no twisty to offer', () => {
+  it('names the rows that are not there, because they have no twisty to offer', async () => {
     // The one loss a fetch can still inflict: a node with more direct children than a
     // whole delivery holds (core builds a cell's children uncapped). The payload's own
     // banner cannot say this — it was composed before the user opened anything — so the
     // answer carries the count and it is said here, in the strip, where a message is not
     // painted over by the full-bleed table.
-    send({ type: 'childRows', nodeId: 'A', rows: kids, truncated: 143257 });
+    await answer('A', { rows: kids, truncated: 143257 });
     expect(errorBanner().style.display).toBe('block');
     expect(errorBanner().textContent).toContain('143,257');
     // And the rows that DID come are still merged: a partial answer is worth having.
     expect(idsOf()).toEqual(['section:design', 'A', 'A.k0', 'A.k1', 'B']);
   });
 
-  it('clears on the next payload, so it cannot outlive the view it describes', () => {
-    send({ type: 'childRows', nodeId: 'A', rows: kids, truncated: 7 });
+  it('clears on the next payload, so it cannot outlive the view it describes', async () => {
+    await answer('A', { rows: kids, truncated: 7 });
     expect(errorBanner().style.display).toBe('block');
     paint();
     expect(errorBanner().style.display).toBe('none');
@@ -148,18 +159,18 @@ describe('an answer the host could not fit', () => {
 });
 
 describe('an answer the table has stopped waiting for', () => {
-  it('drops an answer about a row that is no longer here', () => {
+  it('drops an answer about a row that is no longer here', async () => {
     // A repaint rebuilt the tree while the fetch was in flight. Appending the orphans
     // would put rows under a parent the table does not have — which the tree walk reads
     // as top-level, so they would render alongside the sections.
-    send({ type: 'childRows', nodeId: 'gone', rows: kids, truncated: 0 });
+    await answer('gone', { rows: kids, truncated: 0 });
     expect(idsOf()).toEqual(['section:design', 'A', 'B']);
   });
 
-  it('says nothing about a truncation the user cannot see either', () => {
+  it('says nothing about a truncation the user cannot see either', async () => {
     // The count describes rows under a row that is no longer in the table, so a banner
     // about it would name something the user has no way to look at.
-    send({ type: 'childRows', nodeId: 'gone', rows: kids, truncated: 500 });
+    await answer('gone', { rows: kids, truncated: 500 });
     expect(errorBanner().style.display).toBe('none');
   });
 });

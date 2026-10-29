@@ -78,8 +78,8 @@ describe('the prefix is defined once', () => {
 });
 
 describe('both readers of a srcId come through it', () => {
-  // navigate.ts imports vscode, so vitest cannot call it; linkRoute is covered behaviourally
-  // in linkRoute.test.ts. These pin the wiring in the cheap suite — the bug was not a wrong
+  // navigate.ts imports vscode, so vitest cannot call it; the table's link rule (view's
+  // localLinkName, which connectTable applies) is covered behaviourally in linkRoute.test.ts. These pin the wiring in the cheap suite — the bug was not a wrong
   // rule, it was a rule that two call sites did not use.
   const read = (rel: string): string =>
     blankCommentsAndKeepLines(readFileSync(join(SRC, rel), 'utf8'));
@@ -88,7 +88,7 @@ describe('both readers of a srcId come through it', () => {
     expect(read('host/navigate.ts')).toMatch(/srcIdToUriString\(/);
   });
 
-  it('linkRoute.ts compares through it', () => {
-    expect(read('webview/linkRoute.ts')).toMatch(/srcIdToUriString\(/);
+  it("the table's link rule (view's localLinkName) compares through it", () => {
+    expect(read('../node_modules/data-explorer-view/dist/model/ids/linkTarget.js')).toMatch(/srcIdToUriString\(/);
   });
 });
