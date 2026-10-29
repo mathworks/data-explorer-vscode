@@ -10,13 +10,16 @@
 // all zeros. Positioning tests therefore stub the rects they care about, which
 // is enough to pin the ARITHMETIC — the only part this file owns.
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { DexVariableEditor } from 'data-explorer-view/widgets/variable-editor/dex-variable-editor.js';
+import { DexVariableEditor, defineVariableEditor } from 'data-explorer-view/widgets/variable-editor/dex-variable-editor.js';
 import type { MatrixCellsAnswer } from 'data-explorer-view/widgets/variable-editor/dex-variable-editor.js';
 import type { MatrixCellsMessage } from '../src/common/protocol.js';
 import type { MatrixDescriptor, MatrixPayload } from 'data-explorer-view/widgets/variable-editor/dex-matrix-grid.js';
 import { DexMatrixGrid } from 'data-explorer-view/widgets/variable-editor/dex-matrix-grid.js';
-import { DexMatrixOpen } from 'data-explorer-view/widgets/shared/dex-matrix-open.js';
+import { DexMatrixOpen, defineMatrixOpen } from 'data-explorer-view/widgets/shared/dex-matrix-open.js';
 import { installMatrixOpen } from '../src/webview/matrixOpen.js';
+
+defineVariableEditor();
+defineMatrixOpen();
 
 const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 

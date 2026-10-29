@@ -36,7 +36,9 @@ import {
 import { parseNavTarget } from '../src/host/navTarget.js';
 import { getModelFromBytes } from 'data-explorer-view/model/workspace/SlddModel.js';
 import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
-import { DexTreeTable, type TreeTableRow } from 'data-explorer-view/widgets/tree-table/dex-tree-table.js';
+import { DexTreeTable, defineTreeTable, type TreeTableRow } from 'data-explorer-view/widgets/tree-table/dex-tree-table.js';
+
+defineTreeTable();
 
 // import.meta.dirname, not a URL against import.meta.url: under happy-dom that resolves
 // against a document base rather than the file (same trap as usageEndToEnd.test.ts).

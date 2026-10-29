@@ -9,7 +9,9 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { DexIcon } from 'data-explorer-view/widgets/shared/dex-icon.js';
+import { DexIcon, defineIcon } from 'data-explorer-view/widgets/shared/dex-icon.js';
+
+defineIcon();
 
 let icon: DexIcon | null = null;
 

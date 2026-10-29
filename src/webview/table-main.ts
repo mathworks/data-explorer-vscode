@@ -1,10 +1,10 @@
 // Copyright 2026 The MathWorks, Inc.
 import 'data-explorer-view/theme/global.css';
 import './vscode-theme.css';
-import 'data-explorer-view/widgets/tree-table/dex-tree-table.js';
-import 'data-explorer-view/widgets/context-menu/dex-context-menu.js';
-import 'data-explorer-view/widgets/error-dialog/dex-error-dialog.js';
-import 'data-explorer-view/widgets/variable-editor/dex-variable-editor.js';
+import { defineTreeTable } from 'data-explorer-view/widgets/tree-table/dex-tree-table.js';
+import { defineContextMenu } from 'data-explorer-view/widgets/context-menu/dex-context-menu.js';
+import { defineErrorDialog } from 'data-explorer-view/widgets/error-dialog/dex-error-dialog.js';
+import { defineVariableEditor } from 'data-explorer-view/widgets/variable-editor/dex-variable-editor.js';
 import { installMatrixOpen } from './matrixOpen.js';
 import { renderBanners, renderError } from './banners.js';
 import {
@@ -24,6 +24,13 @@ import type { SectionRule } from 'data-explorer-view/model/actions/sectionRules.
 import type { DragDescriptor } from '../host/dragState.js';
 import { isSectionRowId, sectionNameFromRowId, WHOLE_FILE_SECTION } from 'data-explorer-view/model/ids/sectionRowId.js';
 import type { HostToTableMessage } from '../common/protocol.js';
+
+// Importing a widget no longer registers it, so this comes first: before the shell's table is
+// looked up and before any overlay is created, each finds its element already defined.
+defineTreeTable();
+defineContextMenu();
+defineErrorDialog();
+defineVariableEditor();
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
 const vscode = acquireVsCodeApi();

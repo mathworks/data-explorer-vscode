@@ -1,10 +1,15 @@
 // Copyright 2026 The MathWorks, Inc.
 import 'data-explorer-view/theme/global.css';
 import './vscode-theme.css';
-import 'data-explorer-view/widgets/property-inspector/dex-property-inspector.js';
-import 'data-explorer-view/widgets/variable-editor/dex-variable-editor.js';
+import { definePropertyInspector } from 'data-explorer-view/widgets/property-inspector/dex-property-inspector.js';
+import { defineVariableEditor } from 'data-explorer-view/widgets/variable-editor/dex-variable-editor.js';
 import { installMatrixOpen } from './matrixOpen.js';
 import type { HostToPropsMessage } from '../common/protocol.js';
+
+// Importing a widget no longer registers it, so this comes first: before the shell's inspector
+// is looked up and before the Variable Editor is created.
+definePropertyInspector();
+defineVariableEditor();
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
 const vscode = acquireVsCodeApi();
