@@ -5,9 +5,15 @@
 # packaged version comes from the tag (v1.0.1 -> 1.0.1) and must match the
 # version in package.json.
 #
+# An odd minor version (1.47.x) is a Marketplace pre-release and an even one
+# (1.48.x) a stable release, the way VS Code numbers its own: for an odd minor
+# the .vsix is packaged with --pre-release and the GitHub Release is marked as
+# a pre-release too.
+#
 # Marketplace publishing is intentionally manual (download the Release .vsix
-# and run `npx vsce publish --packagePath <vsix>`); this workflow only builds
-# and publishes the GitHub Release.
+# and run `npx vsce publish --packagePath <vsix>`, or for an odd minor
+# `npx vsce publish --pre-release --packagePath <vsix>`); this workflow only
+# builds and publishes the GitHub Release.
 name: Release
 
 on:
@@ -44,7 +50,10 @@ jobs:
 
       # Package the version already declared in package.json (no bump). Fail
       # early if the pushed tag doesn't match it, so releases stay consistent.
+      # An odd minor is packaged as a pre-release; the `prerelease` output
+      # marks the GitHub Release to match.
       - name: Package VSIX
+        id: package
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           PKG_VERSION="$(node -p "require('./package.json').version")"
@@ -52,7 +61,14 @@ jobs:
             echo "Tag $GITHUB_REF_NAME (=$VERSION) does not match package.json version $PKG_VERSION" >&2
             exit 1
           fi
-          npx vsce package --out "simulink-data-explorer-${VERSION}.vsix"
+          MINOR="$(echo "$VERSION" | cut -d. -f2)"
+          if [ $((MINOR % 2)) -eq 1 ]; then
+            npx vsce package --pre-release --out "simulink-data-explorer-${VERSION}.vsix"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            npx vsce package --out "simulink-data-explorer-${VERSION}.vsix"
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # Attach a checksum so a download can be checked with
       # `sha256sum -c SHA256SUMS`. This catches a corrupted or truncated
@@ -71,7 +87,10 @@ jobs:
             simulink-data-explorer-*.vsix
             SHA256SUMS
           generate_release_notes: true
+          prerelease: ${{ steps.package.outputs.prerelease }}
 
       # Publishing to the VS Code Marketplace is done manually: download the
       # .vsix attached to the GitHub Release (or build it locally with
       # `npm run package`) and run `npx vsce publish --packagePath <vsix>`.
+      # For an odd minor, a pre-release, run
+      # `npx vsce publish --pre-release --packagePath <vsix>` instead.
