@@ -15,7 +15,6 @@
 // happen when the row lands. The failure if it is not held is silent: the entry is created
 // and selected, the editor never opens, and the user is left renaming it by hand.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
-import '../src/webview/components/dex-add-gallery.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -32,13 +31,14 @@ describe('the Add gallery, wired through the webview entry point', () => {
   let table: any;
   let posted: any[];
 
+  // Its own timeout: a cold import of the whole table-main webview is what a loaded machine stretches.
   beforeAll(async () => {
     posted = [];
     (globalThis as any).acquireVsCodeApi = () => ({ postMessage: (m: any) => posted.push(m) });
     document.body.innerHTML = '<dex-tree-table></dex-tree-table>';
     await import('../src/webview/table-main.js');
     table = document.querySelector('dex-tree-table');
-  });
+  }, 60_000);
 
   beforeEach(() => {
     posted.length = 0;
@@ -60,8 +60,8 @@ describe('the Add gallery, wired through the webview entry point', () => {
       }),
     );
     // One table serves the whole file (the module body wires window listeners once), so an
-    // editor left open by the previous case would read as this case's answer. A setRows does
-    // not close it in production either — see the Observations note in the spec.
+    // editor left open by the previous case would read as this case's answer. A setRows closes
+    // it only when its row or column is gone (ruling V-037), and these rows are the same ones.
     table._editingCell = null;
     await table.updateComplete;
     posted.length = 0;
@@ -214,6 +214,40 @@ describe('the Add gallery, wired through the webview entry point', () => {
       expect(editingCell()).toBeNull();
     });
 
+    it('a whole repaint that drops the renamed row closes its editor; one that keeps it does not', async () => {
+      // Ruling V-037 (b), through the shipped setRows handler. The entry being renamed is
+      // undone, or deleted from the text view, and the repaint no longer carries it: the
+      // editor closes rather than stay open over a row that is not there, which left the
+      // table deaf to the keyboard.
+      await paint(true);
+      send({ type: 'beginRename', rowId: 'doc/design/gain' });
+      await table.updateComplete;
+      expect(editingCell()).toMatchObject({ rowId: 'doc/design/gain', columnId: 'Name' });
+
+      const withoutGain = rowsOf().filter((r) => r.ID !== 'doc/design/gain');
+      send({
+        type: 'setRows',
+        docUri: 'file:///fx/d.sldd',
+        rows: withoutGain,
+        columns: ['Name', 'Value'],
+        editable: true,
+      });
+      await table.updateComplete;
+      expect(editingCell()).toBeNull();
+      expect(editorInput()).toBeNull();
+
+      // The background repaint (a save) carries the row again: the editor stays open.
+      await paint(true);
+      send({ type: 'beginRename', rowId: 'doc/design/gain' });
+      await table.updateComplete;
+      const input = editorInput()!;
+      input.value = 'gainTyped';
+      send({ type: 'setRows', docUri: 'file:///fx/d.sldd', rows: rowsOf(), columns: ['Name', 'Value'], editable: true });
+      await table.updateComplete;
+      expect(editingCell()).toMatchObject({ rowId: 'doc/design/gain', columnId: 'Name' });
+      expect(editorInput()?.value).toBe('gainTyped');
+    });
+
     it('opens nothing for a row the table does not hold a renameable name for', async () => {
       // The component decides, through the same `_cellEditTarget` a double-click goes
       // through: a section header has no editable Name, so there is no editor to open and no
@@ -235,6 +269,80 @@ describe('the Add gallery, wired through the webview entry point', () => {
       send({ type: 'insertEntryRows', sectionRowId: SECTION_ROW, rows: [] });
       await table.updateComplete;
       expect(editingCell()).toBeNull();
+    });
+  });
+
+  // Ruling V-038, option (b): closing a pinned gallery does NOT select the run it added. Each
+  // add selects its own new entry, so the last one is what stays selected, and closing changes
+  // nothing. The reasons are in addGallery.test.ts ('the pin promises only what it does').
+  // This passes before and after the ruling. It is here so that building the run selection
+  // later is a deliberate change to this test, and not a tooltip and a behaviour that drift
+  // apart again.
+  describe('closing a pinned run', () => {
+    const popover = () => table.shadowRoot.querySelector('dex-add-gallery') as any;
+    const tileOf = (g: any, className: string) =>
+      [...g.shadowRoot.querySelectorAll('.tile')].find((t: any) => t.dataset.className === className) as HTMLElement;
+    const added = (name: string) => ({
+      ID: `doc/design/${name}`,
+      parent: SECTION_ROW,
+      Name: { label: name, editable: true },
+      Value: '0',
+    });
+
+    const closers: [string, (g: any) => void][] = [
+      [
+        'the popover’s Escape',
+        (g) =>
+          tileOf(g, 'Simulink.Parameter').dispatchEvent(
+            new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true, cancelable: true }),
+          ),
+      ],
+      ['the Add button', () => (table.shadowRoot.querySelector('.add-button') as HTMLElement).click()],
+      ['the accelerator', () => send({ type: 'openAddGallery' })],
+    ];
+
+    it.each(closers)('leaves the last entry selected, closed by %s, and opens no editor', async (_, close) => {
+      await paint(true);
+      table.selectedRowIds = [];
+      (table.shadowRoot.querySelector('.add-button') as HTMLElement).click();
+      await table.updateComplete;
+      const g = popover();
+      await g.updateComplete;
+      const pin = g.shadowRoot.querySelector('.gallery-pin input') as HTMLInputElement;
+      pin.checked = true;
+      pin.dispatchEvent(new Event('change', { bubbles: true }));
+      await table.updateComplete;
+      try {
+        // Two tile clicks, each answered as both hosts answer an add: the new entry's rows,
+        // then `selectRows` naming that one entry. No `beginRename`, because a pinned add
+        // asks for none.
+        const run = [added('Param'), added('Param1')];
+        for (const row of run) {
+          tileOf(g, 'Simulink.Parameter').click();
+          send({ type: 'insertEntryRows', sectionRowId: SECTION_ROW, rows: [row] });
+          send({ type: 'selectRows', rowIds: [row.ID] });
+          await table.updateComplete;
+        }
+        expect(addsOf().map((m) => m.rename)).toEqual([false, false]);
+        expect(popover()).not.toBeNull();
+        expect(table.selectedRowIds).toEqual(['doc/design/Param1']);
+
+        const before = posted.length;
+        close(g);
+        await table.updateComplete;
+        expect(popover()).toBeNull();
+        // The run is not selected: only the entry the last add selected is.
+        expect(table.selectedRowIds).toEqual(['doc/design/Param1']);
+        expect(table._editingCell ?? null).toBeNull();
+        // And the host is told of no new selection, so the Property Inspector stays put.
+        expect(posted.slice(before).filter((m) => m.type === 'select')).toEqual([]);
+      } finally {
+        // One table serves the whole file, and the pin outlives a close by design. Leave the
+        // next case an unpinned, closed gallery, even when this one failed partway.
+        table._addPinned = false;
+        if (popover()) table.toggleAddGallery();
+        await table.updateComplete;
+      }
     });
   });
 });

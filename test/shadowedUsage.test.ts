@@ -37,9 +37,11 @@ import {
   buildUsageGraph,
   type RawSource,
 } from '../src/host/usageCells.js';
-import { getModel, getModelFromBytes } from '../src/host/SlddModel.js';
-import { buildRows } from '../src/host/rowBuilder.js';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import { buildRows } from 'data-explorer-view/model';
+import { getModel, getModelFromBytes } from 'data-explorer-view/host';
+import { DexTreeTable, defineTreeTable, type TreeTableRow } from 'data-explorer-view/tree-table';
+
+defineTreeTable();
 
 // import.meta.dirname, not a URL against import.meta.url: under happy-dom that resolves
 // against a document base rather than the file (same trap as usageEndToEnd.test.ts).

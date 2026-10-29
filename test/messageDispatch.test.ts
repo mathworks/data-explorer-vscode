@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 //
-// One table UI, three editors behind it, and the same sixteen messages dispatched three
+// One table UI, four editors behind it, and the same sixteen messages dispatched four
 // times.
 //
 // `TableToHostMessage` is the whole vocabulary the webview can speak. Every custom
@@ -9,7 +9,8 @@
 //
 //   SlddTextEditorProvider    a JSON `.sldd`, editable, backed by a TextDocument
 //   BinarySlddEditorProvider  a compressed-binary `.sldd`, editable, no text at all
-//   BinaryEditorProvider      `.slx` / `.mdl` / `.mat` / `.prj`, read-only
+//   MatEditorProvider         a `.mat`, editable, the document is core's tree
+//   BinaryEditorProvider      `.slx` / `.mdl` / `.prj`, read-only
 //
 // BinaryEditorProvider serves TWO webviews, because `.prj` shows a main page instead of a
 // table (see core's ProjectPage.ts): one dispatch chain, two vocabularies. So a provider's
@@ -34,6 +35,12 @@
 // listed here, so it cannot be quietly wrong: making the read-only viewer editable means
 // changing `CustomReadonlyEditorProvider` to `CustomEditorProvider`, and that alone makes
 // this file demand all twelve editing messages of it.
+//
+// What a provider answers is its chain's branches AND the keys of its table of the messages
+// every view answers alike (`const common: CommonHandlers = { … }`, dispatched by
+// tableDispatch.dispatchCommon): a key of that table is a message type, by the interface's
+// own definition, so the table says what it answers as plainly as a branch does. The two are
+// read together, and held to never answering one message twice.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -44,8 +51,11 @@ const read = (p: string) => blankCommentsAndKeepLines(readFileSync(fileURLToPath
 // ── the vocabulary ────────────────────────────────────────────────────────────────
 // Taken from the union rather than restated, so the two cannot disagree. `UndoRedoMessage`
 // is the reason this reads discriminants and not interface names: one interface carries
-// two of them (`'undo' | 'redo'`), and it is the message TYPE a chain branches on.
-const protocol = read('src/common/protocol.ts');
+// two of them (`'undo' | 'redo'`), and it is the message TYPE a chain branches on. The read
+// half of the protocol (ready, select, requestChildren, requestMatrix, …) is declared by view,
+// whose wire format protocol.ts imports, so its declarations are read from the view this
+// extension ships, beside protocol.ts's own.
+const protocol = `${read('src/common/protocol.ts')}\n${read('node_modules/data-explorer-view/dist/model/source/wire.d.ts')}`;
 
 function discriminantsOf(unionName: string): string[] {
   const union = new RegExp(`export type ${unionName} =([\\s\\S]*?);`).exec(protocol);
@@ -83,8 +93,10 @@ const ALWAYS = ['ready', 'select', 'navigate', 'requestMatrix'];
 
 // Everything that MUTATES the document. A read-only editor never receives these because
 // the webview is told it is read-only and does not offer the gestures; an EDITABLE one
-// has no excuse, and this is the list that had to be implemented twice — once against a
-// TextDocument's edits, once against a re-zipped archive.
+// has no excuse, and this is the list that had to be implemented three times — against a
+// TextDocument's edits, a re-zipped archive, and a MAT-file's tree. An editable view may
+// still decline one, but it has to say so: a branch that answers, not a message that lands
+// and does nothing.
 const EDITING = [
   'edit',
   'delete',
@@ -98,6 +110,9 @@ const EDITING = [
   'dragEnd',
   'undo',
   'redo',
+  // Not a mutation, but asked only as an editor opens, which only an editable view offers: the
+  // whole text of a Value shown as a summary, which seeds that editor.
+  'requestEditText',
 ];
 
 // Reveal a range in the underlying text. Only meaningful for the one provider whose
@@ -130,12 +145,65 @@ interface Provider {
   rendersPage: boolean;
   /** Whether its payload is planned to a row budget, and so can defer a row's children. */
   defersRows: boolean;
+  /** The message types its own chain branches on. */
+  branches: Set<string>;
+  /** The keys of its CommonHandlers table, or null where it has none (and dispatches them itself). */
+  table: Set<string> | null;
+  /** Whether its handler hands each message to that table first (`dispatchCommon(msg, common)`). */
+  dispatchesTable: boolean;
+  /** Everything it answers: its branches and its table's keys. */
   handled: Set<string>;
+}
+
+/**
+ * The keys of the object literal, or interface body, that starts at `open` (a `{`): the
+ * identifiers at its top level followed by `:` or `(`, optionally after `?` (a property or a
+ * method, required or not), read by brace matching. Comments are blanked by `read`, and strings in
+ * the handlers hold no unbalanced brace.
+ */
+function literalKeys(source: string, open: number): Set<string> {
+  const keys = new Set<string>();
+  let depth = 0;
+  let expectKey = false;
+  for (let i = open; i < source.length; i++) {
+    const c = source[i];
+    if (c === '{' || c === '(' || c === '[') {
+      depth++;
+      if (depth === 1) expectKey = true;
+      continue;
+    }
+    if (c === '}' || c === ')' || c === ']') {
+      if (--depth === 0) break;
+      continue;
+    }
+    if (depth !== 1) continue;
+    if (c === ',' || c === ';') {
+      expectKey = true;
+      continue;
+    }
+    if (expectKey && /[A-Za-z_$]/.test(c)) {
+      const key = /^[A-Za-z_$][\w$]*/.exec(source.slice(i))![0];
+      const after = source.slice(i + key.length).trimStart().replace(/^\?/, '')[0];
+      if (after === ':' || after === '(') keys.add(key);
+      expectKey = false;
+      i += key.length - 1;
+      continue;
+    }
+    if (!/\s/.test(c)) expectKey = false;
+  }
+  return keys;
+}
+
+/** The keys of a provider's `const common: CommonHandlers = { … }`, or null where it has none. */
+function tableOf(source: string): Set<string> | null {
+  const at = /const common: CommonHandlers = \{/.exec(source);
+  return at ? literalKeys(source, at.index + at[0].length - 1) : null;
 }
 
 const PROVIDERS: Provider[] = [
   'src/host/SlddTextEditorProvider.ts',
   'src/host/BinarySlddEditorProvider.ts',
+  'src/host/MatEditorProvider.ts',
   'src/host/BinaryEditorProvider.ts',
 ].map((file) => {
   const source = read(file);
@@ -154,9 +222,28 @@ const PROVIDERS: Provider[] = [
     // rule the payload was built with — the branch it replaced named one builder, and
     // was true of exactly the one format that had been planned so far.
     defersRows: /rowPlannerFor\(/.test(source),
-    handled: new Set([...source.matchAll(/msg\??\.type\s*===\s*'([^']+)'/g)].map((m) => m[1])),
+    ...answered(source),
   };
 });
+
+function answered(source: string): Pick<Provider, 'branches' | 'table' | 'dispatchesTable' | 'handled'> {
+  const branches = new Set([...source.matchAll(/msg\??\.type\s*===\s*'([^']+)'/g)].map((m) => m[1]));
+  const table = tableOf(source);
+  return {
+    branches,
+    table,
+    dispatchesTable: /dispatchCommon\(msg, common\)/.test(source),
+    handled: new Set([...branches, ...(table ?? [])]),
+  };
+}
+
+// The helper every table provider hands the shared messages to, and the type of its table.
+const DISPATCH = read('src/host/tableDispatch.ts');
+const TABLE_KEYS = (() => {
+  const at = /export interface CommonHandlers \{/.exec(DISPATCH);
+  expect(at, 'tableDispatch.ts still declares CommonHandlers').toBeTruthy();
+  return literalKeys(DISPATCH, at!.index + at![0].length - 1);
+})();
 
 // `CustomReadonlyEditorProvider` is the vscode contract for a document that cannot be
 // edited — the type itself has no `saveCustomDocument`. Anything else is editable.
@@ -172,8 +259,35 @@ describe('the message vocabulary and the editors that speak it are both still he
     expect(VOCABULARY).toContain('redo');
   });
 
-  it('finds all three dispatch chains, one per contract', () => {
+  it('reads the shared table: its keys are message types, and the helper dispatches each', () => {
+    // A key that is not a message type would be a handler no message can reach, and a key the
+    // helper has no case for would be read here as answered while nothing answers it.
+    expect([...TABLE_KEYS].sort()).toEqual(['navigate', 'ready', 'redo', 'requestChildren', 'requestEditText', 'requestMatrix', 'select', 'undo']);
+    for (const key of TABLE_KEYS) {
+      expect(VOCABULARY, `${key} is a message type`).toContain(key);
+      expect(DISPATCH, `dispatchCommon has a case for ${key}`).toMatch(new RegExp(`case '${key}':`));
+    }
+  });
+
+  it('finds every provider handing the shared messages to its table, and answering none twice', () => {
+    const tabled = PROVIDERS.filter((p) => p.table);
+    // Every table provider: none spells the shared messages out in a chain of its own any more.
+    expect(tabled.map((p) => p.file).sort()).toEqual([
+      'BinaryEditorProvider.ts',
+      'BinarySlddEditorProvider.ts',
+      'MatEditorProvider.ts',
+      'SlddTextEditorProvider.ts',
+    ]);
+    for (const p of tabled) {
+      expect(p.dispatchesTable, `${p.file} hands each message to its table`).toBe(true);
+      const twice = [...p.table!].filter((t) => p.branches.has(t));
+      expect(twice, `${p.file} answers ${twice.join(', ')} in its table and its chain`).toEqual([]);
+    }
+  });
+
+  it('finds all four dispatch chains, and every contract among them', () => {
     expect(PROVIDERS.map((p) => p.contract).sort()).toEqual([
+      'CustomEditorProvider',
       'CustomEditorProvider',
       'CustomReadonlyEditorProvider',
       'CustomTextEditorProvider',
@@ -266,7 +380,7 @@ describe('each editor answers everything its contract makes meaningful', () => {
 });
 
 describe('every setRows says which document it is describing', () => {
-  // The webview answers a link into its own document itself (webview/linkRoute.ts), which
+  // The webview answers a link into its own document itself (view's connectTable, by localLinkName), which
   // it can only do if it knows which document that is. `webview.postMessage` takes `any`,
   // so omitting the field at one of these call sites is not a type error, and the symptom
   // is silent: that one view's local links take the host round-trip instead. Three posts
@@ -296,9 +410,9 @@ describe('every setRows says which document it is describing', () => {
   };
   const posts = PROVIDERS.map((p) => ({ file: p.file, bodies: payloadsOf(read(`src/host/${p.file}`)) }));
 
-  it('finds all three posts, so none of them is missed below', () => {
+  it('finds all four posts, so none of them is missed below', () => {
     // A regex that matched nothing would make the loop vacuous.
-    expect(posts.reduce((n, p) => n + p.bodies.length, 0)).toBe(3);
+    expect(posts.reduce((n, p) => n + p.bodies.length, 0)).toBe(4);
   });
 
   for (const { file, bodies } of posts) {

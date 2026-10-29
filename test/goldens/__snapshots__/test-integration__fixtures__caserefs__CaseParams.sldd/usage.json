@@ -1,0 +1,13 @@
+{
+ "file:///fx/test-integration/fixtures/caserefs/CaseParams.sldd/design/CaseVar": {
+  "blockLinks": [
+   {
+    "blockName": "Gain1",
+    "blockPath": "Gain1",
+    "modelName": "caseRefs",
+    "modelUri": "file:///fx/test-integration/fixtures/caserefs/caseRefs.slx",
+    "linkTarget": "blocks:1@file:///fx/test-integration/fixtures/caserefs/caseRefs.slx"
+   }
+  ]
+ }
+}

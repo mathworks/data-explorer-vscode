@@ -4,14 +4,30 @@
 // .sldd is an OPC/zip package whose only editable text payload is data/chunk0.xml;
 // all other parts pass through verbatim. The document holds that chunkXml string
 // as its single edit surface plus the pass-through parts. Every table edit is a
-// pure string transform on chunkXml (xmlStructuralEdit), regenerating only the
-// touched entry's <Object> fragment so untouched entries stay byte-identical —
+// pure string transform on chunkXml (xmlStructuralEdit), replacing only the touched
+// entry's <Object>…</Object> with what core's spliceEntryObject writes for it: the
+// entry's bytes with what the edit changed written from the model, laid out as the
+// chunk is, and every byte around it as it was. Untouched entries stay byte-identical —
 // the same risk profile as the JSON .sldd table view.
 //
 // Unlike SlddTextEditorProvider (backed by a native TextDocument), this is a
 // CustomEditorProvider: it owns its own edit stack via onDidChangeCustomDocument,
-// and re-zips on save. The save gate re-parses chunkXml before writing, so a
-// serializer bug becomes a failed save, never a corrupted file.
+// and re-zips on save. Undo and redo restore the chunk text, and rebuild the entries
+// they change from that text (entryOps' fragments), so an undone entry keeps the
+// bytes it came from. The save gate (writeTo) makes two checks before it writes, and
+// a refusal leaves the file on disk untouched:
+//  - it re-reads chunkXml and refuses the save if the chunk does not read back, so a
+//    serializer bug that breaks the markup, or a chunk core would read as an empty
+//    dictionary, becomes a failed save;
+//  - it compares chunkXml with the chunk as last read or saved, entry by entry, with
+//    a scan of the markup rather than core's reader (binarySaveGate.ts, the
+//    maintainer's D12 addendum): an entry no edit changed must be its bytes, and an
+//    edited one must keep every part the edit did not change (core's
+//    keptPartsViolations), or the save is refused, naming the entry.
+// Neither checks that an edited value is right. A loss the reader and writer share
+// re-reads as unchanged, which is why the second check compares bytes, found by a scan
+// of the markup, and never a re-read of them; an edited part is written from the
+// model, and keeping that right is core's writers' job.
 //
 // The model is registered in the global DataModel singleton under a srcId that
 // PREFIXES the URI, so it never collides with the read-only BinaryEditorProvider's
@@ -19,39 +35,54 @@
 import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
 import { renderTableWebview } from './webviewHtml.js';
-import { buildEntryRows, clipMarkKey, splitClipMarkKey, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from './rowBuilder.js';
-import { rowPlannerFor } from './rowPlanner.js';
-import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
-import { answerChildRequest } from './childRequest.js';
-import { sectionRules } from './sectionRules.js';
-// DATA_PART_XML is core's name for the one zip member holding the entries, and the four
-// sites below are three roles of one rule: two lookups, the exclusion in
+import {
+  buildEntryRows,
+  COLUMNS,
+  COLUMN_LABELS,
+  COLUMN_GROUPS,
+  type ClipMark,
+  rowPlannerFor,
+  LAZY_ROW_BUDGET,
+  lazyRowsBanner,
+  sectionRules,
+  sourceWarnings,
+  warningBanner,
+  buildSectionRowId,
+  basename,
+  binaryEditSrcId,
+} from 'data-explorer-view/model';
+import { answerChildRequest, postOrReport, answerMatrixRequest } from 'data-explorer-view/host';
+import { clipMarkChange, clipMarkOfDoc } from './clipMarks.js';
+// DATA_PART_XML is core's name for the one zip member holding the entries, and the three
+// sites below are three roles of one rule: the lookup in `chunkOf`, the exclusion in
 // `passThroughParts`, and the re-insert in `writeTo`. Drift between them does not throw —
 // see `passThroughParts` — so they take the name core's own reader looks up.
 import {
-  serializeEntryToXml,
   DataModel,
   DATA_PART_XML,
+  editRefusalText,
   findEntryObjectSpan,
   entrySelectorOf,
   planDeletion,
+  spliceEntryObject,
   type ParseWarning,
 } from 'data-explorer-core';
 // Never parseBinarySlddParts directly: readSlddParts is the same read plus the rule
 // that a dictionary this host could not read is not passed on as an empty one, which
 // the reader itself no longer enforces (it recovers and warns instead).
-import { readSlddParts } from './slddContent.js';
+import { readSlddParts } from 'data-explorer-view/model';
+import { changedEntryKeys, savedChunkRefusal, SavedChunk, uncheckableEntries } from './binarySaveGate.js';
+import { chunkEntryKey, entryKey, scanChunkEntries } from './chunkEntries.js';
 import { isZipBytes } from './slddFormat.js';
-import { sourceWarnings, warningBanner } from './parseWarnings.js';
-import { postOrReport } from './postPayload.js';
 import {
   findOwningEntry,
-  resolveSectionForPaste,
+  refuseDisallowedPaste,
   sectionByName,
-  buildDragSnapshot,
+  sectionTarget,
   reselectAfterRemoval,
+  type SectionTarget,
 } from './structuralEdit.js';
-import { copyEntriesToClipboard } from './clipboardAction.js';
+import { copyEntriesToClipboard, dragEntries } from './clipboardAction.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from './slddBaseline.js';
 import {
   deleteEntryXml,
@@ -63,26 +94,34 @@ import {
   deleteEntriesByNameXml,
   type StructuralResult,
 } from './xmlStructuralEdit.js';
-import { catalogRenameOf, scXmlRenamePatch, type ScPartPatch } from './scRename.js';
+import {
+  catalogFunctionRenameOf,
+  catalogRenameOf,
+  scXmlFunctionRenamePatch,
+  scXmlRenamePatch,
+  type ScPartPatch,
+} from './scRename.js';
 import {
   applyEntryOps,
+  cellEdit,
   entryRecord,
   findEntryByName,
-  findEntryBySelector,
   insertOp,
   mutateEntry,
   opsOfPastedEntries,
   patchOfPairs,
+  removalPairs,
+  removeEntries,
   removeOp,
   replaceOp,
   type AppliedOp,
   type EntryOp,
   type EntryOpPair,
   type EntryPatch,
+  type EntryRecord,
 } from './entryOps.js';
-import { buildSectionRowId } from '../common/sectionRowId.js';
-import { getClipboard, clearClipboard, clipboardState } from './clipboard.js';
-import { setDrag, getDrag, clearDrag } from './dragState.js';
+import { clipboardState } from './clipboard.js';
+import { getDrag, clearDrag } from './dragState.js';
 import {
   registerWebview,
   unregisterWebview,
@@ -93,12 +132,20 @@ import {
   broadcastClipboardState,
   broadcastDragState,
   deleteFromSource,
+  NOT_FOUND_REASON,
 } from './editorHub.js';
-import { basename } from '../common/pathUtil.js';
+import { runTransfer, type TransferAdapter, type TransferDeps } from './transfer.js';
+import { clipboardRegister, dragRegister } from './transferRegisters.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
-import { answerMatrixRequest } from './matrixRequest.js';
-import { binaryEditSrcId } from '../common/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
+import { addChildRefusal, addEntryRefusal, deleteRefusal, describeSource, refusedMessage, type RefusedGesture } from './refusal.js';
+import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
+import { answerEditTextRequest } from './editTextRequest.js';
+import { EditStackMirror, OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
+import { saveSettled } from './settledSave.js';
+import { followDisk, readForOpen, readStamped, refuseIfChangedOnDisk, watchDisk, writeUserFile, type FollowedDocument } from './diskFollow.js';
+import { backupId } from './backupId.js';
+import { sameFile } from './safeWrite.js';
 
 // viewType of the default byte-backed view (BinaryEditorProvider), which owns the rule
 // that picks an editor from a .sldd's bytes. A constant here rather than an import,
@@ -155,6 +202,19 @@ interface ParsedChunk {
   warnings: ParseWarning[];
 }
 
+/** What one `writeTo` did. */
+interface Wrote {
+  /** The save gate's read, which a save re-baselines from; null for a backup, which gates nothing. */
+  gated: ParsedChunk | null;
+  /**
+   * The written file's mtime+size, read off the write itself where it could be (writeUserFile);
+   * none for a backup, which is not the user's file.
+   */
+  stamp: DiskStamp | undefined;
+  /** The pass-through parts the write zipped beside the chunk. */
+  parts: Record<string, Uint8Array>;
+}
+
 /**
  * The zip members a document carries through untouched: every member except the one its
  * entries live in, which this editor holds as `chunkXml` and re-inserts on save.
@@ -183,9 +243,142 @@ function passThroughParts(zip: Record<string, Uint8Array>): Record<string, Uint8
   return parts;
 }
 
-class BinarySlddDocument implements vscode.CustomDocument {
+/** One read of the file behind a document, with the stamp it was read under (diskFollow.readStamped). */
+interface DiskRead {
+  stamp: DiskStamp | undefined;
+  /** The dictionary's data part, decoded (`chunkOf`). */
+  chunkXml: string;
+  /** Every other member (`passThroughParts`). */
+  parts: Record<string, Uint8Array>;
+}
+
+/**
+ * Read the file to replace an open document with: a revert, or the watcher's reload. A file that
+ * does not read as a dictionary (not a zip, or one with no data part) is a failed read, so the
+ * two callers answer it alike: a revert fails and puts the document back (revertCustomDocument),
+ * and a reload leaves the document as it is, still held to the stamp it had, so its next save asks.
+ */
+async function readDisk(uri: vscode.Uri): Promise<DiskRead> {
+  const { stamp, bytes } = await readStamped(uri);
+  const zip = unzipSync(bytes);
+  return { stamp, chunkXml: chunkOf(zip), parts: passThroughParts(zip) };
+}
+
+/**
+ * The data part of a dictionary's zip, decoded, or a refusal: the one rule by which an open and
+ * every read that replaces an open document tell a dictionary from a zip that holds none.
+ */
+function chunkOf(zip: Record<string, Uint8Array>): string {
+  const chunk = zip[DATA_PART_XML];
+  if (!chunk) throw new Error(`Missing ${DATA_PART_XML} in binary SLDD`);
+  return new TextDecoder().decode(chunk);
+}
+
+const recordName = (record: EntryRecord): string => String(record.name ?? '');
+const recordUuid = (record: EntryRecord): string | undefined => {
+  const uuid = (record.metadata as Record<string, unknown> | undefined)?.uuid;
+  return typeof uuid === 'string' && uuid ? uuid : undefined;
+};
+
+/**
+ * The entries an edit changes, by entryKey: those its patch names — every op that builds an
+ * entry carries its record, and a removal's record is the inverse op's, on the other side — or,
+ * for an edit that could not state a patch, those whose text differs between its two chunks.
+ */
+function keysOfEdit(before: string, after: string, patch?: EntryPatch): Set<string> {
+  const keys = new Set<string>();
+  for (const op of patch ? [...patch.undo, ...patch.redo] : []) {
+    if (op.kind !== 'remove') keys.add(entryKey(recordName(op.record), recordUuid(op.record)));
+  }
+  return keys.size > 0 || before === after ? keys : changedEntryKeys(before, after);
+}
+
+/**
+ * For each entry an edit's patch rebuilds in its slot, its key before the edit (its undo
+ * record's), by the row id it has after the edit, which is the one its undo op addresses.
+ */
+function keysBeforeEdit(patch: EntryPatch): Map<string, string> {
+  const keys = new Map<string, string>();
+  for (const op of patch.undo) {
+    if (op.kind === 'replace') keys.set(op.rowId, entryKey(recordName(op.record), recordUuid(op.record)));
+  }
+  return keys;
+}
+
+/** How many ops look their fragment up one at a time; more share one scan of the chunk. */
+const FRAGMENT_LOOKUPS = 4;
+
+/**
+ * Give each op that rebuilds an entry that entry's `<Object>` text in `chunk`, the chunk state
+ * the op restores, so the entry it rebuilds keeps the bytes it came from (entryOps'
+ * EntryFragment). Once per op: an op restores the same chunk every time it runs. A few ops each
+ * look theirs up with core's findEntryObjectSpan, which on the largest dictionary measured
+ * (207 MB) is ~6× faster than a scan; more share one scan. One cut from the wrong place costs
+ * nothing but the provenance: entryOps uses a fragment only when it reads as exactly the entry
+ * the op's record names.
+ */
+function cutFragments(chunk: string, ops: EntryOp[]): void {
+  const wanting = ops.filter((op) => op.kind !== 'remove' && op.fragment === undefined) as Exclude<
+    EntryOp,
+    { kind: 'remove' }
+  >[];
+  if (wanting.length === 0) return;
+  if (wanting.length <= FRAGMENT_LOOKUPS) {
+    for (const op of wanting) {
+      const span = findEntryObjectSpan(chunk, { name: recordName(op.record), uuid: recordUuid(op.record) });
+      op.fragment = span ? chunk.slice(span.offset, span.offset + span.length) : null;
+    }
+    return;
+  }
+  const scan = scanChunkEntries(chunk);
+  const found = new Map<string, { start: number; end: number }[]>();
+  for (const entry of scan.clean ? scan.entries : []) {
+    const key = chunkEntryKey(entry);
+    found.set(key, [...(found.get(key) ?? []), entry]);
+  }
+  for (const op of wanting) {
+    const list = found.get(entryKey(recordName(op.record), recordUuid(op.record)));
+    op.fragment = list?.length === 1 ? chunk.slice(list[0].start, list[0].end) : null;
+  }
+}
+
+class BinarySlddDocument implements vscode.CustomDocument, FollowedDocument {
   chunkXml: string;
   readonly zipMeta: Record<string, Uint8Array>;
+
+  /**
+   * The chunk as this document last read or wrote it — opened, saved, reverted or reloaded —
+   * which the save gate holds a save to (binarySaveGate.ts). A document restored from a hot-exit
+   * backup read the backup, so that is its chunk until it is saved: the edits in a backup were
+   * made in another session, and nothing is left that could check them.
+   */
+  saved: SavedChunk;
+
+  /**
+   * The pass-through parts as this document last read or wrote them, beside `saved`: what a
+   * revert that cannot read the disk puts back with the chunk (revertCustomDocument). A copy of
+   * the record, not of the bytes: an edit swaps a member of `zipMeta` for another array, and
+   * never writes into one.
+   */
+  savedParts: Record<string, Uint8Array>;
+
+  /**
+   * The entries the edits since `saved` have changed, by entryKey: every entry not in here must
+   * be its bytes in `saved`. Each edit adds what it changes, and so does each undo and redo of
+   * it, so an entry edited and then undone stays in here. That is safe, since an entry back to
+   * its bytes passes either way. Emptied whenever `saved` is replaced.
+   */
+  edited = new Set<string>();
+
+  /**
+   * The entries the edits since `saved` have changed while core's check could not be held to
+   * them, each key mapped to every key that entry has gone by (binarySaveGate's
+   * uncheckableEntries): the save gate refuses any of them whose text is not `saved`'s. Asked
+   * when each edit is made, while the entry's node still holds the bytes it was read from, since
+   * a redo or a re-read rebuilds the node from the text the edit wrote. Like `edited`, each undo
+   * and redo puts its edit's back, and it is emptied whenever `saved` is replaced.
+   */
+  unchecked = new Map<string, ReadonlySet<string>>();
   private readonly _onDidChange = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<BinarySlddDocument>>();
   readonly onDidChangeCustomDocument = this._onDidChange.event;
 
@@ -207,20 +400,71 @@ class BinarySlddDocument implements vscode.CustomDocument {
    */
   readonly misrouted: boolean;
 
+  // --- Following the file on disk (the rules are in diskConflict.ts) ---
+
+  /**
+   * This document's copy of the dirty flag VS Code keeps, which the API gives no way to
+   * read. The watcher uses it to choose between reloading and keeping unsaved edits.
+   */
+  readonly edits: EditStackMirror;
+
+  /**
+   * The file's mtime+size as this view last loaded, reverted to, or wrote it. A save compares
+   * the disk with this, and the watcher ignores any event that leaves the disk matching it.
+   * That is how the view's own saves are kept from counting as outside changes.
+   */
+  stamp: DiskStamp | undefined;
+
+  /**
+   * A save was refused because the file changed on disk, and nothing has resolved that yet.
+   * This mirrors VS Code's conflict state for a text file: a later save, auto-save included,
+   * does not ask again unless `promptsForConflict` says so. Cleared by a save that writes
+   * and by a revert.
+   */
+  inConflict = false;
+
+  /** The Overwrite / Revert prompt is showing. */
+  conflictPromptOpen = false;
+
+  /**
+   * The outside version the user answered Overwrite for. A save writes over that version
+   * without asking. A later outside change has a different stamp, so it is asked about
+   * again. Cleared by any save that writes and by a revert.
+   */
+  overwriteStamp: DiskStamp | undefined;
+
+  /** A save is in flight. The watcher waits, so it never reloads in the middle of one. */
+  saving = false;
+
+  disposed = false;
+
+  private readonly disposables: vscode.Disposable[] = [];
+
   constructor(
     public readonly uri: vscode.Uri,
     chunkXml: string,
     zipMeta: Record<string, Uint8Array>,
     misrouted = false,
+    fromBackup = false,
   ) {
     this.chunkXml = chunkXml;
+    this.saved = new SavedChunk(chunkXml);
     this.zipMeta = zipMeta;
+    this.savedParts = { ...zipMeta };
     this.misrouted = misrouted;
+    // VS Code reports a document restored from a hot-exit backup as dirty, though it has no
+    // edits, until it is saved or reverted.
+    this.edits = new EditStackMirror(fromBackup);
+  }
+
+  /** Something to dispose with this document: today, its watcher. */
+  track(disposable: vscode.Disposable): void {
+    this.disposables.push(disposable);
   }
 
   // Prefixed, so this editable model never collides with the read-only
   // BinaryEditorProvider's cached model of the same uri (DataModel is a singleton). The
-  // prefix and its removal live together in common/srcId.ts — a link target core builds out
+  // prefix and its removal live together in data-explorer-view's src/model/ids/srcId.ts — a link target core builds out
   // of this srcId has to be read back as a document, which is what needs the pair to agree.
   get srcId(): string {
     return binaryEditSrcId(this.uri.toString());
@@ -267,22 +511,82 @@ class BinarySlddDocument implements vscode.CustomDocument {
    * rebuild it against the catalog the model is holding, which is a step ahead.
    */
   pushEdit(label: string, before: string, after: string, patch?: EntryPatch, part?: ScPartPatch): void {
+    // What the save gate is told this edit changes, in both directions — see `edited`.
+    const changed = keysOfEdit(before, after, patch);
+    // And which of those entries the check cannot be held to, asked now — see `unchecked`.
+    const uncheckable = uncheckableEntries(
+      DataModel.getDataSource(this.srcId) ?? null,
+      changed,
+      patch ? keysBeforeEdit(patch) : null,
+    );
     this.chunkXml = after;
+    this.markEdited(changed);
+    this.markUnchecked(uncheckable);
     if (part) this.zipMeta[part.member] = part.after;
+    // The dirty-flag copy moves with VS Code's stack: this push, and each undo or redo VS
+    // Code asks for through the two closures below.
+    this.edits.pushed();
     this._onDidChange.fire({
       document: this,
       label,
       undo: () => {
+        this.edits.undone();
+        this.markEdited(changed);
+        this.markUnchecked(uncheckable);
         this.chunkXml = before;
         if (part) this.zipMeta[part.member] = part.before;
         this.applyOps(part ? undefined : patch?.undo);
       },
       redo: () => {
+        this.edits.redone();
+        this.markEdited(changed);
+        this.markUnchecked(uncheckable);
         this.chunkXml = after;
         if (part) this.zipMeta[part.member] = part.after;
         this.applyOps(part ? undefined : patch?.redo);
       },
     });
+  }
+
+  private markEdited(keys: ReadonlySet<string>): void {
+    for (const key of keys) this.edited.add(key);
+  }
+
+  /** Record entries in `unchecked`, each group the keys of one entry, joined to any it shares one with. */
+  markUnchecked(groups: Iterable<Iterable<string>>): void {
+    for (const group of groups) {
+      const keys = new Set<string>(group);
+      for (const key of [...keys]) for (const alias of this.unchecked.get(key) ?? []) keys.add(alias);
+      for (const key of keys) this.unchecked.set(key, keys);
+    }
+  }
+
+  /**
+   * Make this document hold what `read` found on disk: the chunk, the pass-through parts, and
+   * the stamp they were read under. Shared by a revert, by the watcher's reload, and by a revert
+   * that could not read the disk (which hands in the document as last read or written, under the
+   * stamp it already holds), so all three replace the document the same way.
+   */
+  applyDisk(read: DiskRead): void {
+    this.chunkXml = read.chunkXml;
+    // What a save is held to from now on, and nothing yet edited against it.
+    this.saved = new SavedChunk(read.chunkXml);
+    this.savedParts = { ...read.parts };
+    this.edited = new Set();
+    this.unchecked = new Map();
+    // The parts too, and for the same reason: an edit can have patched one of them (a
+    // rename carried into the System Composer catalog), and a revert that restored only
+    // the chunk would leave the entry named as the file spells it beside a catalog that
+    // no longer classifies it — then write that pair out on the next save.
+    this.resetParts(read.parts);
+    this.stamp = read.stamp;
+    // The document now holds what is on disk, so there is nothing left to be in conflict
+    // with.
+    this.inConflict = false;
+    this.overwriteStamp = undefined;
+    // Wide on purpose: a revert replaces the whole document, so there is no narrower
+    // truth to tell the table than "everything you are showing came from elsewhere".
+    this.repaintAll();
   }
 
   /**
@@ -310,6 +614,9 @@ class BinarySlddDocument implements vscode.CustomDocument {
       try {
         const model = DataModel.getDataSource(this.srcId);
         if (model) {
+          // chunkXml is already the text this undo or redo restores: what the ops rebuild
+          // their entries from.
+          cutFragments(this.chunkXml, ops);
           this.repaintOps(applyEntryOps(model, ops));
           return;
         }
@@ -324,13 +631,29 @@ class BinarySlddDocument implements vscode.CustomDocument {
     // Copied because a repaint can dispose a view (an error path re-registers), and a
     // Set mutated mid-iteration is how one view's failure silently skips another's.
     for (const view of [...this.views]) view.repaintAll(from);
+    this.onChanged?.();
   }
 
   repaintOps(applied: AppliedOp[]): void {
     for (const view of [...this.views]) view.repaintOps(applied);
+    this.onChanged?.();
   }
 
+  /**
+   * Called after every repaint of this document, once whatever views it has are painted: the
+   * provider's, which shows the Property Inspector's node again from the tree as it now is.
+   *
+   * Here, at the two repaints, because every change to the document ends in one of them: each
+   * edit, its undo and redo (applyOps), a save (re-registered), a revert and a reload
+   * (applyDisk), and every error path that rebuilds from the text. The views have re-registered
+   * the tree by then, when a wide repaint does that, so what the inspector resolves is the tree
+   * the table shows.
+   */
+  onChanged?: () => void;
+
   dispose(): void {
+    this.disposed = true;
+    for (const d of this.disposables.splice(0)) d.dispose();
     DataModel.removeDataSource(this.srcId);
     this._onDidChange.dispose();
   }
@@ -342,11 +665,25 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   // Relay selection to the Property Inspector (wired in extension.ts).
   public onSelect?: (uriString: string, rowIds: string[]) => void;
   // Handle a Usage-column link click (wired in extension.ts).
-  public onNavigate?: (target: string) => void;
+  public onNavigate?: (target: string, referrer?: string) => void;
+  // A document's tree changed: an edit, an undo or a redo, a save, a revert or a reload (wired in
+  // extension.ts, which shows the Property Inspector's node again from the tree, if it is this
+  // document's).
+  public onChanged?: (uriString: string) => void;
 
   private readonly _onDidChangeCustomDocument =
     new vscode.EventEmitter<vscode.CustomDocumentEditEvent<BinarySlddDocument>>();
   readonly onDidChangeCustomDocument = this._onDidChangeCustomDocument.event;
+
+  /**
+   * Ask the user about a save refused because the file changed on disk, and resolve with
+   * the button they chose. A property so that the integration suite, which cannot click a
+   * notification, can answer for them.
+   *
+   * An error notification, because VS Code shows its own version of this prompt as one.
+   */
+  askSaveConflict: (message: string) => Thenable<string | undefined> = (message) =>
+    vscode.window.showErrorMessage(message, OVERWRITE, REVERT);
 
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -355,8 +692,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     openContext: vscode.CustomDocumentOpenContext,
     _token: vscode.CancellationToken,
   ): Promise<BinarySlddDocument> {
-    const source = openContext.backupId ? vscode.Uri.parse(openContext.backupId) : uri;
-    const bytes = await vscode.workspace.fs.readFile(source);
+    // A hot-exit backup is a whole .sldd (backupCustomDocument), so a restore opens it as the
+    // document, held to the stamp the backup recorded; otherwise the file's own, taken before the
+    // read (diskFollow.readForOpen, the MAT-file editor's too).
+    const { stamp, bytes } = await readForOpen(uri, openContext.backupId);
     // A custom editor's selector is a filename glob, and the two .sldd formats are not
     // distinguishable by name — so "Reopen Editor With…" offers THIS view for every
     // *.sldd, including a JSON one, which has nothing for `unzipSync` to read. That
@@ -374,13 +713,22 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // so a backup takes the normal path.
     if (!isZipBytes(bytes)) return new BinarySlddDocument(uri, '', {}, true);
     const zip = unzipSync(bytes);
-    const chunk = zip[DATA_PART_XML];
-    if (!chunk) throw new Error(`Missing ${DATA_PART_XML} in binary SLDD`);
-    const chunkXml = new TextDecoder().decode(chunk);
-    const doc = new BinarySlddDocument(uri, chunkXml, passThroughParts(zip));
+    const doc = new BinarySlddDocument(uri, chunkOf(zip), passThroughParts(zip), false, !!openContext.backupId);
+    doc.stamp = stamp;
+    doc.onChanged = () => this.onChanged?.(uri.toString());
     // Relay the document's edit events to the provider-level emitter VS Code listens on.
     doc.onDidChangeCustomDocument((e) => this._onDidChangeCustomDocument.fire(e));
+    doc.track(this.watchDisk(doc));
     return doc;
+  }
+
+  /**
+   * Follow the file on disk, the way VS Code follows a text file it has open (diskFollow.ts,
+   * shared with the MAT-file editor): reload a clean document from what the disk now holds,
+   * through the same `applyDisk` a revert uses, and leave unsaved edits alone.
+   */
+  private watchDisk(document: BinarySlddDocument): vscode.Disposable {
+    return watchDisk(document, () => followDisk(document, () => readDisk(document.uri), (read) => document.applyDisk(read)));
   }
 
   async resolveCustomEditor(
@@ -403,6 +751,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     webviewPanel.iconPath = new vscode.ThemeIcon('table');
     const uriString = document.uri.toString();
     const name = document.metaPath;
+    // Core's messages name this source by its id, which every message shown here spells as the
+    // file's name, as the MAT-file editor's do; a failed edit says so in the banner.
+    const describe = describeSource(document.srcId, name);
+    const failedEdit = (err: unknown): string => 'Failed to apply edit: ' + describe((err as Error).message);
+    // A refused Add Child, Delete or Add, in core's words, said as every table editor says one.
+    const postRefusal = (gesture: RefusedGesture, reason: string) => webview.postMessage(refusedMessage(gesture, reason, describe));
 
     // Which builder plans this file's rows AND answers a fetch for them (rowPlanner.ts).
     // Planning an editable view is admissible for the reasons set out in
@@ -450,23 +804,6 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       return found ?? null;
     };
 
-    // The clipboard mark this document's rows should carry, if any. Shared by the
-    // full and entry-scoped repaints so a cut/copied entry renders its affordance
-    // the same way whichever one painted it.
-    // Every entry the clipboard holds carries the mark, each keyed by its OWN source
-    // section: a multi-row cut can span sections, so one shared section would dim the
-    // wrong rows.
-    const clipMarkOfDoc = (): ClipMark | undefined => {
-      const clip = getClipboard();
-      if (!clip || clip.sourceDocUri !== uriString) return undefined;
-      const keys = new Set<string>();
-      for (const it of clip.items) {
-        const name = it.payload.name;
-        if (typeof name === 'string' && name) keys.add(clipMarkKey(it.sourceSection, name));
-      }
-      return keys.size ? { keys, mode: clip.mode } : undefined;
-    };
-
     const post = (from: ModelSource = 'chunk') => {
       try {
         // 'registered' is only ever passed by a caller that has just registered a tree
@@ -479,7 +816,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           document.baselineCaptured = true;
         }
         const modified = computeModified(uriString, node);
-        const clipMark = clipMarkOfDoc();
+        const clipMark = clipMarkOfDoc(uriString);
         const planned = planner.payload(node, LAZY_ROW_BUDGET, { modifiedNames: modified, clipMark });
         const rows = planned.rows;
         // Through postOrReport, and NOT awaited: the postMessage itself (and the
@@ -509,10 +846,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         );
         webview.postMessage({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
         webview.postMessage({ type: 'clipboardState', ...clipboardState() });
-        paintedMark = clipMarkOfDoc();
+        paintedMark = clipMark;
         drainNavigateSelect(webview, uriString);
       } catch (err) {
-        webview.postMessage({ type: 'error', message: `Failed to parse ${name}: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: `Failed to parse ${name}: ${describe((err as Error).message)}` });
       }
     };
 
@@ -531,7 +868,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       // Planned to the same budget the payload used, so a repaint of one huge entry
       // cannot post more than the RPC carries — see the note at the sibling call site in
       // SlddTextEditorProvider.
-      return buildEntryRows(entry, section.name, modified, clipMarkOfDoc(), undefined, LAZY_ROW_BUDGET);
+      return buildEntryRows(entry, section.name, modified, clipMarkOfDoc(uriString), undefined, LAZY_ROW_BUDGET);
     };
 
     /**
@@ -577,7 +914,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // rows from before it. Repaint wide, then say so — after, because the repaint
         // clears the banner the message writes.
         post();
-        webview.postMessage({ type: 'error', message: `Failed to update the row: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: `Failed to update the row: ${describe((err as Error).message)}` });
       }
     };
 
@@ -601,23 +938,26 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
      * mark), so there is nothing left to un-dim.
      */
     let paintedMark: ClipMark | undefined;
-    // Order-independent: the same entries marked in a different order is the SAME mark,
-    // and repainting for it would be a repaint the user's rows do not need.
-    const markKey = (mark?: ClipMark): string =>
-      mark ? JSON.stringify([mark.mode, [...mark.keys].sort()]) : '';
     const repaintClipMark = () => {
-      const next = clipMarkOfDoc();
-      if (markKey(paintedMark) === markKey(next)) return;
-      // Every entry either mark names: the ones losing the affordance and the ones
-      // gaining it. A key present in both yields one repaint (the `seen` guard below),
-      // as does a copy re-taken as a cut.
-      const affected = new Set<string>([...(paintedMark?.keys ?? []), ...(next?.keys ?? [])]);
+      const next = clipMarkOfDoc(uriString);
+      // Every entry either mark names (clipMarkChange), or none when they are the same mark.
+      const affected = clipMarkChange(paintedMark, next);
+      if (!affected) return;
+      let model: any;
+      try {
+        model = liveModel();
+      } catch {
+        // No tree to name the affected entries in (liveModel re-reads the chunk when none is
+        // registered, and that read failed). The wide repaint is both the fallback and where
+        // the read error is reported; paintedMark is left alone because nothing was painted.
+        // As in the JSON view, where this guard came from.
+        post();
+        return;
+      }
       paintedMark = next;
-      const model = liveModel();
       const ops: AppliedOp[] = [];
       const seen = new Set<string>();
-      for (const key of affected) {
-        const { section, name } = splitClipMarkKey(key);
+      for (const { section, name } of affected) {
         const entry = findEntryByName(model, section, name);
         if (!entry || seen.has(entry.id)) continue;
         seen.add(entry.id);
@@ -658,26 +998,22 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     registerSourceDeleter(uriString, (targets) => {
       const before = document.chunkXml;
       const after = deleteEntriesByNameXml(before, targets);
-      if (after === before) return;
+      // Nothing answers to those names any more: renamed or deleted since the cut. Said, because
+      // the move's other half has landed and the user is left holding a copy.
+      if (after === before) return { removed: false, reason: NOT_FOUND_REASON };
       // The model half of the delete, narrowly when every target resolves to exactly
       // one live entry. Deliberately keyed on the SAME targets the text splice used, so
-      // the two halves cannot remove different entries.
-      const patch = attempt<EntryPatch>(() => {
-        const model = liveModel();
-        const entries = targets.map((t) => findEntryBySelector(model, t));
-        if (entries.some((e) => !e)) return undefined;
-        return {
-          // Reversed, because undo applies the inverses in reverse order — see
-          // applyEntryOps.
-          undo: entries.map((e) => insertOp(e)).reverse(),
-          redo: entries.map((e) => removeOp(e.id)),
-        };
-      });
-      document.pushEdit('Move (remove source)', before, after, patch);
-      // Applied through the document (not directly) so the model change happens once
-      // and every view of it repaints — this deleter runs on behalf of ANOTHER
-      // document's drop, so the view it belongs to is not the one being interacted with.
-      document.applyOps(patch?.redo);
+      // the two halves cannot remove different entries. removalPairs refuses before it
+      // removes anything, so a target it cannot settle costs the narrow path and no more:
+      // the wide repaint below rebuilds from the chunk that is already right.
+      const removal = attempt(() => removalPairs(liveModel(), targets) ?? undefined);
+      document.pushEdit('Move (remove source)', before, after, removal ? patchOfPairs(removal.pairs) : undefined);
+      // Repainted through the document (not this view) so every view of it repaints —
+      // this deleter runs on behalf of ANOTHER document's drop, so the view it belongs to
+      // is not the one being interacted with.
+      if (removal) document.repaintOps(removal.applied);
+      else document.repaintAll();
+      return { removed: true };
     });
 
     /**
@@ -697,6 +1033,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       rowId: string,
       transform: (xml: string, node: any) => StructuralResult,
       label: string,
+      gesture: RefusedGesture,
     ) => {
       liveModel();
       const node = findNode(rowId);
@@ -707,6 +1044,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       const entry = findOwningEntry(node);
       if (!entry) {
         webview.postMessage({ type: 'error', message: 'Could not locate the owning entry in the model.' });
+        return;
+      }
+      // Core's reason, asked before anything changes (refusal.ts).
+      const refused = gesture === 'addChild' ? addChildRefusal(node.id) : deleteRefusal([node.id]);
+      if (refused) {
+        postRefusal(gesture, refused);
         return;
       }
       // Snapshot before the transform, which mutates the model: the entry's pre-edit
@@ -731,7 +1074,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // than waiting for the next repaint to paper over it. First, because the repaint
         // clears the error banner the message writes.
         document.repaintAll();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: failedEdit(err) });
       }
     };
 
@@ -765,19 +1108,19 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // Nothing was pushed, so chunkXml is untouched; the model may not be. Rebuild
         // from the text, which is the state the user still has.
         document.repaintAll();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: failedEdit(err) });
       }
     };
 
     /**
      * Delete SEVERAL rows as ONE edit.
      *
-     * Delete acts on ROWS (see webview/operands.ts), so its operands can mix whole entries
+     * Delete acts on ROWS (see data-explorer-view's src/model/actions/operands.ts), so its operands can mix whole entries
      * with nested children of other entries. This format's undo stack is this document's
      * own and steps by pushEdit, so the whole gesture is ONE push: one `after` string built
-     * by folding every removal, and one op list describing all of them. applyDrop already
-     * has this shape for N payloads — deliberately, because a drop IS a paste and a delete
-     * of the same N.
+     * by folding every removal, and one op list describing all of them. The transfer's commit
+     * (paste and drop, below) already has this shape for N payloads — deliberately, because a
+     * drop IS a paste and a delete of the same N.
      *
      * READ THE MODEL FIRST, for the reason the JSON path does: a removal takes its node out
      * of the tree, so the selectors the splice needs, the row to select afterwards, and the
@@ -792,11 +1135,14 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         webview.postMessage({ type: 'error', message: 'Could not locate the items in the model.' });
         return;
       }
+      // Asked of every row the plan removes, before any leaves (refusal.ts).
+      const refused = deleteRefusal([...plan.entries, ...plan.childGroups.flatMap((g) => g.children)].map((n: any) => n.id));
+      if (refused) {
+        postRefusal('delete', refused);
+        return;
+      }
       // Read off the live tree, before anything leaves it.
       const selectors = plan.entries.map((entry) => entrySelectorOf(entry));
-      const entryPairs = attempt<EntryOpPair[]>(() =>
-        plan.entries.map((entry) => ({ redo: removeOp(entry.id), undo: insertOp(entry) })),
-      );
       const doomed = new Set<any>(plan.entries);
       const lastEntry = plan.entries[plan.entries.length - 1];
       const entrySelectId = lastEntry
@@ -825,13 +1171,21 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         }
         working = deleteEntriesByNameXml(working, selectors);
 
+        // The entries leave the model through the one removal every path shares, whose undo
+        // ops are captured interleaved with the removals — captured up front, as they were
+        // here, an undo of [P, Q] out of [P, Q, R] put them back as [P, R, Q]. It refuses
+        // before removing anything, and a refusal costs only the narrow undo: the entries
+        // still leave, by plain ops, as a single delete's do when its record will not serialize.
+        const entryRemoval = attempt(() => removeEntries(model, plan.entries));
+        if (entryRemoval) applied.push(...entryRemoval.applied);
+        else applied.push(...applyEntryOps(model, plan.entries.map((entry) => removeOp(entry.id))));
+
         // The op list is all-or-nothing: a group whose record would not serialize left no
         // pair, and a patch missing one op would restore a partial state. No patch means
         // both directions repaint wide, which is merely slow (see `attempt`).
-        const complete = !!entryPairs && childPairs.length === plan.childGroups.length;
-        const patch = complete ? patchOfPairs([...childPairs, ...entryPairs]) : undefined;
+        const complete = !!entryRemoval && childPairs.length === plan.childGroups.length;
+        const patch = complete ? patchOfPairs([...childPairs, ...entryRemoval.pairs]) : undefined;
 
-        applied.push(...applyEntryOps(model, (entryPairs ?? []).map((p) => p.redo)));
         document.pushEdit('Delete', before, working, patch);
         document.repaintOps(applied);
         const landing = entrySelectId ?? childSelectId;
@@ -841,7 +1195,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // removals happen before the splice. Rebuild from the text, then say so (the
         // repaint clears the banner, so it goes first).
         document.repaintAll();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: failedEdit(err) });
       }
     };
 
@@ -863,8 +1217,14 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         webview.postMessage({ type: 'error', message: 'Could not locate the item in the model.' });
         return;
       }
-      if (node.isEntry) applyDeleteEntry(node);
-      else applyStructural(rowIds[0], (xml, n) => deleteChildXml(xml, n), 'Delete');
+      if (!node.isEntry) {
+        applyStructural(rowIds[0], (xml, n) => deleteChildXml(xml, n), 'Delete', 'delete');
+        return;
+      }
+      // Core's reason, asked before anything changes (refusal.ts).
+      const refused = deleteRefusal([node.id]);
+      if (refused) postRefusal('delete', refused);
+      else applyDeleteEntry(node);
     };
 
     // Value edit / rename: mutate node, reserialize its owning entry, splice.
@@ -893,15 +1253,20 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // catalog, which names the entry as the file still does. Null for all but a rename of
         // a catalogued architectural entry.
         const catalogRename = catalogRenameOf(msg.columnId, msg.newValue, node, entry);
+        // And a service interface's function, which the catalog keeps a copy of under the
+        // interface's definition. Never non-null together with catalogRename.
+        const functionRename = catalogFunctionRenameOf(msg.columnId, msg.newValue, node, entry);
         // The undo half of the patch has to be snapshotted here: this is the only moment
         // the pre-edit state exists. (Through attempt, so an entry that will not
         // serialize costs this edit its fast undo and not the edit itself.)
         const beforeRecord = attempt(() => entryRecord(entry));
-        const result = mutateEntry(entry, () => node.setProperty(msg.columnId, msg.newValue));
+        const { result, unchanged } = cellEdit(entry, node, msg.columnId, msg.newValue);
         if (result && typeof result === 'object' && result.error) {
           webview.postMessage({
             type: 'validationError',
-            reason: result.reason,
+            // Named as the session's editProperty names one, which the MAT-file editor shows:
+            // `Cannot edit "<row>": <why>.` (core's editRefusalText).
+            reason: describe(editRefusalText(node, msg.columnId, result.reason)),
             invalidValue: msg.newValue,
             previousValue: msg.oldValue,
           });
@@ -910,10 +1275,13 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           postEntry(entry, entryRowId);
           return;
         }
+        // The cell's own text set back (cellEdit): nothing changed, so nothing is pushed or painted.
+        if (unchanged) return;
         const before = document.chunkXml;
-        const frag = serializeEntryToXml(entry).replace(/\n$/, '');
-        const span = findEntryObjectSpan(before, entrySelectorForLookup);
-        if (!span) {
+        // Core writes the entry and splices it: its bytes, with what the edit changed written
+        // from the model, laid out as this chunk is, and every byte around it as it was.
+        const after = spliceEntryObject(before, entry, entrySelectorForLookup);
+        if (after === null) {
           // The node is already mutated and the text is not, so the model no longer
           // describes the file. Rebuild from the text — the edit is refused, so the
           // orphan mutation has to go rather than sit there looking applied. Before the
@@ -922,7 +1290,6 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           webview.postMessage({ type: 'error', message: 'Could not locate the entry text to update.' });
           return;
         }
-        const after = before.slice(0, span.offset) + frag + before.slice(span.offset + span.length);
         // Each direction addresses the entry by the id the OTHER one leaves behind, and a
         // RENAME makes those two different: the model now holds the new id, so that is
         // what undo has to find; once undo has run they both hold the old one again, so
@@ -935,18 +1302,21 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // The catalog is a zip member this document only passes through, so carrying the
         // rename into it is a member swap rather than a text edit — computed here, after the
         // validation gate, so a rejected edit does not pay for reading the part. Null unless
-        // a definition actually carries the name.
+        // the catalog spells what was renamed: a definition carrying the entry's name, or the
+        // function listed under its interface.
         const scPart = catalogRename
           ? scXmlRenamePatch(document.zipMeta, catalogRename.oldName, catalogRename.newName)
-          : null;
+          : functionRename
+            ? scXmlFunctionRenamePatch(document.zipMeta, functionRename)
+            : null;
         document.pushEdit('Edit ' + msg.columnId, before, after, patch, scPart ?? undefined);
         document.repaintOps([{ kind: 'replace', entryRowId, entry }]);
         if (msg.columnId === 'Name') webview.postMessage({ type: 'selectRows', rowIds: [node.id] });
       } catch (err) {
-        // Same reason as the !span branch, in both halves: setProperty may have landed
+        // Same reason as the not-found branch above, in both halves: setProperty may have landed
         // before the throw, and the repaint clears the banner the message writes.
         document.repaintAll();
-        webview.postMessage({ type: 'error', message: 'Failed to apply edit: ' + (err as Error).message });
+        webview.postMessage({ type: 'error', message: failedEdit(err) });
       }
     };
 
@@ -960,118 +1330,90 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           liveModel();
         },
         findNode,
-        post: (message) => webview.postMessage(message),
+        post: (message) => webview.postMessage({ ...message, message: describe(message.message) }),
         broadcast: broadcastClipboardState,
       });
     };
 
-    const applyPaste = async (rowId: string) => {
-      try {
-        const clip = getClipboard();
-        if (!clip) {
-          webview.postMessage({ type: 'error', message: 'Nothing to paste — the clipboard is empty.' });
-          return;
-        }
-        const model = liveModel();
-        const node = findNode(rowId);
-        let section = resolveSectionForPaste(model, node, rowId);
-        if (!section) {
-          webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
-          return;
-        }
-        const isCut = clip.mode === 'cut';
-        const sameDoc = clip.sourceDocUri === uriString;
-        // Identity from the payloads the clipboard snapped at cut time, so the
-        // source-delete can't hit same-named entries in another namespace.
-        const srcSelectors = clip.items.map((it) => entrySelectorOf(it.payload));
-        const named = srcSelectors.filter((s) => !!s.name);
-
-        // A cut into the SAME section every item came from is a no-op move: just clear
-        // the mark. The broadcast repaints the rows that can carry one, and nothing else.
-        // With mixed sources it is NOT a no-op — the items from elsewhere really do move
-        // — so the whole paste proceeds.
-        if (isCut && sameDoc && clip.items.every((it) => it.sourceSection === section.name)) {
-          clearClipboard();
-          broadcastClipboardState();
-          return;
-        }
-
+    // --- Paste and drop: one transfer, two registers -------------------------------
+    //
+    // What a paste or a drop MEANS is transfer.ts's, shared with the JSON view: which register
+    // and when it is let go of, the target resolved before anything changes, the same-section
+    // no-op, a same-document move as ONE edit that removes the sources first so the pasted
+    // copies keep their names, a cross-document move as the paste here and then the delete in
+    // the source's own format (editorHub), and what each way of failing says. What is left here
+    // is what an edit IS in this format: XML splices folded into chunkXml, pushed as one edit
+    // with the entry ops that let its undo and redo skip the re-parse.
+    //
+    // A fresh adapter per transfer, though this one keeps no state of its own: the whole edit
+    // is synchronous from chunkXml to pushEdit, so nothing can land in between and there is no
+    // half-written state for onFailure to know about.
+    const transferAdapter = (): TransferAdapter<SectionTarget> => ({
+      docUri: uriString,
+      resolveTarget: (rowId) => sectionTarget(liveModel(), findNode(rowId), rowId),
+      validate: (target, payloads) => refuseDisallowedPaste(target.section, payloads),
+      commit: ({ target, payloads, removeFirst, label }) => {
+        let section = target.section;
         const before = document.chunkXml;
         let working = before;
         // The forward changes in the order they happen, each with its inverse.
         const pairs: EntryOpPair[] = [];
         const applied: AppliedOp[] = [];
         let narrow = true;
-        // A same-document cut removes the source first so the pasted copy can keep the
-        // source's name — from the text AND from the model, because the uniqueness check
-        // inside the paste reads the MODEL's namespace and a source still standing there
-        // would push the copy to `Name1`.
-        if (isCut && sameDoc && named.length) {
-          working = deleteEntriesByNameXml(working, named);
-          const sources = named.map((t) => findEntryBySelector(model, t));
-          if (sources.every((e) => !!e)) {
-            const seen = new Set<string>();
-            for (const src of sources) {
-              // Two clipboard items can resolve to ONE model entry when their selectors
-              // name no distinguishing namespace, and removing it twice would throw on
-              // the second op — the same reason deleteEntriesByNameXml re-finds each span.
-              if (seen.has(src.id)) continue;
-              seen.add(src.id);
-              pairs.push({ redo: removeOp(src.id), undo: insertOp(src) });
-              applied.push(...applyEntryOps(model, [removeOp(src.id)]));
-            }
+        // A same-document move removes the sources first so the pasted copies can keep their
+        // names — from the text AND from the model, because the uniqueness check inside the
+        // paste reads the MODEL's namespace and a source still standing there would push the
+        // copy to `Name1`.
+        if (removeFirst.length > 0) {
+          working = deleteEntriesByNameXml(working, removeFirst);
+          const removal = removalPairs(target.model, removeFirst);
+          if (removal) {
+            pairs.push(...removal.pairs);
+            applied.push(...removal.applied);
           } else {
-            // The model cannot say which entry the clipboard means, so it catches up the
-            // old way — and the target section has to be re-resolved against the tree
-            // that just replaced it.
+            // The model cannot say which entries the selectors mean, so it catches up the old
+            // way, and the target section is found again in the tree that replaced it — by
+            // name, not through the row, which may have been one of the entries just removed.
             narrow = false;
-            const rebuilt = registerModel(working);
-            section = resolveSectionForPaste(rebuilt, findNode(rowId), rowId) ?? section;
+            section = sectionByName(registerModel(working), target.sectionName);
+            if (!section) throw new Error('Could not resolve the target section.');
           }
         }
-
-        // The fold attaches each new entry to the section itself (that is
-        // prepareEntryForPaste's job, and the uniqueness check needs it), APPENDING it —
-        // so whatever it added is the tail this count marks off.
-        const addedFrom = (section.children as any[]).length;
-        const { newText, selectIds } = pasteEntriesXml(working, section, clip.items.map((it) => it.payload));
-        // Indexing each new subtree and describing it for the undo stack is entryOps' job —
-        // the same call the JSON provider makes from its own paste and drop. The loop was
-        // written out here and in applyDrop instead, putting one rule in three places, and
-        // of those two copies only this one still said why the indexing is owed: a node id
-        // is a PATH, so an entry that joined the tree outside an op is in no index, and the
+        // The fold attaches each new entry to the section itself (that is prepareEntryForPaste's
+        // job, and the uniqueness check needs it), APPENDING it — so whatever it added is the
+        // tail this count marks off. Indexing each new subtree and describing it for the undo
+        // stack is entryOps' job (opsOfPastedEntries), the call the JSON view makes too: a node
+        // id is a PATH, so an entry that joined the tree outside an op is in no index, and the
         // row the paste selects would not resolve for the next edit.
+        const addedFrom = (section.children as any[]).length;
+        const { newText, selectIds } = pasteEntriesXml(working, section, payloads);
         const added = opsOfPastedEntries(section, addedFrom);
         pairs.push(...added.pairs);
         applied.push(...added.applied);
-        document.pushEdit('Paste', before, newText, narrow ? patchOfPairs(pairs) : undefined);
+        document.pushEdit(label, before, newText, narrow ? patchOfPairs(pairs) : undefined);
         if (narrow) document.repaintOps(applied);
         else document.repaintAll();
         if (selectIds.length) webview.postMessage({ type: 'selectRows', rowIds: selectIds });
-        try {
-          // A cross-document cut removes the source from ITS document via that
-          // document's own format-appropriate deleter (JSON or binary), a second
-          // native undo step — exactly a cut in one file + paste in another.
-          if (isCut && !sameDoc && clip.sourceDocUri && named.length) {
-            await deleteFromSource(clip.sourceDocUri, named);
-          }
-        } finally {
-          // Cleared even if the source-delete throws: the paste above already
-          // succeeded, so leaving the cut live means the next paste duplicates the
-          // entry again. Matches the JSON provider.
-          if (isCut) {
-            clearClipboard();
-            broadcastClipboardState();
-          }
-        }
-      } catch (err) {
-        // A paste attaches its new node to the model before it can fail on the text, so
-        // the model may be a step ahead of chunkXml. Rebuild from the text, which is the
-        // state the user still has — first, because the repaint clears the banner.
+      },
+      // A paste attaches its new nodes to the model before it can fail on the text, and a move
+      // has taken its sources out, so the model may be a step ahead of chunkXml. Rebuild from
+      // the text, which is the state the user still has — first, because the repaint clears
+      // the banner.
+      onFailure: (err) => {
         document.repaintAll();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
-      }
+        webview.postMessage({ type: 'error', message: failedEdit(err) });
+      },
+      report: (message) => void webview.postMessage({ type: 'error', message: describe(message) }),
+    });
+    // A move that left its original behind is said where it stays, not only in the banner a row
+    // update clears: see TransferDeps.warn.
+    const transferDeps: TransferDeps = {
+      deleteFromSource,
+      warn: (message) => void vscode.window.showWarningMessage(message),
     };
+
+    const applyPaste = (rowId: string) =>
+      runTransfer({ rowId }, clipboardRegister(broadcastClipboardState), transferAdapter(), transferDeps);
 
     /**
      * Create ONE new default entry from the Add gallery.
@@ -1085,7 +1427,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
      *
      * Synchronous end to end — `chunkXml` in, `pushEdit` out — so a pinned run of tile clicks
      * arriving faster than a write needs no queue here. The JSON provider's add does (see
-     * `queueAddEntry` there): its write is a `WorkspaceEdit` it has to await, so two handlers
+     * `queueStructural` there): its write is a `WorkspaceEdit` it has to await, so two handlers
      * can interleave around it. Same gesture, two document kinds, one of them exposed.
      */
     const applyAddEntry = (msg: { section: string; className: string; rename: boolean }): void => {
@@ -1096,8 +1438,14 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
           webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
           return;
         }
+        // Core's reason, asked before anything changes (refusal.ts).
+        const refused = addEntryRefusal(section.id, msg.className);
+        if (refused) {
+          postRefusal('add', refused);
+          return;
+        }
         const before = document.chunkXml;
-        // Before the add: the mark the new tail is measured from (see applyPaste).
+        // Before the add: the mark the new tail is measured from (see the transfer commit).
         const addedFrom = (section.children as any[]).length;
         const { newText, selectId } = addNewEntryXml(before, section, msg.className);
         // Indexes the new subtree and states the insert for the undo — owed because the entry
@@ -1116,7 +1464,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
         // a step ahead of chunkXml. Rebuild from the text — the state the user still has —
         // first, because the repaint clears the banner.
         document.repaintAll();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
+        webview.postMessage({ type: 'error', message: failedEdit(err) });
       }
     };
 
@@ -1124,23 +1472,19 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // Each dragged row's owning entry is serialized (the payload the drop pastes)
     // alongside the display facts (class/kind) the target webview needs to predict
     // the drop, then the payload-free descriptor is broadcast so every open table
-    // renders feedback. The snapshot itself is shared with SlddTextEditorProvider
-    // (buildDragSnapshot); only getting a live model differs between the formats.
+    // renders feedback. Shared with every other table (clipboardAction.dragEntries);
+    // only getting a live model differs between the formats.
     const applyDragStart = (msg: { rowIds: string[] }): void => {
-      try {
+      dragEntries(msg.rowIds, uriString, {
         // From the model as it stands: starting a drag changes no text, so a re-parse
         // could only rebuild the tree that is already there. See applyCopy.
-        liveModel();
-        const snap = buildDragSnapshot(msg.rowIds, findNode);
-        if (snap.items.length === 0) clearDrag();
-        else setDrag(uriString, snap.sourceSection, snap.sourceSectionLabel, snap.sourceIsDerived, snap.items);
-        broadcastDragState();
-      } catch (err) {
-        clearDrag();
-        broadcastDragState();
-        // Said, as a failed copy is — see SlddTextEditorProvider's applyDragStart.
-        webview.postMessage({ type: 'error', message: `Failed to drag: ${(err as Error).message}` });
-      }
+        refresh: () => {
+          liveModel();
+        },
+        findNode,
+        post: (message) => webview.postMessage({ ...message, message: describe(message.message) }),
+        broadcast: broadcastDragState,
+      });
     };
 
     const applyDragEnd = (): void => {
@@ -1148,128 +1492,46 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       broadcastDragState();
     };
 
-    // --- Drop: complete the drag as copy/move + paste ---------------------------
-    // Identical in shape to SlddTextEditorProvider.applyDrop, using the XML
-    // transforms. A same-document move deletes the sources first (in the same
-    // text) so the pasted copies keep their names; a cross-document move pastes
-    // here, then deletes from the SOURCE document via the hub (which dispatches
-    // to the source's own format-appropriate deleter — JSON or binary).
-    const applyDrop = async (msg: { rowId: string; mode: 'copy' | 'move' }): Promise<void> => {
-      try {
-        const drag = getDrag();
-        if (!drag || drag.items.length === 0) {
-          webview.postMessage({ type: 'error', message: 'Nothing to drop.' });
-          return;
-        }
-        const payloads = drag.items.map((it) => it.payload);
-        const isMove = msg.mode === 'move';
-        const sameDoc = drag.sourceDocUri === uriString;
-        // Selectors, not bare names: a dragged entry's name is unique only within
-        // its namespace, so deleting by name alone could splice out a same-named
-        // entry in another section. See core's entrySelector.ts.
-        const sourceTargets = drag.items
-          .map((it) => entrySelectorOf(it.payload))
-          .filter((s) => s.name.length > 0);
+    // --- Drop: the drag register's transfer --------------------------------------
+    // The same transfer as a paste (above), read from the drag register, which is captured
+    // as the drop arrives and let go of however the drop ends.
+    const applyDrop = (msg: { rowId: string; mode: 'copy' | 'move' }) =>
+      runTransfer({ rowId: msg.rowId }, dragRegister(msg.mode, broadcastDragState), transferAdapter(), transferDeps);
 
-        const model = liveModel();
-        const before = document.chunkXml;
-        let working = before;
-        // The forward changes in the order they happen, each with its inverse.
-        const pairs: EntryOpPair[] = [];
-        const applied: AppliedOp[] = [];
-        let narrow = true;
-        let section = resolveSectionForPaste(model, findNode(msg.rowId), msg.rowId);
-        // A same-document move removes the originals first so the pasted copies keep
-        // their names — from the text and from the model, whose namespace the paste's
-        // uniqueness check reads. A copy, or a cross-document move, leaves this
-        // document's originals untouched here.
-        if (isMove && sameDoc && sourceTargets.length) {
-          working = deleteEntriesByNameXml(working, sourceTargets);
-          const sources = sourceTargets.map((t) => findEntryBySelector(model, t));
-          if (sources.every((e) => !!e)) {
-            const seen = new Set<string>();
-            for (const src of sources) {
-              // A multi-select drag can list the same entry twice (two selected rows of
-              // one entry), and removing it twice would throw on the second op — the same
-              // reason deleteEntriesByNameXml re-finds each span.
-              if (seen.has(src.id)) continue;
-              seen.add(src.id);
-              pairs.push({ redo: removeOp(src.id), undo: insertOp(src) });
-              applied.push(...applyEntryOps(model, [removeOp(src.id)]));
-            }
-          } else {
-            // At least one source is not something the model can name unambiguously, so
-            // it catches up the old way and the target section is re-resolved against the
-            // tree that replaced it.
-            narrow = false;
-            const rebuilt = registerModel(working);
-            section = resolveSectionForPaste(rebuilt, findNode(msg.rowId), msg.rowId);
-          }
-        }
-        if (!section) {
-          webview.postMessage({ type: 'error', message: 'Could not resolve the target section.' });
-          document.repaintAll();
-          return;
-        }
-
-        // The fold attaches each new entry to the section as it goes (see
-        // foldPasteEntries), appending — so what it added is the tail after this count.
-        const addedFrom = (section.children as any[]).length;
-        const { newText, selectIds } = pasteEntriesXml(working, section, payloads);
-        // Same call, and for the same reason, as applyPaste above.
-        const added = opsOfPastedEntries(section, addedFrom);
-        pairs.push(...added.pairs);
-        applied.push(...added.applied);
-        document.pushEdit(isMove ? 'Move' : 'Copy', before, newText, narrow ? patchOfPairs(pairs) : undefined);
-        if (narrow) document.repaintOps(applied);
-        else document.repaintAll();
-        if (selectIds.length) webview.postMessage({ type: 'selectRows', rowIds: selectIds });
-
-        // Cross-document move: remove the originals from the SOURCE document via
-        // its own deleter (a second native undo step on that document).
-        if (isMove && !sameDoc) {
-          await deleteFromSource(drag.sourceDocUri, sourceTargets);
-        }
-      } catch (err) {
-        // Same as applyPaste: the fold attaches nodes as it goes, so a failure part-way
-        // can leave the model ahead of chunkXml. Rebuild from the text.
-        document.repaintAll();
-        webview.postMessage({ type: 'error', message: `Failed to apply edit: ${(err as Error).message}` });
-      } finally {
-        // A drop ends the drag whatever became of it — see SlddTextEditorProvider's applyDrop.
-        clearDrag();
-        broadcastDragState();
-      }
+    // The messages every table view answers alike (tableDispatch.ts), keyed by message type.
+    const common: CommonHandlers = {
+      ready: () => post(),
+      select: (rowIds) => this.onSelect?.(uriString, rowIds),
+      navigate: (target) => this.onNavigate?.(target, uriString),
+      // A Variable Editor panel is opening: send its cells. One shared answer for all four
+      // webview hosts — see matrixRequest.ts.
+      requestMatrix: (nodeId) => answerMatrixRequest(webview, uriString, nodeId),
+      // A Value editor is opening on a summary: send its whole text, read off the live tree,
+      // as an edit is (editTextRequest.ts).
+      requestEditText: (rowId) => answerEditTextRequest((m) => webview.postMessage(m), (id) => (liveModel(), findNode(id)), rowId, describe),
+      // A row the payload deferred is being opened: send the rows under it (childRequest.ts).
+      // The filler is a no-op because THIS view's payload fills no Usage column either — a
+      // fetched row has to match its siblings, and matching means empty here. `uriString`
+      // resolves because findNode prefers the global registry, which is keyed by the node id
+      // this provider's prefixed srcId is embedded in; that is the same lookup the Property
+      // Inspector's selection uses.
+      requestChildren: (nodeId) => void answerChildRequest(webview, uriString, nodeId, name, async () => false, planner),
+      undo: () => void vscode.commands.executeCommand('undo'),
+      redo: () => void vscode.commands.executeCommand('redo'),
     };
 
     const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
-      if (msg?.type === 'ready') post();
-      else if (msg?.type === 'select') this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
-      else if (msg?.type === 'edit') applyEdit(msg);
+      if (dispatchCommon(msg, common)) return;
+      if (msg?.type === 'edit') applyEdit(msg);
       else if (msg?.type === 'copy') applyCopy(msg.rowIds, 'copy');
       else if (msg?.type === 'cut') applyCopy(msg.rowIds, 'cut');
       else if (msg?.type === 'delete') applyDelete(msg.rowIds);
-      else if (msg?.type === 'addChild') applyStructural(msg.rowId, (xml, node) => addChildXml(xml, node), 'Add child');
+      else if (msg?.type === 'addChild') applyStructural(msg.rowId, (xml, node) => addChildXml(xml, node), 'Add child', 'addChild');
       else if (msg?.type === 'paste') void applyPaste(msg.rowId);
       else if (msg?.type === 'addEntry') applyAddEntry(msg);
       else if (msg?.type === 'dragStart') applyDragStart(msg);
       else if (msg?.type === 'dragEnd') applyDragEnd();
       else if (msg?.type === 'drop') void applyDrop(msg);
-      else if (msg?.type === 'navigate') {
-        if (typeof msg.target === 'string') this.onNavigate?.(msg.target);
-      } else if (msg?.type === 'requestMatrix') {
-        // A Variable Editor panel is opening: send its cells. One shared answer for
-        // all four webview hosts — see matrixRequest.ts.
-        answerMatrixRequest(webview, uriString, msg.nodeId);
-      } else if (msg?.type === 'requestChildren') {
-        // A row the payload deferred is being opened: send the rows under it
-        // (childRequest.ts). The filler is a no-op because THIS view's payload fills no
-        // Usage column either — a fetched row has to match its siblings, and matching
-        // means empty here. `uriString` resolves because findNode prefers the global
-        // registry, which is keyed by the node id this provider's prefixed srcId is
-        // embedded in; that is the same lookup the Property Inspector's selection uses.
-        void answerChildRequest(webview, uriString, msg.nodeId, name, async () => false, planner);
-      } else if (msg?.type === 'undo' || msg?.type === 'redo') void vscode.commands.executeCommand(msg.type);
     });
 
     const navSub = wireNavigateSelect(webview, uriString);
@@ -1300,12 +1562,57 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   }
 
   // --- Save / backup / revert (the safety gate lives here) ---
-  async saveCustomDocument(document: BinarySlddDocument, _token: vscode.CancellationToken): Promise<void> {
+  async saveCustomDocument(document: BinarySlddDocument, token: vscode.CancellationToken): Promise<void> {
+    // Written again if the stack moved while it was being written (settledSave.ts).
+    await saveSettled(document.edits, token, () => this.writeDocument(document));
+  }
+
+  /** One write of the document as it stands, the save's own: one round of `saveSettled`. */
+  private async writeDocument(document: BinarySlddDocument): Promise<void> {
     // A save used to read the dictionary THREE times — the gate, then the re-baseline,
     // then the repaint's rebuild — for three trees that describe the same unchanged
     // chunkXml. On a real 2.6 MB dictionary that is ~3.1 s each, so ~9 s of a save spent
     // re-deriving what the first read already had. Now: read once, here.
-    const gated = await this.writeTo(document, document.uri);
+    //
+    // The disk check runs AFTER the gate and the zip, right before the write. It can only
+    // see changes made before it runs, so the later it runs, the smaller the gap a change
+    // can slip through. It also keeps the gate synchronous up to the first await, which is
+    // what lets a save read the text the user actually saved (see writeTo).
+    document.saving = true;
+    let gated: ParsedChunk | null;
+    // The edits this save writes. writeTo gates them before its first await, so an edit that
+    // lands while the write is in flight goes into a fresh set and stays unsaved, as its text
+    // does. A save that fails wrote nothing, so they go back.
+    const edited = document.edited;
+    const unchecked = document.unchecked;
+    try {
+      const writing = this.writeTo(document, document.uri, 'save', () =>
+        refuseIfChangedOnDisk(document, BinarySlddEditorProvider.viewType, (m) => this.askSaveConflict(m)),
+      );
+      document.edited = new Set();
+      document.unchecked = new Map();
+      const wrote = await writing;
+      gated = wrote.gated;
+      // What the next save is held to: the text this one wrote, not chunkXml, which an edit
+      // on the write's await may have moved on.
+      if (gated) {
+        document.saved = new SavedChunk(gated.chunkXml);
+        document.savedParts = wrote.parts;
+      }
+      // What a later save and the watcher compare the disk with, read off the written file
+      // itself where the write could: a stat after it would take an outside write landing just
+      // after for this one, and the next save would write over that without asking. The
+      // watcher's event for this write then finds the disk matching, and ignores it.
+      document.stamp = wrote.stamp;
+    } catch (err) {
+      for (const key of edited) document.edited.add(key);
+      document.markUnchecked(new Set(unchecked.values()));
+      throw err;
+    } finally {
+      document.saving = false;
+    }
+    document.inConflict = false;
+    document.overwriteStamp = undefined;
     // Re-baseline to the just-saved content so per-row "Modified" marks clear,
     // then repaint (mirrors SlddTextEditorProvider's onDidSaveTextDocument path).
     // Baseline BEFORE painting, or the paint diffs against the pre-save baseline and
@@ -1320,26 +1627,38 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   async saveCustomDocumentAs(
     document: BinarySlddDocument,
     dest: vscode.Uri,
-    _token: vscode.CancellationToken,
+    token: vscode.CancellationToken,
   ): Promise<void> {
+    // Onto the file itself, by its own name or another link to it: that is a save, and has to
+    // move the stamp, the save gate's chunk and the dirty flag as one does, or the next save
+    // would take its own write for an outside one. As the MAT-file editor's Save As.
+    if (dest.toString() === document.uri.toString() || (await sameFile(dest, document.uri))) {
+      return this.saveCustomDocument(document, token);
+    }
     await this.writeTo(document, dest);
   }
 
   async revertCustomDocument(document: BinarySlddDocument, _token: vscode.CancellationToken): Promise<void> {
-    const bytes = await vscode.workspace.fs.readFile(document.uri);
-    const zip = unzipSync(bytes);
-    const chunk = zip[DATA_PART_XML];
-    if (chunk) {
-      document.chunkXml = new TextDecoder().decode(chunk);
-      // The parts too, and for the same reason: an edit can have patched one of them (a
-      // rename carried into the System Composer catalog), and a revert that restored only
-      // the chunk would leave the entry named as the file spells it beside a catalog that
-      // no longer classifies it — then write that pair out on the next save.
-      document.resetParts(zip);
+    // VS Code marks the document clean as it asks for this, without waiting for it. The read
+    // comes first, so that the watcher, which reads the dirty-flag copy, does not reload over
+    // a revert still reading; the copy is marked clean once the read is in, either way. As the
+    // MAT-file editor's revert. A revert also ends a save conflict, as it does for a text file,
+    // whether or not its read succeeds: both paths end in applyDisk, which ends it.
+    let read: DiskRead;
+    try {
+      read = await readDisk(document.uri);
+    } catch (err) {
+      // The file is gone, or is no dictionary (readDisk). VS Code shows the document clean, so it
+      // must not go on holding the edits it dropped: it is put back to the file as it last read
+      // or wrote it, the chunk the save gate holds a save to and the parts beside it, under the
+      // stamp it already holds, so that a save still asks about a file that changed. A document
+      // restored from a backup last read the backup. The error says why to VS Code, which shows it.
+      document.edits.reverted();
+      document.applyDisk({ stamp: document.stamp, chunkXml: document.saved.xml, parts: document.savedParts });
+      throw err;
     }
-    // Wide on purpose: a revert replaces the whole document, so there is no narrower
-    // truth to tell the table than "everything you are showing came from elsewhere".
-    document.repaintAll();
+    document.edits.reverted();
+    document.applyDisk(read);
   }
 
   async backupCustomDocument(
@@ -1362,7 +1681,9 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     // is touched.
     await this.writeTo(document, ctx.destination, 'backup');
     return {
-      id: ctx.destination.toString(),
+      // With the stamp of the file these edits were made over, which a restore's first save
+      // compares the file with (backupId.ts).
+      id: backupId(ctx.destination.toString(), document.stamp),
       delete: async () => {
         try {
           await vscode.workspace.fs.delete(ctx.destination);
@@ -1417,7 +1738,10 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   //    error, and the on-disk file is never touched. This is the call site the
   //    reads-as-empty rule in readSlddParts matters most for: a chunk the reader cannot
   //    read yields a dictionary with no entries, and zipping that over the file on disk
-  //    would take every entry with it, silently. It also compresses properly, because
+  //    would take every entry with it, silently. Then the chunk is held to the chunk as
+  //    last read or saved (binarySaveGate.ts): what no edit changed must be its bytes,
+  //    and an edited entry must keep what the edit did not change. Neither check says
+  //    an edited value is right (see the header). It also compresses properly, because
   //    the result is what the user keeps.
   //
   //  - 'backup' writes VS Code's hot-exit scratch copy, which is thrown away when the
@@ -1429,11 +1753,23 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   // The gate's read is RETURNED rather than dropped, because the caller that re-baselines
   // after a save needs exactly it: a second read of the same string is seconds of work for
   // an answer already in hand. 'backup' gates nothing, so it has nothing to return.
+  //
+  // 'save' writes the user's file through writeUserFile, which replaces it whole where the file
+  // system lets it (safeWrite.ts) rather than cutting it to nothing and writing it again, so a
+  // crash or a full disk part-way through leaves the dictionary the user had, and which answers
+  // the stamp the write left. A dictionary is a zip, and a zip cut short is a file MATLAB cannot
+  // open. 'backup' writes VS Code's scratch copy plainly.
+  //
+  // `beforeWrite` runs after the zip and before the write, and a throw from it means nothing
+  // is written. A save passes its disk check here. Everything up to that call is synchronous,
+  // so the text gated and zipped is the text the document held when the save was called.
+  // An edit arriving on the check's await is not written, and stays unsaved.
   private async writeTo(
     document: BinarySlddDocument,
     dest: vscode.Uri,
     mode: 'save' | 'backup' = 'save',
-  ): Promise<ParsedChunk | null> {
+    beforeWrite?: () => Promise<void>,
+  ): Promise<Wrote> {
     let gated: ParsedChunk | null = null;
     if (mode === 'save') {
       try {
@@ -1443,11 +1779,23 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       } catch (err) {
         throw new Error('Refusing to save: the document did not re-parse (' + (err as Error).message + ').');
       }
+      const refusal = savedChunkRefusal(
+        document.saved,
+        gated.chunkXml,
+        document.edited,
+        DataModel.getDataSource(document.srcId) ?? null,
+        document.unchecked,
+      );
+      if (refusal) throw new Error(refusal);
     }
-    const zipEntries: Record<string, Uint8Array> = { ...document.zipMeta };
-    zipEntries[DATA_PART_XML] = new TextEncoder().encode(document.chunkXml);
+    const parts: Record<string, Uint8Array> = { ...document.zipMeta };
+    const zipEntries: Record<string, Uint8Array> = { ...parts, [DATA_PART_XML]: new TextEncoder().encode(document.chunkXml) };
     const zipped = zipSync(zipEntries, { level: mode === 'save' ? 6 : 1 });
-    await vscode.workspace.fs.writeFile(dest, zipped);
-    return gated;
+    if (beforeWrite) await beforeWrite();
+    if (mode === 'backup') {
+      await vscode.workspace.fs.writeFile(dest, zipped);
+      return { gated, stamp: undefined, parts };
+    }
+    return { gated, stamp: await writeUserFile(dest, zipped), parts };
   }
 }

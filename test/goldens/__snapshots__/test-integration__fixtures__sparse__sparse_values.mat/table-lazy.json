@@ -1,0 +1,943 @@
+[
+ {
+  "type": "setRows",
+  "docUri": "file:///fx/test-integration/fixtures/sparse/sparse_values.mat",
+  "rows": [
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spDiag",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "spDiag",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<10x10 sparse double>",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double (sparse)",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spComplex",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "spComplex",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<3x4 sparse complex double>",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double (sparse complex)",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spLogical",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "spLogical",
+     "iconId": "wsCheck",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<2x3 sparse logical>",
+    "_valueEditable": false,
+    "DataType": "logical",
+    "Description": "",
+    "Class": "logical (sparse)",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spSingle",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "spSingle",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<3x2 sparse single>",
+    "_valueEditable": false,
+    "DataType": "single",
+    "Description": "",
+    "Class": "single (sparse)",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spAllZero",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "spAllZero",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<3x4 sparse double>",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double (sparse)",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spEmpty",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "spEmpty",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<0x0 sparse double>",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double (sparse)",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spRow",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "spRow",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<1x5 sparse double>",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double (sparse)",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spCol",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "spCol",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<5x1 sparse double>",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double (sparse)",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spNonFinite",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "spNonFinite",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<2x2 sparse double>",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double (sparse)",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spBig",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "spBig",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<1000x1000 sparse double>",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double (sparse)",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/spTall",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "spTall",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<10000000x2 sparse double>",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double (sparse)",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dDiag",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "dDiag",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<10x10 double>",
+    "_valueEditable": true,
+    "_hasEditText": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_matrix": {
+     "name": "dDiag",
+     "className": "double",
+     "dims": [
+      10,
+      10
+     ],
+     "nodeId": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dDiag"
+    },
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dComplex",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "dComplex",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<3x4 complex double>",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double (complex)",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_matrix": {
+     "name": "dComplex",
+     "className": "double",
+     "dims": [
+      3,
+      4
+     ],
+     "nodeId": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dComplex"
+    },
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dLogical",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "dLogical",
+     "iconId": "wsCheck",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "[true false false; false false true]",
+    "_valueEditable": true,
+    "DataType": "logical",
+    "Description": "",
+    "Class": "logical",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_matrix": {
+     "name": "dLogical",
+     "className": "logical",
+     "dims": [
+      2,
+      3
+     ],
+     "nodeId": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dLogical"
+    },
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dSingle",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "dSingle",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "[0 1.5; 2.5 0; 0 -4]",
+    "_valueEditable": true,
+    "DataType": "single",
+    "Description": "",
+    "Class": "single",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_matrix": {
+     "name": "dSingle",
+     "className": "single",
+     "dims": [
+      3,
+      2
+     ],
+     "nodeId": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dSingle"
+    },
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dAllZero",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "dAllZero",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<3x4 double>",
+    "_valueEditable": true,
+    "_hasEditText": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_matrix": {
+     "name": "dAllZero",
+     "className": "double",
+     "dims": [
+      3,
+      4
+     ],
+     "nodeId": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dAllZero"
+    },
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dEmpty",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "dEmpty",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "[ ]",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dRow",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "dRow",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "[0 2 0 4 0]",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": true,
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dCol",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "dCol",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "[0; 3; 0; 0; 5]",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": true,
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dNonFinite",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "dNonFinite",
+     "iconId": "wsDefault",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "[Inf 0; -Inf NaN]",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_matrix": {
+     "name": "dNonFinite",
+     "className": "double",
+     "dims": [
+      2,
+      2
+     ],
+     "nodeId": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/dNonFinite"
+    },
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/pSp",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "pSp",
+     "iconId": "wsParameters",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<3x3 sparse double>",
+    "_valueEditable": false,
+    "DataType": "auto",
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "dimensions": "[3 3]",
+    "complexity": "real",
+    "storageClass": {
+     "text": "Auto",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Auto",
+      "SimulinkGlobal",
+      "ExportedGlobal",
+      "ImportedExtern",
+      "ImportedExternPointer"
+     ]
+    },
+    "headerFile": "",
+    "alignment": "-1",
+    "Class": "Simulink.Parameter",
+    "Kind": "Simulink Parameter",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/pSpLogical",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "pSpLogical",
+     "iconId": "wsParameters",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<2x2 sparse logical>",
+    "_valueEditable": false,
+    "DataType": "boolean",
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "dimensions": "[2 2]",
+    "complexity": "real",
+    "storageClass": {
+     "text": "Auto",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Auto",
+      "SimulinkGlobal",
+      "ExportedGlobal",
+      "ImportedExtern",
+      "ImportedExternPointer"
+     ]
+    },
+    "headerFile": "",
+    "alignment": "-1",
+    "Class": "Simulink.Parameter",
+    "Kind": "Simulink Parameter",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/pSpComplex",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "pSpComplex",
+     "iconId": "wsParameters",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<2x2 sparse complex double>",
+    "_valueEditable": false,
+    "DataType": "auto",
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "dimensions": "[2 2]",
+    "complexity": "complex",
+    "storageClass": {
+     "text": "Auto",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Auto",
+      "SimulinkGlobal",
+      "ExportedGlobal",
+      "ImportedExtern",
+      "ImportedExternPointer"
+     ]
+    },
+    "headerFile": "",
+    "alignment": "-1",
+    "Class": "Simulink.Parameter",
+    "Kind": "Simulink Parameter",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/pDense",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "pDense",
+     "iconId": "wsParameters",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "[0 5 0; 0 0 0; 6 0 0]",
+    "_valueEditable": true,
+    "DataType": "auto",
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "dimensions": "[3 3]",
+    "complexity": "real",
+    "storageClass": {
+     "text": "Auto",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Auto",
+      "SimulinkGlobal",
+      "ExportedGlobal",
+      "ImportedExtern",
+      "ImportedExternPointer"
+     ]
+    },
+    "headerFile": "",
+    "alignment": "-1",
+    "Class": "Simulink.Parameter",
+    "Kind": "Simulink Parameter",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_matrix": {
+     "name": "pDense.Value",
+     "className": "double",
+     "dims": [
+      3,
+      3
+     ],
+     "nodeId": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/pDense"
+    },
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/st",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "st",
+     "iconId": "wsTree",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "<1x1 struct>",
+    "_valueEditable": false,
+    "DataType": "struct",
+    "Description": "",
+    "Class": "struct",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": true,
+    "_lazy": true
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/sparse/sparse_values.mat/c",
+    "parent": null,
+    "Status": "",
+    "Name": {
+     "label": "c",
+     "iconId": "wsBrackets",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "{<1x3 sparse double>, [9 10]}",
+    "_valueEditable": false,
+    "DataType": "cell",
+    "Description": "",
+    "Class": "cell",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": true,
+    "_lazy": true
+   }
+  ],
+  "columns": [
+   "Name",
+   "Value",
+   "DataType",
+   "UsedBy",
+   "Status",
+   "Kind",
+   "Class",
+   "Description",
+   "dimensions",
+   "dimensionsMode",
+   "complexity",
+   "Min",
+   "Max",
+   "Unit",
+   "storageClass",
+   "headerFile",
+   "alignment",
+   "definitionFile",
+   "preStatement",
+   "postStatement",
+   "qualifier",
+   "bankName",
+   "variantConditions",
+   "allChoicesCoderInfo",
+   "activeChoiceCoderInfo",
+   "lastModified",
+   "lastModifiedBy"
+  ],
+  "columnLabels": {
+   "Name": "Name",
+   "Value": "Value",
+   "Class": "Class",
+   "Kind": "Kind",
+   "DataType": "Data Type",
+   "Status": "Status",
+   "UsedBy": "Usage",
+   "Description": "Description",
+   "Min": "Min",
+   "Max": "Max",
+   "Unit": "Unit",
+   "definitionFile": "Definition File",
+   "preStatement": "Pre Statement",
+   "postStatement": "Post Statement",
+   "qualifier": "Qualifier",
+   "bankName": "Bank Name",
+   "variantConditions": "Variant Conditions",
+   "allChoicesCoderInfo": "All Choices Coder Info",
+   "activeChoiceCoderInfo": "Active Choice Coder Info",
+   "lastModified": "Last Modified",
+   "lastModifiedBy": "Last Modified By",
+   "dimensions": "Dimensions",
+   "complexity": "Complexity",
+   "storageClass": "Storage Class",
+   "headerFile": "Header File",
+   "alignment": "Alignment",
+   "dimensionsMode": "Dimensions Mode"
+  },
+  "columnGroups": {
+   "Min": "Data Object",
+   "Max": "Data Object",
+   "Unit": "Data Object",
+   "dimensions": "Data Object",
+   "complexity": "Data Object",
+   "dimensionsMode": "Data Object",
+   "storageClass": "Code Generation",
+   "headerFile": "Code Generation",
+   "alignment": "Code Generation",
+   "definitionFile": "Code Generation",
+   "preStatement": "Code Generation",
+   "postStatement": "Code Generation",
+   "qualifier": "Code Generation",
+   "bankName": "Variant Bank",
+   "variantConditions": "Variant Bank",
+   "allChoicesCoderInfo": "Variant Bank",
+   "activeChoiceCoderInfo": "Variant Bank",
+   "lastModified": "Data Dictionary",
+   "lastModifiedBy": "Data Dictionary"
+  },
+  "editable": true,
+  "add": {
+   "classes": [
+    "MatlabVariable",
+    "MatlabStruct",
+    "Simulink.Parameter",
+    "Simulink.Signal",
+    "Simulink.Bus",
+    "Simulink.NumericType",
+    "Simulink.AliasType",
+    "Simulink.ValueType",
+    "string"
+   ]
+  },
+  "warnings": {
+   "headline": "This file is too large to load at once: 23 of these rows load their contents when you expand them.",
+   "details": [
+    "The search box and the column sort cover the rows that are loaded."
+   ]
+  }
+ },
+ {
+  "type": "sectionRules",
+  "docUri": "file:///fx/test-integration/fixtures/sparse/sparse_values.mat",
+  "rules": [
+   {
+    "sectionName": "",
+    "sectionLabel": "sparse_values.mat",
+    "isDerived": false,
+    "allowedTypes": [
+     "MatlabVariable",
+     "Simulink.Parameter",
+     "Simulink.Signal",
+     "Simulink.Bus",
+     "Simulink.NumericType",
+     "Simulink.AliasType",
+     "Simulink.ValueType"
+    ]
+   }
+  ]
+ },
+ {
+  "type": "clipboardState",
+  "canPaste": false,
+  "mode": null,
+  "items": []
+ }
+]

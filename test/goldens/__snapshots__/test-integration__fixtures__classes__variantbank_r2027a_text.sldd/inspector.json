@@ -1,0 +1,377 @@
+{
+ "file:///fx/test-integration/fixtures/classes/variantbank_r2027a_text.sldd/design/ciA": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "ciA",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Variant Bank Coder Info",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.VariantBankCoderInfo",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Header File",
+      "value": "h.h",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Definition File",
+      "value": "d.c",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Pre Statement",
+      "value": "pre",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Post Statement",
+      "value": "post",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Qualifier",
+      "value": "Const",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/classes/variantbank_r2027a_text.sldd/design/ciB": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "ciB",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Variant Bank Coder Info",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.VariantBankCoderInfo",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Definition File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Pre Statement",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Post Statement",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Qualifier",
+      "value": "None",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/classes/variantbank_r2027a_text.sldd/design/vb1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "vb1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Variant Bank",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.VariantBank",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "two\nlines, it's",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Variant Bank",
+    "properties": [
+     {
+      "name": "Bank Name",
+      "value": "bankOne",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Variant Conditions",
+      "value": "{'W > 0 && ~X'}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "All Choices Coder Info",
+      "value": "ciA",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Active Choice Coder Info",
+      "value": "ciA",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/classes/variantbank_r2027a_text.sldd/design/vbD": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "vbD",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Variant Bank",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.VariantBank",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Variant Bank",
+    "properties": [
+     {
+      "name": "Bank Name",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Variant Conditions",
+      "value": "{}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "All Choices Coder Info",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Active Choice Coder Info",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/classes/variantbank_r2027a_text.sldd/design/vbN": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "vbN",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Variant Bank",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.VariantBank",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "desc A",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Variant Bank",
+    "properties": [
+     {
+      "name": "Bank Name",
+      "value": "bankA",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Variant Conditions",
+      "value": "{'V == 1','V == 2'}",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "All Choices Coder Info",
+      "value": "ciA",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Active Choice Coder Info",
+      "value": "ciB",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

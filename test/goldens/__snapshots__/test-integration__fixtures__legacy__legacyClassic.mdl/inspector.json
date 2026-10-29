@@ -1,0 +1,102 @@
+{
+ "file:///fx/test-integration/fixtures/legacy/legacyClassic.mdl/blocks/ClassicGain": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "ClassicGain",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Block Path",
+      "value": "ClassicGain",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/legacy/legacyClassic.mdl/blocks/ClassicConst": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "ClassicConst",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Block Path",
+      "value": "ClassicConst",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/legacy/legacyClassic.mdl/references/plant.mdl@$bdroot/Plant": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "plant.mdl",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Block Path",
+      "value": "$bdroot/Plant",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Status",
+      "value": "Not Loaded",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/legacy/legacyClassic.mdl/dataSources/legacyParams.sldd@legacyParams.sldd": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "legacyParams.sldd",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Path",
+      "value": "legacyParams.sldd",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Status",
+      "value": "Not Loaded",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

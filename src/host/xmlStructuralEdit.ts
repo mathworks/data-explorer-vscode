@@ -1,9 +1,10 @@
 // Copyright 2026 The MathWorks, Inc.
 //
 // Pure (VS-Code-free) XML text transforms for structural edits on a binary .sldd's
-// data/chunk0.xml — the XML analog of structuralEdit.ts. Each edit regenerates the
-// WHOLE touched entry's <Object> fragment (via serializeEntryToXml) and byte-splices
-// it, so untouched sibling entries stay byte-identical.
+// data/chunk0.xml — the XML analog of structuralEdit.ts. Each edit replaces the
+// touched entry's <Object>…</Object> with what core's spliceEntryObject writes for it
+// (its bytes, with what the edit changed written from the model, laid out as the chunk
+// is), so untouched sibling entries, and every byte around the entry, stay as they were.
 //
 // Only the SPLICING is format-specific. Everything that decides what an edit MEANS
 // — which node owns a row, what a section will accept, what a pasted entry becomes,
@@ -15,13 +16,13 @@
 
 import {
   serializeEntryToXml,
-  findEntryObjectSpan,
+  spliceEntryObject,
   findEntryElementSpan,
   findEntryInsertionPoint,
   entrySelectorOf,
   type EntrySelector,
 } from 'data-explorer-core';
-import { buildSectionRowId } from '../common/sectionRowId.js';
+import { buildSectionRowId } from 'data-explorer-view/model';
 import {
   reselectAfterRemoval,
   removeChildFromModel,
@@ -41,12 +42,12 @@ export function reserializeEntryXml(entry: any): string {
   return serializeEntryToXml(entry).replace(/\n$/, '');
 }
 
-// Replace the owning entry's fragment in-place with its reserialized form.
+// Replace the owning entry's <Object>…</Object> in place with what a save writes for it now.
+// Core's splice, not a span of this module's own: the entry's line used to be spliced over a
+// span that starts at `<Object`, so every edit put another four spaces in front of it.
 function spliceEntry(text: string, entry: any, selectId: string | null): StructuralResult {
-  const frag = reserializeEntryXml(entry);
-  const span = findEntryObjectSpan(text, entrySelectorOf(entry));
-  if (!span) throw new Error(`Could not locate entry "${entry.name}" text.`);
-  const newText = text.slice(0, span.offset) + frag + text.slice(span.offset + span.length);
+  const newText = spliceEntryObject(text, entry);
+  if (newText === null) throw new Error(`Could not locate entry "${entry.name}" text.`);
   return { newText, selectId };
 }
 

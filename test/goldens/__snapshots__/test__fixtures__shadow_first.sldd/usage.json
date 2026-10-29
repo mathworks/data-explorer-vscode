@@ -1,0 +1,13 @@
+{
+ "file:///fx/test/fixtures/shadow_first.sldd/design/PairVar": {
+  "blockLinks": [
+   {
+    "blockName": "PairGain",
+    "blockPath": "PairGain",
+    "modelName": "shadow_pair",
+    "modelUri": "file:///fx/test/fixtures/shadow_pair.slx",
+    "linkTarget": "blocks:1@file:///fx/test/fixtures/shadow_pair.slx"
+   }
+  ]
+ }
+}

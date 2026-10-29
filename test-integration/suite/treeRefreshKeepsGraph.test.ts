@@ -15,7 +15,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SectionsTreeProvider } from '../../src/host/SectionsTreeProvider';
-import { decode } from '../../src/host/health';
+import { decode } from 'data-explorer-view/model';
 
 function extUri(): vscode.Uri {
   const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
@@ -66,7 +66,7 @@ suite('The Data Explorer tree rebuilds only when the folder changed', () => {
       // (`/"Dictionary References"\s*:\s*(\[[^\]]*\])/`), which matched the first occurrence at any
       // depth, so a dictionary no MATLAB would write still produced an edge. That regex is gone —
       // one `scanSldd` now answers the references, the names and the usage summary from one read of
-      // either format (sourceCache.ts) — and `JSON.parse` keeps the LAST of two identical keys, so
+      // either format (core's cache) — and `JSON.parse` keeps the LAST of two identical keys, so
       // the top-level copy read as no references at all. What this test is about is unaffected: it
       // asserts that `rebuild()` re-reads the folder and `refresh()` does not, and it can only
       // assert that over a dictionary the extension actually reads.
@@ -94,28 +94,34 @@ suite('The Data Explorer tree rebuilds only when the folder changed', () => {
     }
   }).timeout(60000);
 
+  // On a scratch copy of its own, not on data.sldd. The test above rewrites data.sldd on disk
+  // and restores it, and a model of data.sldd that an earlier suite left open (navigateReferrer
+  // opens one) reloads after that restore. A reload landing under this test's edit bumps the
+  // document's version, and the main thread then refuses the edit: 'the edit applied' failed
+  // this way on Linux CI. No other test opens this copy.
   test('a refresh() is enough to badge a document that just went dirty', async () => {
-    const uri = wsUri('data.sldd');
+    const uri = wsUri('tree_refresh_badge.sldd');
+    await vscode.workspace.fs.copy(wsUri('data.sldd'), uri, { overwrite: true });
     const tree = new SectionsTreeProvider(extUri());
     const rowFor = async (): Promise<vscode.TreeItem> => {
       const roots = await tree.getChildren();
       for (const r of roots) {
         const kids = r.kind === 'group' ? await tree.getChildren(r) : [r];
-        const hit = kids.find((k) => k.label === 'data.sldd');
+        const hit = kids.find((k) => k.label === 'tree_refresh_badge.sldd');
         if (hit) return tree.getTreeItem(hit);
       }
-      throw new Error('data.sldd is not a row in the tree');
+      throw new Error('tree_refresh_badge.sldd is not a row in the tree');
     };
 
-    assert.strictEqual(
-      decode((await rowFor()).resourceUri?.query),
-      null,
-      'the file starts clean, so its row carries no health state',
-    );
-
-    const doc = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(doc);
     try {
+      assert.strictEqual(
+        decode((await rowFor()).resourceUri?.query),
+        null,
+        'the file starts clean, so its row carries no health state',
+      );
+
+      const doc = await vscode.workspace.openTextDocument(uri);
+      await vscode.window.showTextDocument(doc);
       // Dirty the document without saving — what a keystroke, an undo and a redo all do.
       const edit = new vscode.WorkspaceEdit();
       edit.insert(uri, doc.positionAt(0), ' ');
@@ -130,6 +136,7 @@ suite('The Data Explorer tree rebuilds only when the folder changed', () => {
       );
     } finally {
       await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+      await vscode.workspace.fs.delete(uri);
     }
   }).timeout(60000);
 });

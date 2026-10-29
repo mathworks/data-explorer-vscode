@@ -1,0 +1,31 @@
+{
+ "file:///fx/test-integration/fixtures/legacy/legacyParams.sldd/design/Kp": {
+  "blockLinks": [
+   {
+    "blockName": "ClassicGain",
+    "blockPath": "ClassicGain",
+    "modelName": "legacyClassic",
+    "modelUri": "file:///fx/test-integration/fixtures/legacy/legacyClassic.mdl",
+    "linkTarget": "blocks:ClassicGain@file:///fx/test-integration/fixtures/legacy/legacyClassic.mdl"
+   },
+   {
+    "blockName": "ModernGain",
+    "blockPath": "ModernGain",
+    "modelName": "legacyModern",
+    "modelUri": "file:///fx/test-integration/fixtures/legacy/legacyModern.mdl",
+    "linkTarget": "blocks:1@file:///fx/test-integration/fixtures/legacy/legacyModern.mdl"
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/legacy/legacyParams.sldd/design/Uo": {
+  "blockLinks": [
+   {
+    "blockName": "ClassicConst",
+    "blockPath": "ClassicConst",
+    "modelName": "legacyClassic",
+    "modelUri": "file:///fx/test-integration/fixtures/legacy/legacyClassic.mdl",
+    "linkTarget": "blocks:ClassicConst@file:///fx/test-integration/fixtures/legacy/legacyClassic.mdl"
+   }
+  ]
+ }
+}

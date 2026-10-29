@@ -1,0 +1,52 @@
+{
+ "file:///fx/test/fixtures/chain_model.slx/blocks/1": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "ChainGain",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Block Path",
+      "value": "ChainGain",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/chain_model.slx/dataSources/chain_top.sldd@chain_top.sldd": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "chain_top.sldd",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Path",
+      "value": "chain_top.sldd",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Status",
+      "value": "Not Loaded",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

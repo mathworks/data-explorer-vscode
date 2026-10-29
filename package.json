@@ -2,7 +2,7 @@
   "name": "simulink-data-explorer",
   "displayName": "Simulink Data Explorer",
   "description": "Explore Simulink models, data dictionaries, MAT-files, and projects as interactive tables and relationship trees.",
-  "version": "1.36.10",
+  "version": "1.46.0",
   "publisher": "mathworks",
   "icon": "media/icon.png",
   "private": true,
@@ -38,9 +38,6 @@
             "filenamePattern": "*.sldd"
           },
           {
-            "filenamePattern": "*.mat"
-          },
-          {
             "filenamePattern": "*.slx"
           },
           {
@@ -71,6 +68,16 @@
           }
         ],
         "priority": "option"
+      },
+      {
+        "viewType": "dataExplorer.matView",
+        "displayName": "Data Explorer",
+        "selector": [
+          {
+            "filenamePattern": "*.mat"
+          }
+        ],
+        "priority": "default"
       },
       {
         "viewType": "dataExplorer.projectView",
@@ -193,7 +200,7 @@
         },
         {
           "command": "dataExplorer.addEntry",
-          "when": "activeCustomEditorId == dataExplorer.tableView || activeCustomEditorId == dataExplorer.binarySlddView"
+          "when": "activeCustomEditorId == dataExplorer.tableView || activeCustomEditorId == dataExplorer.binarySlddView || activeCustomEditorId == dataExplorer.matView"
         }
       ],
       "view/title": [
@@ -214,7 +221,7 @@
         "command": "dataExplorer.addEntry",
         "key": "ctrl+alt+a",
         "mac": "cmd+alt+a",
-        "when": "activeCustomEditorId == dataExplorer.tableView || activeCustomEditorId == dataExplorer.binarySlddView"
+        "when": "activeCustomEditorId == dataExplorer.tableView || activeCustomEditorId == dataExplorer.binarySlddView || activeCustomEditorId == dataExplorer.matView"
       }
     ]
   },
@@ -222,7 +229,7 @@
     "build:webview": "vite build",
     "build:host": "node esbuild.mjs",
     "build:web": "node esbuild.mjs --web",
-    "copy:icons": "node -e \"const fs=require('fs');fs.mkdirSync('dist/webview/icons',{recursive:true});for(const f of fs.readdirSync('media/icons'))fs.copyFileSync('media/icons/'+f,'dist/webview/icons/'+f)\"",
+    "copy:icons": "node scripts/copy-icons.mjs",
     "build": "npm run build:webview && npm run copy:icons && npm run build:host",
     "watch:host": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
@@ -236,7 +243,8 @@
   },
   "dependencies": {
     "@lit/context": "^1.1.6",
-    "data-explorer-core": "github:mathworks/data-explorer-core#v1.36.8",
+    "data-explorer-core": "github:mathworks/data-explorer-core#v1.48.0",
+    "data-explorer-view": "github:mathworks/data-explorer-view#3465cd935dff6f2d14e5674a35ad3d6c46934360",
     "fast-xml-parser": "^5.8.0",
     "fflate": "^0.8.3",
     "highlight.js": "^11.11.1",
@@ -246,17 +254,17 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.106.0",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.0.0",
     "@vscode/test-web": "^0.0.81",
-    "@vscode/vsce": "^3.0.0",
+    "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.25.0",
     "happy-dom": "^20.9.0",
     "mocha": "^11.7.6",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   },
   "overrides": {
     "js-yaml": "^4.3.2",

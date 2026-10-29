@@ -33,6 +33,11 @@ export interface EntrySyncPlan {
   entry: any;
   /** Its element re-parsed — exactly what `SectionNode.parseEntry` takes. */
   record: EntryRecord;
+  /**
+   * Always true: the record is the document's own text, so the replace op built from this plan
+   * says so (EntryOp's `fromDocumentText`) and core reads it as the file's read does.
+   */
+  fromDocumentText: true;
 }
 
 /** A single `vscode.TextDocumentContentChangeEvent`, as much of it as matters here. */
@@ -86,6 +91,42 @@ export function isEchoOfEdit(changes: readonly RangeReplacement[], submitted: Ra
 }
 
 /**
+ * A write the host painted AHEAD of: its rows went out before a byte was written, so the change
+ * event the write fires has nothing left to repaint — as long as those rows are still the ones
+ * on screen.
+ *
+ * `epoch` is what says they are. It counts the wide repaints the view has begun, read when the
+ * paint went out; a wide repaint begun since has replaced every row, and it read the text as it
+ * was before this write landed, because nothing waits for a write. See isPaintedEcho.
+ */
+export interface PaintedWrite {
+  /** The range replacement handed to the document. */
+  submitted: RangeReplacement;
+  /** How many wide repaints the view had begun when this write's rows were painted. */
+  epoch: number;
+}
+
+/**
+ * Whether a change event is the echo of a write whose rows are still on screen — the one case
+ * where the event can be skipped.
+ *
+ * Byte for byte, as isEchoOfEdit asks, AND with no wide repaint begun since the paint. A save, a
+ * webview asking for its rows (`ready`) and a clipboard broadcast over rows out of step each
+ * repaint the whole table without waiting for a write in flight, and each reads the text as it
+ * stands, which until the write lands is the text from BEFORE the edit: the screen goes back to
+ * the old rows and the model is rebuilt from the old text. Skipped then, the echo left both
+ * saying what the file no longer does. Refused, it is a change like any other, applied to the
+ * tree that repaint built — the price is the repaint, never a wrong row.
+ */
+export function isPaintedEcho(
+  changes: readonly RangeReplacement[],
+  painted: PaintedWrite,
+  epoch: number,
+): boolean {
+  return painted.epoch === epoch && isEchoOfEdit(changes, painted.submitted);
+}
+
+/**
  * An edit the host wrote, kept AFTER its own event has come and gone — because VS Code can
  * hand it back again, in either direction, whenever the user asks.
  *
@@ -112,20 +153,42 @@ export interface KnownEdit {
  * What the host remembers about the edit it just submitted, until the change event arrives.
  *
  * Set immediately before the WorkspaceEdit and spent by the very next change event, once.
+ *
+ * ONE id, because the edit has painted by the time this is set: the model holds the entry under
+ * the name the edit gave it, and so do the rows on screen. It used to carry the pre-rename id as
+ * well, for the rows — from when the echo was the paint, and the table still held the entry under
+ * its old name. Once the paint came first, that id named a run the table no longer had, every
+ * rename's confirmation missed it, and the table asked for the whole payload to recover.
  */
 export interface HostEdit {
-  /** The edited entry as the MODEL now spells it — a rename has already happened. */
+  /** The edited entry as the MODEL and the ROWS ON SCREEN now spell it — after any rename. */
   entryId: string;
-  /** The id the ROWS ON SCREEN carry for it — before that rename. */
-  rowId: string;
   /** The range replacement handed to the document. */
   submitted: RangeReplacement;
+  /**
+   * How many wide repaints the view had begun when this was set — the same stamp, for the same
+   * reason, as PaintedWrite's: a wide repaint begun since has replaced the rows `entryId` names
+   * (see hintFor).
+   */
+  epoch: number;
+}
+
+/**
+ * The expectation a change event may use, or null.
+ *
+ * The hint names the rows the edit painted and the entry as the edit left the model. A wide
+ * repaint begun since has rebuilt both from the text before the write landed, so neither is
+ * true any more, and the event is a change like any other to the tree that repaint built —
+ * which the recovery path plans by itself (planEntrySync), from the rows that are on screen.
+ */
+export function hintFor(hint: HostEdit | null, epoch: number): HostEdit | null {
+  return hint && hint.epoch === epoch ? hint : null;
 }
 
 /** The op the host's own edit amounts to, and the run of rows to paint it over. */
 export interface OwnEditPlan {
   op: EntryOp;
-  /** The row id the table is holding the entry under (see HostEdit.rowId). */
+  /** The row id the table is holding the entry under (see HostEdit.entryId). */
   entryRowId: string;
 }
 
@@ -164,11 +227,12 @@ export function planOwnEdit(
     return null;
   }
   if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
-  // The op resolves the entry as the MODEL spells it (the mutation renamed it already); the
-  // repaint lands on the id the TABLE still shows. Neither substitutes for the other.
+  // The op resolves the entry as the MODEL spells it (the mutation renamed it already), and the
+  // repaint lands on the same id, which is the one the paint left the rows under.
+  // The record is the text now in the document, so the op says so (see EntryOp).
   return {
-    op: { kind: 'replace', rowId: hint.entryId, record: record as EntryRecord },
-    entryRowId: hint.rowId,
+    op: { kind: 'replace', rowId: hint.entryId, record: record as EntryRecord, fromDocumentText: true },
+    entryRowId: hint.entryId,
   };
 }
 
@@ -247,7 +311,7 @@ function planFromElementText(model: any, elementText: string, arrayCount?: numbe
   if (metaString(entryRecord.metadata, 'namespace') !== metaString(from, 'namespace')) return null;
   if (metaString(entryRecord.metadata, 'isderived') !== metaString(from, 'isderived')) return null;
 
-  return { entry, record: entryRecord };
+  return { entry, record: entryRecord, fromDocumentText: true };
 }
 
 /**

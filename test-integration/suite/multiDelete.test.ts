@@ -38,7 +38,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { unzipSync } from 'fflate';
-import { SC_PART_XML } from 'data-explorer-core';
+import { DataModel, SC_PART_XML } from 'data-explorer-core';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 import {
@@ -50,8 +50,8 @@ import {
   isEntryRow,
   isHeader,
   nameOf,
+  quiet,
   rowNamed,
-  settle,
   token,
   waitFor,
   ws,
@@ -66,6 +66,10 @@ import {
 // one element leaves a scalar with no child rows at all rather than a container holding
 // one. Both are correct behaviour and neither is this test's subject.
 const isElementRow = (row: any): boolean => /[({][\d,\s]+[)}]$/.test(nameOf(row));
+
+// What the host says when a delete does not happen: a failure in the banner (`error`), or a
+// refusal in its dialog (`refused`: a child its parent will not give up).
+const isReport = (m: any): boolean => m.type === 'error' || m.type === 'refused';
 
 /**
  * Open a working copy of a JSON fixture through the real provider, let the caller choose a
@@ -104,19 +108,16 @@ async function deleteFromJson(
     await waitFor(
       'the delete to be applied or refused',
       () =>
-        view.posts.some((m) => m.type === 'error') ||
+        view.posts.some(isReport) ||
         (doc.version > versionBefore &&
           view.posts.some((m) => m.type === 'updateEntryRows' || m.type === 'setRows')),
     );
-    // The repaint is what the wait above catches; `selectRows` follows it. Small and fixed
-    // because it is a tail, not the work.
-    await settle(150);
+    // The repaint is what the wait above catches, and `selectRows` is posted beside it, before
+    // the write. What is left is an error after the write, which can only be given time.
+    await quiet(150, 'an error reported after the delete landed');
 
     const after = doc.getText();
-    assert.ok(
-      !view.posts.some((m) => m.type === 'error'),
-      `no error was reported (${JSON.stringify(view.posts.filter((m) => m.type === 'error'))})`,
-    );
+    assert.ok(!view.posts.some(isReport), `no error was reported (${JSON.stringify(view.posts.filter(isReport))})`);
     return { before, after, versions: doc.version - versionBefore, posts: view.posts, rows };
   } finally {
     view.close();
@@ -324,7 +325,7 @@ suite('A scattered multi-row delete, on a JSON .sldd', () => {
       // The error IS the answer here, so it is what to wait for. Then a fixed tail, because
       // "nothing else happened" cannot be waited for — only given time to fail to happen.
       await waitFor('the refusal', () => view.posts.some((m) => m.type === 'error'));
-      await settle(500);
+      await quiet(500, 'a write, which the refused delete must not make');
 
       assert.strictEqual(doc.getText(), before, 'the document was not touched');
       assert.strictEqual(doc.version, version, 'and no write was attempted');
@@ -409,10 +410,7 @@ async function deleteFromBinary(
     view.send({ type: 'delete', rowIds });
 
     const after = (doc as any).chunkXml as string;
-    assert.ok(
-      !view.posts.some((m) => m.type === 'error'),
-      `no error was reported (${JSON.stringify(view.posts.filter((m) => m.type === 'error'))})`,
-    );
+    assert.ok(!view.posts.some(isReport), `no error was reported (${JSON.stringify(view.posts.filter(isReport))})`);
     await provider.saveCustomDocument(doc, token());
     const saved = unzipSync(await vscode.workspace.fs.readFile(uri));
     return { before, after, edits, posts: view.posts, rows, saved };
@@ -556,5 +554,67 @@ suite('The same two gestures, on a compressed-binary .sldd', () => {
       await archMember(SC_PART_XML),
       'and left the pass-through part alone',
     );
+  }).timeout(60000);
+});
+
+// --- and its undo ------------------------------------------------------------------------
+//
+// This format's undo is the provider's own: the delete pushes the chunk and a patch of entry
+// ops, and undo applies the inverse ops to the model in place, without re-reading the chunk.
+// Those inverses are inserts, each naming the index its entry held — and the binary delete
+// used to capture them for every entry BEFORE removing any, then replay them reversed, which
+// puts the rightmost entry back first at an index counted past a gap nothing has filled yet:
+// [P, Q, R] with P and Q deleted came back as [P, R, Q]. The chunk was right (it is restored
+// as a string), so the file was fine and only the model and the rows on screen were wrong —
+// until a save, a re-read or the next edit built on them.
+//
+// The params dictionary is the MATLAB-written one, whose Design Data section has the three
+// neighbours this needs.
+suite('Undo of a multi-entry delete, on a compressed-binary .sldd', () => {
+  suiteSetup(async () => {
+    await vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.activate();
+  });
+
+  test('puts the entries back in the order they had, in the model it already holds', async () => {
+    const fixture = vscode.Uri.joinPath(ws(), '..', '..', '..', 'test', 'parity', 'artifacts', 'binary', 'params.sldd');
+    const uri = vscode.Uri.joinPath(ws(), '..', 'bin_delete_undo_order.sldd');
+    await vscode.workspace.fs.copy(fixture, uri, { overwrite: true });
+    const provider = new BinarySlddEditorProvider(ctx());
+    const edits: vscode.CustomDocumentEditEvent<vscode.CustomDocument>[] = [];
+    const sub = provider.onDidChangeCustomDocument((e) => edits.push(e as any));
+    const doc: any = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
+    const view = fakePanel();
+    try {
+      await provider.resolveCustomEditor(doc, view.panel, token());
+      view.send({ type: 'ready' });
+      const model: any = DataModel.getDataSource(doc.srcId);
+      assert.ok(model, 'the first paint registered the model');
+      const inventory = () => (model.children as any[]).map((s: any) => (s.children as any[]).map((e: any) => e.name));
+      const section = (model.children as any[]).find((s: any) => s.children.length >= 3);
+      assert.ok(section, 'a section with three neighbours');
+      const [p, q, r] = (section.children as any[]).slice(0, 3);
+      const before = inventory();
+      const chunkBefore = doc.chunkXml as string;
+
+      view.posts.length = 0;
+      view.send({ type: 'delete', rowIds: [p.id, q.id] });
+      assert.deepStrictEqual(view.posts.filter(isReport), [], 'the delete is applied');
+      assert.strictEqual(edits.length, 1, 'as one edit');
+      assert.strictEqual(section.children[0], r, `${p.name} and ${q.name} left, so ${r.name} leads`);
+
+      await edits[0].undo();
+      assert.strictEqual(doc.chunkXml, chunkBefore, 'the undo restores the chunk');
+      assert.strictEqual(DataModel.getDataSource(doc.srcId), model, 'from the ops, not by re-reading it');
+      assert.deepStrictEqual(inventory(), before, `and ${p.name}, ${q.name}, ${r.name} are back in that order`);
+
+      // And the redo takes the same two out again.
+      await edits[0].redo();
+      assert.strictEqual(section.children[0], r, 'the redo removes them again');
+    } finally {
+      view.close();
+      sub.dispose();
+      doc.dispose();
+      await vscode.workspace.fs.delete(uri);
+    }
   }).timeout(60000);
 });

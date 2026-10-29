@@ -10,8 +10,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
-import { dropFactsOf } from '../src/host/dropFacts.js';
+import { dropFactsOf } from 'data-explorer-view/model';
+import { getModel, findNode, invalidate } from 'data-explorer-view/host';
 import { buildDragSnapshot } from '../src/host/structuralEdit.js';
 
 const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');
@@ -64,8 +64,9 @@ describe('dropFactsOf', () => {
   it('produces exactly the facts buildDragSnapshot puts in the register', () => {
     const h = harness('test://facts-parity.sldd');
     const rowId = h.id('arch', 'DataInterface');
-    const { payload, ...facts } = buildDragSnapshot([rowId], h.find).items[0];
+    const { payload, sourceSection, ...facts } = buildDragSnapshot([rowId], h.find).items[0];
     expect(payload).toBeTruthy();
+    expect(sourceSection).toBe('arch');
     expect(facts).toEqual(dropFactsOf(h.find(rowId)));
   });
 });

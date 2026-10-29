@@ -3,13 +3,19 @@
 //
 // <dex-icon> is the one place the webview turns a node's iconId into a visible
 // image. The host ships an iconId per row (RowData.Name.iconId) and dex-tree-table
-// binds it; this component maps the id onto a file under media/icons/ and renders
-// an <img>. The alias table exists because the data model names kinds ('struct',
-// 'bus') while the shipped assets use MathWorks icon names ('typeStruct').
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { DexIcon } from '../src/webview/components/dex-icon.js';
+// binds it; this component maps the id onto a file under the icon base the webview
+// entries set (`./icons/`, the icons copy:icons ships) and renders an <img>.
+// The alias table exists because the data model names kinds ('struct', 'bus') while
+// the shipped assets use MathWorks icon names ('typeStruct').
+import { describe, it, expect, afterEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { DexIcon, defineIcon, setIconBase } from 'data-explorer-view/icon';
+import { shippedIcon } from './tools/shippedIcons.js';
+
+// As table-main and pi-main do, before any icon renders.
+setIconBase('./icons/');
+defineIcon();
 
 let icon: DexIcon | null = null;
 
@@ -30,12 +36,9 @@ function src(el: DexIcon): string {
   return img(el)!.getAttribute('src')!;
 }
 
-// The asset the rendered src actually resolves to on disk. Resolved from the
-// vitest cwd (the repo root) because happy-dom replaces import.meta.url with a
-// non-file URL.
-function assetFor(el: DexIcon): string {
-  const file = src(el).replace(/^.*\/icons\//, '');
-  return resolve('media/icons', file);
+// The shipped asset the rendered src names, or undefined.
+function assetFor(el: DexIcon): string | undefined {
+  return shippedIcon(src(el).replace(/^.*\/icons\//, '').replace(/\.svg$/, ''));
 }
 
 afterEach(() => {
@@ -46,35 +49,32 @@ afterEach(() => {
 describe('rendering an icon', () => {
   it('renders an <img> pointing at the matching file under icons/', async () => {
     const el = await makeIcon('blocks');
-    expect(src(el)).toBe('/icons/blocks.svg');
+    expect(src(el)).toBe('./icons/blocks.svg');
   });
 
   it('resolves the src relative to the webview base so the CSP allows it', async () => {
-    // The webview is served from a vscode-resource base (vite `base: './'`); a src
-    // that ignored BASE_URL would point outside localResourceRoots and be blocked,
-    // showing a broken image on every row.
+    // The webview is served from a vscode-resource base (<base href> = dist/webview); a
+    // src that resolved anywhere else would point outside localResourceRoots and be
+    // blocked, showing a broken image on every row.
     const el = await makeIcon('blocks');
     expect(src(el).endsWith('icons/blocks.svg')).toBe(true);
-    expect(src(el).startsWith('icons/blocks.svg')).toBe(false);
+    expect(new URL(src(el), 'https://host/ext/dist/webview/').href).toBe('https://host/ext/dist/webview/icons/blocks.svg');
   });
 
-  it('still resolves from the root when the bundler hands it an empty BASE_URL', async () => {
-    // The base is read once per element, at construction, and pasted straight in
-    // front of `icons/…`. An empty BASE_URL with no fallback would emit the
-    // RELATIVE src `icons/blocks.svg`, which resolves against the webview's own
-    // vscode-webview:// document URL rather than the resource root — outside
-    // localResourceRoots, so the CSP blocks it and every row loses its icon.
-    // Restored by hand rather than with unstubAllEnvs, which puts BASE_URL back
-    // as '' and would leave every later case in this file measuring the fallback
-    // instead of the real base.
-    const real = import.meta.env.BASE_URL;
-    vi.stubEnv('BASE_URL', '');
-    try {
-      const el = await makeIcon('blocks');
-      expect(src(el)).toBe('/icons/blocks.svg');
-    } finally {
-      vi.stubEnv('BASE_URL', real);
+  it('takes its base from every webview entry, set before the entry defines a widget', () => {
+    // Without it dex-icon falls back to the package's own icons/ folder, found from its
+    // module's URL — which, bundled into dist/webview/assets/, names a folder outside the
+    // extension, so the CSP blocks it and every row loses its icon. The project page
+    // draws no icon and has no dex-icon to configure.
+    for (const entry of ['table-main.ts', 'pi-main.ts']) {
+      const code = readFileSync(join(process.cwd(), 'src', 'webview', entry), 'utf8');
+      const set = code.indexOf("setIconBase('./icons/');");
+      expect(set, `${entry} never sets the icon base`).toBeGreaterThan(-1);
+      expect(set, `${entry} defines a widget before it sets the icon base`).toBeLessThan(code.search(/^define\w+\(\);$/m));
     }
+    const project = readFileSync(join(process.cwd(), 'src', 'webview', 'project-main.ts'), 'utf8');
+    expect(project).toMatch(/from 'data-explorer-view\/project-page'/);
+    expect(project).not.toMatch(/from 'data-explorer-view\/(?!project-page'|model')/);
   });
 
   it('sizes the image on both axes so rows do not shift while icons load', async () => {
@@ -128,7 +128,7 @@ describe('aliasing a data-model kind onto a shipped asset', () => {
 
   it.each(ALIASES)('maps the %s kind onto %s.svg', async (kind, asset) => {
     const el = await makeIcon(kind);
-    expect(src(el)).toBe(`/icons/${asset}.svg`);
+    expect(src(el)).toBe(`./icons/${asset}.svg`);
   });
 
   it('every alias resolves to an asset that actually ships', async () => {
@@ -137,7 +137,7 @@ describe('aliasing a data-model kind onto a shipped asset', () => {
     // generic fallback here.
     for (const [kind] of ALIASES) {
       const el = await makeIcon(kind);
-      expect(existsSync(assetFor(el)), `alias ${kind} -> missing ${src(el)}`).toBe(true);
+      expect(assetFor(el), `alias ${kind} -> missing ${src(el)}`).toBeDefined();
       el.remove();
     }
   });
@@ -146,8 +146,8 @@ describe('aliasing a data-model kind onto a shipped asset', () => {
     // Most ids the host sends are already asset names (SectionNode.iconId,
     // ModelNode SECTION_DEFS); aliasing must not rewrite them.
     const el = await makeIcon('databaseFolderDesign');
-    expect(src(el)).toBe('/icons/databaseFolderDesign.svg');
-    expect(existsSync(assetFor(el))).toBe(true);
+    expect(src(el)).toBe('./icons/databaseFolderDesign.svg');
+    expect(assetFor(el)).toBeDefined();
   });
 });
 
@@ -184,6 +184,6 @@ describe('no icon to show', () => {
     const el = await makeIcon('');
     el.iconId = 'typeBus';
     await el.updateComplete;
-    expect(src(el)).toBe('/icons/typeBus.svg');
+    expect(src(el)).toBe('./icons/typeBus.svg');
   });
 });

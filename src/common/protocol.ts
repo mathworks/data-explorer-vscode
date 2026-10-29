@@ -11,56 +11,58 @@
 // runtime-chosen `type` (keyboard shortcut / context-menu action id), which a
 // strict send-side type would fight without any behavior benefit.
 //
-// `rows` / `groups` / `columns` are intentionally loose (`any[]` / `unknown`):
-// they flow into the vendored table/inspector components (typed `any`) and are
-// mapped with narrower callbacks, so a stricter element type would introduce new
-// contravariant-callback errors rather than catch real bugs.
+// THE READ HALF IS VIEW'S. The messages that carry a table and its inspector (setRows, the entry
+// repaints, error, childRows, matrixCells, showProps, empty; ready, select, requestChildren,
+// requestMatrix) are data-explorer-view's documented wire format (its model's wire.ts), which
+// view's messageSource and serveTable speak, and which this extension's webviews take through
+// connectTable and connectInspector. They are imported from there, so the host and the webviews
+// speak exactly the format view documents. What is declared here is this extension's own:
+// setRows' two VS Code-only fields, editing, navigation and the project page.
 
 import type { ProjectPage } from 'data-explorer-core';
-import type { MspProject } from './msp.js';
-import type { SectionRule } from '../host/sectionRules.js';
+import type {
+  ChildRowsMessage,
+  EmptyMessage,
+  ErrorMessage,
+  InsertEntryRowsMessage,
+  MatrixCellsMessage,
+  MspProject,
+  ReadyMessage,
+  RequestChildrenMessage,
+  RequestMatrixMessage,
+  SectionRule,
+  DropFacts,
+  SelectMessage,
+  SetRowsMessage as WireSetRowsMessage,
+  ShowPropsMessage,
+  UpdateEntryRowsMessage,
+  WarningBanner,
+} from 'data-explorer-view/model';
+
+export type {
+  ChildRowsMessage,
+  EmptyMessage,
+  ErrorMessage,
+  InsertEntryRowsMessage,
+  MatrixCellsMessage,
+  ReadyMessage,
+  RequestChildrenMessage,
+  RequestMatrixMessage,
+  SelectMessage,
+  ShowPropsMessage,
+  UpdateEntryRowsMessage,
+};
 import type { DragDescriptor } from '../host/dragState.js';
 import type { ClipboardMode } from '../host/clipboard.js';
-import type { DropFacts } from '../host/dropFacts.js';
-import type { WarningBanner } from '../host/parseWarnings.js';
-import type { MatrixPayload } from '../host/matrixPayload.js';
 
 // --- Host -> Webview (table view: table-main.ts) ------------------------------
 
-/** Full table repaint: rows + column metadata + edit/read-only mode. */
-export interface SetRowsMessage {
-  type: 'setRows';
-  /**
-   * The uri of the document these rows came from, so the webview can answer a link into
-   * itself without a host round-trip (see webview/linkRoute.ts).
-   *
-   * On `setRows` rather than `sectionRules` because only the two EDITABLE providers post
-   * that one — it carries drop rules, which a read-only .slx/.mat view has none of. Hang
-   * the uri off it and a read-only table never learns its own identity, so its links take
-   * the host path while a dictionary's take the local one: the same rule behaving two ways
-   * depending on which provider had drop rules to send.
-   *
-   * Declared required to say every provider owes it, though `webview.postMessage` is
-   * untyped, so what actually holds the four call sites is a test in
-   * test/messageDispatch.test.ts.
-   */
-  docUri: string;
-  rows: any[];
-  columns: unknown;
-  columnLabels: unknown;
-  columnGroups?: unknown;
-  editable: boolean;
-  /** Persistent read-only banner text (e.g. size-limited JSON .sldd). */
-  notice?: string;
-  /**
-   * What the parse could not read, when it could not read something — absent for a
-   * clean read, so a view that never sets it shows no banner.
-   *
-   * Separate from `notice` because they answer different questions: `notice` explains
-   * the MODE this view is in (read-only, and why), while this says the DATA is short.
-   * A file can be both, and folding them into one string would force a choice.
-   */
-  warnings?: WarningBanner;
+/**
+ * Full table repaint: the wire's setRows (rows, columns, docUri, editable, notice, warnings), plus
+ * what only this extension's table reads: whether there is a text view to locate a row in, and
+ * what the Add gallery offers.
+ */
+export interface SetRowsMessage extends WireSetRowsMessage {
   /**
    * Whether this document is backed by a plain-text view the "Location in Text"
    * action can reveal a row in. True for JSON .sldd (a TextDocument); false/absent
@@ -68,55 +70,12 @@ export interface SetRowsMessage {
    * user-facing text editor — so the action is omitted there rather than dead.
    */
   hasTextView?: boolean;
-}
-
-/**
- * Entry-scoped repaint: replace the rows of ONE entry subtree, leaving every other
- * row in the table untouched.
- *
- * The narrow counterpart to `setRows`, for an edit the host knows is confined to a
- * single entry (a value edit, a rename, adding or deleting a nested child). A
- * `setRows` is the wrong shape for those: it costs a re-parse of the whole
- * dictionary plus every row, which on a real customer .sldd is seconds of latency
- * and a ~67 MB payload to express a one-cell change.
- *
- * `rows` is `buildEntryRows` output — the entry row first, then its flattened
- * descendants — and an empty array removes the subtree.
- */
-export interface UpdateEntryRowsMessage {
-  type: 'updateEntryRows';
   /**
-   * The entry row whose subtree these rows replace, as the TABLE currently spells
-   * it. On a rename that is the entry's OLD id: the rows on screen still carry it,
-   * and the replacement rows carry the new one.
+   * What the Add gallery offers. Absent: every tile, a dictionary's, each naming its section.
+   * `{classes}`: a MAT-file's, the tiles of the classes core says the file can take a new
+   * variable of (MatNode.getAllowedTypes), in no section.
    */
-  entryRowId: string;
-  rows: any[];
-}
-
-/**
- * Entry-scoped INSERT: add the rows of ONE new entry to a section, leaving every
- * other row untouched.
- *
- * `updateEntryRows` covers an entry that is already on screen — including removing
- * it, with an empty `rows`. An entry that is NEW to the table (a paste, a drop, the
- * undo of a delete) has no run to splice over, so it needs the position stated
- * instead: which section it joins, and which of that section's entries it goes
- * before.
- *
- * `beforeRowId` is the entry row the new rows precede; absent means "last in this
- * section", which is where a paste lands (the fragment goes in at the end of the
- * dictionary's entry list, so a re-read would put it there too — the narrow insert
- * has to agree with the wide rebuild, or the row order changes under the user on
- * the next full repaint).
- */
-export interface InsertEntryRowsMessage {
-  type: 'insertEntryRows';
-  /** The section row (`section:<name>`) the new entry belongs to. */
-  sectionRowId: string;
-  /** The entry row the new rows go before; absent appends to the section. */
-  beforeRowId?: string;
-  rows: any[];
+  add?: { classes: readonly string[] };
 }
 
 /** This document's section drop-rules, for client-side drop prediction. */
@@ -135,8 +94,15 @@ export interface ClipboardStateMessage {
    * What the clipboard holds, payload-free — so the menu can ask the target section
    * whether a paste may land there before offering it, exactly as a dragover asks.
    * Never the entry records: on a 47.8 MB dictionary that is a 67 MB postMessage.
+   *
+   * `sectionName` is the section each entry was copied or cut from ('' for a MAT-file's
+   * variable), as a drag descriptor's items carry it. Optional: a host that does not send it
+   * (with `sourceDocUri`) only loses the menu's knowledge that a cut pasted back where it
+   * came from is a no-op.
    */
-  items: DropFacts[];
+  items: (DropFacts & { sectionName?: string })[];
+  /** The document the entries were copied or cut from. See `items`. */
+  sourceDocUri?: string;
 }
 
 /** Broadcast the in-flight drag descriptor (null when no drag is active). */
@@ -199,12 +165,6 @@ export interface OpenAddGalleryMessage {
   type: 'openAddGallery';
 }
 
-/** Transient red error banner. */
-export interface ErrorMessage {
-  type: 'error';
-  message: string;
-}
-
 /** Invalid cell edit: show the scoped validation dialog and revert the cell. */
 export interface ValidationErrorMessage {
   type: 'validationError';
@@ -213,80 +173,27 @@ export interface ValidationErrorMessage {
   previousValue: unknown;
 }
 
-// --- Host -> Webview (property inspector: pi-main.ts) -------------------------
-
-/** Render the property groups for the selected node. */
-export interface ShowPropsMessage {
-  type: 'showProps';
-  groups: any[];
+/**
+ * A gesture refused before it changed anything (Add Child, Delete, Add): shown in the dialog a
+ * refused cell edit is shown in, titled by the gesture, with why (host/refusal.ts). A dialog and
+ * not the banner, because the next repaint clears the banner.
+ */
+export interface RefusedMessage {
+  type: 'refused';
+  title: string;
+  reason: string;
 }
-
-/** Clear the inspector (nothing selected). */
-export interface EmptyMessage {
-  type: 'empty';
-}
-
-// --- Host -> Webview (both table and inspector: the Variable Editor's cells) ---
 
 /**
- * The cells for a matrix the webview asked about, or why there are none.
- *
- * Sent only in answer to `requestMatrix`, never unprompted. The rows themselves
- * carry a `MatrixDescriptor` — name, class, shape, node id — which is what the
- * glyph and the panel title need; the cells are fetched when a panel actually
- * opens. A 1000x1000 entry is 4 MB of cell strings, and stamping that onto a row
- * meant every griddable matrix in a file crossed this boundary whether or not
- * anyone looked at one.
- *
- * `nodeId` is echoed so a late answer to a panel the user already closed, or
- * re-opened on a different row, can be dropped instead of painted.
- *
- * Exactly one of `matrix` / `message` is set. `message` exists because a descriptor
- * is not a promise: whether the cells lay out is only discoverable by laying them
- * out, which is the work the descriptor exists to skip. So the panel has to be able
- * to say "could not read this" rather than show an empty grid.
+ * The answer to `RequestEditTextMessage`: the whole text of the row's Value, which seeds its editor,
+ * or null where there is none to edit (the value changed under the request), with core's reason
+ * where it gives one (`valueEditRefusal`).
  */
-export interface MatrixCellsMessage {
-  type: 'matrixCells';
-  nodeId: string;
-  matrix?: MatrixPayload;
-  message?: string;
-}
-
-// --- Host -> Webview (table view: the children of one deferred row) ----------
-
-/**
- * The rows under a row whose children were not delivered with the payload.
- *
- * Sent only in answer to `requestChildren`, never unprompted. The counterpart to
- * `_lazy` on a row (host: lazyRows.ts): a payload planned to a budget stops at whole
- * levels and marks the frontier, and this is where the next level comes from when the
- * user opens one. Measured reason it exists: the `.mat` that forced the payload cap is
- * 2,016,325 nodes over 7 levels, of which the first four are 238 rows — so the file's
- * whole shape fits immediately and the rest is a click away, where a capped payload
- * showed the first cell's descendants and left the other ten unreachable.
- *
- * `nodeId` is echoed for the same reason `matrixCells` echoes it: the answer is matched
- * against the row that asked, so one arriving after a repaint replaced that row is
- * dropped rather than spliced in next to rows it no longer belongs with.
- *
- * `rows` is the subtree UNDER the node, never the node's own row — the table already
- * holds that one, with the user's selection possibly on it. Empty means the host had
- * nothing to send (the node is gone, or every one of its rows failed to build), which
- * the table reads as "this row has no children after all" and stops offering to fetch.
- *
- * `truncated` is how many of this node's own children got no row at all, which is the
- * one loss a fetch can still inflict: core caps numeric and string expansion at 10,000
- * but builds a CELL's children uncapped, so a single 200,000-element cell outgrows a
- * whole delivery. Those names are absent with nothing to expand, so the table says so
- * instead of presenting a short list as the whole list — the payload's own banner
- * already does this for the same loss one level up.
- */
-export interface ChildRowsMessage {
-  type: 'childRows';
-  nodeId: string;
-  rows: any[];
-  truncated: number;
+export interface EditTextMessage {
+  type: 'editText';
+  rowId: string;
+  text: string | null;
+  reason?: string;
 }
 
 // --- Host -> Webview (project main page: project-main.ts) ---------------------
@@ -310,7 +217,7 @@ export interface SetProjectMessage {
   root: string;
   /**
    * What a Managed Simulink Project adds — absent for every project that is not one,
-   * which is every project this extension has ever opened until now. See common/msp.ts:
+   * which is every project this extension has ever opened until now. See data-explorer-view's src/model/ids/msp.ts:
    * the page's MSP markup hangs entirely off this key being present, so a non-MSP
    * project's page is unchanged by its existence.
    */
@@ -336,6 +243,8 @@ export type HostToTableMessage =
   | OpenAddGalleryMessage
   | ErrorMessage
   | ValidationErrorMessage
+  | RefusedMessage
+  | EditTextMessage
   | MatrixCellsMessage
   | ChildRowsMessage;
 
@@ -343,17 +252,6 @@ export type HostToTableMessage =
 export type HostToPropsMessage = ShowPropsMessage | EmptyMessage | MatrixCellsMessage;
 
 // --- Webview -> Host (table view -> providers) --------------------------------
-
-/** Webview booted and is ready to receive its first payload. */
-export interface ReadyMessage {
-  type: 'ready';
-}
-
-/** Row selection changed (relayed to the Property Inspector). */
-export interface SelectMessage {
-  type: 'select';
-  rowIds: string[];
-}
 
 /** A committed cell edit / rename to write back into the JSON text. */
 export interface EditMessage {
@@ -387,6 +285,12 @@ export interface DeleteMessage {
 }
 export interface PasteMessage {
   type: 'paste';
+  /**
+   * The row the paste is anchored at, whose section it lands in. '' is no row — the
+   * document itself — sent only by a table whose document is ONE target (a MAT-file, whose
+   * host posted a whole-file `sectionRules` rule): a right-click on its empty body, or Cmd+V
+   * with nothing selected. A dictionary posts no such rule, so it is never sent ''.
+   */
   rowId: string;
 }
 export interface AddChildMessage {
@@ -449,46 +353,25 @@ export interface DragEndMessage {
 /** Drop completed: apply the move/copy against the target row. */
 export interface DropMessage {
   type: 'drop';
+  /**
+   * The row dropped on. '' is the table's empty body, for the reason `PasteMessage.rowId`
+   * can be '': only a one-target document's table allows a drop there, which is how an empty
+   * MAT-file takes one.
+   */
   rowId: string;
   mode: 'copy' | 'move';
 }
 
 /**
- * A Variable Editor panel is opening on this node: send its cells.
- *
- * The one message the TABLE sends that is a question rather than a command, and the
- * reason the row's `_matrix` carries no cells (see `MatrixCellsMessage`). `nodeId` is
- * the ROW's node, not the matrix owner's — a property row's matrix lives on its
- * `Value` child, and the host re-runs its own `matrixForRow` rule on this id rather
- * than trusting the webview to have resolved it the same way.
- *
- * Shared with `PropsToHostMessage` rather than reinvented: the Property Inspector
- * opens the same panel on the same kind of value, and the two would otherwise be one
- * rule along two paths — the defect this codebase keeps relearning.
+ * The whole text of a Value the row shows as a summary for its size (`<1x500 double>`), asked for
+ * as its editor opens. The table's third question: the row carries only a MARKER that there is
+ * such a text (`_hasEditText`), and the text, which can run to 200,000 characters, is fetched when
+ * the user opens the editor, as a matrix's cells are when the Variable Editor opens. Answered by
+ * `EditTextMessage`.
  */
-export interface RequestMatrixMessage {
-  type: 'requestMatrix';
-  nodeId: string;
-}
-
-/**
- * Fetch the children of a row that arrived without them.
- *
- * The table's second question, and the same bargain as `requestMatrix`: the payload
- * carries a MARKER (`_lazy` on the row) and the contents are fetched when the user
- * asks to see them. Where the matrix fetch is about one value being large, this is
- * about the TREE being large — the host plans a payload to a row budget by whole
- * levels, and the rows below the last level that fit are what this asks for.
- *
- * `nodeId` is the row's id, which IS its node's id (core's `toRow` sets `ID: this.id`),
- * so the host resolves it through the same `findNode` the matrix fetch uses.
- *
- * Sent at most once per row per payload: the table clears the marker when the answer
- * arrives, so expanding and collapsing a fetched row again costs nothing.
- */
-export interface RequestChildrenMessage {
-  type: 'requestChildren';
-  nodeId: string;
+export interface RequestEditTextMessage {
+  type: 'requestEditText';
+  rowId: string;
 }
 
 /** Every message the host receives from the table webview. */
@@ -509,7 +392,8 @@ export type TableToHostMessage =
   | DragEndMessage
   | DropMessage
   | RequestMatrixMessage
-  | RequestChildrenMessage;
+  | RequestChildrenMessage
+  | RequestEditTextMessage;
 
 /**
  * A link on the project page was activated: open what it names.

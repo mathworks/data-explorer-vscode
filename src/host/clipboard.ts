@@ -7,14 +7,14 @@
 // model, so later mutations don't alias it.
 //
 // It holds MANY items because a copy acts on every entry the selection resolves to
-// (webview/operands.ts). Each item records its OWN source section: those entries may
+// (data-explorer-view's src/model/actions/operands.ts). Each item records its OWN source section: those entries may
 // span sections, and a cut is LAZY — the source deletion is deferred to paste time, so
 // each item has to say where it must be deleted FROM. One shared section would delete
 // the wrong entry, or none.
 //
 // It stays a register distinct from the drag register and from the plain-text view's
 // copy: three independent stores, by design.
-import type { DropFacts } from './dropFacts.js';
+import type { DropFacts } from 'data-explorer-view/model';
 
 export type ClipboardMode = 'cut' | 'copy';
 
@@ -22,6 +22,8 @@ export type ClipboardMode = 'cut' | 'copy';
 export interface ClipboardItem extends DropFacts {
   payload: Record<string, unknown>;
   sourceSection: string;
+  /** Its document's token for the entry as it was taken, for that document's deleter (transfer.ts). */
+  origin?: object;
 }
 
 interface ClipboardEntry {
@@ -67,21 +69,33 @@ export function canPaste(): boolean {
  * `items` is the payload-FREE strip, exactly as `dragDescriptor()` strips the drag
  * register: the webview needs the drop facts to predict whether a paste may land here
  * (dropDecision), and must never be shipped the entry records.
+ *
+ * Where the cut came from travels too — the document, and each item's section, in the
+ * shape the drag descriptor spells them (`docUri` there, `sectionName` per item) — so the
+ * menu can say what the host decides (transfer.ts's isNoopMove): a cut pasted back into the
+ * section every item came from, in the document it came from, does nothing, and a Paste
+ * offered over it would be a menu item that does nothing when clicked.
  */
 export function clipboardState(): {
   canPaste: boolean;
   mode: ClipboardMode | null;
-  items: DropFacts[];
+  sourceDocUri: string | undefined;
+  items: (DropFacts & { sectionName: string })[];
 } {
   return {
     canPaste: current !== null,
     mode: current ? current.mode : null,
-    items: (current?.items ?? []).map(({ className, arrayClass, kind, isMatlabVariable, isScalarNumeric }) => ({
-      className,
-      arrayClass,
-      kind,
-      isMatlabVariable,
-      isScalarNumeric,
-    })),
+    sourceDocUri: current?.sourceDocUri,
+    items: (current?.items ?? []).map(
+      ({ sourceSection, className, arrayClass, kind, isMatlabVariable, isScalarNumeric, sharedName }) => ({
+        sectionName: sourceSection,
+        className,
+        arrayClass,
+        kind,
+        isMatlabVariable,
+        isScalarNumeric,
+        ...(sharedName ? { sharedName } : {}),
+      }),
+    ),
   };
 }

@@ -101,14 +101,14 @@ describe('namesFromSlx', () => {
   });
 
   // A block name is unique inside its own system and nowhere else, so the name is the
-  // wrong thing to key a block record on — and it was: f14.slx's four blocks named
-  // `Gain` deduped to a single hit that could reveal only whichever one came first,
-  // and its nameless Constant was dropped for having no name to search for. Both are
-  // core's rules (blockKey / blockLabel / joinBlockPath), applied here.
+  // wrong thing to key a block record on — and it was: a shipped Simulink demo model's
+  // four blocks named `Gain` deduped to a single hit that could reveal only whichever one
+  // came first, and its nameless Constant was dropped for having no name to search for.
+  // Both are core's rules (blockKey / blockLabel / joinBlockPath), applied here.
   describe('one record per BLOCK, not per name', () => {
-    const uri = 'file:///w/f14.slx';
+    const uri = 'file:///w/aircraft.slx';
     // Two `Gain` blocks in two subsystems and one whose label the file leaves blank —
-    // f14.slx's shape, which is where this came from.
+    // that demo model's shape, which is where this came from.
     const parsed = {
       blockParamUsages: [
         { blockName: 'Gain', sid: '15', systemPath: '' },

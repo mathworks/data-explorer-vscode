@@ -97,10 +97,32 @@ describe('clipboard', () => {
     const state = clipboardState();
     expect(state).toMatchObject({ canPaste: true, mode: 'copy' });
     expect(state.items).toEqual([
-      { className: 'Simulink.Parameter', arrayClass: '', kind: 'Parameter', isMatlabVariable: true, isScalarNumeric: true },
-      { className: 'Simulink.Parameter', arrayClass: '', kind: 'Parameter', isMatlabVariable: true, isScalarNumeric: true },
+      { sectionName: 'design', className: 'Simulink.Parameter', arrayClass: '', kind: 'Parameter', isMatlabVariable: true, isScalarNumeric: true },
+      { sectionName: 'design', className: 'Simulink.Parameter', arrayClass: '', kind: 'Parameter', isMatlabVariable: true, isScalarNumeric: true },
     ]);
     expect(JSON.stringify(state)).not.toContain('Kp');
+  });
+
+  it('says where a cut came from — the document, and each item’s own section — still without payloads', () => {
+    // The menu disables Paste where the host would answer a no-op (a cut pasted back into the
+    // section every item came from, in the same document: transfer.ts's isNoopMove), and it
+    // can only know that if the broadcast says where the cut came from. Spelled as the drag
+    // descriptor spells it, so the webview asks one question of either register.
+    setClipboard([item('Bus1', 'arch'), item('Kp', 'design')], 'cut', 'file:///a.sldd');
+    const state = clipboardState();
+    expect(state.sourceDocUri).toBe('file:///a.sldd');
+    expect(state.items.map((i) => i.sectionName)).toEqual(['arch', 'design']);
+    expect(JSON.stringify(state)).not.toContain('Bus1');
+    expect(state.items.every((i) => !('payload' in i))).toBe(true);
+  });
+
+  it('a MAT-file cut says its one section is the unnamed one', () => {
+    setClipboard([item('x', '')], 'cut', 'file:///vars.mat');
+    expect(clipboardState()).toMatchObject({ sourceDocUri: 'file:///vars.mat', items: [{ sectionName: '' }] });
+  });
+
+  it('names no source when the clipboard is empty', () => {
+    expect(clipboardState().sourceDocUri).toBeUndefined();
   });
 
   it('holds the payloads by reference (structural snapshot is the caller\'s duty)', () => {

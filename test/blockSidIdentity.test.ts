@@ -4,14 +4,14 @@
 // A block is identified by its SID, and its NAME is only a label — over real bytes, from
 // the parse to the text in the cell.
 //
-// Found in ~/delite/f/f14.slx, in two shapes at once. A block name is unique only inside
-// its own system, and that model has four blocks named `Gain` in four different
-// subsystems; keyed by name they collapsed into ONE row whose Usage read
+// Found in a shipped Simulink demo model, in two shapes at once. A block name is unique
+// only inside its own system, and that model has four blocks named `Gain` in four
+// different subsystems; keyed by name they collapsed into ONE row whose Usage read
 // `Gain=Mq, Gain=Zw, Gain=Kf, Gain=Zw` — four blocks' parameters in one cell — and all
-// four shared the row id `f14.slx/blocks/Gain`, so the Property Inspector, a selection,
+// four shared the row id `<model>.slx/blocks/Gain`, so the Property Inspector, a selection,
 // and a Usage link could not tell them apart. And the model holds a Constant whose `Name`
 // attribute Simulink wrote as a lone line break (`Name="&#xA;"` SID 65): it normalizes to
-// the empty string, so the row showed a BLANK Name, took the id `f14.slx/blocks/`, and its
+// the empty string, so the row showed a BLANK Name, took the id `<model>.slx/blocks/`, and its
 // Usage link — whose text is the block name — was an empty anchor with nothing to click.
 //
 // Core v1.8.0 splits the two facts (`blockKey` = the SID, `blockLabel` = the name or
@@ -34,9 +34,11 @@ import {
   type RawSource,
 } from '../src/host/usageCells.js';
 import { parseNavTarget } from '../src/host/navTarget.js';
-import { getModelFromBytes } from '../src/host/SlddModel.js';
-import { buildRows } from '../src/host/rowBuilder.js';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import { buildRows } from 'data-explorer-view/model';
+import { getModelFromBytes } from 'data-explorer-view/host';
+import { DexTreeTable, defineTreeTable, type TreeTableRow } from 'data-explorer-view/tree-table';
+
+defineTreeTable();
 
 // import.meta.dirname, not a URL against import.meta.url: under happy-dom that resolves
 // against a document base rather than the file (same trap as usageEndToEnd.test.ts).
@@ -90,7 +92,7 @@ describe('the workspace graph over same-named and nameless blocks', () => {
   });
 
   it('gives the nameless block a printable label and a followable link', () => {
-    // The f14 block the user asked about, over the same `Uo` it reads there. The cell text
+    // That model's block the user asked about, over the same `Uo` it reads there. The cell text
     // was empty — an anchor with no characters in it cannot be clicked — and the target
     // named no block at all.
     expect(graph().blocksUsing(DICT, 'Uo')).toEqual([
@@ -239,9 +241,12 @@ describe('the model view’s own rows, from the parse through the annotation', (
 
   // And that the matcher itself looks there. table-main.ts is a webview ENTRY module — it
   // builds the table and wires `window.addEventListener('message')` at import — so it is
-  // read rather than run, the same way webviewOverlays.test.ts reads it.
+  // read rather than run, the same way webviewOverlays.test.ts reads it. The matcher is view's
+  // connectTable now, which table-main hands the host's selectByName to.
   it('is matched by a webview that considers the key', () => {
     const src = readFileSync(join(import.meta.dirname, '..', 'src/webview/table-main.ts'), 'utf8');
-    expect(src).toContain('r._blockKey === pendingSelectName');
+    expect(src).toContain('handle.selectByName(msg.name)');
+    const connect = readFileSync(join(import.meta.dirname, '..', 'node_modules/data-explorer-view/dist/widgets/tree-table/connectTable.js'), 'utf8');
+    expect(connect).toContain('r._blockKey === pendingSelectName');
   });
 });

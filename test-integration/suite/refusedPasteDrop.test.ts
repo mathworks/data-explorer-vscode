@@ -25,10 +25,10 @@ import * as vscode from 'vscode';
 import { DataModel } from 'data-explorer-core';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { peekModel } from '../../src/host/SlddModel';
+import { peekModel } from 'data-explorer-view/host';
 import { clearClipboard } from '../../src/host/clipboard';
 import { clearDrag, getDrag } from '../../src/host/dragState';
-import { chunkOf, ctx, entryNames, fakePanel, isEntryRow, nameOf, settle, token, waitFor, ws, wsUri } from './tools/hostHarness';
+import { chunkOf, ctx, entryNames, fakePanel, isEntryRow, nameOf, quiet, token, waitFor, ws, wsUri } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -36,6 +36,11 @@ const ENTRY = 'mat2x2';
 // Its pasted copies: the uniquifier appends a number.
 const COPY = /^mat2x2\d+$/;
 const REFUSAL = 'Value of "mat2x2" would write 134217728 bytes no data backs';
+// What a drag start says of an entry that will not serialize: before the snapshot, core is asked
+// whether the entry can travel at all (copyRefusal), and answers in its own words. The stub's
+// error is an Error named MatWriteError rather than core's class, so core words it as a writing
+// that failed, quoting it.
+const DRAG_REFUSAL = `Cannot copy "${ENTRY}": it could not be written (${REFUSAL}). Nothing was copied.`;
 
 /**
  * Make `method` throw a MatWriteError for every node `when` picks, on the prototype in `node`'s
@@ -112,7 +117,7 @@ async function answered(tab: TextTab, msg: any): Promise<void> {
   tab.view.posts.length = 0;
   tab.view.send(msg);
   await waitFor(`an answer to ${msg.type}`, () => errorsIn(tab.view.posts).length > 0 || tab.doc.version > version);
-  await settle(100);
+  await quiet(100, `a second answer to ${msg.type}: an error after the write, or a write after the refusal`);
 }
 
 suite('A refused paste or drop into a JSON .sldd', () => {
@@ -172,11 +177,11 @@ suite('A refused paste or drop into a JSON .sldd', () => {
       try {
         tab.view.posts.length = 0;
         tab.view.send({ type: 'dragStart', rowIds: [source.ID] });
-        await settle(50);
+        await waitFor('the drag start to be refused', () => errorsIn(tab.view.posts).length > 0);
       } finally {
         restore();
       }
-      assert.deepStrictEqual(errorsIn(tab.view.posts), [`Failed to drag: ${REFUSAL}`], 'the failure is reported');
+      assert.deepStrictEqual(errorsIn(tab.view.posts), [DRAG_REFUSAL], 'the refusal is reported, in core\'s words');
       assert.strictEqual(getDrag(), null, 'and the drag register is empty');
     });
   }).timeout(60000);
@@ -185,12 +190,13 @@ suite('A refused paste or drop into a JSON .sldd', () => {
     await withTextTab('refused_drop.sldd', async (tab) => {
       const source = rowOf(tab.rows, ENTRY);
       const before = tab.doc.getText();
-      // Copied FIRST, for the paste at the end: a copy re-reads the document (applyCopy's
-      // refresh), so one made after the drop would repair the model itself and hide whether the
-      // drop did.
+      // Copied FIRST, for the paste at the end: that paste asks what the drop left in the model,
+      // so nothing between the two may touch it. (A copy reads the tree as it stands rather than
+      // re-reading the document, but one made after the drop would still be a step the question
+      // does not need.)
       tab.view.send({ type: 'copy', rowIds: [source.ID] });
       tab.view.send({ type: 'dragStart', rowIds: [source.ID] });
-      await settle(50);
+      await waitFor('the drag to start', () => getDrag() !== null);
       assert.ok(getDrag(), 'the drag started');
 
       const restore = refuse(tab.entry(), 'serialize', (self) => COPY.test(String(self.name)));
@@ -249,11 +255,11 @@ suite('A refused drag or drop on a compressed-binary .sldd', () => {
       try {
         view.posts.length = 0;
         view.send({ type: 'dragStart', rowIds: [source.ID] });
-        await settle(50);
+        await waitFor('the drag start to be refused', () => errorsIn(view.posts).length > 0);
       } finally {
         restore();
       }
-      assert.deepStrictEqual(errorsIn(view.posts), [`Failed to drag: ${REFUSAL}`], 'the failure is reported');
+      assert.deepStrictEqual(errorsIn(view.posts), [DRAG_REFUSAL], 'the refusal is reported, in core\'s words');
       assert.strictEqual(getDrag(), null, 'and the drag register is empty');
     });
   }).timeout(60000);
@@ -263,14 +269,14 @@ suite('A refused drag or drop on a compressed-binary .sldd', () => {
       const source = rowOf(rows, ENTRY);
       const before = doc.chunkXml as string;
       view.send({ type: 'dragStart', rowIds: [source.ID] });
-      await settle(50);
+      await waitFor('the drag to start', () => getDrag() !== null);
       assert.ok(getDrag(), 'the drag started');
 
       // The same real refusal as the JSON cut above: a matrix dropped into Architectural Data.
       view.posts.length = 0;
       view.send({ type: 'drop', rowId: 'section:arch', mode: 'copy' });
       await waitFor('the refusal', () => errorsIn(view.posts).length > 0);
-      await settle(50);
+      await waitFor('the refused drop to end the drag', () => getDrag() === null);
       assert.match(errorsIn(view.posts)[0], /must be scalar and numeric/);
       assert.strictEqual(doc.chunkXml, before, 'the document is untouched');
       assert.strictEqual(getDrag(), null, 'and the drag is over');

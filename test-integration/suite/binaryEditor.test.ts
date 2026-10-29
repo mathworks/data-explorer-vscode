@@ -11,6 +11,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
+import { waitFor } from './tools/hostHarness';
 
 const TABLE_VIEW = 'dataExplorer.tableView';
 const BINARY_SLDD_VIEW = 'dataExplorer.binarySlddView';
@@ -124,21 +125,17 @@ suite('BinaryEditorProvider', () => {
     // redirect above.
     assert.ok(disposed, 'the redundant binary panel disposes itself after redirect');
 
-    // Poll for the binarySlddView tab the redirect opened.
-    const start = Date.now();
-    let found = false;
-    while (Date.now() - start < 5000) {
-      found = vscode.window.tabGroups.all
+    // Wait for the binarySlddView tab the redirect opened.
+    const found = () =>
+      vscode.window.tabGroups.all
         .flatMap((g) => g.tabs)
         .some(
           (t) =>
             (t.input as { viewType?: string; uri?: vscode.Uri })?.viewType === BINARY_SLDD_VIEW &&
             (t.input as { uri?: vscode.Uri })?.uri?.toString() === uri.toString(),
         );
-      if (found) break;
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    assert.ok(found, 'the binary (zip) .sldd was redirected into the writable view');
+    await waitFor('the binarySlddView tab the redirect opens', found);
+    assert.ok(found(), 'the binary (zip) .sldd was redirected into the writable view');
   });
 
   test('resolving an editable JSON .sldd redirects to the table view and disposes the binary panel', async () => {
@@ -154,21 +151,17 @@ suite('BinaryEditorProvider', () => {
     // The editable JSON path calls openWith(tableView) and disposes THIS panel.
     assert.ok(disposed, 'the redundant binary panel disposes itself after redirect');
 
-    // Poll for the tableView tab the redirect opened.
-    const start = Date.now();
-    let found = false;
-    while (Date.now() - start < 5000) {
-      found = vscode.window.tabGroups.all
+    // Wait for the tableView tab the redirect opened.
+    const found = () =>
+      vscode.window.tabGroups.all
         .flatMap((g) => g.tabs)
         .some(
           (t) =>
             (t.input as { viewType?: string; uri?: vscode.Uri })?.viewType === TABLE_VIEW &&
             (t.input as { uri?: vscode.Uri })?.uri?.toString() === uri.toString(),
         );
-      if (found) break;
-      await new Promise((r) => setTimeout(r, 50));
-    }
-    assert.ok(found, 'the editable JSON .sldd was redirected into the table view');
+    await waitFor('the tableView tab the redirect opens', found);
+    assert.ok(found(), 'the editable JSON .sldd was redirected into the table view');
   });
 
   test('the onSelect relay is invoked wiring (defaults to undefined until set)', () => {

@@ -1,0 +1,27 @@
+{
+ "file:///fx/test-integration/fixtures/usageorder/sharedParams.sldd/design/SharedGain": {
+  "blockLinks": [
+   {
+    "blockName": "GainA",
+    "blockPath": "GainA",
+    "modelName": "ctrlA",
+    "modelUri": "file:///fx/test-integration/fixtures/usageorder/ctrlA.slx",
+    "linkTarget": "blocks:1@file:///fx/test-integration/fixtures/usageorder/ctrlA.slx"
+   },
+   {
+    "blockName": "LimitA",
+    "blockPath": "LimitA",
+    "modelName": "ctrlA",
+    "modelUri": "file:///fx/test-integration/fixtures/usageorder/ctrlA.slx",
+    "linkTarget": "blocks:2@file:///fx/test-integration/fixtures/usageorder/ctrlA.slx"
+   },
+   {
+    "blockName": "GainB",
+    "blockPath": "GainB",
+    "modelName": "plantB",
+    "modelUri": "file:///fx/test-integration/fixtures/usageorder/plantB.slx",
+    "linkTarget": "blocks:1@file:///fx/test-integration/fixtures/usageorder/plantB.slx"
+   }
+  ]
+ }
+}

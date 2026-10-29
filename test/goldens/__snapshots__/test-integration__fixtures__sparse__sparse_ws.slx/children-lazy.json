@@ -1,0 +1,30 @@
+{
+ "digested": true,
+ "sha256": "c6ac3813735bc8f8d07952cdd974362c9675231063e4b0c76ea0099582834000",
+ "entryCount": 23,
+ "entries": {
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/c": "ea97e6ade108af07",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/dAllZero": "338e08c5dbe5f38c",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/dCol": "cc98d67d6a2cb42d",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/dComplex": "141466172e4bc7f3",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/dDiag": "495d2b055044f6c0",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/dLogical": "cc2b49442df4492b",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/dNonFinite": "9579d93abcce03ff",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/dRow": "dd9c9f3fb7856339",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/dSingle": "30522cbdaab91a2d",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/pDense": "cc38fa669bcc52d2",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/pSp": "9491a9dd048b5cba",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/pSpComplex": "b433955975146d6c",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/pSpLogical": "0b45ce10541e8442",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/spBig": "cd921757035c4752",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/spCol": "f856af1238225cb5",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/spComplex": "681adbabe1a8bac3",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/spDiag": "b9874df769349b48",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/spLogical": "d4a93c8271828c5d",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/spNonFinite": "810cae872cfbc749",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/spRow": "a335c0595d814010",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/spSingle": "baf806f07b4f1697",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/spTall": "a8e648bf9afa9fa7",
+  "file:///fx/test-integration/fixtures/sparse/sparse_ws.slx/workspace/st": "a0ea03d8e2a7bf8d"
+ }
+}

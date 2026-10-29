@@ -1,0 +1,42 @@
+{
+ "binedit:file:///fx/test-integration/fixtures/workspace/binary.sldd/design/Kp": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Kp",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "[ ]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "MATLAB Variable",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "double",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

@@ -1,0 +1,165 @@
+{
+ "binedit:file:///fx/test/fixtures/mcos/Param.mat/Param": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Param",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Value",
+      "value": "42",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "int32",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Simulink Parameter",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.Parameter",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Minimum",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Maximum",
+      "value": "100",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Unit",
+      "value": "m/s",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "hello",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Storage Class",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Identifier",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Alignment",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Dimensions",
+      "value": "[1 1]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Complexity",
+      "value": "real",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Min",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Stored Integer Max",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Definition File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Owner",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Preserve Array Dimensions",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Struct Name",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Get Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Set Function",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

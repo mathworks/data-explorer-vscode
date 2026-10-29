@@ -20,20 +20,13 @@
 // undecodable dictionary to VS Code's own text editor); they just contribute no
 // relationships, which is the same thing they contributed before, at ~2 GB less.
 import * as vscode from 'vscode';
+import { MAX_SCAN_BYTES, scanVersionOf } from 'data-explorer-core';
 
-// The batching half, kept vscode-free so vitest can pin its order contract. Re-exported
-// because a caller wants ONE import for "how a scan reads": the cap and the batch size
-// are one policy, and splitting the import would let a new scan adopt half of it.
-export { mapLimited, SCAN_READ_CONCURRENCY } from './mapLimited.js';
-
-/**
- * The largest file any workspace-wide scan will read.
- *
- * V8's maximum string length (`0x1fffffe8`) — the point past which a textual
- * dictionary cannot be decoded, so scanning it cannot succeed no matter what the
- * scan does with the bytes.
- */
-export const MAX_SCAN_BYTES = 0x1fffffe8;
+// The cap and the version token are core's (`MAX_SCAN_BYTES`, `scanVersionOf`): they are
+// the rule a scan cache keys on, and every host that reads a folder has to make it the same
+// way. What is left here is the filesystem half — VS Code's `stat` and `readFile`. The cap
+// is re-exported because a caller wants ONE import for "how a scan reads".
+export { MAX_SCAN_BYTES };
 
 /**
  * Read a file for a scan, or `null` if it should not be scanned at all — too large
@@ -70,16 +63,15 @@ export async function readForScan(uri: vscode.Uri): Promise<Uint8Array | null> {
  * and size is invisible to this token, and a file-system watcher does report it. VS Code's
  * watcher is fed by the OS's own change events rather than by polling a `stat`, so its event
  * carries information no token computed from a `stat` can. That is why the shared cache has
- * exactly one invalidation hook (`sourceCache.forgetSource`, called from the tab's watcher) and
+ * exactly one invalidation hook (`sourceCache.forgetSource`, called from two watchers: a read-only
+ * tab's on each event, and the workspace's when this token did not move across one) and
  * why it is a hook rather than a finer key — a finer key means hashing, which means reading.
  * forgetOnDiskChange.test.ts restores an mtime with `utimesSync` and asserts that this token
  * does not move across the write.
  */
 export async function scanVersion(uri: vscode.Uri): Promise<string | null> {
   try {
-    const stat = await vscode.workspace.fs.stat(uri);
-    if (stat.size > MAX_SCAN_BYTES) return null;
-    return `${stat.mtime}:${stat.size}`;
+    return scanVersionOf(await vscode.workspace.fs.stat(uri));
   } catch {
     return null;
   }

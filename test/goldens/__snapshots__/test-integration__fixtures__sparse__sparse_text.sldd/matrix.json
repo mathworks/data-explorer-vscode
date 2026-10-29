@@ -1,0 +1,280 @@
+{
+ "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dAllZero": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dAllZero",
+  "matrix": {
+   "name": "dAllZero",
+   "className": "double",
+   "dims": [
+    3,
+    4
+   ],
+   "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dAllZero",
+   "cells": [
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0"
+   ]
+  }
+ },
+ "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dComplex": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dComplex",
+  "matrix": {
+   "name": "dComplex",
+   "className": "double",
+   "dims": [
+    3,
+    4
+   ],
+   "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dComplex",
+   "cells": [
+    "1+2i",
+    "0+0i",
+    "0+0i",
+    "4-0.25i",
+    "0+0i",
+    "0+0i",
+    "-0-3i",
+    "0+0i",
+    "0.5+0i",
+    "0+0i",
+    "0+0i",
+    "0+0i"
+   ]
+  }
+ },
+ "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dDiag": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dDiag",
+  "matrix": {
+   "name": "dDiag",
+   "className": "double",
+   "dims": [
+    10,
+    10
+   ],
+   "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dDiag",
+   "cells": [
+    "1",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "2",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "3",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "4",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "5",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "6",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "7",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "8",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "9",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "0",
+    "10"
+   ]
+  }
+ },
+ "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dLogical": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dLogical",
+  "matrix": {
+   "name": "dLogical",
+   "className": "logical",
+   "dims": [
+    2,
+    3
+   ],
+   "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dLogical",
+   "cells": [
+    "true",
+    "false",
+    "false",
+    "false",
+    "false",
+    "true"
+   ]
+  }
+ },
+ "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dNonFinite": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dNonFinite",
+  "matrix": {
+   "name": "dNonFinite",
+   "className": "double",
+   "dims": [
+    2,
+    2
+   ],
+   "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dNonFinite",
+   "cells": [
+    "Inf",
+    "0",
+    "-Inf",
+    "NaN"
+   ]
+  }
+ },
+ "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dSingle": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dSingle",
+  "matrix": {
+   "name": "dSingle",
+   "className": "single",
+   "dims": [
+    3,
+    2
+   ],
+   "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/dSingle",
+   "cells": [
+    "0",
+    "1.5",
+    "2.5",
+    "0",
+    "0",
+    "-4"
+   ]
+  }
+ },
+ "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/pDense": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/pDense",
+  "matrix": {
+   "name": "pDense.Value",
+   "className": "double",
+   "dims": [
+    3,
+    3
+   ],
+   "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/pDense",
+   "cells": [
+    "0",
+    "5",
+    "0",
+    "0",
+    "0",
+    "0",
+    "6",
+    "0",
+    "0"
+   ]
+  }
+ },
+ "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/pDense/Value": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/pDense/Value",
+  "matrix": {
+   "name": "Value",
+   "className": "double",
+   "dims": [
+    3,
+    3
+   ],
+   "nodeId": "file:///fx/test-integration/fixtures/sparse/sparse_text.sldd/design/pDense/Value",
+   "cells": [
+    "0",
+    "5",
+    "0",
+    "0",
+    "0",
+    "0",
+    "6",
+    "0",
+    "0"
+   ]
+  }
+ }
+}

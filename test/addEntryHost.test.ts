@@ -32,9 +32,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
 import { DataModel } from 'data-explorer-core';
-import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
-import { readSlddParts } from '../src/host/slddContent.js';
-import { buildRows } from '../src/host/rowBuilder.js';
+import { readSlddParts, buildRows } from 'data-explorer-view/model';
+import { getModel, findNode, invalidate } from 'data-explorer-view/host';
 import { addNewEntry, sectionByName } from '../src/host/structuralEdit.js';
 import { addNewEntryXml, pasteEntryXml } from '../src/host/xmlStructuralEdit.js';
 import { opsOfPastedEntries } from '../src/host/entryOps.js';
@@ -131,9 +130,9 @@ describe('an add creates the entry core says it creates', () => {
   });
 
   it('needs each add of a run computed against the text the last one wrote', () => {
-    // WHY the JSON provider serializes adds on the write (`queueAddEntry`). Every structural
+    // WHY the JSON provider serializes adds on the write (`queueStructural`). Every structural
     // handler there reads the document when it starts and writes when it ends; the gallery's
-    // pin is the one gesture that can arrive faster than that, so a second handler could read
+    // pin is a gesture built to arrive faster than that, so a second handler could read
     // the text from before the first entry existed. Both adds then name the SAME insertion
     // offset — and applied in order, the file lists them backwards from the model.
     const uri = 'test://add-stale.sldd';

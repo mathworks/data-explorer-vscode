@@ -1,0 +1,70 @@
+{
+ "file:///fx/test/fixtures/params.sldd/design/Kp": {
+  "blockLinks": [
+   {
+    "blockName": "Gain1",
+    "blockPath": "Gain1",
+    "modelName": "legacy_ctrl",
+    "modelUri": "file:///fx/test/fixtures/legacy_ctrl.mdl",
+    "linkTarget": "blocks:Gain1@file:///fx/test/fixtures/legacy_ctrl.mdl"
+   },
+   {
+    "blockName": "PlantGain",
+    "blockPath": "PlantGain",
+    "modelName": "shared_gain",
+    "modelUri": "file:///fx/test/fixtures/shared_gain.slx",
+    "linkTarget": "blocks:1@file:///fx/test/fixtures/shared_gain.slx"
+   },
+   {
+    "blockName": "Trim",
+    "blockPath": "Trim",
+    "modelName": "shared_gain",
+    "modelUri": "file:///fx/test/fixtures/shared_gain.slx",
+    "linkTarget": "blocks:2@file:///fx/test/fixtures/shared_gain.slx"
+   },
+   {
+    "blockName": "Gain",
+    "blockPath": "Gain",
+    "modelName": "sid_blocks",
+    "modelUri": "file:///fx/test/fixtures/sid_blocks.slx",
+    "linkTarget": "blocks:15@file:///fx/test/fixtures/sid_blocks.slx"
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/params.sldd/design/Uo": {
+  "blockLinks": [
+   {
+    "blockName": "Setpoint",
+    "blockPath": "Setpoint",
+    "modelName": "legacy_ctrl",
+    "modelUri": "file:///fx/test/fixtures/legacy_ctrl.mdl",
+    "linkTarget": "blocks:Setpoint@file:///fx/test/fixtures/legacy_ctrl.mdl"
+   },
+   {
+    "blockName": "DictOnly",
+    "blockPath": "DictOnly",
+    "modelName": "shadow_ws",
+    "modelUri": "file:///fx/test/fixtures/shadow_ws.slx",
+    "linkTarget": "blocks:2@file:///fx/test/fixtures/shadow_ws.slx"
+   },
+   {
+    "blockName": "<SID: 65>",
+    "blockPath": "Inner/<SID: 65>",
+    "modelName": "sid_blocks",
+    "modelUri": "file:///fx/test/fixtures/sid_blocks.slx",
+    "linkTarget": "blocks:65@file:///fx/test/fixtures/sid_blocks.slx"
+   }
+  ]
+ },
+ "file:///fx/test/fixtures/params.sldd/design/Ki": {
+  "blockLinks": [
+   {
+    "blockName": "Gain",
+    "blockPath": "Inner/Gain",
+    "modelName": "sid_blocks",
+    "modelUri": "file:///fx/test/fixtures/sid_blocks.slx",
+    "linkTarget": "blocks:24@file:///fx/test/fixtures/sid_blocks.slx"
+   }
+  ]
+ }
+}

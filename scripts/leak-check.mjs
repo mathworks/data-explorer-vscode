@@ -23,8 +23,9 @@ const NEEDLES = ['insidelabs', 'ipws', 'mw-npm-repository', 'gitlab', 'data-expl
 // valid across the rewrite, so a correct lockfile is still an installable one.
 const PUBLIC_REGISTRY = 'https://registry.npmjs.org/';
 
-// The single legitimate exception: the upstream data model is a git dependency, not a
-// registry one, so it resolves to a GitHub URL by design.
+// The legitimate exceptions: the two upstream packages, the data model (data-explorer-core) and
+// the view layer built on it (data-explorer-view), are git dependencies, not registry ones, so
+// they resolve to GitHub URLs by design.
 const ALLOWED_GIT_PREFIX = 'git+ssh://git@github.com/mathworks/';
 
 // Local-only files, kept out of the tree by .gitignore. Ignore rules do not apply to
@@ -49,7 +50,7 @@ process.exit(failed ? 1 : 0);
 //
 // Case-SENSITIVE, deliberately. Adding -i looks strictly safer and is not: `ipws` is
 // four characters and turns up inside ordinary camelCase, so -i flags every call to
-// `skipWs()` in src/webview/rowFilter.ts. A check that cries wolf on correct code gets
+// `skipWs()` in data-explorer-view's src/model/filter/rowFilter.ts. A check that cries wolf on correct code gets
 // muted, and a muted check guards nothing. The cost is that a shouted `GITLAB` would
 // pass; the needles are lowercase everywhere they legitimately occur.
 function checkNeedles() {

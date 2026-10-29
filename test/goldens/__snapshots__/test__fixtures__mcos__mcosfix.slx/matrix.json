@@ -1,0 +1,44 @@
+{
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat",
+  "matrix": {
+   "name": "ParamMat.Value",
+   "className": "double",
+   "dims": [
+    2,
+    3
+   ],
+   "nodeId": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+   ]
+  }
+ },
+ "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value": {
+  "type": "matrixCells",
+  "nodeId": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value",
+  "matrix": {
+   "name": "Value",
+   "className": "double",
+   "dims": [
+    2,
+    3
+   ],
+   "nodeId": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+   ]
+  }
+ }
+}

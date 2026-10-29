@@ -1,21 +1,37 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
 import { renderProjectWebview, renderTableWebview } from './webviewHtml.js';
-import { getModelForBinaryTab, invalidate } from './SlddModel.js';
+import {
+  COLUMNS,
+  COLUMN_LABELS,
+  COLUMN_GROUPS,
+  rowPlannerFor,
+  sourceWarnings,
+  warningBanner,
+  LAZY_ROW_BUDGET,
+  lazyRowsBanner,
+  basename,
+  projectPathSegments,
+} from 'data-explorer-view/model';
+import {
+  getModelForBinaryTab,
+  invalidate,
+  openSourceView,
+  releaseIfUnviewed,
+  releaseSourceView,
+  capRows,
+  rowCapBanner,
+  postOrFallback,
+  answerMatrixRequest,
+  answerChildRequest,
+  type UsageFiller,
+} from 'data-explorer-view/host';
 import { forgetChangedSource, parsedModelForTab } from './sourceReads.js';
-import { COLUMNS, COLUMN_LABELS, COLUMN_GROUPS } from './rowBuilder.js';
-import { rowPlannerFor } from './rowPlanner.js';
 import { readProjectStore } from './projectStore.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, exceedsStringDecodeLimit, isZipBytes } from './slddFormat.js';
 import { annotateDataRows, annotateModelRows } from './usageGraph.js';
-import { sourceWarnings, warningBanner } from './parseWarnings.js';
-import { capRows, rowCapBanner } from './rowCap.js';
-import { LAZY_ROW_BUDGET, lazyRowsBanner } from './lazyRows.js';
-import { postOrReport } from './postPayload.js';
+import { subscribeUsageRepost } from './usageRepostWatch.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
-import { answerMatrixRequest } from './matrixRequest.js';
-import { answerChildRequest, type UsageFiller } from './childRequest.js';
-import { basename, projectPathSegments } from '../common/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import { seededRead } from './seededRead.js';
 import { detectMsp, MSP_CONFIG } from './mspProject.js';
@@ -30,11 +46,13 @@ import {
   projectFallbackName,
 } from 'data-explorer-core';
 import type { ProjectToHostMessage, TableToHostMessage } from '../common/protocol.js';
+import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 
 // viewType of the editable text-backed table (SlddTextEditorProvider). Declared
 // here as a constant to avoid importing the provider (which would be circular).
 const TABLE_VIEW_TYPE = 'dataExplorer.tableView';
 const BINARY_SLDD_VIEW_TYPE = 'dataExplorer.binarySlddView';
+const MAT_VIEW_TYPE = 'dataExplorer.matView';
 
 /**
  * The folder a project's paths are relative to: the one holding the marker — the `.prj`, or
@@ -161,20 +179,35 @@ async function readTextIfPresent(
   }
 }
 
-// Custom document. Read-only for all binary formats (.slx, .mat, .prj, zipped
-// .sldd). There is NO in-memory working-copy string: the file on disk is the
+// Custom document. Read-only for all the formats it shows (.slx, .mdl, .prj, and a
+// zipped .sldd too large for its editable view). There is NO in-memory working-copy string: the file on disk is the
 // single source of truth, and this document only tracks its URI.
+//
+// It does hold one thing: the tree its tabs show, registered in core's session and cached in
+// SlddModel under the uri. VS Code disposes a custom document after its LAST panel closes, so
+// that is where the tree is given back — every file opened used to stay parsed for the life of
+// the window. Through SlddModel's view count, because the editable JSON view registers under the
+// same uri and may still be showing it.
 class BinaryDocument implements vscode.CustomDocument {
+  /** Set once VS Code has disposed this document; a read still in flight checks it. */
+  disposed = false;
+
   constructor(public readonly uri: vscode.Uri) {}
 
-  dispose(): void {}
+  dispose(): void {
+    // Once: a second release would spend a hold that belongs to another view of this uri.
+    if (this.disposed) return;
+    this.disposed = true;
+    releaseSourceView(this.uri.toString());
+  }
 }
 
 // Single byte-backed READ-ONLY custom editor for the binary formats (.slx,
-// .mat, .prj, zipped .sldd). Byte-backed so it can open binary (zip) .sldd —
+// .mdl, .prj, zipped .sldd). Byte-backed so it can open binary (zip) .sldd —
 // which VS Code refuses to open as a text document because of NUL bytes.
 // Editable JSON .sldd is handled by SlddTextEditorProvider; binary/zip .sldd is
-// routed here via an explicit openWith redirect in extension.ts.
+// routed here via an explicit openWith redirect in extension.ts. A .mat that lands
+// here is handed on to MatEditorProvider (see resolveCustomEditor).
 export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider<BinaryDocument> {
   public static readonly viewType = 'dataExplorer.binaryView';
 
@@ -203,7 +236,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
 
   // Handle a Usage-column link click: open the referenced file and select the
   // target row there (wired in extension.ts to the shared navigate handler).
-  public onNavigate?: (target: string) => void;
+  public onNavigate?: (target: string, referrer?: string) => void;
 
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -212,6 +245,8 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     _openContext: vscode.CustomDocumentOpenContext,
     _token: vscode.CancellationToken,
   ): Promise<BinaryDocument> {
+    // Held until BinaryDocument.dispose — see there.
+    openSourceView(uri.toString());
     return new BinaryDocument(uri);
   }
 
@@ -232,13 +267,14 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     const planner = rowPlannerFor(name);
     // Who fills the Usage column, chosen once for the same reason. A model (.slx/.mdl)
     // resolves its blocks' params to source files and its workspace vars to the blocks
-    // that use them; a .mat/.sldd data view resolves its variables to the blocks that use
-    // them; a .prj has no Usage column at all. The payload and the fetch share this
-    // because a row the user expanded showing an empty cell where its siblings show
-    // their users is the same drift as a row built by the wrong builder, only subtler.
+    // that use them; a .sldd data view resolves its entries to the blocks that use them;
+    // a .prj has no Usage column at all (and a .mat is handed on before any of this runs).
+    // The payload and the fetch share this because a row the user expanded showing an
+    // empty cell where its siblings show their users is the same drift as a row built by
+    // the wrong builder, only subtler.
     const fillUsage: UsageFiller = isModelFile(name)
       ? annotateModelRows
-      : isMatFile(name) || isSlddFile(name)
+      : isSlddFile(name)
         ? annotateDataRows
         : async () => false;
 
@@ -253,12 +289,27 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     // for every other format, none of which reads anything here.
     let seed: ArrayBuffer | undefined;
 
+    // A MAT-file has its own, writable editor, which is its default (package.json), so one only
+    // lands here by a route that named this view: a tab restored from before that editor
+    // existed, or an editor association. Send it there, as a zip .sldd is sent to its writable
+    // view below, so a .mat is never read-only in one tab and editable in another. A file that
+    // editor cannot save it opens read-only itself, saying why.
+    if (isMatFile(name)) {
+      const preview = this.isPanelPreview(document.uri);
+      await vscode.commands.executeCommand('vscode.openWith', document.uri, MAT_VIEW_TYPE, {
+        preview,
+        pinned: !preview,
+      });
+      webviewPanel.dispose();
+      return;
+    }
+
     // This byte-backed editor is the DEFAULT for *.sldd because it can open any
     // bytes (binary/zip .sldd fail to load as a TextDocument, so the text-backed
     // tableView can't be the default). But editable JSON .sldd should open in the
     // editable tableView. When one lands here (e.g. an Explorer double-click),
     // redirect it: reopen with tableView and close this binary tab. Binary/zip
-    // .sldd and .slx/.mat/.prj fall through and render read-only as normal.
+    // .sldd and .slx/.mdl/.prj fall through and render read-only as normal.
     if (isSlddFile(name)) {
       try {
         const bytes = await vscode.workspace.fs.readFile(document.uri);
@@ -333,7 +384,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       // tab uses (SlddTextEditorProvider), so both .sldd forms look consistent.
       webviewPanel.iconPath = new vscode.ThemeIcon('table');
     } else {
-      // Every other format this editor owns — .slx, .mdl, .mat, .prj — is read-only
+      // Every other format this editor owns — .slx, .mdl, .prj — is read-only
       // with no editable counterpart to switch to, and nothing in the table says so:
       // VS Code has no read-only affordance of its own (a read-only editor renders
       // exactly like a writable one), and the banner is reserved for the SURPRISING
@@ -422,11 +473,17 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           parsed: () => parsedModelForTab(document.uri),
           bytes: byteSource.read,
         });
+        // The tab closed while the file was being read. The read registered its tree AFTER the
+        // document released, so give it back here, or nothing ever will.
+        if (document.disposed) {
+          releaseIfUnviewed(uriString);
+          return;
+        }
         // Bounded BEFORE the payload is built, and before the Usage column is filled:
         // rows that are not going to be shown are not worth annotating, and a payload
         // over V8's maximum string length cannot be posted at all (rowCap.ts).
         //
-        // The payload is PLANNED to that bound rather than cut to it (lazyRows.ts):
+        // The payload is PLANNED to the row budget rather than cut to it (lazyRows.ts):
         // whole levels of the tree, with the rows below the last one that fits fetched on
         // demand. That is the difference between a file showing its shape and a file
         // showing the first branch of it — measured on the 2,016,325-node `.mat` that
@@ -436,43 +493,50 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
         // EVERY format, not just the one that provoked it. The rule is that the names are
         // complete and the deep values may wait, and nothing about it is specific to a
         // `.mat`: a dictionary of wide structs, a model of deep buses and a project of
-        // thousands of files all have the same shape of too much. The cap stays behind it
-        // as the thing that cannot be planned away — a top level wider than the budget —
-        // and the two bounds compose in the banner below.
+        // thousands of files all have the same shape of too much.
+        //
+        // NOT CAPPED: a top level wider than the budget is delivered whole (lazyRows.ts), and
+        // cutting it here would drop exactly the names the plan keeps. The 138 MB bench
+        // dictionary is 291,568 rows and 140.8 MiB of JSON that way. The cap is the fallback
+        // instead, for a payload `postMessage` refuses (see postOrFallback).
         const planned = planner.payload(node, LAZY_ROW_BUDGET);
-        const capped = capRows(planned.rows);
-        const rows = capped.rows;
+        const rows = planned.rows;
+        const parseBanner = warningBanner(sourceWarnings(node));
         // Fill the Usage column from the shared workspace usage graph (lazy + cached).
         await fillUsage(uriString, rows).catch(() => false);
-        const delivered = await postOrReport(
-          webview,
-          {
-            type: 'setRows',
-            docUri: uriString,
-            rows,
-            columns: COLUMNS,
-            columnLabels: COLUMN_LABELS,
-            columnGroups: COLUMN_GROUPS,
-            editable: false,
-            notice,
-            // Independent of `notice`: that one explains why this view is read-only,
-            // this one says the file is not all here. A large JSON dictionary that also
-            // read short shows both, which is why they are two fields and not one
-            // string — see renderBanners in the webview.
-            //
-            // Through both bounds, so a table that is not showing the whole file says
-            // which kind of short it is in the same strip that reports what the parse
-            // could not read: rows that load when opened (the plan), rows the plan could
-            // not fit at all (its own truncation), or rows cut from the payload (the
-            // cap). The composition is what keeps each sentence from depending on the
-            // others being impossible.
-            warnings: lazyRowsBanner(
-              planned.plan,
-              rowCapBanner(capped, warningBanner(sourceWarnings(node))),
-            ),
-          },
-          name,
-        );
+        const payload = {
+          type: 'setRows',
+          docUri: uriString,
+          rows,
+          columns: COLUMNS,
+          columnLabels: COLUMN_LABELS,
+          columnGroups: COLUMN_GROUPS,
+          editable: false,
+          notice,
+          // Independent of `notice`: that one explains why this view is read-only,
+          // this one says the file is not all here. A large JSON dictionary that also
+          // read short shows both, which is why they are two fields and not one
+          // string — see renderBanners in the webview.
+          //
+          // In the same strip that reports what the parse could not read, so a table
+          // that is not showing the whole file says so: rows that load when opened.
+          warnings: lazyRowsBanner(planned.plan, parseBanner),
+        };
+        // The first MAX_TABLE_ROWS rows, a prefix so every row's parent is in it, and the
+        // cap's banner leading: rows that are not in the view at all are the bigger news.
+        // Its count of rows to expand is of the rows it shows. Nothing smaller to offer
+        // when nothing would be cut.
+        const fallback = () => {
+          const capped = capRows(rows);
+          if (capped.rows.length === capped.total) return undefined;
+          const deferred = capped.rows.filter((r: any) => r?._lazy).length;
+          return {
+            ...payload,
+            rows: capped.rows,
+            warnings: rowCapBanner(capped, lazyRowsBanner({ deferred }, parseBanner)),
+          };
+        };
+        const delivered = await postOrFallback(webview, payload, fallback, name);
         // Only when the rows it selects into actually arrived. A held selection
         // drained against a view showing the error banner is a selection aimed at
         // rows that are not there, and it would be dropped silently rather than wait
@@ -494,35 +558,35 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       }
     };
 
+    // The messages every table view answers alike (tableDispatch.ts), keyed by message type. No
+    // undo or redo: the view is read-only, and VS Code holds no stack for it.
+    const common: CommonHandlers = {
+      ready: () => void post(),
+      // Relay the selection to the Property Inspector via the wired callback.
+      select: (rowIds) => this.onSelect?.(uriString, rowIds),
+      navigate: (target) => this.onNavigate?.(target, uriString),
+      // A Variable Editor panel is opening: send its cells. One shared answer for all four
+      // webview hosts — see matrixRequest.ts. Read-only is no reason to skip it; this is the
+      // viewer where most matrices are actually looked at.
+      requestMatrix: (nodeId) => answerMatrixRequest(webview, uriString, nodeId),
+      // A row the payload deferred is being opened: send the rows under it. The answer is a
+      // module (childRequest.ts) rather than a body here because all three providers plan their
+      // payloads and so all three can be asked. `fillUsage` is handed in rather than imported
+      // there: it is this provider that already depends on vscode, and childRequest.ts stays
+      // loadable under vitest because it does not (see its UsageFiller).
+      requestChildren: (nodeId) => void answerChildRequest(webview, uriString, nodeId, name, fillUsage, planner),
+    };
+
     // Register listeners BEFORE assigning webview.html, so a fast-booting
     // webview cannot post 'ready' before we are subscribed to receive it.
     const sub = webview.onDidReceiveMessage((msg: TableToHostMessage | ProjectToHostMessage) => {
-      if (msg?.type === 'ready') {
-        void post();
-      } else if (msg?.type === 'openFile') {
+      if (dispatchCommon(msg, common)) return;
+      if (msg?.type === 'openFile') {
         // Only the project page sends this, and only the host can answer it: the path
         // is project-root-relative, and the page has no idea where that root is.
         if (typeof msg.path === 'string' && msg.path.length > 0) {
           void openProjectPath(projectRootOf(document.uri), msg.path, msg.preferProject === true);
         }
-      } else if (msg?.type === 'select') {
-        // Relay the selection to the Property Inspector via the wired callback.
-        this.onSelect?.(uriString, Array.isArray(msg.rowIds) ? msg.rowIds : []);
-      } else if (msg?.type === 'navigate') {
-        if (typeof msg.target === 'string') this.onNavigate?.(msg.target);
-      } else if (msg?.type === 'requestMatrix') {
-        // A Variable Editor panel is opening: send its cells. One shared answer for
-        // all four webview hosts — see matrixRequest.ts. Read-only is no reason to
-        // skip it; this is the viewer where most matrices are actually looked at.
-        answerMatrixRequest(webview, uriString, msg.nodeId);
-      } else if (msg?.type === 'requestChildren') {
-        // A row the payload deferred is being opened: send the rows under it. The answer
-        // is a module (childRequest.ts) rather than a body here because all three
-        // providers plan their payloads and so all three can be asked. `fillUsage` is
-        // handed in rather than imported there: it is this provider that already depends
-        // on vscode, and childRequest.ts stays loadable under vitest because it does not
-        // (see its UsageFiller).
-        void answerChildRequest(webview, uriString, msg.nodeId, name, fillUsage, planner);
       }
     });
 
@@ -550,14 +614,20 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       // repost below would re-derive the table from the parse of the OLD bytes, leaving the
       // user with a file that changed, an editor that visibly refreshed, and every row stale
       // for the life of the window. A watcher event is evidence of a change no `stat` carries,
-      // so it is the one place allowed to spend a re-read (see sourceCache.forgetSource, and
-      // note that putting this inside `invalidate` would apply it to every repost too).
+      // so a watcher is the one kind of caller allowed to spend a re-read (see
+      // sourceCache.forgetSource, and note that putting this inside `invalidate` would apply it
+      // to every repost too).
       forgetChangedSource(document.uri);
       invalidate(uriString);
       void post();
     };
     const changeSub = watcher.onDidChange(onDiskChange);
     const createSub = watcher.onDidCreate(onDiskChange);
+    // A model created or deleted elsewhere in the workspace can add or remove a block that uses
+    // one of THIS file's variables, which its own watcher above never hears of — so a data view
+    // reposts for that too (usageRepostWatch.ts). A model's own tab and a project page cannot be
+    // changed by another model, and do not subscribe.
+    const usageSub = fillUsage === annotateDataRows ? subscribeUsageRepost(() => void post()) : undefined;
 
     webview.html = this.getHtml(webview, distRoot, name);
     webviewPanel.onDidDispose(() => {
@@ -565,6 +635,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       watcher.dispose();
       changeSub.dispose();
       createSub.dispose();
+      usageSub?.dispose();
       navSub.dispose();
     });
   }

@@ -6,7 +6,7 @@
 // The cheap tier used to read a dictionary three times: `summarizeFiles` scanned it for the usage
 // summary, `refsFromSlddBytes` scanned it again for the reference list, and the name index scanned
 // it a third time for the entry names. Now `dataCheapOf` scans once and the artifact carries all
-// three (sourceCache.ts). That is a speed change whose whole risk is in the ANSWERS: every one of
+// three (core's cache). That is a speed change whose whole risk is in the ANSWERS: every one of
 // the three is consumed somewhere a wrong answer is invisible — a tree edge that is simply not
 // drawn, a search that simply does not find a name, a Usage cell that simply says nothing. So this
 // suite is the equality, per fixture, in the style usageScopeEquality.test.ts uses for the scoped
@@ -35,25 +35,23 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import {
+  cheapOne,
   isJsonTextBytes,
   isMatFile,
   isSlddFile,
+  newSourceCache,
   normalizeRefNames,
   parseMat,
   refBasename,
   scanMat,
   slddChunkContent,
-} from 'data-explorer-core';
-import { namesFromMat, namesFromSldd, type NameRecord } from '../src/host/nameExtract.js';
-import { namesOfFile, type NameReader } from '../src/host/nameScan.js';
-import { readSlddContent, scanSldd } from '../src/host/slddContent.js';
-import {
-  cheapOne,
-  newSourceCache,
   type Cheap,
   type SourceCache,
   type SourceFile,
-} from '../src/host/sourceCache.js';
+} from 'data-explorer-core';
+import { namesFromMat, namesFromSldd, type NameRecord } from '../src/host/nameExtract.js';
+import { namesOfFile, type NameReader } from '../src/host/nameScan.js';
+import { readSlddContent, scanSldd } from 'data-explorer-view/model';
 
 const ROOT = import.meta.dirname;
 

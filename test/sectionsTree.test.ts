@@ -16,8 +16,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { toArrayBuffer } from '../src/common/bytes.js';
-import { scanSldd } from '../src/host/slddContent.js';
-import { normalizeRefNames, refBasename } from '../src/host/slddRefs.js';
+import { scanSldd } from 'data-explorer-view/model';
+import { normalizeRefNames, refBasename } from 'data-explorer-core';
 
 function fixturePath(name: string): string {
   return fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
@@ -77,7 +77,7 @@ describe('a textual dictionary’s references, through the reader that ships', (
     // truncated dictionary is a file the read could not recover, which this host treats as a
     // failure rather than as an empty dictionary (slddContent.ts). Every workspace-wide caller
     // catches — the cheap tier answers an empty artifact for it, so the tree still lists the file
-    // with no edges (structuralIndex.test.ts pins that over a folder pass) — and the one caller
+    // with no edges (view's graphSources.test.ts pins that over a folder pass) — and the one caller
     // that shows a single file turns it into the "Failed to parse" banner instead of a table with
     // no rows.
     expect(() => refsOf(bytes('{ "Dictionary References": [oops }'))).toThrow();

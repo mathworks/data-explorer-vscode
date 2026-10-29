@@ -1,0 +1,22 @@
+{
+ "file:///fx/test-integration/fixtures/usageorder/ctrlA.slx/blocks/1": {
+  "paramLinks": [
+   {
+    "property": "Gain",
+    "paramName": "SharedGain",
+    "source": "sharedParams.sldd",
+    "linkTarget": "SharedGain@file:///fx/test-integration/fixtures/usageorder/sharedParams.sldd"
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/usageorder/ctrlA.slx/blocks/2": {
+  "paramLinks": [
+   {
+    "property": "Value",
+    "paramName": "SharedGain",
+    "source": "sharedParams.sldd",
+    "linkTarget": "SharedGain@file:///fx/test-integration/fixtures/usageorder/sharedParams.sldd"
+   }
+  ]
+ }
+}

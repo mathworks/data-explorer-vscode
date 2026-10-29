@@ -12,8 +12,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
-import { buildRows } from '../src/host/rowBuilder.js';
+import { buildRows } from 'data-explorer-view/model';
+import { getModel, findNode, invalidate } from 'data-explorer-view/host';
 import { findEntrySpan } from '../src/host/entrySplice.js';
 import { findOwningEntry } from '../src/host/structuralEdit.js';
 

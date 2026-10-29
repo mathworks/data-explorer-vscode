@@ -1,0 +1,32 @@
+{
+ "file:///fx/test/fixtures/sldd-stream-objects/stream_objects_text.sldd/design/plainS": {
+  "type": "childRows",
+  "nodeId": "file:///fx/test/fixtures/sldd-stream-objects/stream_objects_text.sldd/design/plainS",
+  "rows": [
+   {
+    "ID": "file:///fx/test/fixtures/sldd-stream-objects/stream_objects_text.sldd/design/plainS/x",
+    "parent": "file:///fx/test/fixtures/sldd-stream-objects/stream_objects_text.sldd/design/plainS",
+    "Status": "",
+    "Name": {
+     "label": "x",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "Value": "1",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ }
+}

@@ -1,0 +1,12 @@
+{
+ "file:///fx/test/fixtures/chain_model.slx/blocks/1": {
+  "paramLinks": [
+   {
+    "property": "Gain",
+    "paramName": "ChainVar",
+    "source": "chain_leaf.sldd",
+    "linkTarget": "ChainVar@file:///fx/test/fixtures/chain_leaf.sldd"
+   }
+  ]
+ }
+}

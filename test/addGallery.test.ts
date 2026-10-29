@@ -16,11 +16,17 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import '../src/webview/components/dex-add-gallery.js';
-import type { DexAddGallery } from '../src/webview/components/dex-add-gallery.js';
-import '../src/webview/components/dex-tree-table.js';
-import type { DexTreeTable, TreeTableRow } from '../src/webview/components/dex-tree-table.js';
-import { ADD_CATALOG, allTiles } from '../src/common/addCatalog.js';
+import {
+  defineAddGallery,
+  type DexAddGallery,
+  defineTreeTable,
+  type DexTreeTable,
+  type TreeTableRow,
+} from 'data-explorer-view/tree-table';
+import { ADD_CATALOG, allTiles } from 'data-explorer-view/model';
+
+defineAddGallery();
+defineTreeTable();
 
 // The popover's geometry used to be two exported TS constants that both components interpolated
 // into their css`` templates. It is two custom properties in vscode-theme.css now — the
@@ -192,6 +198,22 @@ describe('dex-add-gallery', () => {
   it('opens showing the pin it was given', async () => {
     const el = await gallery(true);
     expect(($(el, '.gallery-pin input') as HTMLInputElement).checked).toBe(true);
+  });
+
+  // THE DECISION THIS PINS (ruling V-038, option (b), 2026-10-16). The design had closing a
+  // pinned gallery reveal and select every entry the run added, and the pin's tooltip
+  // promised it ("closing selects the whole run"). Nothing ever did: each add selects its one
+  // new entry, so after a run only the last one is selected. The selection was dropped rather
+  // than built. Building it needs the run's ids to flow from table-main's `selectRows` into the
+  // component, or a new gallery-close event, plus rules for an id renamed or undone mid-run.
+  // A tooltip that promises nothing is better than one that promises a missing feature. The
+  // undo half of the same design paragraph was dropped the same way (addEntryUndo.test.ts).
+  // What closing a run does select is locked in addEntryWiring.test.ts.
+  it('the pin promises only what it does', async () => {
+    const el = await gallery();
+    const title = $(el, '.gallery-pin').getAttribute('title');
+    expect(title).toBe('Stay open after each add. Entries land immediately and are not renamed.');
+    expect(title).not.toMatch(/select/i);
   });
 
   it('Escape asks to close, and keeps the key to itself', async () => {
@@ -708,14 +730,19 @@ describe('the table and the gallery together', () => {
     expect(cssText).toContain(".columns-button[aria-expanded='true']");
 
     // The pressed rule carries a border as well as a surface, because in Light Modern the
-    // surface alone (#E8E8E8 selection over #F2F2F2 hover) is four percent of grey.
-    expect(cssText).toContain('--vscode-inputOption-activeBorder');
+    // surface alone (#E8E8E8 selection over #F2F2F2 hover) is four percent of grey. The widget
+    // reads it as --dex-border-color-active, which vscode-theme.css maps onto inputOption's.
+    const pressed = /\.add-button\[aria-expanded='true'\]\s*\{([^}]*)\}/.exec(cssText);
+    expect(pressed, 'no pressed rule').not.toBeNull();
+    expect(pressed![1]).toMatch(/border-color:\s*var\(--dex-border-color-active\b/);
+    expect(THEME_CSS).toMatch(/--dex-border-color-active:\s*var\(--vscode-inputOption-activeBorder\b/);
     // And the surface is NOT taken from that same group: inputOption.activeBackground is
     // registered `transparent` on the high-contrast themes, where a var() fallback therefore
     // never fires and the button would lose its only cue. Cheap to write, invisible to review,
     // and exactly the kind of regression a browser harness cannot catch either — the harness
     // leaves the HC token undefined, so the trap would measure as though it worked.
     expect(cssText).not.toContain('--vscode-inputOption-activeBackground');
+    expect(THEME_CSS).not.toContain('--vscode-inputOption-activeBackground');
 
     // And the attribute is a live answer on both, not decoration on one.
     const columns = el.shadowRoot!.querySelector('.columns-button') as HTMLElement;

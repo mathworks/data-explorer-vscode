@@ -25,6 +25,7 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
+import { MatEditorProvider } from '../../src/host/MatEditorProvider';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { ctx, fakePanel, token, waitFor } from './tools/hostHarness';
 
@@ -79,7 +80,7 @@ interface Opened {
 // Each format through the editor the extension opens it in. The text dictionary is a
 // TextDocument; the others are custom documents.
 const VENUES: { file: string; open: (uri: vscode.Uri) => Promise<Opened> }[] = [
-  { file: 'sparse_values.mat', open: (uri) => openCustom(new BinaryEditorProvider(ctx()), uri) },
+  { file: 'sparse_values.mat', open: (uri) => openCustom(new MatEditorProvider(ctx()), uri) },
   { file: 'sparse_ws.slx', open: (uri) => openCustom(new BinaryEditorProvider(ctx()), uri) },
   { file: 'sparse_binary.sldd', open: (uri) => openCustom(new BinarySlddEditorProvider(ctx()), uri) },
   {

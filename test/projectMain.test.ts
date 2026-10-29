@@ -13,7 +13,7 @@
 // per test FILE and this one wires a window listener and creates its own DOM.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import type { ProjectPage } from 'data-explorer-core';
-import { ROW_CAP } from '../src/webview/projectPage.js';
+import { ROW_CAP } from 'data-explorer-view/project-page';
 
 const posted: Array<{ type: string; [k: string]: unknown }> = [];
 
@@ -73,13 +73,14 @@ function type(input: HTMLInputElement, value: string, caret = value.length): voi
 }
 
 describe('the project page webview', () => {
+  // Its own timeout: a cold import of the whole project-main webview is what a loaded machine stretches.
   beforeAll(async () => {
     (globalThis as any).acquireVsCodeApi = () => ({
       postMessage: (m: unknown) => posted.push(m as { type: string }),
     });
     await import('../src/webview/project-main.js');
     atLoad = [...posted];
-  });
+  }, 60_000);
 
   beforeEach(() => {
     setProject({ shortcuts: SHORTCUTS });

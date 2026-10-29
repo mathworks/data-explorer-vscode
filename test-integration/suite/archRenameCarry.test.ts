@@ -33,8 +33,14 @@ import {
   findEntryObjectSpan,
 } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { catalogRenameOf, scXmlRenamePatch } from '../../src/host/scRename';
+import {
+  catalogFunctionRenameOf,
+  catalogRenameOf,
+  scXmlFunctionRenamePatch,
+  scXmlRenamePatch,
+} from '../../src/host/scRename';
 import { mutateEntry } from '../../src/host/entryOps';
+import { waitFor } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -54,17 +60,16 @@ function token() {
   return new vscode.CancellationTokenSource().token;
 }
 
-const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 /**
- * A working copy of the vitest suite's architectural fixture.
+ * A working copy of one of the vitest suite's architectural fixtures (`arch_binary.sldd`
+ * unless named).
  *
  * Sourced from `test/fixtures` rather than duplicated here, so the dictionary this asks
  * about is the same one the unit tests ask about; and written OUTSIDE the workspace folder,
  * whose exact file set two other suites assert.
  */
-async function workingCopy(name: string): Promise<vscode.Uri> {
-  const src = vscode.Uri.joinPath(ws(), '..', '..', '..', 'test', 'fixtures', 'arch_binary.sldd');
+async function workingCopy(name: string, fixture = 'arch_binary.sldd'): Promise<vscode.Uri> {
+  const src = vscode.Uri.joinPath(ws(), '..', '..', '..', 'test', 'fixtures', fixture);
   const dst = vscode.Uri.joinPath(ws(), '..', name);
   await vscode.workspace.fs.copy(src, dst, { overwrite: true });
   return dst;
@@ -96,13 +101,14 @@ async function open(provider: BinarySlddEditorProvider, uri: vscode.Uri) {
     enableScripts: true,
   });
   await provider.resolveCustomEditor(doc, panel, token());
-  await settle(500);
-  // The model is registered by a repaint, which the webview asks for with `ready`. Trigger
-  // one here rather than waiting on the webview's timing, then close the view so a late
-  // `ready` cannot rebuild the tree under the assertions.
+  // The model is registered by a repaint, which the webview asks for with `ready`. Wait for
+  // that round trip, then repaint once more here and close the view, so that no `ready` can
+  // still be on its way to rebuild the tree under the assertions.
+  const srcId = (doc as unknown as { srcId: string }).srcId;
+  await waitFor('the ready/post round trip to register the document', () => !!DataModel.getDataSource(srcId));
   (doc as any).repaintAll();
   panel.dispose();
-  const root: any = DataModel.getDataSource((doc as unknown as { srcId: string }).srcId);
+  const root: any = DataModel.getDataSource(srcId);
   assert.ok(root, 'resolving the editor registered the document’s model');
   return { doc, root };
 }
@@ -130,6 +136,43 @@ function renameEntry(doc: any, root: any, name: string, newName: string) {
 
   doc.pushEdit('Edit Name', before, after, undefined, part);
   return { before, after, part: part! };
+}
+
+/**
+ * applyEdit's rename of a service interface's FUNCTION, minus the webview message: the
+ * catalog keeps its own copy of the function (`p_Name`, `p_FunctionPrototype`), so this
+ * edit carries a member swap too, through the function gate rather than the entry one.
+ */
+function renameFunction(doc: any, root: any, entryName: string, name: string, newName: string) {
+  const entry = entryNamed(root, entryName);
+  assert.ok(entry, `the fixture has an entry named ${entryName}`);
+  const node = (entry.children as any[]).find((c: any) => c.name === name);
+  assert.ok(node, `${entryName} has a function named ${name}`);
+  const selector = entrySelectorOf(entry);
+  assert.strictEqual(catalogRenameOf('Name', newName, node, entry), null, 'a function is not an entry rename');
+  const functionRename = catalogFunctionRenameOf('Name', newName, node, entry);
+  assert.ok(functionRename, 'a function of a top-level service interface is a rename the catalog can carry');
+
+  assert.strictEqual(mutateEntry(entry, () => node.setProperty('Name', newName)), true);
+
+  const before = doc.chunkXml as string;
+  const span = findEntryObjectSpan(before, selector);
+  assert.ok(span, 'the entry’s XML object is locatable');
+  const frag = serializeEntryToXml(entry).replace(/\n$/, '');
+  const after = before.slice(0, span!.offset) + frag + before.slice(span!.offset + span!.length);
+  const part = scXmlFunctionRenamePatch(doc.zipMeta, functionRename!);
+  assert.ok(part, 'the catalog lists this function, so the rename has a part to carry');
+
+  doc.pushEdit('Edit Name', before, after, undefined, part);
+  return { before, after, part: part! };
+}
+
+/** `text` with each `from` replaced by its `to`, checking first that `from` occurs exactly once. */
+function replacedOnce(text: string, pairs: [string, string][]): string {
+  return pairs.reduce((out, [from, to]) => {
+    assert.strictEqual(out.split(from).length - 1, 1, `"${from}" occurs exactly once`);
+    return out.replace(from, () => to);
+  }, text);
 }
 
 suite('Architectural rename carries into the System Composer catalog', () => {
@@ -205,6 +248,68 @@ suite('Architectural rename carries into the System Composer catalog', () => {
     await vscode.workspace.fs.delete(uri);
   });
 
+  test('a save writes a renamed service function in the chunk and in the catalog', async () => {
+    // The catalog's copy of a service interface's function: without the carry the saved
+    // chunk says `compute` and the saved catalog still says `f`, which MATLAB reads as two
+    // different functions.
+    const uri = await workingCopy('arch_rename_function_save.sldd', 'arch_service_binary.sldd');
+    const original = await partsOnDisk(uri);
+
+    const { doc } = await open(provider, uri);
+    const { part } = renameFunction(doc, DataModel.getDataSource((doc as any).srcId), 'ServiceInterface', 'f', 'compute');
+    assert.deepStrictEqual((doc as any).zipMeta[SC_PART_XML], part.after, 'the edit swapped the catalog member on the document');
+    await provider.saveCustomDocument(doc, token());
+
+    const saved = await partsOnDisk(uri);
+    assert.ok(saved.chunkXml.includes('>compute<'), 'the saved chunk spells the new name');
+    assert.ok(saved.chunkXml.includes('y = compute(u)'), 'and the Prototype that declares it');
+    // Exactly the function's two sites: the data interface named f and g's argument g stay.
+    assert.strictEqual(
+      new TextDecoder().decode(saved.zipMeta[SC_PART_XML]),
+      replacedOnce(new TextDecoder().decode(original.zipMeta[SC_PART_XML]), [
+        ['<p_FunctionPrototype>y = f(u)</p_FunctionPrototype>', '<p_FunctionPrototype>y = compute(u)</p_FunctionPrototype>'],
+        ['<p_Name>f</p_Name>\n        </p_FunctionElements>', '<p_Name>compute</p_Name>\n        </p_FunctionElements>'],
+      ]),
+      'the saved catalog renames the function at its p_Name and p_FunctionPrototype, and nowhere else',
+    );
+    assert.strictEqual(kindsOnDisk(saved).ServiceInterface, 'Service Interface', 'and still models the entry');
+
+    doc.dispose();
+    await vscode.workspace.fs.delete(uri);
+  });
+
+  test('undo of a service function rename restores the catalog member byte for byte, and a save writes that back', async () => {
+    const uri = await workingCopy('arch_rename_function_undo.sldd', 'arch_service_binary.sldd');
+    const original = await partsOnDisk(uri);
+
+    const { doc } = await open(provider, uri);
+    const edits: vscode.CustomDocumentEditEvent<vscode.CustomDocument>[] = [];
+    const sub = provider.onDidChangeCustomDocument((e) => edits.push(e));
+    const { before, part } = renameFunction(doc, DataModel.getDataSource((doc as any).srcId), 'ServiceInterface', 'f', 'compute');
+    assert.strictEqual(edits.length, 1, 'the rename is ONE edit on VS Code’s undo stack');
+
+    edits[0].undo();
+    assert.strictEqual((doc as any).chunkXml, before, 'undo restored the chunk');
+    assert.deepStrictEqual(
+      (doc as any).zipMeta[SC_PART_XML],
+      original.zipMeta[SC_PART_XML],
+      'and the catalog member, byte for byte',
+    );
+
+    edits[0].redo();
+    assert.deepStrictEqual((doc as any).zipMeta[SC_PART_XML], part.after, 'redo swapped it back');
+
+    edits[0].undo();
+    await provider.saveCustomDocument(doc, token());
+    const saved = await partsOnDisk(uri);
+    assert.strictEqual(saved.chunkXml, original.chunkXml, 'the saved chunk is the undone one');
+    assert.deepStrictEqual(saved.zipMeta[SC_PART_XML], original.zipMeta[SC_PART_XML], 'and so is the saved catalog');
+
+    sub.dispose();
+    doc.dispose();
+    await vscode.workspace.fs.delete(uri);
+  });
+
   test('a revert brings the catalog back from disk too, not just the chunk', async () => {
     // The half of a revert that is easy to miss: it re-reads the file, and a revert that
     // restored only `data/chunk0.xml` would leave the patched catalog in place — a file whose
@@ -229,5 +334,27 @@ suite('Architectural rename carries into the System Composer catalog', () => {
 
     doc.dispose();
     await vscode.workspace.fs.delete(uri);
+  });
+
+  test('a revert that cannot read the disk puts the catalog back as last read too, not just the chunk', async () => {
+    // VS Code shows the document clean whatever the revert does, so a revert that fails puts the
+    // document back to the file as it last read it — and, for the reason above, the catalog with
+    // the chunk.
+    const uri = await workingCopy('arch_rename_revert_unread.sldd');
+    const original = await partsOnDisk(uri);
+
+    const { doc } = await open(provider, uri);
+    renameEntry(doc, DataModel.getDataSource((doc as any).srcId), 'StructType', 'Wheel');
+    await vscode.workspace.fs.delete(uri);
+
+    await assert.rejects(provider.revertCustomDocument(doc, token()));
+    assert.strictEqual((doc as any).chunkXml, original.chunkXml, 'the chunk as last read');
+    assert.deepStrictEqual(
+      (doc as any).zipMeta[SC_PART_XML],
+      original.zipMeta[SC_PART_XML],
+      'and the pass-through catalog with it',
+    );
+
+    doc.dispose();
   });
 });

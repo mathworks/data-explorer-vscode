@@ -54,13 +54,13 @@ import { describe, it, expect, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel, applyScEdits, entrySelectorOf } from 'data-explorer-core';
-import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
-import { buildEntryRows } from '../src/host/rowBuilder.js';
+import { buildEntryRows, spliceEntryRows } from 'data-explorer-view/model';
+import { getModel, findNode, invalidate } from 'data-explorer-view/host';
 import { findEntrySpan, detectIndent } from '../src/host/entrySplice.js';
 import { indexEntries } from '../src/host/jsonEntryScan.js';
 import { reserializeEntry } from '../src/host/structuralEdit.js';
 import { mutateEntry, applyEntryOps } from '../src/host/entryOps.js';
-import { planEntrySync, isEchoOfEdit, planOwnEdit } from '../src/host/jsonEntrySync.js';
+import { planEntrySync, isEchoOfEdit, isPaintedEcho, hintFor, planOwnEdit } from '../src/host/jsonEntrySync.js';
 import { catalogRenameOf, scJsonRenameEdits } from '../src/host/scRename.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -222,7 +222,7 @@ interface Edited {
   painted: any[];
   before: any[];
   newText: string;
-  /** The id the rows on screen carry — pre-rename. */
+  /** The id the rows on screen carried before the paint — pre-rename. */
   rowIdOnScreen: string;
   /** The id the model gives the entry once the repaint has rebuilt it — post-rename. */
   entryId: string;
@@ -300,9 +300,16 @@ function editInPlace(uri: string, label: string, text: string, pair: Pair): Edit
   // multi-change event is not an echo of one span): if the narrow rows are right there too,
   // the fallback is a choice about latency and not about correctness.
   const submitted = { rangeOffset: span!.offset, rangeLength: span!.length, text: entryText };
-  const plan = planOwnEdit([{ ...submitted }], { entryId: entry.id, rowId: rowIdOnScreen, submitted });
+  const plan = planOwnEdit([{ ...submitted }], { entryId: entry.id, submitted, epoch: 0 });
   expect(plan, `the host recognises its own edit (${pair.columnId} on "${pair.nodeId}")`).not.toBeNull();
-  expect(plan!.entryRowId, 'and repaints over the run the table is showing').toBe(rowIdOnScreen);
+  // And repaints over the run the table is showing, which by the time the echo arrives is the run
+  // the PAINT left — under the entry's new id, after a rename. Spliced as the webview splices, so
+  // an id the table no longer holds fails here as the miss it is there (a full-payload round trip).
+  const onScreen = spliceEntryRows(before, rowIdOnScreen, painted);
+  expect(
+    onScreen && spliceEntryRows(onScreen, plan!.entryRowId, []),
+    `the echo lands on a run the table holds (${pair.columnId} on "${pair.nodeId}")`,
+  ).not.toBeNull();
   const applied = applyEntryOps(model, [plan!.op]);
   expect(applied[0].kind).toBe('replace');
   const fresh = (applied[0] as any).entry;
@@ -395,7 +402,8 @@ for (const { label, text } of FIXTURES) {
       expect(showedTheEdit, 'of which the eager paint visibly carried the edit').toBeGreaterThan(compared / 2);
     });
 
-    // The reason the repaint carries a row id of its own rather than reading the model's.
+    // The reason the PAINT splices over the id read before the mutation rather than the model's:
+    // until it lands, the rows on screen still carry the old one.
     it('leaves a renamed entry answering to an id the rows on screen do not carry', () => {
       const renames = pairs.filter((p) => p.columnId === 'Name' && p.entryRow);
       expect(renames.length).toBeGreaterThan(0);
@@ -585,23 +593,53 @@ describe('isEchoOfEdit — spending the repaint token only on the edit that made
   });
 });
 
+describe('isPaintedEcho / hintFor — an echo is trusted only while its paint is still on screen', () => {
+  // A paint goes out before its write, and a wide repaint begun before the write lands reads the
+  // text from BEFORE it — rebuilding the rows and the tree as if the edit had not happened. The
+  // echo of such a write is then the one change that would repair both, so it must not be
+  // skipped (a structural edit) or planned against rows the repaint replaced (a cell edit's hint).
+  const submitted = { rangeOffset: 120, rangeLength: 45, text: '{ "name": "A" }' };
+
+  it('skips the echo of a painted write while no wide repaint has begun since', () => {
+    expect(isPaintedEcho([{ ...submitted }], { submitted, epoch: 3 }, 3)).toBe(true);
+  });
+
+  it('refuses it once a wide repaint has begun, however exactly the bytes match', () => {
+    expect(isPaintedEcho([{ ...submitted }], { submitted, epoch: 3 }, 4)).toBe(false);
+  });
+
+  it('still asks the bytes first: a change that is not the write is never skipped', () => {
+    expect(isPaintedEcho([{ ...submitted, rangeOffset: 121 }], { submitted, epoch: 3 }, 3)).toBe(false);
+    expect(isPaintedEcho([], { submitted, epoch: 3 }, 3)).toBe(false);
+  });
+
+  it('drops a cell edit’s hint the same way, and keeps it while its paint stands', () => {
+    const hint = { entryId: 'doc/design/A', submitted, epoch: 3 };
+    expect(hintFor(hint, 3)).toBe(hint);
+    expect(hintFor(hint, 4)).toBeNull();
+    expect(hintFor(null, 3)).toBeNull();
+  });
+});
+
 describe('planOwnEdit — the entry the host wrote, read back out of what it wrote', () => {
   const entryText = '{\n  "name": "Gain_renamed",\n  "value": 42\n}';
   const submitted = { rangeOffset: 200, rangeLength: 38, text: entryText };
-  const hint = { entryId: 'doc/design/Gain_renamed', rowId: 'doc/design/Gain', submitted };
+  const hint = { entryId: 'doc/design/Gain_renamed', submitted, epoch: 0 };
 
-  it('replaces the entry the MODEL names, over the row the TABLE shows', () => {
+  it('replaces the entry the MODEL names, over the run the PAINT left under the same id', () => {
     const plan = planOwnEdit([{ ...submitted }], hint);
     expect(plan).not.toBeNull();
-    // The two ids are different halves of a rename and neither substitutes for the other: the
-    // op has to resolve the node as the model now spells it, and the splice has to land on the
-    // run the webview is holding, which still carries the old name.
+    // One id for both halves of a rename: the op resolves the node as the model now spells it,
+    // and the paint went out before the write, so the run the webview holds carries the new name
+    // too. Spliced over the old name, the confirmation missed, and the table asked for the whole
+    // payload to recover — after every rename.
     expect(plan!.op).toEqual({
       kind: 'replace',
       rowId: 'doc/design/Gain_renamed',
       record: { name: 'Gain_renamed', value: 42 },
+      fromDocumentText: true,
     });
-    expect(plan!.entryRowId).toBe('doc/design/Gain');
+    expect(plan!.entryRowId).toBe('doc/design/Gain_renamed');
   });
 
   it('refuses a change that is not the echo of the submitted edit', () => {

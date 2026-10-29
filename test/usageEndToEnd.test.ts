@@ -38,9 +38,11 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { annotateVariableRows, buildUsageGraph, type RawSource } from '../src/host/usageCells.js';
-import { getModel, getModelFromBytes } from '../src/host/SlddModel.js';
-import { buildRows } from '../src/host/rowBuilder.js';
-import { DexTreeTable, type TreeTableRow } from '../src/webview/components/dex-tree-table.js';
+import { buildRows } from 'data-explorer-view/model';
+import { getModel, getModelFromBytes } from 'data-explorer-view/host';
+import { DexTreeTable, defineTreeTable, type TreeTableRow } from 'data-explorer-view/tree-table';
+
+defineTreeTable();
 
 // import.meta.dirname, not a URL relative to import.meta.url: under happy-dom that
 // resolves against a document base rather than the file, and every read fails as
@@ -109,8 +111,8 @@ describe('the usage graph over the real fixture files', () => {
     // Each also carries where the block IS. Every one of these sits in its model's root
     // system, so the path is the label alone — the interesting case (two `Gain`s in two
     // subsystems) is pinned in usageCells.test.ts over bytes built for it, and in core
-    // against MATLAB-written f14.slx. What this pins is that the field survives the
-    // whole path from core's index to the cell.
+    // against a shipped Simulink demo model MATLAB wrote. What this pins is that the
+    // field survives the whole path from core's index to the cell.
     expect(graph().blocksUsing(DICT, 'Kp')).toEqual([
       { blockName: 'Gain1', blockPath: 'Gain1', modelName: 'legacy_ctrl', modelUri: CTRL, linkTarget: `blocks:Gain1@${CTRL}` },
       { blockName: 'PlantGain', blockPath: 'PlantGain', modelName: 'shared_gain', modelUri: GAIN, linkTarget: `blocks:1@${GAIN}` },

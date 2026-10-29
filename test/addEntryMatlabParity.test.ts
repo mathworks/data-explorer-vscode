@@ -26,11 +26,10 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync, zipSync } from 'fflate';
 import { DataModel } from 'data-explorer-core';
-import { getModel, invalidate } from '../src/host/SlddModel.js';
-import { readSlddParts } from '../src/host/slddContent.js';
+import { readSlddParts, ADD_CATALOG } from 'data-explorer-view/model';
+import { getModel, invalidate } from 'data-explorer-view/host';
 import { addNewEntry, sectionByName } from '../src/host/structuralEdit.js';
 import { addNewEntryXml } from '../src/host/xmlStructuralEdit.js';
-import { ADD_CATALOG } from '../src/common/addCatalog.js';
 import { MATLAB_DEFAULTS, MATLAB_ABSENT, MATLAB_CUSTOM_SAVE } from './matlabDefaults.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

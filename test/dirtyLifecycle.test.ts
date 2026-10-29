@@ -18,9 +18,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModelFromBytes, findNode, invalidate } from '../src/host/SlddModel.js';
+import { buildRows } from 'data-explorer-view/model';
+import { getModelFromBytes, findNode, invalidate } from 'data-explorer-view/host';
 import { captureBaseline, computeModified, clearBaseline } from '../src/host/slddBaseline.js';
-import { buildRows } from '../src/host/rowBuilder.js';
 import { findEntrySpan, detectIndent } from '../src/host/entrySplice.js';
 
 const fixtureText = readFileSync(

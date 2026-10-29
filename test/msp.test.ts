@@ -3,7 +3,7 @@
 //
 // The Managed Simulink Project proof of concept, end to end on the two things this repo
 // decides: which member is which half (src/host/mspProject.ts) and what the page says
-// about it (src/webview/projectPage.ts).
+// about it (data-explorer-view's src/widgets/project-page/projectPage.ts).
 //
 // The store shapes asserted here were MEASURED against the toolkit's own Flight Control
 // example, four generated projects:
@@ -18,8 +18,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import type { ParsedProject, ProjectPage } from 'data-explorer-core';
 import { detectMsp } from '../src/host/mspProject.js';
-import { renderProjectPage } from '../src/webview/projectPage.js';
-import type { ProjectPagePayload } from '../src/webview/projectPage.js';
+import { renderProjectPage, type ProjectPagePayload } from 'data-explorer-view/project-page';
 
 const IFACE = '110edaf7-5770-482c-b8a4-b92306ac967b';
 const PRIV = '3ced2a68-a1a2-4ddd-bd2a-ae1836d724de';
@@ -294,12 +293,13 @@ describe('a project that is not one', () => {
 describe('clicking a component row', () => {
   const posted: Array<Record<string, unknown>> = [];
 
+  // Its own timeout: a cold import of the whole project-main webview is what a loaded machine stretches.
   beforeAll(async () => {
     (globalThis as any).acquireVsCodeApi = () => ({
       postMessage: (m: unknown) => posted.push(m as Record<string, unknown>),
     });
     await import('../src/webview/project-main.js');
-  });
+  }, 60_000);
 
   beforeEach(() => {
     window.dispatchEvent(

@@ -1,0 +1,22 @@
+{
+ "digested": true,
+ "sha256": "5b6657a61a551be6737d0a41e324f70a248920682c13824ee00cb3be81f1041c",
+ "entryCount": 15,
+ "entries": {
+  "file:///fx/test/fixtures/numeric_json.sldd/design/Array": "7056a5fd2ea08a4c",
+  "file:///fx/test/fixtures/numeric_json.sldd/design/Array1": "78505569c0c1501f",
+  "file:///fx/test/fixtures/numeric_json.sldd/design/CellArray": "dfcb5fb1b0dbac69",
+  "file:///fx/test/fixtures/numeric_json.sldd/design/CellArray1": "7693d89f2d128719",
+  "file:///fx/test/fixtures/numeric_json.sldd/design/CellMatrix": "7d7c9aa345d7e30d",
+  "file:///fx/test/fixtures/numeric_json.sldd/design/Hybrid": "32cca77c71c36559",
+  "file:///fx/test/fixtures/numeric_json.sldd/design/Matrix": "2d339ae0f8a16cec",
+  "file:///fx/test/fixtures/numeric_json.sldd/design/NestedStruct": "37314602271afed8",
+  "file:///fx/test/fixtures/numeric_json.sldd/design/Struct": "3f76856457ced6f9",
+  "file:///fx/test/fixtures/numeric_json.sldd/design/stringArray": "3e7368a24d78e0bb",
+  "file:///fx/test/fixtures/numeric_json.sldd/design/stringMatrix": "9950b1f7c4845bb7",
+  "file:///fx/test/fixtures/numeric_json.sldd/design/stringVArray": "6ba35219e1b21d30",
+  "file:///fx/test/fixtures/numeric_json.sldd/design/structArray": "517a387decee6fa0",
+  "file:///fx/test/fixtures/numeric_json.sldd/design/structMatrix": "cc88a3365733343e",
+  "file:///fx/test/fixtures/numeric_json.sldd/design/structVArray": "113528505a3cb813"
+ }
+}

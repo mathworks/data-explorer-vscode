@@ -1,0 +1,12 @@
+{
+ "file:///fx/test-integration/fixtures/usageorder/plantB.slx/blocks/1": {
+  "paramLinks": [
+   {
+    "property": "Gain",
+    "paramName": "SharedGain",
+    "source": "sharedParams.sldd",
+    "linkTarget": "SharedGain@file:///fx/test-integration/fixtures/usageorder/sharedParams.sldd"
+   }
+  ]
+ }
+}

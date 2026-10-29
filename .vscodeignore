@@ -50,5 +50,4 @@ vitest.config.ts
 tsconfig.json
 **/*.map
 media/screenshots/**
-media/icons/**
 *.vsix

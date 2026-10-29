@@ -1,29 +1,45 @@
 // Copyright 2026 The MathWorks, Inc.
-import './components/styles/global.css';
+import 'data-explorer-view/theme.css';
+import './webview-page.css';
 import './vscode-theme.css';
-import './components/dex-tree-table.js';
-import './components/dex-context-menu.js';
-import './components/dex-error-dialog.js';
-import './components/dex-variable-editor.js';
-import { installMatrixOpen } from './matrixOpen.js';
+import {
+  connectTable,
+  defineTreeTable,
+  buildContextMenuItems,
+  shouldShowContextMenu,
+  shouldOpenCellEditor,
+  resolveShortcutAction,
+  type ClipboardState,
+  type MenuRow,
+} from 'data-explorer-view/tree-table';
+import { defineContextMenu, type ContextMenuItem } from 'data-explorer-view/context-menu';
+import { defineErrorDialog } from 'data-explorer-view/error-dialog';
+import { defineVariableEditor } from 'data-explorer-view/variable-editor';
+import { setIconBase } from 'data-explorer-view/icon';
 import { renderBanners, renderError } from './banners.js';
 import {
-  nextExpandedIds,
-  nextStickyIds,
-  pendingSelectionToApply,
-  spliceEntryRows,
-  insertEntryRows,
-  mergeChildRows,
-} from './rowUpdates.js';
-import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from './menuItems.js';
-import { dropDecision, type DragMode, type DropTarget, type DragSource } from './dropDecision.js';
-import { sectionRowIdOf } from './operands.js';
-import { linkRoute } from './linkRoute.js';
-import type { ContextMenuItem } from './components/dex-context-menu.js';
-import type { SectionRule } from '../host/sectionRules.js';
+  messageSource,
+  dropDecision,
+  type DragMode,
+  type DropTarget,
+  sectionRowIdOf,
+  type SectionRule,
+  sectionNameFromRowId,
+  WHOLE_FILE_SECTION,
+} from 'data-explorer-view/model';
+import { vscodePort } from './vscodePort.js';
 import type { DragDescriptor } from '../host/dragState.js';
-import { isSectionRowId, sectionNameFromRowId } from '../common/sectionRowId.js';
 import type { HostToTableMessage } from '../common/protocol.js';
+
+// Importing a widget no longer registers it, so this comes first: before the shell's table is
+// looked up and before any overlay is created, each finds its element already defined. The icon
+// base too, before the first row draws one: the icons copy:icons puts in dist/webview/icons,
+// relative to the shell's <base href> (dist/webview).
+setIconBase('./icons/');
+defineTreeTable();
+defineContextMenu();
+defineErrorDialog();
+defineVariableEditor();
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -50,11 +66,9 @@ function overlay(tag: string): any {
 
 const contextMenu = overlay('dex-context-menu');
 const errorDialog = overlay('dex-error-dialog');
-// The Variable Editor: a glyph in a matrix Value cell asks for a grid. The table
-// is the event source because the glyph lives inside its shadow tree.
+// The Variable Editor: a glyph in a matrix Value cell asks for a grid. connectTable opens and
+// fills it (below); it is made here with the other overlays so the shells stay interchangeable.
 const variableEditor = overlay('dex-variable-editor');
-const matrixOpen = installMatrixOpen(table, variableEditor, (m) => vscode.postMessage(m));
-
 // Menu state cached from host messages so the menu builds synchronously on
 // right-click (no round-trip): whether the doc is editable, and clipboard state.
 let editable = false;
@@ -75,13 +89,26 @@ let sectionRulesList: SectionRule[] = [];
 // dataTransfer — is the authoritative source of what is being dragged.
 let dragDescriptor: DragDescriptor | null = null;
 
+// The rule of a document that is ONE target: a MAT-file has no section layer, so its host
+// posts a single rule for the whole file, under WHOLE_FILE_SECTION ('', the spelling host and
+// webview share — sectionRules.wholeFileRules). No dictionary posts one, so for every
+// dictionary this is null and nothing below changes.
+function wholeFileRule(): SectionRule | null {
+  return sectionRulesList.find((r) => r.sectionName === WHOLE_FILE_SECTION) ?? null;
+}
+
 // Resolve the section a row belongs to, at any depth — the rule a paste into it or a drop
 // on it has to satisfy. The walk lives in operands.ts because that is where the host's own
 // walk is mirrored and tested; a one-level lookup here used to answer null for a nested
 // child, which now reads as "no destination" and would refuse a paste the host accepts.
-function sectionRuleForRow(rowId: string): SectionRule | null {
-  const sectionRowId = sectionRowIdOf(rowId, (table.rows ?? []) as MenuRow[]);
-  const sectionName = sectionRowId == null ? null : sectionNameFromRowId(sectionRowId);
+//
+// A row with no section ancestor — a MAT-file's variable, or anything under one — and no
+// row at all (null, or '' from a drop on the empty body) resolve to the whole-file rule,
+// which is the document's one target when it has one, and null when it does not.
+function sectionRuleForRow(rowId: string | null): SectionRule | null {
+  const sectionRowId = rowId ? sectionRowIdOf(rowId, (table.rows ?? []) as MenuRow[]) : null;
+  if (sectionRowId == null) return wholeFileRule();
+  const sectionName = sectionNameFromRowId(sectionRowId);
   if (sectionName == null) return null;
   return sectionRulesList.find((r) => r.sectionName === sectionName) ?? null;
 }
@@ -92,20 +119,25 @@ function sectionRuleForRow(rowId: string): SectionRule | null {
 // Both triggers go through here so they cannot disagree — the keyboard does not re-derive
 // enablement, it builds this and reads the item. That is what makes "a shortcut can never
 // do something the menu wouldn't" true rather than commented.
-function menuFor(anchorRowId: string | null): ContextMenuItem[] {
-  const rule = anchorRowId ? sectionRuleForRow(anchorRowId) : null;
+//
+// `selection` is the current one but for a right-click on no row, which is a gesture on the
+// document rather than on what is selected: its menu is the one a selection of nothing gets.
+function menuFor(anchorRowId: string | null, selection: string[] = selectedRowIds()): ContextMenuItem[] {
+  const rule = sectionRuleForRow(anchorRowId);
   return buildContextMenuItems({
     rows: (table.rows ?? []) as MenuRow[],
-    selectedRowIds: selectedRowIds(),
+    selectedRowIds: selection,
     anchorRowId,
     clipboard: clipboardState,
     editable,
     hasTextView,
     // Paste's allow-check needs the target section's rules; without them the item is
-    // offered only as far as "the clipboard is non-empty" can justify.
+    // offered only as far as "the clipboard is non-empty" can justify. The section's name
+    // and this document's uri are what tell a cut pasted back where it came from.
     pasteTarget: rule
-      ? { sectionLabel: rule.sectionLabel, isDerived: rule.isDerived, allowedTypes: rule.allowedTypes }
+      ? { sectionName: rule.sectionName, sectionLabel: rule.sectionLabel, isDerived: rule.isDerived, allowedTypes: rule.allowedTypes }
       : null,
+    docUri,
   });
 }
 
@@ -127,14 +159,23 @@ function postAction(actionId: string, anchorRowId: string | null): void {
     vscode.postMessage({ type: actionId, rowIds: selectedRowIds() });
     return;
   }
-  if (!anchorRowId) return;
+  if (!anchorRowId) {
+    // A paste anchored at no row targets the document itself; '' is how the host is told
+    // so. Only a one-target document can be that target (wholeFileRule). Its menu is the
+    // only one that offers it, and this says so again here rather than trusting every
+    // path that reaches postAction to have asked: a dictionary's host has no section to
+    // put a row-less paste in.
+    if (actionId === 'paste' && wholeFileRule()) vscode.postMessage({ type: 'paste', rowId: '' });
+    return;
+  }
   vscode.postMessage({ type: actionId, rowId: anchorRowId });
 }
 
-// The predictor injected into the table: given the row under the cursor and the
-// drag mode, run the pure dropDecision against the broadcast drag descriptor and
-// this document's section rules. Returns null when there's no active drag or the
-// target section can't be resolved, so the table falls back to default behavior.
+// The predictor injected into the table: given the row under the cursor ('' for the
+// empty body) and the drag mode, run the pure dropDecision against the broadcast drag
+// descriptor and this document's section rules. Returns null when there's no active drag or
+// the target section can't be resolved, which the table reads as a refusal: a drag the host
+// never announced (a file from the OS, text from another app) is not one this table takes.
 function predictDrop(
   targetRowId: string,
   mode: DragMode,
@@ -142,13 +183,6 @@ function predictDrop(
   if (!dragDescriptor) return null;
   const rule = sectionRuleForRow(targetRowId);
   if (!rule) return null;
-  const source: DragSource = {
-    docUri: dragDescriptor.docUri,
-    sectionName: dragDescriptor.sectionName,
-    sectionLabel: dragDescriptor.sectionLabel,
-    isDerived: dragDescriptor.isDerived,
-    items: dragDescriptor.items,
-  };
   const target: DropTarget = {
     docUri,
     sectionName: rule.sectionName,
@@ -156,271 +190,78 @@ function predictDrop(
     isDerived: rule.isDerived,
     allowedTypes: rule.allowedTypes,
   };
-  return dropDecision(source, target, mode);
+  // The descriptor IS a DragSource (the source document, and each item's own section).
+  return dropDecision(dragDescriptor, target, mode);
 }
 
-// The rows the host asked us to select once they exist in the table. Set on a rename (the
-// row's id changes, so the old selection is stale), and on every edit that ADDS rows — a
-// paste or a drop of several entries names all of them, so the selection lands on the
-// whole group the user just created rather than on its last member. Applied as soon as
-// they are all present, otherwise held until the rebuilt rows arrive.
-let pendingSelectIds: string[] = [];
-
-function applyPendingSelection(): void {
-  const rows = (table.rows ?? []) as { ID: string; parent: string | null }[];
-  const toSelect = pendingSelectionToApply(rows, pendingSelectIds);
-  if (!toSelect) return;
-  table.selectedRowIds = toSelect;
-  // Keep the host (Property Inspector) in sync with the re-selected rows.
-  vscode.postMessage({ type: 'select', rowIds: toSelect });
-  pendingSelectIds = [];
+// Whether a value read off a message is an object — the one shape every list element below
+// has to be before a field of it is read.
+function isRecord(x: unknown): x is Record<string, any> {
+  return typeof x === 'object' && x !== null;
 }
 
-// A row the host asked us to open the name editor on once it exists. Set only by an add
-// from the gallery: core names a new entry from its class's stem (`Param`, `Param1`, … for a
-// Simulink.Parameter) and saying what it really is is the user's next act (see
-// BeginRenameMessage). Held until the row arrives for
-// the same reason pendingSelectIds is — the request travels beside the repaint that carries
-// the row, and nothing here may assume which lands first.
-let pendingRenameId: string | null = null;
-
-function applyPendingRename(): void {
-  if (!pendingRenameId) return;
-  const rows = (table.rows ?? []) as { ID: string }[];
-  if (!rows.some((r) => r.ID === pendingRenameId)) return;
-  // Cleared whether or not the editor opened. A row that is present and NOT renameable is
-  // an answer, not a wait: holding the request would open the editor on whatever row next
-  // takes that id, which after an undo is a different entry.
-  table.beginRename(pendingRenameId);
-  pendingRenameId = null;
+// The well-formed rules of a `sectionRules` message. A rule with no section name answers no
+// row; an allow-list that is not a list is no restriction, as an absent one is.
+function wellFormedRules(rules: unknown): SectionRule[] {
+  if (!Array.isArray(rules)) return [];
+  return rules
+    .filter((r): r is SectionRule => isRecord(r) && typeof r.sectionName === 'string')
+    .map((r) => (Array.isArray(r.allowedTypes) ? r : { ...r, allowedTypes: [] }));
 }
 
-// A name a navigation asked us to select once its row exists. Set on a cross-tab
-// Usage-link click (the target is identified by name — block or variable — not
-// by hierarchical id); applied as soon as a matching row is present, else held
-// until rows arrive. Setting selectedRowIds makes the table expand ancestors and
-// scroll the row into view.
-let pendingSelectName: string | null = null;
-
-function applyPendingNameSelection(): void {
-  if (!pendingSelectName) return;
-  const rows = (table.rows ?? []) as {
-    ID: string;
-    parent?: string | null;
-    Name?: { label?: string };
-    _blockKey?: string;
-  }[];
-  // A row that is a top-level ENTRY: its parent is a section header. Same reading of the
-  // row shape as operands.ts, through the same `section:` spelling.
-  const isEntry = (r: { parent?: string | null }): boolean =>
-    typeof r.parent === 'string' && isSectionRowId(r.parent);
-  const named = (r: { Name?: { label?: string } }): boolean => r.Name?.label === pendingSelectName;
-  // Two grammars share this one channel. A variable target (and a block in a file
-  // written before SIDs existed) is a NAME and matches the Name label; a block
-  // target is core's block KEY — the SID — which is not printed anywhere, so it is
-  // matched against the `_blockKey` the row publishes. Without that second pass a
-  // `blocks:65@f14.slx` click would open the model and select nothing, since the
-  // row it means reads `<SID: 65>`. Name first, so every pre-SID target keeps its
-  // existing answer when a same-spelled key also exists.
-  //
-  // ENTRY rows first within the Name pass, because a name can be spelled at more than
-  // one depth and every by-name target on this channel means the top-level one: a Data
-  // Type link resolves through core's typeLinkIndex, which is `isEntry`-gated, and the
-  // Usage grammars name a dictionary/MAT variable or a model-workspace param. A nested
-  // row that happens to share the name is not what any of them means — and in an
-  // architectural dictionary that is not hypothetical, because a bus element named after
-  // the value type it references sits ABOVE that value type's own entry. First-in-
-  // document-order then answered with the row the click came FROM, so the link selected
-  // what was already selected and read as dead. The ungated pass stays as the fallback a
-  // pre-SID block target needs: its row is deep in the block tree, never an entry.
-  const match =
-    rows.find((r) => named(r) && isEntry(r)) ??
-    rows.find(named) ??
-    rows.find((r) => r._blockKey === pendingSelectName);
-  if (!match) return;
-  table.selectedRowIds = [match.ID];
-  vscode.postMessage({ type: 'select', rowIds: [match.ID] });
-  pendingSelectName = null;
-}
-
-// We are waiting for the first payload from the moment this module runs: the host
-// parses synchronously (and, on first open, scans the whole workspace for the
-// usage graph) before it can post 'setRows', which is several seconds on a large
-// file. Setting this at boot, ahead of the table's first paint, is what stops that
-// gap from being reported as "No data" — the table has no rows yet, but that is
-// not the same as the file having none.
+// The table's display half of the protocol is view's: connectTable over messageSource (below)
+// paints setRows, updateEntryRows, insertEntryRows and childRows, answers the matrix glyph,
+// shows errors in the banner strip and keeps selection and expansion across a repaint. What is
+// left here is this extension's: the editing state a setRows carries, the host's selection,
+// rename and navigation requests, and the editing messages. Every handler reads its message as
+// the protocol types it (protocol.ts), but the postMessage boundary is untyped, and a throw
+// inside this listener is a table that stops answering without a word, so a message that is not
+// an object is ignored and the state messages keep what is well-formed.
 //
-// The table owns what the wait LOOKS like: a spinner in its own region, under a
-// search bar that stays, revealed only after a delay so a fast open never flashes
-// it (see .loading-state in dex-tree-table.ts). This module owns only when the
-// wait starts and ends. It used to own the whole thing — a timer here, revealing
-// an overlay pinned over the entire panel — and the overlay covered the search bar
-// on its way, which is the flicker that moved this into the component.
-table.loading = true;
-
-// The wait is over: the first payload (setRows) landed, or an error ended it.
-function hideLoading(): void {
-  table.loading = false;
-}
-
-// Through banners.ts, like the notice and the warning, because the error banner is
-// in the same strip and the table is offset by the strip's TOTAL height. Painted
-// from here it was styled and stacked as if it were alone: outside the strip, in
-// normal flow ahead of a table pinned at inset:0, so the table covered it and an
-// error message reached the DOM and no screen.
-function showError(message: string): void {
-  renderError(table, message);
-}
-function clearError(): void {
-  renderError(table, undefined);
-}
-
-// Hand a new row array to the table and re-derive everything that depends on it.
-//
-// Shared by the two repaint messages — the whole-table `setRows` and the
-// entry-scoped `updateEntryRows` — because every rule here is about ROWS and none
-// of them is about how many arrived. Written once so the narrow path cannot drift
-// from the wide one: an entry-scoped repaint that forgot to invalidate
-// `_visibleRowsCache`, or to re-apply a pending selection, would be a bug visible
-// only after an edit and only on one of the two paths.
-function installRows(rows: any[]): void {
-  // Preserve the current selection across the rebuild if the row still exists.
-  // EVERY repaint (value edit, structural edit, text-view edit, undo, redo)
-  // arrives here, so this is what keeps selection stable through all of them.
-  const prevSelected: string[] = Array.isArray(table.selectedRowIds) ? table.selectedRowIds : [];
-  const prevExpanded: Set<string> | null = table._expandedIds instanceof Set ? table._expandedIds : null;
-  // Read BEFORE the new rows land: what the user is looking at is the answer to a
-  // search, and a row they have since edited out of that answer must not be deleted
-  // from under them.
-  const prevVisible: string[] =
-    typeof table._getVisibleRows === 'function'
-      ? table._getVisibleRows().map((r: { ID: string }) => r.ID)
-      : [];
-  table.rows = rows;
-  // Preserve expansion (keep still-existing expanded ids); default to
-  // sections-only on first load. Never collapse the tree under the user.
-  table._expandedIds = nextExpandedIds(prevExpanded, rows);
-  // Preserve the filtered list: rows edited out of the active search stay until the
-  // user searches again. pendingSelectIds — the rows the host wants selected after this
-  // edit, so a renamed row under its new id, or the entries a paste added — are still
-  // unread here; applyPendingSelection() below is what consumes them.
-  table._stickyRowIds = nextStickyIds(table._filterText ?? '', prevVisible, rows, pendingSelectIds);
-  table._visibleRowsCache = null;
-  const present = new Set(rows.map((r: { ID: string }) => r.ID));
-  const stillSelected = prevSelected.filter((id) => present.has(id));
-  if (stillSelected.length > 0) table.selectedRowIds = stillSelected;
-  if (typeof table.requestUpdate === 'function') table.requestUpdate();
-  // A rename/structural edit posts selectRows then triggers this rebuild;
-  // re-apply now that the rows it named exist.
-  applyPendingSelection();
-  // A cross-tab navigation may be waiting for its target row to appear.
-  applyPendingNameSelection();
-  // AFTER the selection, because selecting expands the row's ancestors and scrolls it into
-  // view — an editor opened on a row still hidden under a collapsed section, or below the
-  // viewport, is a table that has silently stopped responding to the keyboard.
-  applyPendingRename();
-}
-
+// Registered BEFORE the table's source, so that for a setRows the editing state (editable, the
+// Add button, row drag) is set before the rows are installed, in the order it always was.
 window.addEventListener('message', (event: MessageEvent) => {
   const msg = event.data as HostToTableMessage;
-  if (msg.type === 'updateEntryRows') {
-    // Entry-scoped repaint: splice this entry's rows over the run already on
-    // screen. Nothing else about the view changes, so columns, banners, editable
-    // and the section rules are all left exactly as the last setRows set them.
-    const spliced = spliceEntryRows((table.rows ?? []) as any[], msg.entryRowId, msg.rows ?? []);
-    if (!spliced) {
-      // The table doesn't hold the entry the host repainted, so the two are out of
-      // step and a splice would silently drop the edit. Ask for a full payload
-      // instead — which is exactly what `ready` requests, and what every provider
-      // already answers with post().
-      vscode.postMessage({ type: 'ready' });
-      return;
-    }
-    // Same reason setRows closes it: the grid is anchored to a cell in the rows
-    // being replaced, and its anchor glyph may not survive the repaint.
-    matrixOpen.close();
-    // Only a SUCCEEDING edit repaints this narrowly (every failure path in the host
-    // resyncs with a full setRows instead), so reaching here clears a banner left
-    // over from an earlier failure — as setRows does, for the same reason.
-    clearError();
-    installRows(spliced);
-  } else if (msg.type === 'insertEntryRows') {
-    // Entry-scoped repaint for an entry the table does not hold yet — a paste, a
-    // drop, or the undo of a delete. Same rules as the splice above; only finding
-    // the place differs, and the host states it (see insertEntryRows).
-    const inserted = insertEntryRows((table.rows ?? []) as any[], msg.sectionRowId, msg.beforeRowId, msg.rows ?? []);
-    if (!inserted) {
-      vscode.postMessage({ type: 'ready' });
-      return;
-    }
-    matrixOpen.close();
-    clearError();
-    installRows(inserted);
-  } else if (msg.type === 'childRows') {
-    // The children of a row the payload deferred (host: lazyRows.ts, childRequest.ts).
-    // Merged in place, NOT installed as a new payload: the rest of the table is
-    // untouched, so the banners, the columns, the selection and an open matrix grid all
-    // stay as they are — this adds rows under one row the user just opened.
-    const merged = mergeChildRows((table.rows ?? []) as any[], msg.nodeId, msg.rows ?? []);
-    // No row by that id any more, so this answers a question the table has stopped
-    // asking (a repaint rebuilt the tree while the fetch was in flight). Dropped, not
-    // escalated to a full repaint: nothing is out of step, the answer is simply stale.
-    if (merged) installRows(merged);
-    // The host could not fit all of this row's children. They have no row and no
-    // twisty, so without this the short list reads as the whole list — and the file's
-    // own banner cannot say it, because it was written before the user opened anything.
-    if (merged && msg.truncated > 0) {
-      showError(
-        `This item has more rows than one view can show: ${msg.truncated.toLocaleString('en-US')} ` +
-          'of its contents are not listed.',
-      );
-    }
-  } else if (msg.type === 'setRows') {
-    hideLoading();
-    clearError();
-    // Every row is about to be replaced, so an open grid describes a payload the
-    // user can no longer see the source of — and its anchor glyph may not survive
-    // the repaint. Close it rather than leave it floating over new data.
-    matrixOpen.close();
-    // The banner strip: the persistent read-only notice (size-limited JSON .sldd)
-    // and what the parse could not read. Passed together because they stack in one
-    // container whose total height the table is offset by; either can be absent,
-    // and a payload carrying neither clears the strip.
-    renderBanners(table, {
-      notice: typeof msg.notice === 'string' ? msg.notice : undefined,
-      warnings: msg.warnings,
-    });
-    const rows = msg.rows ?? [];
+  if (!isRecord(msg)) return;
+  if (msg.type === 'setRows') {
     editable = !!msg.editable;
     hasTextView = !!msg.hasTextView;
+    // A row drag is a structural edit, so it needs an editable document.
+    table.rowDrag = editable;
     // Every table gets setRows, including the read-only ones that never receive
-    // sectionRules — so this is the assignment that lets a .slx or .mat view answer a link
+    // sectionRules — so this is the assignment that lets a .slx or .prj view answer a link
     // into itself. Guarded so a provider that has not been updated leaves the old value
     // rather than blanking it.
     docUri = typeof msg.docUri === 'string' ? msg.docUri : docUri;
     // The `+ Add` button exists only where entries can be created, which is the same
-    // condition the context menu is gated on — the two editable .sldd views. A read-only
-    // view gets no button rather than a dead one.
+    // condition the context menu is gated on — the editable views. A read-only view gets
+    // no button rather than a dead one.
     table.canAdd = editable;
-    table.columns = msg.columns ?? null;
-    table.columnLabels = msg.columnLabels ?? null;
-    table.columnGroups = (msg.columnGroups as Record<string, string> | undefined) ?? null;
-    installRows(rows);
+    // A MAT-file's gallery offers the classes its host lists, a dictionary's every tile.
+    table.addClasses = msg.add && Array.isArray(msg.add.classes) ? msg.add.classes.filter((c) => typeof c === 'string') : null;
+    // A view that is read-only now has no drop rule left that is about it. Only then: an
+    // editable payload's rules are re-sent AFTER it (the providers post sectionRules behind
+    // setRows), so wiping them here would leave the view rule-less until the next message —
+    // or for good, from a host that posts first.
+    if (!editable) sectionRulesList = [];
+    // NOT the broadcast drag (dragDescriptor): it mirrors the host's drag register, which a
+    // repaint does not end — the register keeps the rows it snapped at drag start, and the
+    // host broadcasts the end itself (dragEnd, and after every drop). Cleared here, a repaint
+    // landing mid-drag (a file changed on disk, a Usage repost) would leave this table
+    // refusing the rest of that drag.
   } else if (msg.type === 'selectByName') {
     // Cross-tab navigation: select the row whose name matches (block or
-    // variable). Apply now if present, else hold until the next setRows.
-    pendingSelectName = typeof msg.name === 'string' ? msg.name : null;
-    applyPendingNameSelection();
+    // variable). Applied now if present, else held until the next setRows.
+    if (typeof msg.name === 'string') handle.selectByName(msg.name);
   } else if (msg.type === 'selectRows') {
-    // Select rows by id (a rename changed one, a paste added several). Apply now if they
-    // are all present, else stash until a rebuild brings the rest.
-    pendingSelectIds = Array.isArray(msg.rowIds) ? msg.rowIds.filter((id) => typeof id === 'string') : [];
-    applyPendingSelection();
+    // Select rows by id (a rename changed one, a paste added several). Applied now if they
+    // are all present, else held until a rebuild brings the rest. Either way the host has
+    // said what is selected, so a vanished selection's pending clear is moot.
+    handle.select(Array.isArray(msg.rowIds) ? msg.rowIds : []);
   } else if (msg.type === 'beginRename') {
-    // Open the name editor on a just-created entry. Apply now if its row is already here
-    // (the host paints the new rows before it asks), else hold until the repaint arrives.
-    pendingRenameId = typeof msg.rowId === 'string' ? msg.rowId : null;
-    applyPendingRename();
+    // Open the name editor on a just-created entry. Applied now if its row is already here
+    // (the host paints the new rows before it asks), else held until the repaint arrives.
+    if (typeof msg.rowId === 'string') handle.beginRename(msg.rowId);
   } else if (msg.type === 'openAddGallery') {
     // The Add-gallery accelerator (dataExplorer.addEntry) arriving from the host. Handed
     // straight to the same method the button calls, so the keyboard and the pointer share
@@ -430,18 +271,21 @@ window.addEventListener('message', (event: MessageEvent) => {
     clipboardState = {
       canPaste: !!msg.canPaste,
       mode: msg.mode ?? null,
-      items: Array.isArray(msg.items) ? msg.items : [],
+      items: Array.isArray(msg.items) ? msg.items.filter(isRecord) : [],
+      // Where the entries came from, when the host says: what lets Paste refuse a cut
+      // pasted back into its own section (menuItems, isNoopMove).
+      sourceDocUri: typeof msg.sourceDocUri === 'string' ? msg.sourceDocUri : undefined,
     };
   } else if (msg.type === 'sectionRules') {
     docUri = typeof msg.docUri === 'string' ? msg.docUri : docUri;
-    sectionRulesList = Array.isArray(msg.rules) ? msg.rules : [];
+    sectionRulesList = wellFormedRules(msg.rules);
   } else if (msg.type === 'dragState') {
     // The host broadcasts the in-flight drag (or null when it ends) to every
     // webview, so a drag started in another tab predicts correctly here.
-    dragDescriptor = msg.descriptor ?? null;
-  } else if (msg.type === 'error') {
-    hideLoading();
-    showError(msg.message);
+    const d: unknown = msg.descriptor;
+    dragDescriptor = isRecord(d) && Array.isArray(d.items)
+      ? ({ ...d, items: d.items.filter(isRecord) } as DragDescriptor)
+      : null;
   } else if (msg.type === 'validationError') {
     // Invalid cell edit: modal scoped to this webview (not the whole window).
     // The host follows this message with a repaint of the rejected row's entry, so
@@ -452,8 +296,40 @@ window.addEventListener('message', (event: MessageEvent) => {
       invalidValue: msg.invalidValue,
       validValue: msg.previousValue,
     });
+  } else if (msg.type === 'refused') {
+    // A refused Add Child, Delete or Add: the same dialog, titled by the gesture, which stays
+    // until it is closed. A banner would be cleared by the next repaint.
+    errorDialog.show({ title: msg.title, reason: msg.reason });
+  } else if (msg.type === 'editText') {
+    // The whole text of a Value shown as a summary, asked for as its editor opens: the editor
+    // opens on it. None (the value changed under the request): core's reason, where it gives one.
+    if (typeof msg.text === 'string') table.openWholeValueEditor?.(msg.rowId, msg.text);
+    else if (typeof msg.reason === 'string') errorDialog.show({ title: 'Cannot Edit', reason: msg.reason });
   }
 });
+
+// The table, fed by the host through view's connectTable: the same rules table-main used to
+// hold (installRows, the vanished-selection clear, pending selections, lazy rows, the matrix
+// glyph, local links, Ctrl+F), now one implementation every app shares. The banners are drawn
+// in this shell's strip (banners.ts), whose height the full-bleed table is offset by; the menu is
+// this file's (menu: false), because it is the editing menu.
+const handle = connectTable(table, messageSource(vscodePort(vscode)), {
+  variableEditor,
+  menu: false,
+  banners: (banners) => {
+    renderError(table, banners.error);
+    renderBanners(table, { notice: banners.notice, warnings: banners.warnings });
+  },
+});
+
+// Relay row selection to the host, for the Property Inspector, which is another webview: the
+// user's, and the ones the table applies for the host and for a link.
+handle.on('select', (rowIds) => vscode.postMessage({ type: 'select', rowIds }));
+
+// A link the table does not answer itself goes to the host, which opens the referenced file and
+// selects the row there (see navigate.ts): each table is its own webview, with no page around
+// it to navigate within.
+handle.on('navigate', ({ target }) => vscode.postMessage({ type: 'navigate', target }));
 
 // Whether this keystroke is TEXT ENTRY rather than a gesture on the grid: the search
 // box, the column-filter popup, the inline cell editor. Read off the COMPOSED PATH,
@@ -468,7 +344,7 @@ function isTypingInField(ev: KeyboardEvent): boolean {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || !!active?.isContentEditable;
 }
 
-// Read-only documents never open the inline cell editor. The vendored table
+// Read-only documents never open the inline cell editor. The table component
 // opens it on double-click and on Enter, gating only on per-row flags (which we
 // keep intact for cell coloring). Intercept both gestures in the CAPTURE phase
 // — before they reach the component's shadow-internal handlers — and swallow
@@ -487,9 +363,10 @@ table.addEventListener(
     const ev = e as KeyboardEvent;
     // Only Enter on the GRID is the cell-editor gesture this gate exists for. Enter in a
     // FIELD belongs to that field: the search box commits a search with it and the
-    // column-filter popup applies with it. Without this exemption, a read-only view
-    // (.slx, .mdl, .mat, .prj) had a search box that did nothing at all — the keystroke
-    // died here, one element above the box, and .sldd looked fine because it is editable.
+    // column-filter popup applies with it. Without this exemption, a read-only view (.slx,
+    // .mdl, .prj, a read-only MAT-file) had a search box that did nothing at all — the
+    // keystroke died here, one element above the box, and .sldd looked fine because it is
+    // editable.
     if (ev.key === 'Enter' && !isTypingInField(ev) && !shouldOpenCellEditor(editable)) {
       e.stopPropagation();
     }
@@ -516,23 +393,6 @@ table.addEventListener(
   true,
 );
 
-// Cmd/Ctrl+F: focus the search/filter input above the table. The built-in
-// webview find widget is not enabled for these panels, so this chord is free to
-// claim. Pure client-side (no host round-trip) — just forward focus to the
-// component's filter input. Skipped with modifiers we don't own (Shift/Alt).
-table.addEventListener(
-  'keydown',
-  (e: Event) => {
-    const ev = e as KeyboardEvent;
-    if ((ev.key === 'f' || ev.key === 'F') && (ev.metaKey || ev.ctrlKey) && !ev.shiftKey && !ev.altKey) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      table.focusFilter?.();
-    }
-  },
-  true,
-);
-
 // Cut/Copy/Paste/Delete keyboard shortcuts — the keyboard half of the context-menu
 // actions (whose labels advertise these chords). Enablement is not re-derived here: the
 // menu for the current selection IS the authority, so the chord does exactly what
@@ -552,9 +412,11 @@ table.addEventListener(
     if (isTypingInField(ev)) return;
 
     // The primary selection anchors the gesture, the same way the right-clicked row
-    // does: it is what a paste targets the section of.
+    // does: it is what a paste targets the section of. With nothing selected the anchor is
+    // no row, and the menu for that offers only Paste — enabled only where the document is
+    // one target (an empty MAT-file pastes into the file), so a dictionary's Cmd+V with
+    // nothing selected still does nothing.
     const anchorRowId = selectedRowIds()[0] ?? null;
-    if (!anchorRowId) return;
     // Absent (a section selection offers no Copy at all) or disabled → do nothing, and
     // let the key through rather than swallowing it.
     const item = menuFor(anchorRowId).find((i) => i.id === action);
@@ -571,11 +433,19 @@ table.addEventListener(
 // the clicked row, then show it. The table component has already settled the
 // selection (a click outside it replaces it) and prevented the native browser menu.
 table.addEventListener('dex-table-context-menu', (e: Event) => {
-  // Read-only documents (.mat/.slx/.prj, binary/zip .sldd) have no menu at all:
-  // no cell editor and no right-click actions.
+  // Read-only views (.slx/.mdl/.prj, a MAT-file shown read-only, a JSON .sldd too large to
+  // edit) have no menu at all: no cell editor and no right-click actions.
   if (!shouldShowContextMenu(editable)) return;
   const detail = (e as CustomEvent).detail;
   lastContextRowId = detail.rowId ?? null;
+  if (lastContextRowId === null) {
+    // A right-click on no row (the space under the rows, or an empty table) is a gesture
+    // on the document. Only a one-target document has a menu there — Paste into the file,
+    // Undo/Redo — so a dictionary's empty space stays inert, as it always was.
+    if (!wholeFileRule()) return;
+    contextMenu.show(detail.x, detail.y, menuFor(null, []));
+    return;
+  }
   contextMenu.show(detail.x, detail.y, menuFor(lastContextRowId));
 });
 
@@ -591,7 +461,8 @@ table.dropPredictor = predictDrop;
 // Drag lifecycle → host. On drag start the host snapshots the dragged rows into
 // its drag register and broadcasts the descriptor; on end it clears + rebroad-
 // casts; on drop it completes the move/copy as paste (+ source delete). All
-// gated on editable so read-only views never initiate a structural drag.
+// gated on an editable document, the fact table.rowDrag is set from, so a read-only
+// view never starts or takes one.
 table.addEventListener('dex-row-drag-start', (e: Event) => {
   if (!editable) return;
   const rowIds = (e as CustomEvent).detail?.rowIds ?? [];
@@ -603,58 +474,12 @@ table.addEventListener('dex-row-drag-end', () => {
 table.addEventListener('dex-row-drop', (e: Event) => {
   if (!editable) return;
   const detail = (e as CustomEvent).detail;
-  vscode.postMessage({ type: 'drop', rowId: detail.targetRowId, mode: detail.mode });
-});
-
-// A row whose children the payload held back was opened: ask the host for them. The
-// table has already marked the row as asked-about, so a second click does not re-ask,
-// and the answer arrives as `childRows` above. Not gated on `editable` — this is how a
-// read-only .mat view is navigated at all.
-table.addEventListener('dex-request-children', (e: Event) => {
-  const nodeId = (e as CustomEvent).detail?.nodeId;
-  if (typeof nodeId === 'string' && nodeId !== '') vscode.postMessage({ type: 'requestChildren', nodeId });
-});
-
-// Relay row selection to the host (for PI + tree sync in later phases).
-table.addEventListener('dex-row-selected', (e: Event) => {
-  const detail = (e as CustomEvent).detail;
-  vscode.postMessage({ type: 'select', rowIds: detail.rowIds ?? [] });
-});
-
-// A link was clicked. Most targets name a row in ANOTHER tab, so they go to the host,
-// which opens the referenced file and selects the row there (see navigate.ts) —
-// cross-tab navigation is host-mediated because each table is its own webview (unlike
-// the vendored dex-app's in-page nav).
-//
-// A Data Type link is the exception: core built its target from the source the entry
-// lives in, so the row is already in this table. The host path would still work — it
-// opens the tab the user is looking at and posts a selectByName back — so this is a
-// round-trip and a tab focus saved, not a bug fixed. linkRoute owns the decision, and
-// nothing here re-derives it.
-table.addEventListener('dex-link-clicked', (e: Event) => {
-  const target = (e as CustomEvent).detail?.target;
-  if (typeof target !== 'string') return;
-  const route = linkRoute(target, docUri);
-  if (route.kind !== 'local') {
-    vscode.postMessage({ type: 'navigate', target });
-    return;
-  }
-  // The same name-matching path a cross-tab selectByName lands on, so a local jump and a
-  // remote one select the same row, expand the same ancestors and tell the host about the
-  // selection the same way.
-  pendingSelectName = route.name;
-  applyPendingNameSelection();
-  if (pendingSelectName !== null) {
-    // A local MISS. applyPendingNameSelection clears the slot on a hit and leaves it set
-    // otherwise, so this is the table saying the row is not here after all — a target whose
-    // name half is an expression rather than a whole name, say (core resolves those; this
-    // table cannot). Hand it to the host, which can, rather than swallowing the click. The
-    // slot is cleared either way: a local target that missed must not hijack the next
-    // repaint the way a legitimately-early cross-tab target is allowed to.
-    pendingSelectName = null;
-    vscode.postMessage({ type: 'navigate', target });
-    return;
-  }
+  // '' is a drop on the empty body, which the predictor allows only into a one-target
+  // document — the drag twin of a paste anchored at no row, and refused here on the same
+  // terms as that paste (postAction).
+  const rowId = typeof detail?.targetRowId === 'string' ? detail.targetRowId : '';
+  if (rowId === '' && !wholeFileRule()) return;
+  vscode.postMessage({ type: 'drop', rowId, mode: detail.mode });
 });
 
 // A tile in the Add gallery was clicked: ask the host to create one entry of that class in
@@ -674,6 +499,14 @@ table.addEventListener('dex-add-entry', (e: Event) => {
   });
 });
 
+// A Value editor is opening on a summary: ask the host for the whole text it stands for, which the
+// row does not carry (answered by an `editText` message, above).
+table.addEventListener('dex-edit-text-request', (e: Event) => {
+  if (!editable) return;
+  const rowId = (e as CustomEvent).detail?.rowId;
+  if (typeof rowId === 'string') vscode.postMessage({ type: 'requestEditText', rowId });
+});
+
 // Relay committed cell edits to the host for write-back into the JSON text.
 table.addEventListener('dex-edit-completed', (e: Event) => {
   const detail = (e as CustomEvent).detail;
@@ -686,4 +519,3 @@ table.addEventListener('dex-edit-completed', (e: Event) => {
   });
 });
 
-vscode.postMessage({ type: 'ready' });

@@ -33,8 +33,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { unzipSync } from 'fflate';
 import { DataModel } from 'data-explorer-core';
-import { readSlddParts } from '../src/host/slddContent.js';
-import { buildRows, COLUMNS, COLUMN_LABELS } from '../src/host/rowBuilder.js';
+import { readSlddParts, buildRows, COLUMNS, COLUMN_LABELS } from 'data-explorer-view/model';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -69,6 +68,7 @@ describe('a by-name navigation selects the definition, not a same-named child', 
   let table: any;
   let rows: any[];
 
+  // Its own timeout: a cold import of the whole table-main webview is what a loaded machine stretches.
   beforeAll(async () => {
     rows = fixtureRows();
     (globalThis as any).acquireVsCodeApi = () => ({
@@ -77,7 +77,7 @@ describe('a by-name navigation selects the definition, not a same-named child', 
     document.body.innerHTML = '<dex-tree-table></dex-tree-table>';
     await import('../src/webview/table-main.js');
     table = document.querySelector('dex-tree-table');
-  });
+  }, 60_000);
 
   beforeEach(async () => {
     window.dispatchEvent(

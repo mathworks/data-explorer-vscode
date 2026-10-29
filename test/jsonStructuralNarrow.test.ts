@@ -60,11 +60,15 @@ import {
   type TextPatch,
 } from '../src/host/structuralEdit.js';
 import { minimalReplacement, planDeletion } from 'data-explorer-core';
-import { getModel, invalidate, peekModel } from '../src/host/SlddModel.js';
+import {
+  buildRows,
+  buildEntryRows,
+  spliceEntryRows,
+  insertEntryRows,
+  buildSectionRowId,
+} from 'data-explorer-view/model';
+import { getModel, invalidate, peekModel } from 'data-explorer-view/host';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from '../src/host/slddBaseline.js';
-import { buildRows, buildEntryRows } from '../src/host/rowBuilder.js';
-import { spliceEntryRows, insertEntryRows } from '../src/webview/rowUpdates.js';
-import { buildSectionRowId } from '../src/common/sectionRowId.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

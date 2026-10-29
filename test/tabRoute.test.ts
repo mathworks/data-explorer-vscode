@@ -17,10 +17,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DataModel } from 'data-explorer-core';
-import { getModelForBinaryTab, invalidate } from '../src/host/SlddModel.js';
-import { buildRows } from '../src/host/rowBuilder.js';
-import { newSourceCache, parsedModelForOpenTab, type SourceFile } from '../src/host/sourceCache.js';
+import { DataModel, newSourceCache, parsedModelForOpenTab, type SourceFile } from 'data-explorer-core';
+import { buildRows } from 'data-explorer-view/model';
+import { getModelForBinaryTab, invalidate } from 'data-explorer-view/host';
 
 const dir = join(import.meta.dirname, 'fixtures');
 

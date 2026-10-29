@@ -26,7 +26,7 @@
 // attaches only `InterfaceDictionary`. Attachment is the signal, not definition.
 
 import type { ParsedProject } from 'data-explorer-core';
-import type { MspDictionary, MspProject, MspRole } from '../common/msp.js';
+import type { MspDictionary, MspProject, MspRole } from 'data-explorer-view/model';
 
 /** The label category the toolkit writes into the project store. */
 const MSP_CATEGORY = 'MSP';

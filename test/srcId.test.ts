@@ -16,8 +16,12 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BINARY_EDIT_SRC_PREFIX, binaryEditSrcId, srcIdToUriString } from '../src/common/srcId.js';
+import { binaryEditSrcId, srcIdToUriString } from 'data-explorer-view/model';
 import { blankCommentsAndKeepLines, sourceFiles } from './tools/moduleGraph.js';
+
+// The prefix, as the model spells it: what it puts before an empty uriString. Not imported, because
+// view keeps the constant to itself; only the pair of functions is its interface.
+const BINARY_EDIT_SRC_PREFIX = binaryEditSrcId('');
 
 const URI = 'file:///w/Controller.sldd';
 const SRC = join(import.meta.dirname, '..', 'src');
@@ -63,17 +67,19 @@ describe('the prefix is defined once', () => {
   // test but a link that opens a blank tab.
   const files = sourceFiles(SRC);
 
-  it('appears as a literal in common/srcId.ts and nowhere else under src/', () => {
+  it('appears as a literal in data-explorer-view/model/ids/srcId.js and nowhere else under src/', () => {
     const holders = files.filter((f) =>
       blankCommentsAndKeepLines(readFileSync(join(SRC, f), 'utf8')).includes(BINARY_EDIT_SRC_PREFIX),
     );
-    expect(holders).toEqual(['common/srcId.ts']);
+    expect(holders).toEqual([]);
+    const shipped = join(SRC, '../node_modules/data-explorer-view/dist/model/ids/srcId.js');
+    expect(blankCommentsAndKeepLines(readFileSync(shipped, 'utf8'))).toContain(BINARY_EDIT_SRC_PREFIX);
   });
 });
 
 describe('both readers of a srcId come through it', () => {
-  // navigate.ts imports vscode, so vitest cannot call it; linkRoute is covered behaviourally
-  // in linkRoute.test.ts. These pin the wiring in the cheap suite — the bug was not a wrong
+  // navigate.ts imports vscode, so vitest cannot call it; the table's link rule (view's
+  // localLinkName, which connectTable applies) is covered behaviourally in linkRoute.test.ts. These pin the wiring in the cheap suite — the bug was not a wrong
   // rule, it was a rule that two call sites did not use.
   const read = (rel: string): string =>
     blankCommentsAndKeepLines(readFileSync(join(SRC, rel), 'utf8'));
@@ -82,7 +88,7 @@ describe('both readers of a srcId come through it', () => {
     expect(read('host/navigate.ts')).toMatch(/srcIdToUriString\(/);
   });
 
-  it('linkRoute.ts compares through it', () => {
-    expect(read('webview/linkRoute.ts')).toMatch(/srcIdToUriString\(/);
+  it("the table's link rule (view's localLinkName) compares through it", () => {
+    expect(read('../node_modules/data-explorer-view/dist/model/ids/linkTarget.js')).toMatch(/srcIdToUriString\(/);
   });
 });

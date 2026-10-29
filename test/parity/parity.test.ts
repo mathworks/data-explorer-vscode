@@ -2,7 +2,7 @@
 // Parity check: run the extension's TWO parsers against REAL MATLAB-generated
 // files and compare to the generator's ground_truth.json.
 //
-//   Tier-1 (quick) parser -> tree/relationships  (host/structuralIndex + graphModel)
+//   Tier-1 (quick) parser -> tree/relationships  (view's graphSources + graphModel)
 //   Tier-2 (detailed) parser -> table/content    (DataModel + node tree)
 //
 // Fixtures are produced by test/parity/generate.m (run under real MATLAB) into
@@ -11,14 +11,16 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DataModel, isModelFile, isSlddFile } from 'data-explorer-core';
-import { buildGraphSource } from '../../src/host/structuralIndex.js';
-import { scanSldd } from '../../src/host/slddContent.js';
-import { extractSlxStructure } from '../../src/host/slxStructure.js';
-import { RelGraph, type GraphSource } from '../../src/host/graphModel.js';
+import { DataModel, extractSlxStructure, isModelFile, isSlddFile } from 'data-explorer-core';
+import {
+  buildGraphSource,
+  scanSldd,
+  RelGraph,
+  type GraphSource,
+} from 'data-explorer-view/model';
+import { getModel, getModelFromBytes, invalidate } from 'data-explorer-view/host';
 import { parseMat } from 'data-explorer-core';
 import { parseSlx } from 'data-explorer-core';
-import { getModel, getModelFromBytes, invalidate } from '../../src/host/SlddModel.js';
 
 const ART = (variant: string, name: string) =>
   fileURLToPath(new URL(`./artifacts/${variant}/${name}`, import.meta.url));
@@ -44,15 +46,16 @@ const FILES = ['common.sldd', 'util.sldd', 'params.sldd', 'plant.slx', 'sub.slx'
 
 // Build a GraphSource for a file the way the extension host does: extract the
 // tier-1 artifact from the bytes, then shape a node out of it. `buildGraphSource`
-// takes artifacts and never bytes (structuralIndex.ts), so the extraction is here
+// takes artifacts and never bytes (view's graphSources.ts), so the extraction is here
 // — which is where the host does it too, inside the shared cheap tier.
 //
 // `scanSldd` covers BOTH on-disk dictionary formats behind core's own format
 // sniff, so this no longer tests the first two bytes for 'PK' itself; the
 // text/binary split is what the `variant` axis of this suite drives. It is also
-// the exact call the shipped cheap tier makes for a dictionary (`dataCheapOf` in
-// sourceCache.ts), so what this suite holds against MATLAB's ground truth is the
-// code that runs in the extension and not a second reader written for the test.
+// the read the shipped cheap tier makes for a dictionary (core's `scanSldd` with
+// the same unreadable-source refusal, `dataCheapOf` in core's sourceCache.ts), so
+// what this suite holds against MATLAB's ground truth is the code that runs in the
+// extension and not a second reader written for the test.
 function graphSourceFor(variant: string, name: string): GraphSource {
   const path = ART(variant, name);
   const uriString = `test://${variant}/${name}`;

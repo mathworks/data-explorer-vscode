@@ -11,16 +11,20 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
-import { buildRows } from '../src/host/rowBuilder.js';
+import {
+  buildRows,
+  sectionRules,
+  dropDecision,
+  type DragSource,
+} from 'data-explorer-view/model';
+import { getModel, findNode, invalidate } from 'data-explorer-view/host';
 import {
   pasteEntries,
   deleteEntriesByName,
   resolveSectionForPaste,
   buildDragSnapshot,
 } from '../src/host/structuralEdit.js';
-import { sectionRules } from '../src/host/sectionRules.js';
-import { dropDecision, type DragSource } from '../src/webview/dropDecision.js';
+import { setDrag, clearDrag, dragDescriptor } from '../src/host/dragState.js';
 
 const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');
 
@@ -38,22 +42,19 @@ function sectionOf(m: any, name: string) {
   return m.children.find((s: any) => s.name === name);
 }
 // The DragSource the webview would see, built through the SAME production code
-// applyDragStart runs (buildDragSnapshot) instead of a hand-rolled copy of it —
-// so if what a drag carries ever changes, these end-to-end cases move with it
-// rather than silently drifting. The section facts come from the snapshot too,
-// which is why the call sites no longer spell them out.
+// applyDragStart runs (buildDragSnapshot, then the register) instead of a hand-rolled
+// copy of it — so if what a drag carries ever changes, these end-to-end cases move
+// with it rather than silently drifting. Each item's section comes from the snapshot
+// too, which is why the call sites no longer spell them out.
 function dragSourceOf(uri: string, m: any, ...names: string[]): DragSource {
   const snap = buildDragSnapshot(
     names.map((name) => rowIdOf(m, name)),
     (rowId: string) => findNode(uri, rowId),
   );
-  return {
-    docUri: uri,
-    sectionName: snap.sourceSection,
-    sectionLabel: snap.sourceSectionLabel,
-    isDerived: snap.sourceIsDerived,
-    items: snap.items,
-  };
+  setDrag(uri, snap.items);
+  const descriptor = dragDescriptor()!;
+  clearDrag();
+  return descriptor;
 }
 
 describe('drop end-to-end — cross-section MOVE within one document', () => {
@@ -150,6 +151,47 @@ describe('drop end-to-end — cross-DOCUMENT move', () => {
     const mB2 = getModel(uriB, 'arch.sldd', newB);
     expect(sectionOf(mA2, 'arch').children.map((c: any) => c.name)).not.toContain('DataInterface');
     expect(sectionOf(mB2, 'design').children.map((c: any) => c.name)).toContain('DataInterface1');
+  });
+});
+
+describe('drop end-to-end — a MOVE whose rows span two sections (V-002)', () => {
+  it('design/AliasType + arch/DataInterface onto arch: both end in arch under their own names', () => {
+    // The fixture's first entry, flipped to design (the two sections share one namespace, so
+    // the split is purely `isderived`). In memory only.
+    const text = archText.replace('"isderived": "1"', '"isderived": "0"');
+    const uri = 'test://e2e-mixed.sldd';
+    const m = model(uri, text);
+    expect(sectionOf(m, 'design').children.map((c: any) => c.name)).toEqual(['AliasType']);
+
+    // Predicted as a move. It used to be refused as a same-section no-op, because the drag
+    // kept only its last row's section (arch) while cutting and pasting the same two rows
+    // into arch worked.
+    const archRule = sectionRules(m).find((r) => r.sectionName === 'arch')!;
+    const source = dragSourceOf(uri, m, 'AliasType', 'DataInterface');
+    const decision = dropDecision(source, { docUri: uri, ...archRule }, 'move');
+    expect(decision.noop).toBe(false);
+    expect(decision.canDrop).toBe(true);
+
+    // Performed as applyDrop performs a same-document move: delete every source, then paste
+    // every payload into the target. DataInterface is deleted and re-added in arch, which is
+    // what a cut and paste of the same two rows does.
+    const payloads = buildDragSnapshot(
+      ['AliasType', 'DataInterface'].map((name) => rowIdOf(m, name)),
+      (rowId: string) => findNode(uri, rowId),
+    ).items.map((it) => it.payload);
+    let working = deleteEntriesByName(text, ['AliasType', 'DataInterface']);
+    invalidate(uri);
+    const m2 = getModel(uri, 'arch.sldd', working);
+    working = pasteEntries(working, sectionOf(m2, 'arch'), payloads).newText;
+
+    invalidate(uri);
+    const m3 = getModel(uri, 'arch.sldd', working);
+    const archNames = sectionOf(m3, 'arch').children.map((c: any) => c.name);
+    expect(archNames).toContain('AliasType');
+    expect(archNames).toContain('DataInterface');
+    expect(archNames.filter((n: string) => /^(AliasType|DataInterface)\d+$/.test(n)), 'no renamed copies').toEqual([]);
+    expect(sectionOf(m3, 'arch').children.find((c: any) => c.name === 'AliasType').isDerived).toBe(true);
+    expect(sectionOf(m3, 'design').children, 'nothing is left in design').toEqual([]);
   });
 });
 

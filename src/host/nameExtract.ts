@@ -10,7 +10,7 @@
 // relate. Duplicate names across files are preserved (each becomes its own record)
 // so a global "search entries by name" can list every occurrence.
 import { blockKey, blockLabel, joinBlockPath } from 'data-explorer-core';
-import { uriBasename } from '../common/pathUtil.js';
+import { uriBasename } from 'data-explorer-view/model';
 
 export type EntryKind = 'sldd' | 'mat' | 'workspace' | 'block';
 
@@ -96,11 +96,11 @@ export function namesFromMat(names: readonly string[], sourceUri: string): NameR
 // graph concern, not a name one).
 //
 // One record per BLOCK, keyed by core's `blockKey` — the SID — and never by the name.
-// A name is unique only inside its own system: f14.slx holds four blocks named `Gain`
-// in four subsystems, which deduped by name gave ONE search hit that could reveal only
-// whichever row came first, and the Constant whose label the file leaves blank had no
-// hit at all (an empty name was dropped). Both are now searchable, told apart by their
-// path, and revealed by the key the row publishes as `_blockKey`.
+// A name is unique only inside its own system: a shipped Simulink demo model has four
+// `Gain` blocks in four subsystems, which deduped by name gave ONE search hit that could
+// reveal only whichever row came first, and the Constant whose label the file leaves
+// blank had no hit at all (an empty name was dropped). Both are now searchable, told
+// apart by their path, and revealed by the key the row publishes as `_blockKey`.
 //
 // A block with neither a name nor a SID has no key, and is still dropped: nothing could
 // be searched for, and nothing could be selected if it were found.

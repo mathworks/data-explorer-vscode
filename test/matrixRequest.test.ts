@@ -22,8 +22,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel } from 'data-explorer-core';
-import { getModel, getModelFromBytes, invalidate } from '../src/host/SlddModel.js';
-import { answerMatrixRequest, matrixCellsMessage } from '../src/host/matrixRequest.js';
+import {
+  getModel,
+  getModelFromBytes,
+  invalidate,
+  answerMatrixRequest,
+  matrixCellsMessage,
+} from 'data-explorer-view/host';
 
 function bytes(name: string): ArrayBuffer {
   const b = readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
@@ -149,37 +154,45 @@ describe('answerMatrixRequest', () => {
 });
 
 describe('every host that answers requestMatrix answers it from here', () => {
-  // messageDispatch.test.ts pins that the three TABLE providers have a branch for it.
-  // This pins the other half, and reaches the fourth host it does not cover: that the
-  // branch answers through this module rather than assembling an envelope of its own.
+  // messageDispatch.test.ts pins that the TABLE providers answer it — by a branch of their
+  // own, or by the `requestMatrix` handler of their CommonHandlers table (tableDispatch.ts).
+  // This pins the other half, and reaches the host it does not cover: that the answer goes
+  // through this module rather than assembling an envelope of its own.
   //
   // The Property Inspector is why that is not automatic. It is handed a node and never
   // learns which document it came from, so it cannot call `answerMatrixRequest` — it
   // resolves its own node and calls `matrixCellsMessage`. A second envelope written
   // there would be a panel that says something different about the same failure, in
   // the pane most likely to be open beside the table.
+  //
+  // Each host as [the file with its `requestMatrix` branch, the file that answers it]. The
+  // inspector's answer is its page's (inspectorPage.ts), which holds the node on display and
+  // what the page was sent.
   const HOSTS = [
-    'src/host/SlddTextEditorProvider.ts',
-    'src/host/BinarySlddEditorProvider.ts',
-    'src/host/BinaryEditorProvider.ts',
-    'src/host/PropertiesViewProvider.ts',
+    ['src/host/SlddTextEditorProvider.ts'],
+    ['src/host/BinarySlddEditorProvider.ts'],
+    ['src/host/MatEditorProvider.ts'],
+    ['src/host/BinaryEditorProvider.ts'],
+    ['src/host/PropertiesViewProvider.ts', 'node_modules/data-explorer-view/dist/model/inspector/inspectorPage.js'],
   ];
+  const source = (file: string) => readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), 'utf8');
 
-  for (const file of HOSTS) {
-    it(`${file.replace('src/host/', '')} builds no matrixCells envelope of its own`, () => {
-      const src = readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), 'utf8');
-      expect(src).toMatch(/msg\??\.type === 'requestMatrix'/);
-      expect(src).toMatch(/answerMatrixRequest|matrixCellsMessage/);
+  for (const files of HOSTS) {
+    it(`${files[0].replace('src/host/', '')} builds no matrixCells envelope of its own`, () => {
+      expect(source(files[0])).toMatch(/msg\??\.type === 'requestMatrix'|\brequestMatrix: \(nodeId\) => answerMatrixRequest\(/);
+      expect(source(files[files.length - 1])).toMatch(/answerMatrixRequest|matrixCellsMessage/);
       // The literal, nowhere but here. A host that writes `{ type: 'matrixCells' ... }`
       // itself has started a second rule, whatever it happens to say today.
-      const own = [...src.matchAll(/'matrixCells'/g)].length;
-      expect(own, `${file} spells the matrixCells envelope itself`).toBe(0);
+      for (const file of files) {
+        const own = [...source(file).matchAll(/'matrixCells'/g)].length;
+        expect(own, `${file} spells the matrixCells envelope itself`).toBe(0);
+      }
     });
   }
 
   it('is the only module that names the message at all', () => {
     const builder = readFileSync(
-      fileURLToPath(new URL('../src/host/matrixRequest.ts', import.meta.url)), 'utf8');
+      fileURLToPath(new URL('../node_modules/data-explorer-view/dist/model/matrix/matrixRequest.js', import.meta.url)), 'utf8');
     expect([...builder.matchAll(/'matrixCells'/g)].length).toBeGreaterThan(0);
   });
 

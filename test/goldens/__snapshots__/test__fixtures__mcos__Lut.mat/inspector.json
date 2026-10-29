@@ -1,0 +1,197 @@
+{
+ "binedit:file:///fx/test/fixtures/mcos/Lut.mat/Lut": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Lut",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Lookup Table",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.LookupTable",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Other",
+    "properties": [
+     {
+      "name": "Value",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints Specification",
+      "value": "Explicit values",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Storage Class",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Name",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Scope",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Allow Multiple Instances Of Type To Have Different Table Breakpoint Sizes",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Support Tunable Size",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Table.Value",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Table.Dimensions",
+      "value": "[0, 0]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Table.Min",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Table.Max",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Table.DataType",
+      "value": "auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Table.Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Table.FieldName",
+      "value": "Table",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Table.Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Value",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.TunableSizeValue",
+      "value": "-1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Dimensions",
+      "value": "[0, 0]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Min",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Max",
+      "value": "[]",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.TunableSizeName",
+      "value": "N1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.DataType",
+      "value": "auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Unit",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.FieldName",
+      "value": "BP1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Breakpoints.Description",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

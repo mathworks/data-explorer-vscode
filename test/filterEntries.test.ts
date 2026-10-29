@@ -69,15 +69,15 @@ describe('filterEntries', () => {
 });
 
 // With one record per BLOCK rather than per name, a model answers `Gain` with a hit for
-// every `Gain` it holds — f14.slx has four. The label cannot separate them, so the path
-// is searchable too: "the Gain in Controller" has to be expressible, and a SUBSYSTEM's
-// own name is otherwise absent from this index entirely (a subsystem has no parameter
-// reference of its own to be recorded by).
+// every `Gain` it holds — a shipped Simulink demo model has four. The label cannot
+// separate them, so the path is searchable too: "the Gain in Controller" has to be
+// expressible, and a SUBSYSTEM's own name is otherwise absent from this index entirely
+// (a subsystem has no parameter reference of its own to be recorded by).
 describe('filterEntries over block records, which repeat their labels', () => {
   const block = (name: string, blockPath: string): NameRecord => ({
     name,
-    sourceUri: 'file:///w/f14.slx',
-    sourceLabel: 'f14.slx',
+    sourceUri: 'file:///w/aircraft.slx',
+    sourceLabel: 'aircraft.slx',
     kind: 'block',
     selectName: blockPath,
     blockPath,

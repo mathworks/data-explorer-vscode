@@ -3,26 +3,27 @@
 // ONE cache a window keeps.
 //
 // The reasoning — the tiers, the version key, why a data file is summarised whether or not
-// anyone asked for its names — is all in sourceCache.ts, which is vscode-free so that it can
-// be tested over real fixture bytes. This module supplies `readForScan`/`scanVersion` and the
-// cache instance, and nothing else: the same split nameIndex->nameExtract and
-// searchSources->searchFilter already make here, and it exists so the properties the design
-// rests on are pinned in the fast suite rather than only in the integration suite. The one
-// thing decided here rather than there is the difference between how a SCAN reads a file and
-// how a TAB does — see `parsedModelForTab`.
+// anyone asked for its names — is all in core's source cache (`newSourceCache` and the calls
+// beside it), which is vscode-free so that it can be tested over real fixture bytes. This
+// module supplies `readForScan`/`scanVersion` and the cache instance, and nothing else: the
+// same split nameIndex->nameExtract and searchSources->searchFilter already make here, and it
+// exists so the properties the design rests on are pinned in the fast suite rather than only
+// in the integration suite. The one thing decided here rather than there is the difference
+// between how a SCAN reads a file and how a TAB does — see `parsedModelForTab`.
 import * as vscode from 'vscode';
-import type { ParsedSlx } from 'data-explorer-core';
-import { toArrayBuffer } from '../common/bytes.js';
-import { readForScan, scanVersion } from './scanRead.js';
 import {
   clearSourceCache,
   forgetSource,
+  forgetUnseenWrite,
   newSourceCache,
   parsedModelForOpenTab,
+  type ParsedSlx,
   type SourceCache,
   type SourceFile,
   type SourceReader,
-} from './sourceCache.js';
+} from 'data-explorer-core';
+import { toArrayBuffer } from '../common/bytes.js';
+import { readForScan, scanVersion } from './scanRead.js';
 
 /**
  * One cache for the window, shared by every consumer that reads the folder.
@@ -61,6 +62,24 @@ export function clearSources(): void {
  */
 export function forgetChangedSource(uri: vscode.Uri): void {
   forgetSource(sourceCache, uri.toString());
+}
+
+/**
+ * Drop what the window holds for a file the WORKSPACE watcher has reported changing, but only if
+ * its version did not move.
+ *
+ * The workspace watcher fires for every save of every supported file, and for every file of a
+ * branch switch. Almost all of those move `mtime:size`, and the version key already re-reads them.
+ * Forgetting them as well would bump the cache-wide generation each time, discarding the stores
+ * of every folder pass in flight. So this forgets only what the key cannot see: a write after which
+ * the file's version is one the cache already holds. The reasoning, and why what is held is read
+ * before the `stat`, is on `sourceCache.forgetUnseenWrite`.
+ *
+ * A read-only tab on the file has its own watcher, which forgets on every event
+ * (`forgetChangedSource`): the tab is about to re-read the file anyway.
+ */
+export function forgetUnseenChange(uri: vscode.Uri): Promise<boolean> {
+  return forgetUnseenWrite(sourceCache, uri.toString(), () => scanVersion(uri));
 }
 
 /** The uris a pass was given, as the cache names files. */
@@ -102,8 +121,8 @@ export async function parsedModelForTab(uri: vscode.Uri): Promise<ParsedSlx> {
   // pass that stats it re-reads: self-healing, which is what lets this cache have no invalidation
   // protocol at all. A version taken after the bytes can be NEWER than the content it keys, and
   // then every later pass sees a version that matches and hits forever, on content the file no
-  // longer has. Pinned as an order in sourceCache.test.ts, since this module cannot be loaded in
-  // the unit suite.
+  // longer has. Pinned as an order in test/sourceCache.test.ts, since this module cannot be loaded
+  // in the unit suite.
   const version = await scanVersion(uri);
   const parsed = await parsedModelForOpenTab(sourceCache, file, version, async () =>
     toArrayBuffer(await vscode.workspace.fs.readFile(uri)),

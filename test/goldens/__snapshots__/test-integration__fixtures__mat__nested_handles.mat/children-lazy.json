@@ -1,0 +1,421 @@
+{
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/s_fh": {
+  "type": "childRows",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/s_fh",
+  "rows": [
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/s_fh/named",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/s_fh",
+    "Status": "",
+    "Name": {
+     "label": "named",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "@sin",
+    "_valueEditable": false,
+    "DataType": "function_handle",
+    "Description": "",
+    "Class": "function_handle",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/s_fh/anon",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/s_fh",
+    "Status": "",
+    "Name": {
+     "label": "anon",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "@(x)x.^2+1",
+    "_valueEditable": false,
+    "DataType": "function_handle",
+    "Description": "",
+    "Class": "function_handle",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/s_fh/none",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/s_fh",
+    "Status": "",
+    "Name": {
+     "label": "none",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "[ ]",
+    "_valueEditable": false,
+    "DataType": "function_handle",
+    "Description": "",
+    "Class": "function_handle",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/s_fh/num",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/s_fh",
+    "Status": "",
+    "Name": {
+     "label": "num",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "3",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/c_fh": {
+  "type": "childRows",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/c_fh",
+  "rows": [
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/c_fh/1",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/c_fh",
+    "Status": "",
+    "Name": {
+     "label": "c_fh{1}",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "@sin",
+    "_valueEditable": false,
+    "DataType": "function_handle",
+    "Description": "",
+    "Class": "function_handle",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/c_fh/2",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/c_fh",
+    "Status": "",
+    "Name": {
+     "label": "c_fh{2}",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "@(x)x.^2+1",
+    "_valueEditable": false,
+    "DataType": "function_handle",
+    "Description": "",
+    "Class": "function_handle",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/c_fh/3",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/c_fh",
+    "Status": "",
+    "Name": {
+     "label": "c_fh{3}",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "[ ]",
+    "_valueEditable": false,
+    "DataType": "function_handle",
+    "Description": "",
+    "Class": "function_handle",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/c_fh/4",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/c_fh",
+    "Status": "",
+    "Name": {
+     "label": "c_fh{4}",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "3",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh": {
+  "type": "childRows",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh",
+  "rows": [
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh/inner",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh",
+    "Status": "",
+    "Name": {
+     "label": "inner",
+     "iconId": "wsTree",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "<1x1 struct>",
+    "_valueEditable": false,
+    "DataType": "struct",
+    "Description": "",
+    "Class": "struct",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh/inner/h",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh/inner",
+    "Status": "",
+    "Name": {
+     "label": "h",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "@cos",
+    "_valueEditable": false,
+    "DataType": "function_handle",
+    "Description": "",
+    "Class": "function_handle",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh/list",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh",
+    "Status": "",
+    "Name": {
+     "label": "list",
+     "iconId": "wsBrackets",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "{{@tan}}",
+    "_valueEditable": false,
+    "DataType": "cell",
+    "Description": "",
+    "Class": "cell",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh/list/1",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh/list",
+    "Status": "",
+    "Name": {
+     "label": "list{1}",
+     "iconId": "wsBrackets",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "{@tan}",
+    "_valueEditable": false,
+    "DataType": "cell",
+    "Description": "",
+    "Class": "cell",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh/list/1/1",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/deep_fh/list/1",
+    "Status": "",
+    "Name": {
+     "label": "list{1}{1}",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "@tan",
+    "_valueEditable": false,
+    "DataType": "function_handle",
+    "Description": "",
+    "Class": "function_handle",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/sa_fh": {
+  "type": "childRows",
+  "nodeId": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/sa_fh",
+  "rows": [
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/sa_fh/1",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/sa_fh",
+    "Status": "",
+    "Name": {
+     "label": "sa_fh(1)",
+     "iconId": "wsTree",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "<1x1 struct>",
+    "_valueEditable": false,
+    "DataType": "struct",
+    "Description": "",
+    "Class": "struct",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/sa_fh/1/h",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/sa_fh/1",
+    "Status": "",
+    "Name": {
+     "label": "h",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "@sin",
+    "_valueEditable": false,
+    "DataType": "function_handle",
+    "Description": "",
+    "Class": "function_handle",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/sa_fh/2",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/sa_fh",
+    "Status": "",
+    "Name": {
+     "label": "sa_fh(2)",
+     "iconId": "wsTree",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "<1x1 struct>",
+    "_valueEditable": false,
+    "DataType": "struct",
+    "Description": "",
+    "Class": "struct",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/sa_fh/2/h",
+    "parent": "binedit:file:///fx/test-integration/fixtures/mat/nested_handles.mat/sa_fh/2",
+    "Status": "",
+    "Name": {
+     "label": "h",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "@cos",
+    "_valueEditable": false,
+    "DataType": "function_handle",
+    "Description": "",
+    "Class": "function_handle",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ }
+}

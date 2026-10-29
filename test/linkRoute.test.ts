@@ -19,8 +19,15 @@ import { readFileSync } from 'node:fs';
 // under happy-dom, where import.meta.url is an http URL and fileURLToPath rejects it.
 // blockSidIdentity.test.ts reads the same module the same way for the same reason.
 import { join } from 'node:path';
-import { linkRoute } from '../src/webview/linkRoute.js';
+import { localLinkName } from 'data-explorer-view/model';
 import { blankCommentsAndKeepLines } from './tools/moduleGraph.js';
+
+// The rule is view's now (localLinkName, which connectTable applies to every click), read here
+// the way this file always read it: a target selects a row here, by name, or goes to the host.
+const linkRoute = (target: string, docUri: string) => {
+  const name = localLinkName(target, docUri);
+  return name === null ? { kind: 'host' as const } : { kind: 'local' as const, name };
+};
 
 const HERE = 'file:///w/Controller.sldd';
 
@@ -91,13 +98,20 @@ describe('a link into this same document is answered here', () => {
 describe('table-main routes every link through that one function', () => {
   // Read as source, the way multiSelectInvariants.test.ts reads it: these three are about
   // the SHAPE of the code rather than its behaviour, which the describe below drives for
-  // real against an imported table-main.
+  // real against an imported table-main. The click is connectTable's now (view), so its half is
+  // read from the view this extension ships.
   const src = blankCommentsAndKeepLines(
     readFileSync(join(import.meta.dirname, '..', 'src/webview/table-main.ts'), 'utf8'),
   );
+  const connect = blankCommentsAndKeepLines(
+    readFileSync(join(import.meta.dirname, '..', 'node_modules/data-explorer-view/dist/widgets/tree-table/connectTable.js'), 'utf8'),
+  );
 
   it('decides in exactly one place', () => {
-    expect(src.match(/linkRoute\(/g) ?? []).toHaveLength(1);
+    // table-main has no link rule of its own: it hands what connectTable does not answer to the host.
+    expect(src).not.toMatch(/dex-link-clicked|linkRoute\(|localLinkName\(/);
+    expect(src.match(/handle\.on\('navigate'/g) ?? []).toHaveLength(1);
+    expect(connect.match(/localLinkName\(/g) ?? []).toHaveLength(1);
   });
 
   it('learns the document uri from setRows, not only from sectionRules', () => {
@@ -115,8 +129,9 @@ describe('table-main routes every link through that one function', () => {
     // Two clearings: the one inside applyPendingNameSelection, which runs only on a HIT,
     // and the one on the miss branch after the local call. Counting them is what makes
     // this assertion about the second — matching either would have passed before it
-    // existed.
-    expect(src.match(/pendingSelectName = null;/g) ?? []).toHaveLength(2);
+    // existed. (The declaration, `let pendingSelectName = null;` in the shipped JavaScript, is
+    // neither.)
+    expect(connect.match(/(?<!let )pendingSelectName = null;/g) ?? []).toHaveLength(2);
   });
 });
 
@@ -134,6 +149,7 @@ describe('a local click that finds no row still reaches the host', () => {
   const posted: { type: string; [k: string]: unknown }[] = [];
   let table: any;
 
+  // Its own timeout: a cold import of the whole table-main webview is what a loaded machine stretches.
   beforeAll(async () => {
     (globalThis as any).acquireVsCodeApi = () => ({
       postMessage: (m: unknown) => posted.push(m as { type: string }),
@@ -141,7 +157,7 @@ describe('a local click that finds no row still reaches the host', () => {
     document.body.innerHTML = '<dex-tree-table></dex-tree-table>';
     await import('../src/webview/table-main.js');
     table = document.querySelector('dex-tree-table');
-  });
+  }, 60_000);
 
   // A repaint carrying one row, from THIS document — the setRows `docUri` is what lets the
   // routing fire at all, so this doubles as the end-to-end check that the field arrives.

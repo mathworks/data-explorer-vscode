@@ -1,0 +1,24 @@
+[
+ {
+  "label": "editbash",
+  "kind": "group",
+  "groupKind": "folder",
+  "collapsible": "collapsed",
+  "children": [
+   {
+    "label": "values_binary.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test-integration/fixtures/editbash/values_binary.sldd",
+    "health": null,
+    "collapsible": "none"
+   },
+   {
+    "label": "values_text.sldd",
+    "kind": "sldd",
+    "id": "file:///fx/test-integration/fixtures/editbash/values_text.sldd",
+    "health": null,
+    "collapsible": "none"
+   }
+  ]
+ }
+]

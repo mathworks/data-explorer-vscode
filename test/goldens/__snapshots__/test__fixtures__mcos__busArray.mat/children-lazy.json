@@ -1,0 +1,389 @@
+{
+ "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/1": {
+  "type": "childRows",
+  "nodeId": "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/1",
+  "rows": [
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/1/a",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/1",
+    "Status": "",
+    "Name": {
+     "label": "a",
+     "iconId": "wsBusElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "double",
+    "dimensions": {
+     "text": "1",
+     "editable": true,
+     "editor": "text"
+    },
+    "complexity": {
+     "text": "real",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "real",
+      "complex"
+     ]
+    },
+    "dimensionsMode": {
+     "text": "Fixed",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Fixed",
+      "Variable"
+     ]
+    },
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.BusElement",
+    "Kind": "Bus Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/2": {
+  "type": "childRows",
+  "nodeId": "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/2",
+  "rows": [
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/2/x",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/2",
+    "Status": "",
+    "Name": {
+     "label": "x",
+     "iconId": "wsBusElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "single",
+    "dimensions": {
+     "text": "1",
+     "editable": true,
+     "editor": "text"
+    },
+    "complexity": {
+     "text": "real",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "real",
+      "complex"
+     ]
+    },
+    "dimensionsMode": {
+     "text": "Fixed",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Fixed",
+      "Variable"
+     ]
+    },
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.BusElement",
+    "Kind": "Bus Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/2/y",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/2",
+    "Status": "",
+    "Name": {
+     "label": "y",
+     "iconId": "wsBusElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "int32",
+    "dimensions": {
+     "text": "1",
+     "editable": true,
+     "editor": "text"
+    },
+    "complexity": {
+     "text": "real",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "real",
+      "complex"
+     ]
+    },
+    "dimensionsMode": {
+     "text": "Fixed",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Fixed",
+      "Variable"
+     ]
+    },
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.BusElement",
+    "Kind": "Bus Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ },
+ "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/3": {
+  "type": "childRows",
+  "nodeId": "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/3",
+  "rows": [
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/3/p",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/3",
+    "Status": "",
+    "Name": {
+     "label": "p",
+     "iconId": "wsBusElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "uint8",
+    "dimensions": {
+     "text": "1",
+     "editable": true,
+     "editor": "text"
+    },
+    "complexity": {
+     "text": "real",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "real",
+      "complex"
+     ]
+    },
+    "dimensionsMode": {
+     "text": "Fixed",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Fixed",
+      "Variable"
+     ]
+    },
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.BusElement",
+    "Kind": "Bus Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/3/q",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/3",
+    "Status": "",
+    "Name": {
+     "label": "q",
+     "iconId": "wsBusElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "boolean",
+    "dimensions": {
+     "text": "1",
+     "editable": true,
+     "editor": "text"
+    },
+    "complexity": {
+     "text": "real",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "real",
+      "complex"
+     ]
+    },
+    "dimensionsMode": {
+     "text": "Fixed",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Fixed",
+      "Variable"
+     ]
+    },
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.BusElement",
+    "Kind": "Bus Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/3/r",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/busArray.mat/buses/3",
+    "Status": "",
+    "Name": {
+     "label": "r",
+     "iconId": "wsBusElement",
+     "disabled": true,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "double",
+    "dimensions": {
+     "text": "1",
+     "editable": true,
+     "editor": "text"
+    },
+    "complexity": {
+     "text": "real",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "real",
+      "complex"
+     ]
+    },
+    "dimensionsMode": {
+     "text": "Fixed",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Fixed",
+      "Variable"
+     ]
+    },
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.BusElement",
+    "Kind": "Bus Element",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ }
+}

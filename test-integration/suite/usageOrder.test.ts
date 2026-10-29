@@ -41,9 +41,10 @@ import {
   blocksUsingVariable,
   invalidateUsageGraph,
 } from '../../src/host/usageGraph';
-import { getModel, getModelFromBytes, invalidate } from '../../src/host/SlddModel';
-import { buildRows } from '../../src/host/rowBuilder';
+import { buildRows } from 'data-explorer-view/model';
+import { getModel, getModelFromBytes, invalidate } from 'data-explorer-view/host';
 import { toArrayBuffer } from '../../src/common/bytes';
+import { waitFor } from './tools/hostHarness';
 
 const BINARY_VIEW = 'dataExplorer.binaryView';
 const TABLE_VIEW = 'dataExplorer.tableView';
@@ -69,21 +70,20 @@ async function bytesOf(name: string): Promise<ArrayBuffer> {
 // onDidChangeTabs→invalidate wiring clears, so we invalidate ourselves, which is
 // exactly what re-runs buildGraph against the live open-tab set. The retry absorbs
 // the lag between `openWith` resolving and the tab appearing in tabGroups.
-async function pollRebuilt<T>(fn: () => Promise<T>, timeoutMs = 10000): Promise<T> {
-  const start = Date.now();
-  const attempt = async (): Promise<T> => {
-    invalidateUsageGraph();
-    // No prebuild: every query in `fn` builds the graph for the file it asks about. So
-    // invalidating is the whole of what this does, and it is what re-runs the build against
-    // the live open-tab set — the code path under test.
-    return fn();
-  };
-  let last: T = await attempt();
-  while (Date.now() - start < timeoutMs) {
-    if (last) return last;
-    await new Promise((r) => setTimeout(r, 50));
-    last = await attempt();
-  }
+async function pollRebuilt<T>(what: string, fn: () => Promise<T>, timeoutMs = 10000): Promise<T> {
+  let last!: T;
+  await waitFor(
+    what,
+    async () => {
+      invalidateUsageGraph();
+      // No prebuild: every query in `fn` builds the graph for the file it asks about. So
+      // invalidating is the whole of what this does, and it is what re-runs the build against
+      // the live open-tab set — the code path under test.
+      last = await fn();
+      return !!last;
+    },
+    timeoutMs,
+  );
   return last;
 }
 
@@ -165,7 +165,7 @@ suite('Usage does not depend on tab history', () => {
     await registerCtrlAInSession();
     // Warm the graph against the now-open tabs first, so the assertions below cannot
     // fail merely because the tab set was still settling.
-    const edges = await pollRebuilt(async () => {
+    const edges = await pollRebuilt('all three usages of SharedGain', async () => {
       const u = await blocksUsingVariable(dictUri(), 'SharedGain');
       return u.length === 3 ? u : null;
     });
@@ -218,7 +218,7 @@ suite('Usage does not depend on tab history', () => {
     // engine is entitled to claim.
     await openAllFixtures();
     await registerCtrlAInSession();
-    await pollRebuilt(async () => {
+    await pollRebuilt('all three usages of SharedGain', async () => {
       const u = await blocksUsingVariable(dictUri(), 'SharedGain');
       return u.length === 3 ? u : null;
     });
@@ -238,7 +238,7 @@ suite('Usage does not depend on tab history', () => {
     const before = rowNamed(modelRows, 'GainA').UsedBy;
     assert.ok(before.linkTarget && !before.linkTarget.includes('file:'), 'the node layer targets a bare ref name');
 
-    await pollRebuilt(async () => {
+    await pollRebuilt('all three usages of SharedGain', async () => {
       const u = await blocksUsingVariable(dictUri(), 'SharedGain');
       return u.length === 3 ? u : null;
     });

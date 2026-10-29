@@ -224,9 +224,9 @@ describe('paramLinks — the cell a block row shows', () => {
 // own row shows `g1=g1_param`.
 //
 // Which is exactly MATLAB's answer for the model this came from. `Simulink.findVars` on
-// it reports `g1` in the mask workspace `mWhereUsedRefVars/MulAdd` used by
-// `mWhereUsedRefVars/MulAdd/Gain`, and `g1_param` in the model workspace used by
-// `mWhereUsedRefVars/MulAdd` — the inner Gain is NOT a user of `g1_param`. The two-hop
+// it reports `g1` in the mask workspace `<model>/MulAdd` used by
+// `<model>/MulAdd/Gain`, and `g1_param` in the model workspace used by
+// `<model>/MulAdd` — the inner Gain is NOT a user of `g1_param`. The two-hop
 // chain is the fact; the tests below are that both hops land in a cell.
 describe('paramLinks — a mask parameter, the origin that is not a file', () => {
   // A masked subsystem: `MulAdd` (SID 158) declares `g1 = g1_param` and holds an inner
@@ -374,8 +374,8 @@ describe('annotateVariableRows names the model in every usage', () => {
   });
 
   it('keeps same-named blocks in different models apart', () => {
-    // The case a bare block name cannot express: SharedTypes' DragCoeff is used by a
-    // `DragCalc` in MainVehicle AND a `DragCalc` in SubChassis. Without the model the
+    // The case a bare block name cannot express: a shared dictionary's DragCoeff is used by a
+    // `DragCalc` in Sedan AND a `DragCalc` in Truck. Without the model the
     // cell reads `DragCalc, DragCalc` and neither link is identifiable.
     const rows = [row('DragCoeff')];
     annotateVariableRows(
@@ -383,14 +383,14 @@ describe('annotateVariableRows names the model in every usage', () => {
       rows,
       graphSaying({
         [`${SRC}\nDragCoeff`]: [
-          link('DragCalc', 'MainVehicle', 'file:///w/MainVehicle.slx'),
-          link('DragCalc', 'SubChassis', 'file:///w/SubChassis.slx'),
+          link('DragCalc', 'Sedan', 'file:///w/Sedan.slx'),
+          link('DragCalc', 'Truck', 'file:///w/Truck.slx'),
         ],
       }),
     );
     expect(rows[0].UsedBy.blockLinks.map((b: any) => `${b.blockName}(${b.modelName})`)).toEqual([
-      'DragCalc(MainVehicle)',
-      'DragCalc(SubChassis)',
+      'DragCalc(Sedan)',
+      'DragCalc(Truck)',
     ]);
   });
 
@@ -426,41 +426,41 @@ describe('annotateVariableRows names the model in every usage', () => {
 
   it('OVERWRITES a session-supplied cell that names no model and knows fewer blocks', () => {
     // The regression. `node.toRow()` had already answered from the session, which held
-    // FuelInjector.slx but not EngineCtrl.slx, so AFRTarget read `AFRConst, AFRCheck`:
+    // FuelPath.slx but not EngineLoop.slx, so AFRTarget read `AFRConst, AFRCheck`:
     // no model, and three of its five users missing. The workspace graph knows all five
     // whether or not either model is open, so it wins outright.
     const rows = [
       row('AFRTarget', {
         links: [
-          { text: 'AFRConst', linkTarget: 'AFRConst@file:///w/FuelInjector.slx' },
-          { text: 'AFRCheck', linkTarget: 'AFRCheck@file:///w/FuelInjector.slx' },
+          { text: 'AFRConst', linkTarget: 'AFRConst@file:///w/FuelPath.slx' },
+          { text: 'AFRCheck', linkTarget: 'AFRCheck@file:///w/FuelPath.slx' },
         ],
       }),
     ];
-    const E = 'file:///w/EngineCtrl.slx';
-    const F = 'file:///w/FuelInjector.slx';
+    const E = 'file:///w/EngineLoop.slx';
+    const F = 'file:///w/FuelPath.slx';
     expect(
       annotateVariableRows(
         SRC,
         rows,
         graphSaying({
           [`${SRC}\nAFRTarget`]: [
-            link('AFR', 'EngineCtrl', E),
-            link('AFRMonitor', 'EngineCtrl', E),
-            link('MixTarget', 'EngineCtrl', E),
-            link('AFRConst', 'FuelInjector', F),
-            link('AFRCheck', 'FuelInjector', F),
+            link('AFR', 'EngineLoop', E),
+            link('AFRMonitor', 'EngineLoop', E),
+            link('MixTarget', 'EngineLoop', E),
+            link('AFRConst', 'FuelPath', F),
+            link('AFRCheck', 'FuelPath', F),
           ],
         }),
       ),
     ).toBe(true);
     expect('links' in rows[0].UsedBy).toBe(false);
     expect(rows[0].UsedBy.blockLinks.map((b: any) => `${b.blockName}(${b.modelName})`)).toEqual([
-      'AFR(EngineCtrl)',
-      'AFRMonitor(EngineCtrl)',
-      'MixTarget(EngineCtrl)',
-      'AFRConst(FuelInjector)',
-      'AFRCheck(FuelInjector)',
+      'AFR(EngineLoop)',
+      'AFRMonitor(EngineLoop)',
+      'MixTarget(EngineLoop)',
+      'AFRConst(FuelPath)',
+      'AFRCheck(FuelPath)',
     ]);
   });
 

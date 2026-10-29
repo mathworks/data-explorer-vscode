@@ -1,0 +1,262 @@
+{
+ "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child": {
+  "type": "childRows",
+  "nodeId": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child",
+  "rows": [
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Tag",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child",
+    "Status": "",
+    "Name": {
+     "label": "Tag",
+     "iconId": "wsCharacter",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "'L2'",
+    "_valueEditable": false,
+    "DataType": "char",
+    "Description": "",
+    "Class": "char",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Count",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child",
+    "Status": "",
+    "Name": {
+     "label": "Count",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "2",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Child",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child",
+    "Status": "",
+    "Name": {
+     "label": "Child",
+     "iconId": "ws3d",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "<1x1 Level3>",
+    "_valueEditable": false,
+    "DataType": "",
+    "Description": "",
+    "Class": "Level3",
+    "Kind": "Level3",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Child/Tag",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Child",
+    "Status": "",
+    "Name": {
+     "label": "Tag",
+     "iconId": "wsCharacter",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "'L3'",
+    "_valueEditable": false,
+    "DataType": "char",
+    "Description": "",
+    "Class": "char",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Child/Count",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Child",
+    "Status": "",
+    "Name": {
+     "label": "Count",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "3",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Child/Depth",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Child",
+    "Status": "",
+    "Name": {
+     "label": "Depth",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "301",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Sibling",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child",
+    "Status": "",
+    "Name": {
+     "label": "Sibling",
+     "iconId": "wsBrackets",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "{<1x1 Level3>}",
+    "_valueEditable": false,
+    "DataType": "cell",
+    "Description": "",
+    "Class": "cell",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Sibling/1",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Sibling",
+    "Status": "",
+    "Name": {
+     "label": "Sibling{1}",
+     "iconId": "ws3d",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "<1x1 Level3>",
+    "_valueEditable": false,
+    "DataType": "",
+    "Description": "",
+    "Class": "Level3",
+    "Kind": "Level3",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Sibling/1/Tag",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Sibling/1",
+    "Status": "",
+    "Name": {
+     "label": "Tag",
+     "iconId": "wsCharacter",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "'L3'",
+    "_valueEditable": false,
+    "DataType": "char",
+    "Description": "",
+    "Class": "char",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Sibling/1/Count",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Sibling/1",
+    "Status": "",
+    "Name": {
+     "label": "Count",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "33",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Sibling/1/Depth",
+    "parent": "binedit:file:///fx/test/fixtures/mcos/deep_objs.mat/a/Child/Sibling/1",
+    "Status": "",
+    "Name": {
+     "label": "Depth",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "302",
+    "_valueEditable": false,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   }
+  ],
+  "truncated": 0
+ }
+}

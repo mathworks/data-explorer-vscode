@@ -33,7 +33,7 @@ import {
   type ParamOrigin,
   type UsageIndex,
 } from 'data-explorer-core';
-import { uriBasename } from '../common/pathUtil.js';
+import { uriBasename } from 'data-explorer-view/model';
 
 // A file the graph is built from, already read. `path` decides how it is parsed
 // (never the caller's say-so) and `uriString` is what every link target carries.
@@ -47,8 +47,8 @@ export interface RawSource {
 // and a target that navigates back to it.
 //
 // The model is part of the payload and not an embellishment: two models can hold
-// blocks of the same name — `DragCalc(MainVehicle)` and `DragCalc(SubChassis)` both
-// use SharedTypes' DragCoeff — so a bare block name is not a usable answer for a
+// blocks of the same name — `DragCalc(Sedan)` and `DragCalc(Truck)` both
+// use a shared dictionary's DragCoeff — so a bare block name is not a usable answer for a
 // variable that models share, which is every variable a dictionary exists to hold.
 //
 // `modelUri` rides along for the webview to GROUP by, and is not the same fact as
@@ -220,17 +220,19 @@ function toParamLink(origin: ParamOrigin): ParamLink {
  * from core's SESSION — the models whose editor tab happened to be resolved in this
  * window — in a shape that names the block and not the model. So whether a dictionary
  * entry read `AFRConst, AFRCheck` or
- * `AFR(EngineCtrl), AFRMonitor(EngineCtrl), MixTarget(EngineCtrl), AFRConst(FuelInjector),
- * AFRCheck(FuelInjector)` depended on which models the user had opened — and merely
+ * `AFR(EngineLoop), AFRMonitor(EngineLoop), MixTarget(EngineLoop), AFRConst(FuelPath),
+ * AFRCheck(FuelPath)` depended on which models the user had opened — and merely
  * CLICKING a Usage link registered the model it pointed at, degrading the very cell it
- * was clicked from, permanently (model registrations are never withdrawn). Two engines
- * answering one column is the defect; this makes the workspace graph the one that does.
+ * was clicked from for as long as that model stayed registered. Two engines answering one
+ * column is the defect; this makes the workspace graph the one that does.
  *
- * A row the graph has nothing for is LEFT ALONE rather than emptied, so the session's
- * answer still stands for the one case the graph cannot see: a model opened from outside
- * the workspace and since closed, which leaves the session but is neither found on disk
- * nor an open tab. Absence here is not a claim that a variable is unused — the same rule
- * core's `_usedByCell` applies.
+ * A row the graph has nothing for is LEFT ALONE rather than emptied: absence here is not a
+ * claim that a variable is unused — the same rule core's `_usedByCell` applies. This used to
+ * keep one more answer than the graph has: a model opened from outside the workspace and
+ * since closed, which is neither found on disk nor an open tab, but whose registration the
+ * session kept for the life of the window. A closed tab now releases its registration
+ * (SlddModel's view count), so that credit goes when the model's tab does, and what the
+ * session can still add is what an open tab registered — which the graph reads as well.
  */
 export function annotateVariableRows(
   sourceUri: string,
@@ -252,8 +254,8 @@ export function annotateVariableRows(
 /**
  * Drop the `(model)` qualifier from a usage inside the file the row itself belongs to.
  *
- * The qualifier is there because a variable can be SHARED: `DragCalc(MainVehicle)` and
- * `DragCalc(SubChassis)` are two different blocks and the model is the only thing that
+ * The qualifier is there because a variable can be SHARED: `DragCalc(Sedan)` and
+ * `DragCalc(Truck)` are two different blocks and the model is the only thing that
  * separates them. A MODEL-WORKSPACE variable is shared with nobody — every block that can
  * read it is in the model whose workspace holds it — so in a model view the qualifier
  * repeated the name of the open file on every link and disambiguated nothing.
@@ -289,11 +291,12 @@ function withoutOwnModel(link: BlockLink, sourceUri: string): BlockLink {
  * `ModelBlockNode.toRow` publishes for exactly this purpose — and NEVER by the Name
  * label. A label is unique only inside one system, so two `Gain` blocks in different
  * subsystems would take each other's parameters; and a block Simulink recorded with no
- * name at all (f14.slx's SID 65, whose `Name` attribute is a lone line break) has the
- * synthetic label `<SID: 65>`, which matches no block in core's index and left the cell
- * empty. Unlike a variable row, a block row IS emptied when the graph has nothing for
- * it: the row came from this same model's parse, so the graph has seen the block, and
- * "no parameters resolved" is an answer about it rather than a gap in what was read.
+ * name at all (SID 65 of a shipped Simulink demo model, whose `Name` attribute is a
+ * lone line break) has the synthetic label `<SID: 65>`, which matches no block in core's
+ * index and left the cell empty. Unlike a variable row, a block row IS emptied when the
+ * graph has nothing for it: the row came from this same model's parse, so the graph has
+ * seen the block, and "no parameters resolved" is an answer about it rather than a gap in
+ * what was read.
  */
 export function annotateModelViewRows(
   modelUri: string,

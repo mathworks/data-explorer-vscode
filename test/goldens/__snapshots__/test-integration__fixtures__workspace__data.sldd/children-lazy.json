@@ -1,0 +1,22 @@
+{
+ "digested": true,
+ "sha256": "88166c6c5c643db0a4d1f776373c1d179f900a5ac0db7cee4b9cd7697d9a51f0",
+ "entryCount": 15,
+ "entries": {
+  "file:///fx/test-integration/fixtures/workspace/data.sldd/design/Array": "6b8798e201a4f76c",
+  "file:///fx/test-integration/fixtures/workspace/data.sldd/design/Array1": "4988a656c8bd9a99",
+  "file:///fx/test-integration/fixtures/workspace/data.sldd/design/CellArray": "033c4adf02a8da82",
+  "file:///fx/test-integration/fixtures/workspace/data.sldd/design/CellArray1": "62203b1c6520c682",
+  "file:///fx/test-integration/fixtures/workspace/data.sldd/design/CellMatrix": "7fac7c570dd3b143",
+  "file:///fx/test-integration/fixtures/workspace/data.sldd/design/Hybrid": "5c6050f184b933a1",
+  "file:///fx/test-integration/fixtures/workspace/data.sldd/design/Matrix": "0c6a927dae06b84d",
+  "file:///fx/test-integration/fixtures/workspace/data.sldd/design/NestedStruct": "279412c0dd4efcaa",
+  "file:///fx/test-integration/fixtures/workspace/data.sldd/design/Struct": "1897c13fc3c7aa5d",
+  "file:///fx/test-integration/fixtures/workspace/data.sldd/design/stringArray": "505cccee79335004",
+  "file:///fx/test-integration/fixtures/workspace/data.sldd/design/stringMatrix": "627cdb5e70765a9b",
+  "file:///fx/test-integration/fixtures/workspace/data.sldd/design/stringVArray": "06be2fad15cb8eb6",
+  "file:///fx/test-integration/fixtures/workspace/data.sldd/design/structArray": "60eb6c3535aba060",
+  "file:///fx/test-integration/fixtures/workspace/data.sldd/design/structMatrix": "b262d2e1dc3b4e17",
+  "file:///fx/test-integration/fixtures/workspace/data.sldd/design/structVArray": "7d3e6bd915840713"
+ }
+}

@@ -14,7 +14,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, findNode, invalidate } from '../src/host/SlddModel.js';
+import { getModel, findNode, invalidate } from 'data-explorer-view/host';
 import { buildDragSnapshot, pasteEntries } from '../src/host/structuralEdit.js';
 
 const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');
@@ -46,11 +46,7 @@ describe('buildDragSnapshot', () => {
       isScalarNumeric: false,
     });
     expect(snap.items[0].payload.name).toBe('DataInterface');
-    expect(snap).toMatchObject({
-      sourceSection: 'arch',
-      sourceSectionLabel: 'Architectural Data',
-      sourceIsDerived: true,
-    });
+    expect(snap.items[0].sourceSection).toBe('arch');
   });
 
   it('marks a plain scalar-numeric variable as such — that is what lets it convert on drop', () => {
@@ -167,15 +163,19 @@ describe('buildDragSnapshot', () => {
       isMatlabVariable: true,
       isScalarNumeric: false,
     });
-    expect(snap).toMatchObject({ sourceSection: '', sourceSectionLabel: '', sourceIsDerived: false });
+    expect(snap.items[0].sourceSection).toBe('');
   });
 
-  it('falls back to the section name when the section declares no display name', () => {
-    // sourceSectionLabel names the source in the drop tooltip; a custom section
-    // with no displayName must read as its name rather than as nothing.
-    const bare = { isEntry: true, serialize: () => ({ name: 'X' }), parent: { name: 'custom' } };
+  it('records each item’s section by its NAME, not by what it displays as', () => {
+    // dropDecision compares an item's section with the target's sectionName, so a
+    // display name here would make no drag a same-section no-op.
+    const bare = {
+      isEntry: true,
+      serialize: () => ({ name: 'X' }),
+      parent: { name: 'custom', displayName: 'Custom Section' },
+    };
     const snap = buildDragSnapshot(['x'], () => bare);
-    expect(snap).toMatchObject({ sourceSection: 'custom', sourceSectionLabel: 'custom' });
+    expect(snap.items[0].sourceSection).toBe('custom');
   });
 
   it('returns an empty snapshot for a non-array rowIds — the message is untrusted', () => {
@@ -185,11 +185,6 @@ describe('buildDragSnapshot', () => {
     for (const bad of [undefined, null, 'section:arch', 42, {}]) {
       expect(buildDragSnapshot(bad, h.find).items).toEqual([]);
     }
-    expect(buildDragSnapshot([], h.find)).toEqual({
-      items: [],
-      sourceSection: '',
-      sourceSectionLabel: '',
-      sourceIsDerived: false,
-    });
+    expect(buildDragSnapshot([], h.find)).toEqual({ items: [] });
   });
 });

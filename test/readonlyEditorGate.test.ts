@@ -1,7 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
-import { shouldOpenCellEditor } from '../src/webview/menuItems.js';
+import { shouldOpenCellEditor } from 'data-explorer-view/tree-table';
 
 // The vendored dex-tree-table opens its inline cell editor from handlers bound
 // INSIDE its shadow DOM (on the <td> cells) for both double-click and Enter.
@@ -142,12 +142,13 @@ describe('read-only cell-editor gate (capture-phase interception)', () => {
 describe('the shipped gate keeps a read-only view searchable', () => {
   let table: any;
 
+  // Its own timeout: a cold import of the whole table-main webview is what a loaded machine stretches.
   beforeAll(async () => {
     (globalThis as any).acquireVsCodeApi = () => ({ postMessage: () => {} });
     document.body.innerHTML = '<dex-tree-table></dex-tree-table>';
     await import('../src/webview/table-main.js');
     table = document.querySelector('dex-tree-table');
-  });
+  }, 60_000);
 
   // A .slx-shaped payload: two rows and the read-only flag the gate reads.
   async function paint(editable: boolean): Promise<void> {

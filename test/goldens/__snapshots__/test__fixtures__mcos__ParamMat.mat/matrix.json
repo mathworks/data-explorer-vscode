@@ -1,0 +1,44 @@
+{
+ "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat",
+  "matrix": {
+   "name": "ParamMat.Value",
+   "className": "double",
+   "dims": [
+    2,
+    3
+   ],
+   "nodeId": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+   ]
+  }
+ },
+ "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value": {
+  "type": "matrixCells",
+  "nodeId": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value",
+  "matrix": {
+   "name": "Value",
+   "className": "double",
+   "dims": [
+    2,
+    3
+   ],
+   "nodeId": "binedit:file:///fx/test/fixtures/mcos/ParamMat.mat/ParamMat/Value",
+   "cells": [
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6"
+   ]
+  }
+ }
+}

@@ -1,0 +1,25 @@
+[
+ {
+  "label": "LibProj",
+  "kind": "group",
+  "groupKind": "project",
+  "id": "file:///fx/test/parity/artifacts/project/LibProj/LibProj.prj",
+  "collapsible": "none"
+ },
+ {
+  "label": "MyProj",
+  "kind": "group",
+  "groupKind": "project",
+  "id": "file:///fx/test/parity/artifacts/project/MyProj/MyProj.prj",
+  "collapsible": "collapsed",
+  "children": [
+   {
+    "label": "projmodel.slx",
+    "kind": "model",
+    "id": "file:///fx/test/parity/artifacts/project/MyProj/models/projmodel.slx",
+    "health": null,
+    "collapsible": "none"
+   }
+  ]
+ }
+]

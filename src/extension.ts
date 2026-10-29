@@ -2,26 +2,28 @@
 import * as vscode from 'vscode';
 import { SectionsTreeProvider } from './host/SectionsTreeProvider.js';
 import { PropertiesViewProvider } from './host/PropertiesViewProvider.js';
+import { InspectorSelection } from 'data-explorer-view/model';
+import { invalidate, findNode } from 'data-explorer-view/host';
 import { BinaryEditorProvider } from './host/BinaryEditorProvider.js';
 import { SlddTextEditorProvider } from './host/SlddTextEditorProvider.js';
 import { BinarySlddEditorProvider } from './host/BinarySlddEditorProvider.js';
+import { MatEditorProvider } from './host/MatEditorProvider.js';
 import { HealthDecorationProvider } from './host/HealthDecorationProvider.js';
-import { invalidate, findNode } from './host/SlddModel.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, isZipBytes } from './host/slddFormat.js';
 import { handleNavigate, requestSelect } from './host/navigate.js';
 import { invalidateUsageGraph } from './host/usageGraph.js';
 import { clearUsageSources } from './host/usageSources.js';
 import { searchDataSources } from './host/searchSources.js';
 import { openAddGalleryInActiveView } from './host/editorHub.js';
+import { followContentChanges } from './host/workspaceChange.js';
 import {
   listEntries,
   reindexFile,
   removeFile,
   invalidate as invalidateNameIndex,
 } from './host/nameIndex.js';
-import { isSectionRowId } from './common/sectionRowId.js';
-import { isSupportedPath, SUPPORTED_GLOB } from './common/fileTypes.js';
-import { isSlddFile, isTomlProjectFile } from 'data-explorer-core';
+import { SUPPORTED_GLOB } from './common/fileTypes.js';
+import { isMatFile, isSlddFile, isSupportedPath, isTomlProjectFile } from 'data-explorer-core';
 
 function isSlddUri(uri: vscode.Uri | undefined): boolean {
   return !!uri && isSlddFile(uri.path);
@@ -30,9 +32,11 @@ function isSlddUri(uri: vscode.Uri | undefined): boolean {
 // The ONE format→editor rule: which viewType a URI belongs in, decided by its
 // CONTENT. Editable JSON .sldd → the text-backed table view (native undo/redo);
 // compressed-binary (zip/OPC) .sldd → the writable BinarySlddEditorProvider
-// (table editing + re-zip on save); a `matlab.toml` → the project view, which is
-// BinaryEditorProvider under a second view type; everything else → the read-only
-// BinaryEditorProvider, which opens any bytes.
+// (table editing + re-zip on save); a `.mat` → the writable MatEditorProvider, by
+// name, since every MAT-file it can read it can also edit (one it cannot save opens
+// there read-only); a `matlab.toml` → the project view, which is BinaryEditorProvider
+// under a second view type; everything else → the read-only BinaryEditorProvider,
+// which opens any bytes.
 //
 // A JSON .sldd larger than VS Code's TextDocument sync limit is NOT treated as
 // editable: the CustomTextEditorProvider can't resolve it (the ext host can't
@@ -54,6 +58,7 @@ async function bestViewType(uri: vscode.Uri): Promise<string> {
   // BinaryEditorProvider.projectViewType. Returning `viewType` here instead would be a dead
   // open: that entry's selector does not match `matlab.toml`, so VS Code has nothing to resolve.
   if (isTomlProjectFile(uri.path)) return BinaryEditorProvider.projectViewType;
+  if (isMatFile(uri.path)) return MatEditorProvider.viewType;
   if (!isSlddFile(uri.path)) return BinaryEditorProvider.viewType;
   let bytes: Uint8Array;
   try {
@@ -87,24 +92,22 @@ export function activate(context: vscode.ExtensionContext): void {
   const provider = new SectionsTreeProvider(context.extensionUri);
   const piProvider = new PropertiesViewProvider(context.extensionUri);
 
-  // Resolve a selection (from table or tree) into a node and push it to the PI.
-  // Section rows (id `section:<key>`) have no properties, so clear the PI.
-  const showSelection = (uriString: string, rowIds: string[]): void => {
-    const first = rowIds && rowIds.length > 0 ? rowIds[0] : undefined;
-    if (!first || isSectionRowId(first)) {
-      piProvider.clear();
-      return;
-    }
-    const node = findNode(uriString, first);
-    if (node) piProvider.showNode(node);
-    else piProvider.clear();
-  };
+  // Resolve a table's selection into a node and push it to the PI (inspectorSelection.ts).
+  // Section rows (id `section:<key>`) have no properties, so they clear the PI.
+  const inspector = new InspectorSelection(piProvider, findNode);
+  const showSelection = (uriString: string, rowIds: string[]): void => inspector.show(uriString, rowIds);
+  // A document's tree changed under the inspector: an edit, an undo or a redo, a save, a revert
+  // or a reload rebuilt its nodes under the same ids. Node ids are paths, so the node the
+  // inspector shows is found again in the tree as it now is, and never goes on showing one the
+  // table no longer does. One answer for every editor that says so.
+  const refreshInspector = (uriString: string): void => inspector.refresh(uriString);
 
   // Usage-column link click: open the referenced file (opened non-preview so the
   // navigated-to tab persists) and select the target row there. Shared by both
-  // providers so navigation works from any table.
-  const navigate = (target: string): void => {
-    void handleNavigate(target, (uri) => openInBestEditor(uri));
+  // providers so navigation works from any table. `from` is the document the link was
+  // clicked in: a bare file name opens the copy the tree shows under it.
+  const navigate = (target: string, from?: string): void => {
+    void handleNavigate(target, (uri) => openInBestEditor(uri), from, (ref, r) => provider.resolveReference(ref, r));
   };
 
   // The inspector navigates through the same closure as the tables.
@@ -119,12 +122,21 @@ export function activate(context: vscode.ExtensionContext): void {
   const textProvider = new SlddTextEditorProvider(context);
   textProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
   textProvider.onNavigate = navigate;
+  textProvider.onChanged = refreshInspector;
 
   // Compressed-binary .sldd opens in this writable provider (table editing +
   // re-zip on save). Shares the selection→PI and navigate wiring.
   const binarySlddProvider = new BinarySlddEditorProvider(context);
   binarySlddProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
   binarySlddProvider.onNavigate = navigate;
+  binarySlddProvider.onChanged = refreshInspector;
+
+  // A MAT-file opens in this writable provider (edits through core's session, save
+  // through core's writer). Shares the selection→PI and navigate wiring.
+  const matProvider = new MatEditorProvider(context);
+  matProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
+  matProvider.onNavigate = navigate;
+  matProvider.onChanged = refreshInspector;
 
   // Health badges/colors on tree rows (missing/cycle/modified). The tree
   // encodes each row's state into its resourceUri; this provider renders it.
@@ -234,6 +246,13 @@ export function activate(context: vscode.ExtensionContext): void {
       // document keeps that stack unambiguous.
       { webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: false },
     ),
+    vscode.window.registerCustomEditorProvider(
+      MatEditorProvider.viewType,
+      matProvider,
+      // One panel per document, for the binary .sldd editor's reason: one edit stack. So Split
+      // Right opens no second view of a MAT-file, as it opens none of a binary .sldd.
+      { webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: false },
+    ),
     vscode.window.registerTreeDataProvider('dataExplorer.sections', provider),
     vscode.window.registerFileDecorationProvider(healthProvider),
     vscode.window.registerWebviewViewProvider(
@@ -256,11 +275,9 @@ export function activate(context: vscode.ExtensionContext): void {
     // A file's contents changed: drop its cached model (table) and rebuild the
     // reference index (tree), since edits may add or remove references. Also
     // reindex its entry names (no-op until the index is first built).
-    watcher.onDidChange((uri) => {
-      invalidate(uri.toString());
-      void reindexFile(uri);
-      refreshAll();
-    }),
+    // First, forget the shared source cache's entries if the write left the file's mtime and
+    // size where they were — see workspaceChange.ts.
+    followContentChanges(watcher, refreshAll),
     // Live edits in an open editor: invalidate the cached model and re-badge. Nothing
     // built from DISK is dropped here — see refreshBadges.
     vscode.workspace.onDidChangeTextDocument((e) => {
@@ -325,9 +342,9 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('dataExplorer.openFile', async (uri: vscode.Uri) => {
       if (!uri) return;
       // Route by content: editable JSON .sldd → text-backed table view (native
-      // undo/redo); binary/zip .sldd, .slx, .mat, .prj → read-only binary view;
-      // matlab.toml → the project view. Preview mode (italic, single reused tab)
-      // like the Explorer.
+      // undo/redo); binary/zip .sldd → the writable binary-sldd view; .mat → the
+      // MAT-file editor; .slx, .mdl, .prj → read-only binary view; matlab.toml → the
+      // project view. Preview mode (italic, single reused tab) like the Explorer.
       await openInBestEditor(uri, { preview: true });
     }),
     // Editor-tab toggle: open the current file in the Data Explorer or in VS Code's

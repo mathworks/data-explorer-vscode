@@ -24,6 +24,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { deleteFromSource } from '../../src/host/editorHub';
+import { waitFor } from './tools/hostHarness';
 
 function ctx(): vscode.ExtensionContext {
   const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
@@ -36,8 +37,6 @@ function wsUri(name: string): vscode.Uri {
   assert.ok(ws, 'a workspace folder must be open');
   return vscode.Uri.joinPath(ws.uri, name);
 }
-
-const settle = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -123,12 +122,11 @@ function spanOf(text: string, name: string): { offset: number; length: number } 
  * this suite pass or fail on whether some earlier test happened to warm that graph.
  */
 async function lastRows(posts: any[]): Promise<any[]> {
-  for (let waited = 0; waited < 30000; waited += 100) {
-    const setRows = posts.filter((m) => m?.type === 'setRows');
-    if (setRows.length > 0) return setRows[setRows.length - 1].rows;
-    await settle(100);
-  }
-  assert.fail(`no whole-table paint arrived (saw ${JSON.stringify(posts.map((m) => m?.type))})`);
+  const setRows = () => posts.filter((m) => m?.type === 'setRows');
+  await waitFor('a whole-table paint', () => setRows().length > 0, 30000, () =>
+    `saw ${JSON.stringify(posts.map((m) => m?.type))}`,
+  );
+  return setRows()[setRows().length - 1].rows;
 }
 
 /** The Status cell of the top-level entry row named `name`, or undefined. */
@@ -145,8 +143,8 @@ async function repaint(view: { posts: any[]; send: (m: any) => void }): Promise<
   return lastRows(view.posts);
 }
 
-/** Change entry `name`'s value in the open document, leaving it dirty. */
-async function editEntry(doc: vscode.TextDocument, name: string): Promise<void> {
+/** Change entry `name`'s value in the open document, leaving it dirty, and let `view` repaint it. */
+async function editEntry(doc: vscode.TextDocument, name: string, view: { posts: any[] }): Promise<void> {
   const span = spanOf(doc.getText(), name);
   const record = JSON.parse(doc.getText().slice(span.offset, span.offset + span.length));
   assert.ok(Array.isArray(record.value), 'the fixture entry holds the array this edit changes');
@@ -157,8 +155,11 @@ async function editEntry(doc: vscode.TextDocument, name: string): Promise<void> 
     new vscode.Range(doc.positionAt(span.offset), doc.positionAt(span.offset + span.length)),
     JSON.stringify(record, null, 2),
   );
+  const from = view.posts.length;
   assert.ok(await vscode.workspace.applyEdit(edit), 'the edit applied');
-  await settle(1200);
+  await waitFor(`the open tab to repaint ${name} after the edit`, () =>
+    view.posts.slice(from).some((m) => m?.type === 'updateEntryRows' || m?.type === 'setRows'),
+  );
 }
 
 suite('A JSON .sldd open in two tabs is one document', () => {
@@ -178,7 +179,7 @@ suite('A JSON .sldd open in two tabs is one document', () => {
       'nothing is Modified against the on-open baseline',
     );
 
-    await editEntry(doc, 'Array');
+    await editEntry(doc, 'Array', first);
     assert.strictEqual(
       statusOf(await repaint(first), 'Array'),
       'Modified',
@@ -230,7 +231,9 @@ suite('A JSON .sldd open in two tabs is one document', () => {
     first.close();
     assert.ok(doc.getText().includes('"name": "Array1"'), 'the entry to move is there to begin with');
     await deleteFromSource(uri.toString(), ['Array1']);
-    await settle(1200);
+    await waitFor('the source-delete half of the move to reach the document', () =>
+      !doc.getText().includes('"name": "Array1"'),
+    );
     assert.ok(
       !doc.getText().includes('"name": "Array1"'),
       'the surviving tab completed the source-delete half of the move',

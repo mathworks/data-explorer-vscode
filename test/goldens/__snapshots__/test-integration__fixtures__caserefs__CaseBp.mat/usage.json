@@ -1,0 +1,13 @@
+{
+ "binedit:file:///fx/test-integration/fixtures/caserefs/CaseBp.mat/Bp": {
+  "blockLinks": [
+   {
+    "blockName": "Const1",
+    "blockPath": "Const1",
+    "modelName": "caseRefs",
+    "modelUri": "file:///fx/test-integration/fixtures/caserefs/caseRefs.slx",
+    "linkTarget": "blocks:4@file:///fx/test-integration/fixtures/caserefs/caseRefs.slx"
+   }
+  ]
+ }
+}

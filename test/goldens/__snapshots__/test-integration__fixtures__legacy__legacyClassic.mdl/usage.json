@@ -1,0 +1,22 @@
+{
+ "file:///fx/test-integration/fixtures/legacy/legacyClassic.mdl/blocks/ClassicGain": {
+  "paramLinks": [
+   {
+    "property": "Gain",
+    "paramName": "Kp",
+    "source": "legacyParams.sldd",
+    "linkTarget": "Kp@file:///fx/test-integration/fixtures/legacy/legacyParams.sldd"
+   }
+  ]
+ },
+ "file:///fx/test-integration/fixtures/legacy/legacyClassic.mdl/blocks/ClassicConst": {
+  "paramLinks": [
+   {
+    "property": "Value",
+    "paramName": "Uo",
+    "source": "legacyParams.sldd",
+    "linkTarget": "Uo@file:///fx/test-integration/fixtures/legacy/legacyParams.sldd"
+   }
+  ]
+ }
+}

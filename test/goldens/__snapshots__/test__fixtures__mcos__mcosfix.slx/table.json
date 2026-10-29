@@ -1,0 +1,639 @@
+[
+ {
+  "type": "setRows",
+  "docUri": "file:///fx/test/fixtures/mcos/mcosfix.slx",
+  "rows": [
+   {
+    "ID": "section:blocks",
+    "parent": null,
+    "Name": {
+     "label": "Model Elements",
+     "iconId": "blocks",
+     "editable": false,
+     "disabled": false,
+     "element": false
+    },
+    "Value": "",
+    "Class": "",
+    "Kind": "",
+    "DataType": "",
+    "Status": "",
+    "UsedBy": ""
+   },
+   {
+    "ID": "section:workspace",
+    "parent": null,
+    "Name": {
+     "label": "Model Workspace",
+     "iconId": "databaseFolderWorkspace",
+     "editable": false,
+     "disabled": false,
+     "element": false
+    },
+    "Value": "",
+    "Class": "",
+    "Kind": "",
+    "DataType": "",
+    "Status": "",
+    "UsedBy": ""
+   },
+   {
+    "ID": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/Alias",
+    "parent": "section:workspace",
+    "Status": "",
+    "Name": {
+     "label": "Alias",
+     "iconId": "wsAlias",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "int16",
+    "Description": "aliasdesc",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.AliasType",
+    "Kind": "Alias Type",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/Bp",
+    "parent": "section:workspace",
+    "Status": "",
+    "Name": {
+     "label": "Bp",
+     "iconId": "wsSimulinkBreakpoint",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.Breakpoint",
+    "Kind": "Breakpoint",
+    "Description": "",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/Lut",
+    "parent": "section:workspace",
+    "Status": "",
+    "Name": {
+     "label": "Lut",
+     "iconId": "wsLookup",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.LookupTable",
+    "Kind": "Lookup Table",
+    "Description": "",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/Numeric",
+    "parent": "section:workspace",
+    "Status": "",
+    "Name": {
+     "label": "Numeric",
+     "iconId": "wsNumeric",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "",
+    "Description": "numdesc",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.NumericType",
+    "Kind": "Numeric Type",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/Param",
+    "parent": "section:workspace",
+    "Status": "",
+    "Name": {
+     "label": "Param",
+     "iconId": "wsParameters",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "42",
+    "_valueEditable": true,
+    "DataType": "int32",
+    "Min": {
+     "text": "-1",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "100",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": "m/s",
+    "Description": "hello",
+    "dimensions": "[1 1]",
+    "complexity": "real",
+    "storageClass": {
+     "text": "Auto",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Auto",
+      "SimulinkGlobal",
+      "ExportedGlobal",
+      "ImportedExtern",
+      "ImportedExternPointer",
+      "Custom"
+     ]
+    },
+    "headerFile": "",
+    "alignment": "-1",
+    "Class": "Simulink.Parameter",
+    "Kind": "Simulink Parameter",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat",
+    "parent": "section:workspace",
+    "Status": "",
+    "Name": {
+     "label": "ParamMat",
+     "iconId": "wsParameters",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "Value": "[1 2 3; 4 5 6]",
+    "_valueEditable": true,
+    "DataType": "auto",
+    "Min": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": "",
+    "Description": "matrix",
+    "dimensions": "[2 3]",
+    "complexity": "real",
+    "storageClass": {
+     "text": "Auto",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Auto",
+      "SimulinkGlobal",
+      "ExportedGlobal",
+      "ImportedExtern",
+      "ImportedExternPointer",
+      "Custom"
+     ]
+    },
+    "headerFile": "",
+    "alignment": "-1",
+    "Class": "Simulink.Parameter",
+    "Kind": "Simulink Parameter",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false,
+    "_matrix": {
+     "name": "ParamMat.Value",
+     "className": "double",
+     "dims": [
+      2,
+      3
+     ],
+     "nodeId": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat"
+    }
+   },
+   {
+    "ID": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value",
+    "parent": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat",
+    "Status": "",
+    "Name": {
+     "label": "Value",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": false
+    },
+    "Value": "[1 2 3; 4 5 6]",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false,
+    "_matrix": {
+     "name": "Value",
+     "className": "double",
+     "dims": [
+      2,
+      3
+     ],
+     "nodeId": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value"
+    }
+   },
+   {
+    "ID": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value/1",
+    "parent": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value",
+    "Status": "",
+    "Name": {
+     "label": "Value(1,1)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "1",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value/2",
+    "parent": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value",
+    "Status": "",
+    "Name": {
+     "label": "Value(1,2)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "2",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value/3",
+    "parent": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value",
+    "Status": "",
+    "Name": {
+     "label": "Value(1,3)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "3",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value/4",
+    "parent": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value",
+    "Status": "",
+    "Name": {
+     "label": "Value(2,1)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "4",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value/5",
+    "parent": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value",
+    "Status": "",
+    "Name": {
+     "label": "Value(2,2)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "5",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value/6",
+    "parent": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/ParamMat/Value",
+    "Status": "",
+    "Name": {
+     "label": "Value(2,3)",
+     "iconId": "wsDefault",
+     "disabled": true,
+     "editable": false,
+     "element": true
+    },
+    "Value": "6",
+    "_valueEditable": true,
+    "DataType": "double",
+    "Description": "",
+    "Class": "double",
+    "Kind": "MATLAB Variable",
+    "_descriptionEditable": false,
+    "_descriptionApplies": false,
+    "_canCopy": true,
+    "_canDelete": false,
+    "_canAddChild": false
+   },
+   {
+    "ID": "file:///fx/test/fixtures/mcos/mcosfix.slx/workspace/Sig",
+    "parent": "section:workspace",
+    "Status": "",
+    "Name": {
+     "label": "Sig",
+     "iconId": "wsSignal",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "single",
+    "Min": {
+     "text": "-5",
+     "editable": true,
+     "editor": "text"
+    },
+    "Max": {
+     "text": "5",
+     "editable": true,
+     "editor": "text"
+    },
+    "Unit": "V",
+    "Description": "sigdesc",
+    "dimensions": "-1",
+    "dimensionsMode": {
+     "text": "auto",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "auto",
+      "Fixed",
+      "Variable"
+     ]
+    },
+    "complexity": {
+     "text": "auto",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "auto",
+      "real",
+      "complex"
+     ]
+    },
+    "storageClass": {
+     "text": "Auto",
+     "editable": true,
+     "editor": "select",
+     "options": [
+      "Auto",
+      "SimulinkGlobal",
+      "ExportedGlobal",
+      "ImportedExtern",
+      "ImportedExternPointer",
+      "Custom"
+     ]
+    },
+    "alignment": "-1",
+    "headerFile": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.Signal",
+    "Kind": "Simulink Signal",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "section:config",
+    "parent": null,
+    "Name": {
+     "label": "Configurations",
+     "iconId": "databaseFolderConfiguration",
+     "editable": false,
+     "disabled": false,
+     "element": false
+    },
+    "Value": "",
+    "Class": "",
+    "Kind": "",
+    "DataType": "",
+    "Status": "",
+    "UsedBy": ""
+   },
+   {
+    "ID": "file:///fx/test/fixtures/mcos/mcosfix.slx/config/Configuration",
+    "parent": "section:config",
+    "Status": "",
+    "Name": {
+     "label": "Configuration",
+     "iconId": "check_settings",
+     "disabled": false,
+     "editable": true,
+     "element": false
+    },
+    "DataType": "",
+    "Description": "",
+    "Value": "",
+    "_valueEditable": false,
+    "Class": "Simulink.ConfigSet",
+    "Kind": "Configuration Set",
+    "_descriptionEditable": true,
+    "_descriptionApplies": true,
+    "_canCopy": true,
+    "_canDelete": true,
+    "_canAddChild": false
+   },
+   {
+    "ID": "section:references",
+    "parent": null,
+    "Name": {
+     "label": "Model References",
+     "iconId": "modelReference",
+     "editable": false,
+     "disabled": false,
+     "element": false
+    },
+    "Value": "",
+    "Class": "",
+    "Kind": "",
+    "DataType": "",
+    "Status": "",
+    "UsedBy": ""
+   },
+   {
+    "ID": "section:dataSources",
+    "parent": null,
+    "Name": {
+     "label": "External Data",
+     "iconId": "link_database",
+     "editable": false,
+     "disabled": false,
+     "element": false
+    },
+    "Value": "",
+    "Class": "",
+    "Kind": "",
+    "DataType": "",
+    "Status": "",
+    "UsedBy": ""
+   }
+  ],
+  "columns": [
+   "Name",
+   "Value",
+   "DataType",
+   "UsedBy",
+   "Status",
+   "Kind",
+   "Class",
+   "Description",
+   "dimensions",
+   "dimensionsMode",
+   "complexity",
+   "Min",
+   "Max",
+   "Unit",
+   "storageClass",
+   "headerFile",
+   "alignment",
+   "definitionFile",
+   "preStatement",
+   "postStatement",
+   "qualifier",
+   "bankName",
+   "variantConditions",
+   "allChoicesCoderInfo",
+   "activeChoiceCoderInfo",
+   "lastModified",
+   "lastModifiedBy"
+  ],
+  "columnLabels": {
+   "Name": "Name",
+   "Value": "Value",
+   "Class": "Class",
+   "Kind": "Kind",
+   "DataType": "Data Type",
+   "Status": "Status",
+   "UsedBy": "Usage",
+   "Description": "Description",
+   "Min": "Min",
+   "Max": "Max",
+   "Unit": "Unit",
+   "definitionFile": "Definition File",
+   "preStatement": "Pre Statement",
+   "postStatement": "Post Statement",
+   "qualifier": "Qualifier",
+   "bankName": "Bank Name",
+   "variantConditions": "Variant Conditions",
+   "allChoicesCoderInfo": "All Choices Coder Info",
+   "activeChoiceCoderInfo": "Active Choice Coder Info",
+   "lastModified": "Last Modified",
+   "lastModifiedBy": "Last Modified By",
+   "dimensions": "Dimensions",
+   "complexity": "Complexity",
+   "storageClass": "Storage Class",
+   "headerFile": "Header File",
+   "alignment": "Alignment",
+   "dimensionsMode": "Dimensions Mode"
+  },
+  "columnGroups": {
+   "Min": "Data Object",
+   "Max": "Data Object",
+   "Unit": "Data Object",
+   "dimensions": "Data Object",
+   "complexity": "Data Object",
+   "dimensionsMode": "Data Object",
+   "storageClass": "Code Generation",
+   "headerFile": "Code Generation",
+   "alignment": "Code Generation",
+   "definitionFile": "Code Generation",
+   "preStatement": "Code Generation",
+   "postStatement": "Code Generation",
+   "qualifier": "Code Generation",
+   "bankName": "Variant Bank",
+   "variantConditions": "Variant Bank",
+   "allChoicesCoderInfo": "Variant Bank",
+   "activeChoiceCoderInfo": "Variant Bank",
+   "lastModified": "Data Dictionary",
+   "lastModifiedBy": "Data Dictionary"
+  },
+  "editable": false
+ }
+]

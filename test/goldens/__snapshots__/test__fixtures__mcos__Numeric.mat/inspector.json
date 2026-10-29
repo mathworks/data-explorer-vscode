@@ -1,0 +1,106 @@
+{
+ "binedit:file:///fx/test/fixtures/mcos/Numeric.mat/Numeric": {
+  "type": "showProps",
+  "groups": [
+   {
+    "title": "General",
+    "properties": [
+     {
+      "name": "Name",
+      "value": "Numeric",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Kind",
+      "value": "Numeric Type",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Class",
+      "value": "Simulink.NumericType",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Value Properties",
+    "properties": [
+     {
+      "name": "Data Type Mode",
+      "value": "Double",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Signedness",
+      "value": "Signed",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Word Length",
+      "value": "64",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Fraction Length",
+      "value": "0",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Slope",
+      "value": "1",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Bias",
+      "value": "0",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Data Type Override",
+      "value": "Inherit",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Is Alias",
+      "value": "false",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Description",
+      "value": "numdesc",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   },
+   {
+    "title": "Code Generation",
+    "properties": [
+     {
+      "name": "Data Scope",
+      "value": "Auto",
+      "editable": false,
+      "type": "text"
+     },
+     {
+      "name": "Header File",
+      "value": "",
+      "editable": false,
+      "type": "text"
+     }
+    ]
+   }
+  ]
+ }
+}

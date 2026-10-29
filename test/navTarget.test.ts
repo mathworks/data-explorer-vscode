@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
-import { describe, it, expect } from 'vitest';
-import { parseNavTarget, parseFileTarget } from '../src/host/navTarget.js';
+import { describe, it, expect, vi } from 'vitest';
+import { parseNavTarget, parseFileTarget, resolveNavSource } from '../src/host/navTarget.js';
 
 describe('parseNavTarget — Usage-link target grammar', () => {
   it('parses a bare <name>@<basename> (block -> dictionary variable)', () => {
@@ -55,5 +55,70 @@ describe('parseFileTarget — Model Reference / External Data bare-file links', 
 
   it('returns null for empty input', () => {
     expect(parseFileTarget('')).toBeNull();
+  });
+});
+
+// The source half of a link — a Usage link's `@source`, or a whole bare-file target —
+// turned into the document to open. A bare name is what Simulink records for a Model
+// Reference or an External Data file, and the same name can sit in more than one folder
+// of the workspace: the answer has to be the one the tree shows under the referrer, not
+// whichever file the workspace search happens to list first.
+describe('resolveNavSource — which file a link source names', () => {
+  const REFERRER = 'file:///w/b/model.slx';
+  function deps(scopedAnswer?: string | Error, firstAnswer?: string) {
+    return {
+      scoped: vi.fn(async (_ref: string, _referrer: string) => {
+        if (scopedAnswer instanceof Error) throw scopedAnswer;
+        return scopedAnswer;
+      }),
+      firstMatch: vi.fn(async (_ref: string) => firstAnswer),
+    };
+  }
+
+  it('a full uri names its document, and neither lookup runs', async () => {
+    const d = deps('file:///w/b/params.sldd', 'file:///w/a/params.sldd');
+    expect(await resolveNavSource('file:///w/plant.slx', REFERRER, d)).toBe('file:///w/plant.slx');
+    expect(d.scoped).not.toHaveBeenCalled();
+    expect(d.firstMatch).not.toHaveBeenCalled();
+  });
+
+  it('a bare name with a referrer takes the referrer-scoped answer, not the first match', async () => {
+    const d = deps('file:///w/b/params.sldd', 'file:///w/a/params.sldd');
+    expect(await resolveNavSource('params.sldd', REFERRER, d)).toBe('file:///w/b/params.sldd');
+    expect(d.scoped).toHaveBeenCalledWith('params.sldd', REFERRER);
+    expect(d.firstMatch).not.toHaveBeenCalled();
+  });
+
+  it('a scoped miss falls back to the first workspace match', async () => {
+    const d = deps(undefined, 'file:///w/a/params.sldd');
+    expect(await resolveNavSource('params.sldd', REFERRER, d)).toBe('file:///w/a/params.sldd');
+    expect(d.scoped).toHaveBeenCalledWith('params.sldd', REFERRER);
+    expect(d.firstMatch).toHaveBeenCalledWith('params.sldd');
+  });
+
+  it('a scoped lookup that fails falls back to the first workspace match', async () => {
+    // The tree's graph is a convenience here, not a precondition: a link must still open
+    // something when the graph could not be built.
+    const d = deps(new Error('graph build failed'), 'file:///w/a/params.sldd');
+    expect(await resolveNavSource('params.sldd', REFERRER, d)).toBe('file:///w/a/params.sldd');
+    expect(d.firstMatch).toHaveBeenCalledWith('params.sldd');
+  });
+
+  it('with no referrer there is no scope to prefer, so the first match is the answer', async () => {
+    const d = deps('file:///w/b/params.sldd', 'file:///w/a/params.sldd');
+    expect(await resolveNavSource('params.sldd', undefined, d)).toBe('file:///w/a/params.sldd');
+    expect(d.scoped).not.toHaveBeenCalled();
+    expect(d.firstMatch).toHaveBeenCalledWith('params.sldd');
+  });
+
+  it('with no scoped lookup supplied, a referrer changes nothing', async () => {
+    const firstMatch = vi.fn(async () => 'file:///w/a/params.sldd');
+    expect(await resolveNavSource('params.sldd', REFERRER, { firstMatch })).toBe('file:///w/a/params.sldd');
+    expect(firstMatch).toHaveBeenCalledWith('params.sldd');
+  });
+
+  it('nothing found anywhere is undefined', async () => {
+    const d = deps(undefined, undefined);
+    expect(await resolveNavSource('missing.sldd', REFERRER, d)).toBeUndefined();
   });
 });

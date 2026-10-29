@@ -1,0 +1,32 @@
+/* Copyright 2026 The MathWorks, Inc. */
+/* The webview page itself: the table views are one element filling the panel, so the page
+   is locked to the viewport, in the widgets' font and colours. The project page undoes the
+   lock (it is a document that scrolls; see PROJECT_PAGE_CSS). This used to come with the
+   view's theme sheet, which is now tokens only, because a theme has no business locking an
+   app's viewport. Imported between that sheet and vscode-theme.css, where it sat inside it. */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+  font-family: var(--dex-font-family);
+  font-size: var(--dex-font-size);
+  color: var(--dex-color-text);
+  background: var(--dex-bg-tertiary);
+}
+
+/* Light-DOM controls (the banners, the project page) under Windows high contrast: a border
+   that says "this is a control", and a focus ring in the system's own colour. */
+@media (forced-colors: active) {
+  button, [role="button"], [tabindex="0"] {
+    border: 1px solid ButtonText;
+  }
+  button:focus-visible, [role="button"]:focus-visible, [tabindex="0"]:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  input, select, textarea {
+    border: 1px solid ButtonText;
+  }
+}
