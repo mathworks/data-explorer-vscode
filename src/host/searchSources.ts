@@ -8,48 +8,32 @@
 // with the built-in Search view for panel real estate: it pops up, resolves, and
 // dismisses on accept.
 import * as vscode from 'vscode';
-import type { NameRecord, EntryKind } from './nameIndex.js';
-import { filterEntries } from './searchFilter.js';
+import { MAX_SEARCH_RESULTS, searchEntries, sortNameRecords, type SearchItem } from 'data-explorer-view/model';
+import type { NameRecord } from './nameIndex.js';
 import { themeIconFor } from './iconMap.js';
-
-// Per-kind dex icon id, mapped to a ThemeIcon via themeIconFor. Chosen to echo
-// how each kind renders elsewhere in the extension.
-const ICON_ID_BY_KIND: Record<EntryKind, string> = {
-  sldd: 'wsDefault',
-  mat: 'wsNumeric',
-  workspace: 'wsParameters',
-  block: 'wsSignal',
-};
-
-function iconIdForKind(kind: EntryKind): string {
-  return ICON_ID_BY_KIND[kind];
-}
 
 // A QuickPick item that carries its originating NameRecord so onDidAccept can
 // resolve the picked entry back to its source file + entry name.
 interface EntryItem extends vscode.QuickPickItem {
   entry: NameRecord;
+  revealName: string;
 }
 
-// Cap on how many matches we hand to the QuickPick at once. The QuickPick list
-// has NO virtual scrolling (unlike the table), so pushing the whole index — tens
-// of thousands of entries for a large data source — makes it open and filter
-// sluggishly. We do our own filtering on each keystroke and show at most this
-// many results; a broad query is truncated with a hint rather than dumped whole.
-const MAX_RESULTS = 500;
-
-function toItem(rec: NameRecord): EntryItem {
-  // A block's path goes in front of the file name, because with one row per block a
-  // model can answer a search with four hits all reading `Gain` and the path is what
-  // says which is which. Only when it adds something: a block in the root system has
-  // the path `Gain`, which would just repeat the label. The file name stays either
-  // way — it is the coarser fact, and the only one a non-block hit has.
-  const where = rec.blockPath && rec.blockPath !== rec.name ? rec.blockPath + ' · ' : '';
+// What each match says is view's (`searchItem`: the name, a block's path and the file, the icon
+// its kind shows, the name a pick reveals), so a search in an app reads as this one does. What is
+// VS Code's is the icon: view names one of its icons, and the QuickPick draws a ThemeIcon for it.
+//
+// Capped at MAX_SEARCH_RESULTS (500): the QuickPick list has NO virtual scrolling (unlike the
+// table), so pushing the whole index — tens of thousands of entries for a large data source —
+// makes it open and filter sluggishly. We do our own filtering on each keystroke and show at
+// most that many results; a broad query is truncated rather than dumped whole.
+function toItem(item: SearchItem): EntryItem {
   return {
-    label: rec.name,
-    description: where + rec.sourceLabel,
-    iconPath: themeIconFor(iconIdForKind(rec.kind)),
-    entry: rec,
+    label: item.label,
+    description: item.description,
+    iconPath: themeIconFor(item.iconId),
+    entry: item.entry,
+    revealName: item.revealName,
   };
 }
 
@@ -79,26 +63,23 @@ export async function searchDataSources(
 
   // Recompute the visible items for the current query. Empty query → empty list
   // (nothing shown until the user types). Otherwise case-insensitive substring
-  // match on the entry name and its source label, capped at MAX_RESULTS.
+  // match on the entry name and its source label, capped at MAX_SEARCH_RESULTS.
   const refresh = (): void => {
-    qp.items = filterEntries(records, qp.value, MAX_RESULTS).map(toItem);
+    qp.items = searchEntries(records, qp.value, MAX_SEARCH_RESULTS).map(toItem);
   };
 
   qp.onDidChangeValue(refresh);
   qp.onDidAccept(() => {
     const picked = qp.selectedItems[0];
     qp.hide();
-    if (picked) void reveal(picked.entry.sourceUri, picked.entry.selectName ?? picked.entry.name);
+    if (picked) void reveal(picked.entry.sourceUri, picked.revealName);
   });
   qp.onDidHide(() => qp.dispose());
 
   qp.busy = true;
   qp.show();
   try {
-    records = await listEntries();
-    records.sort(
-      (a, b) => a.name.localeCompare(b.name) || a.sourceLabel.localeCompare(b.sourceLabel),
-    );
+    records = sortNameRecords(await listEntries());
   } finally {
     qp.busy = false;
   }
