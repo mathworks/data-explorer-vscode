@@ -23,7 +23,7 @@ describe('a refused gesture, through the webview entry point', () => {
   }, 60_000);
 
   beforeEach(async () => {
-    if (dialog.hasAttribute('open')) dialog.hide();
+    if (dialog.hasAttribute('open')) dialog.close();
     await dialog.updateComplete;
   });
 

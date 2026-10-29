@@ -33,7 +33,7 @@ describe('the whole text of a summary Value, through the webview entry point', (
       new MessageEvent('message', { data: { type: 'setRows', docUri: 'file:///fx/m.mat', rows: [ROW], columns: ['Name', 'Value', 'DataType'], editable } }),
     );
     table._editingCell = null;
-    if (dialog.hasAttribute('open')) dialog.hide();
+    if (dialog.hasAttribute('open')) dialog.close();
     await table.updateComplete;
     posted.length = 0;
   };
@@ -80,7 +80,7 @@ describe('the whole text of a summary Value, through the webview entry point', (
     expect(editor()).toBeNull();
     expect(dialog.hasAttribute('open')).toBe(true);
     expect(dialog.shadowRoot.textContent).toContain('Cannot edit the Value of "v": it changed.');
-    dialog.hide();
+    dialog.close();
     await dblclick();
     await host({ type: 'editText', rowId: 'm/v', text: null });
     expect(editor()).toBeNull();
