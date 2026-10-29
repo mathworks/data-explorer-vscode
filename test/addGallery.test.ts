@@ -16,11 +16,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import '../src/view/widgets/tree-table/dex-add-gallery.js';
-import type { DexAddGallery } from '../src/view/widgets/tree-table/dex-add-gallery.js';
-import '../src/view/widgets/tree-table/dex-tree-table.js';
-import type { DexTreeTable, TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
-import { ADD_CATALOG, allTiles } from '../src/view/model/ids/addCatalog.js';
+import 'data-explorer-view/widgets/tree-table/dex-add-gallery.js';
+import type { DexAddGallery } from 'data-explorer-view/widgets/tree-table/dex-add-gallery.js';
+import 'data-explorer-view/widgets/tree-table/dex-tree-table.js';
+import type { DexTreeTable, TreeTableRow } from 'data-explorer-view/widgets/tree-table/dex-tree-table.js';
+import { ADD_CATALOG, allTiles } from 'data-explorer-view/model/ids/addCatalog.js';
 
 // The popover's geometry used to be two exported TS constants that both components interpolated
 // into their css`` templates. It is two custom properties in vscode-theme.css now — the

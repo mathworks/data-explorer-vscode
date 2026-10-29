@@ -24,7 +24,7 @@ import { unzipSync } from 'fflate';
 import { DataModel, DATA_PART_XML, findEntryObjectSpan } from 'data-explorer-core';
 import { scanChunkEntries, chunkEntryKey, decodeXmlText, entryKey } from '../src/host/chunkEntries.js';
 import { entryRecord } from '../src/host/entryOps.js';
-import { readSlddParts } from '../src/view/model/workspace/slddContent.js';
+import { readSlddParts } from 'data-explorer-view/model/workspace/slddContent.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

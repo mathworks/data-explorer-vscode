@@ -7,14 +7,14 @@
 // model, so later mutations don't alias it.
 //
 // It holds MANY items because a copy acts on every entry the selection resolves to
-// (view/model/actions/operands.ts). Each item records its OWN source section: those entries may
+// (data-explorer-view's src/model/actions/operands.ts). Each item records its OWN source section: those entries may
 // span sections, and a cut is LAZY — the source deletion is deferred to paste time, so
 // each item has to say where it must be deleted FROM. One shared section would delete
 // the wrong entry, or none.
 //
 // It stays a register distinct from the drag register and from the plain-text view's
 // copy: three independent stores, by design.
-import type { DropFacts } from '../view/model/actions/dropFacts.js';
+import type { DropFacts } from 'data-explorer-view/model/actions/dropFacts.js';
 
 export type ClipboardMode = 'cut' | 'copy';
 

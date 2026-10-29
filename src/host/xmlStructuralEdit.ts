@@ -22,7 +22,7 @@ import {
   entrySelectorOf,
   type EntrySelector,
 } from 'data-explorer-core';
-import { buildSectionRowId } from '../view/model/ids/sectionRowId.js';
+import { buildSectionRowId } from 'data-explorer-view/model/ids/sectionRowId.js';
 import {
   reselectAfterRemoval,
   removeChildFromModel,

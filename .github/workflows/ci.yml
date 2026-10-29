@@ -44,11 +44,6 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      # src/view is staged to become its own package, so it may import only itself,
-      # data-explorer-core and lit, and its model must compile without a DOM.
-      - name: View boundary
-        run: npm run check:view
-
       - name: Build (desktop + web)
         run: |
           npm run build

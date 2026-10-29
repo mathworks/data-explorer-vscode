@@ -9,7 +9,7 @@
 // DESCRIPTOR (source document + per-item section/class/kind, NOT the payloads) to
 // every webview so each can predict the drop live (dropDecision) on dragover.
 
-import type { DropFacts } from '../view/model/actions/dropFacts.js';
+import type { DropFacts } from 'data-explorer-view/model/actions/dropFacts.js';
 
 // One dragged entry: its serialized payload (for the eventual paste), the section
 // it was dragged FROM, and the display facts the webview needs to render feedback

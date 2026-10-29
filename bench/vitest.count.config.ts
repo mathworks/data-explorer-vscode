@@ -26,7 +26,9 @@ export default defineConfig({
     fileParallelism: false,
     pool: 'forks',
     execArgv: ['--expose-gc'],
-    server: { deps: { inline: [/data-explorer-core/] } },
+    // data-explorer-view too: its modules import core, and a view left to Node would load
+    // Node's copy of core beside the inlined one — two DataModels, and a mock on only one.
+    server: { deps: { inline: [/data-explorer-core/, /data-explorer-view/] } },
     // The switch the mock in scenarios.bench.ts reads. Inlining alone only makes the
     // mock POSSIBLE; this is what turns it on.
     env: { BENCH_COUNT_MOCK: '1' },

@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { dirname, join } from 'node:path';
 import { buildProjectPage, isProjectFile, isTomlProjectFile, parseProject, projectFallbackName } from 'data-explorer-core';
-import { warningBanner } from '../../src/view/model/rows/parseWarnings.js';
+import { warningBanner } from 'data-explorer-view/model/rows/parseWarnings.js';
 import { detectMsp, MSP_CONFIG } from '../../src/host/mspProject.js';
 import { expectGolden, fakeFile, fixtureFiles, nameOf, REPO } from './fixtures.js';
 import { readProjectStore, readTextIfPresent } from './nodeReads.js';

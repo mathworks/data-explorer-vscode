@@ -12,8 +12,8 @@
 //    drag send what they send there, and the file's one rule ('') is where a paste or a drop on
 //    any row, or on none, lands. The host's half is matClipboard.test.ts, in real VS Code.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
-import '../src/view/widgets/tree-table/dex-add-gallery.js';
-import { allTiles } from '../src/view/model/ids/addCatalog.js';
+import 'data-explorer-view/widgets/tree-table/dex-add-gallery.js';
+import { allTiles } from 'data-explorer-view/model/ids/addCatalog.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

@@ -16,8 +16,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { copyEntriesToClipboard } from '../src/host/clipboardAction.js';
 import { getClipboard, clearClipboard, setClipboard } from '../src/host/clipboard.js';
-import { getModel, findNode, invalidate } from '../src/view/model/workspace/SlddModel.js';
-import { buildRows } from '../src/view/model/rows/rowBuilder.js';
+import { getModel, findNode, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
 
 const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');
 

@@ -16,7 +16,7 @@
 //
 // Kept vscode-free, so it is unit-testable with the real clipboard (test/clipMarks.test.ts).
 import { getClipboard } from './clipboard.js';
-import { clipMarkKey, splitClipMarkKey, type ClipMark } from '../view/model/rows/rowStamp.js';
+import { clipMarkKey, splitClipMarkKey, type ClipMark } from 'data-explorer-view/model/rows/rowStamp.js';
 
 /**
  * The mark the rows of `docUri` should carry: every entry the clipboard holds from that

@@ -8,9 +8,9 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, invalidate } from '../src/view/model/workspace/SlddModel.js';
-import { buildRows } from '../src/view/model/rows/rowBuilder.js';
-import { findNode } from '../src/view/model/workspace/SlddModel.js';
+import { getModel, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
+import { findNode } from 'data-explorer-view/model/workspace/SlddModel.js';
 import { pasteEntries } from '../src/host/structuralEdit.js';
 
 const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');

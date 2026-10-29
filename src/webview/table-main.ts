@@ -1,10 +1,10 @@
 // Copyright 2026 The MathWorks, Inc.
-import '../view/theme/global.css';
+import 'data-explorer-view/theme/global.css';
 import './vscode-theme.css';
-import '../view/widgets/tree-table/dex-tree-table.js';
-import '../view/widgets/context-menu/dex-context-menu.js';
-import '../view/widgets/error-dialog/dex-error-dialog.js';
-import '../view/widgets/variable-editor/dex-variable-editor.js';
+import 'data-explorer-view/widgets/tree-table/dex-tree-table.js';
+import 'data-explorer-view/widgets/context-menu/dex-context-menu.js';
+import 'data-explorer-view/widgets/error-dialog/dex-error-dialog.js';
+import 'data-explorer-view/widgets/variable-editor/dex-variable-editor.js';
 import { installMatrixOpen } from './matrixOpen.js';
 import { renderBanners, renderError } from './banners.js';
 import {
@@ -14,15 +14,15 @@ import {
   spliceEntryRows,
   insertEntryRows,
   mergeChildRows,
-} from '../view/model/actions/rowUpdates.js';
-import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from '../view/widgets/tree-table/menuItems.js';
-import { dropDecision, type DragMode, type DropTarget } from '../view/model/actions/dropDecision.js';
-import { sectionRowIdOf } from '../view/model/actions/operands.js';
+} from 'data-explorer-view/model/actions/rowUpdates.js';
+import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from 'data-explorer-view/widgets/tree-table/menuItems.js';
+import { dropDecision, type DragMode, type DropTarget } from 'data-explorer-view/model/actions/dropDecision.js';
+import { sectionRowIdOf } from 'data-explorer-view/model/actions/operands.js';
 import { linkRoute } from './linkRoute.js';
-import type { ContextMenuItem } from '../view/widgets/context-menu/dex-context-menu.js';
-import type { SectionRule } from '../view/model/actions/sectionRules.js';
+import type { ContextMenuItem } from 'data-explorer-view/widgets/context-menu/dex-context-menu.js';
+import type { SectionRule } from 'data-explorer-view/model/actions/sectionRules.js';
 import type { DragDescriptor } from '../host/dragState.js';
-import { isSectionRowId, sectionNameFromRowId, WHOLE_FILE_SECTION } from '../view/model/ids/sectionRowId.js';
+import { isSectionRowId, sectionNameFromRowId, WHOLE_FILE_SECTION } from 'data-explorer-view/model/ids/sectionRowId.js';
 import type { HostToTableMessage } from '../common/protocol.js';
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };

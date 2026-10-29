@@ -63,9 +63,9 @@
 // that. A model force-opened in VS Code's own text editor and edited is a dirty document too,
 // and the rule holds for it unchanged: scan or parse the buffer, cache nothing.
 import { isMatFile, isModelFile, isSlddFile, parseModel, scanMat } from 'data-explorer-core';
-import { basename } from '../view/model/ids/pathUtil.js';
+import { basename } from 'data-explorer-view/model/ids/pathUtil.js';
 import { namesFromMat, namesFromSldd, namesFromSlx, type NameRecord } from './nameExtract.js';
-import { scanSldd } from '../view/model/workspace/slddContent.js';
+import { scanSldd } from 'data-explorer-view/model/workspace/slddContent.js';
 import {
   cheapOne,
   parsedModelOf,

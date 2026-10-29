@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
 import { DataModel, parseBinarySlddParts, serializeEntryToXml, findEntryObjectSpan } from 'data-explorer-core';
 import { captureBaseline, computeModified, clearBaseline } from '../src/host/slddBaseline.js';
-import { buildRows } from '../src/view/model/rows/rowBuilder.js';
+import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
 
 const bytes = readFileSync(
   fileURLToPath(new URL('./parity/artifacts/binary/params.sldd', import.meta.url)),

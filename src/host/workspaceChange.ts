@@ -8,7 +8,7 @@
 // extension's own watcher (see test-integration/suite/forgetOnDiskChange.test.ts).
 import * as vscode from 'vscode';
 import { reindexFile } from './nameIndex.js';
-import { invalidate } from '../view/model/workspace/SlddModel.js';
+import { invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
 import { forgetUnseenChange } from './sourceReads.js';
 
 /** Follow `watcher`'s change events; `refreshAll` rebuilds what is drawn from the folder. */
