@@ -90,7 +90,7 @@ describe('clicking a component row', () => {
     await import('../src/webview/project-main.js');
   }, 60_000);
 
-  beforeEach(() => {
+  beforeEach(async () => {
     window.dispatchEvent(
       new MessageEvent('message', {
         data: {
@@ -104,12 +104,15 @@ describe('clicking a component row', () => {
         },
       }),
     );
+    // The page is <dex-project-page>'s, in its shadow root, drawn after an update.
+    await (document.querySelector('dex-project-page') as HTMLElement & { updateComplete: Promise<boolean> }).updateComplete;
     posted.length = 0;
   });
 
   function click(path: string): void {
     document
-      .querySelector(`[data-open="${path}"]`)!
+      .querySelector('dex-project-page')!
+      .shadowRoot!.querySelector(`[data-open="${path}"]`)!
       .dispatchEvent(new MouseEvent('click', { bubbles: true }));
   }
 
