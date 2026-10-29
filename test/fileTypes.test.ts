@@ -317,7 +317,7 @@ describe('no consumer keeps its own copy of the list', () => {
     'src/extension.ts',
     'src/host/SectionsTreeProvider.ts',
     'src/host/usageGraph.ts',
-    // usageCells.ts is deliberately NOT here: it neither discovers nor classifies a
+    // view's usageCells.ts is deliberately NOT here: it neither discovers nor classifies a
     // file. It hands core's `buildUsageIndex` the bytes usageGraph.ts read, and core
     // dispatches on the filename with its own (case-insensitive) kind tests — so a
     // rule about this extension's globs and predicates has nothing to say about it.

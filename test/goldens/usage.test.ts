@@ -6,17 +6,16 @@
 // Separate from table.json because its answer is not the file's alone. A dictionary's Usage cell
 // names the blocks that use each entry, and those blocks are in the models beside it, so the cell
 // depends on the folder the file was opened in. Each file here is opened in its own fixture folder
-// as the workspace, and filled the way usageGraph.ts fills it — the scoped summaries
-// (usageSources.ts → usagePlan.planSummaries), the graph over them, and the provider's annotation —
-// which is the vscode half copied here, around functions that are all called, not copied.
+// as the workspace, and filled the way usageGraph.ts fills it: through view's `UsageGraphs` — the
+// scoped summaries (core's planSummaries), the graph over them, and the annotation — over inputs
+// that list the folder as the workspace, with the tab in it already.
 //
 // A compressed dictionary has no usage.json: its editable view fills no Usage column at all
 // (BinarySlddEditorProvider.ts:1507), so there is nothing past table.json to pin.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DataModel, isGraphPath, newSourceCache, planSummaries } from 'data-explorer-core';
-import { LAZY_ROW_BUDGET } from 'data-explorer-view/model';
+import { DataModel, isGraphPath, newSourceCache } from 'data-explorer-core';
+import { LAZY_ROW_BUDGET, UsageGraphs } from 'data-explorer-view/model';
 import { clearClipboard } from '../../src/host/clipboard.js';
-import { annotateModelViewRows, annotateVariableRows, buildUsageGraphFromSummaries } from '../../src/host/usageCells.js';
 import { bytesOf, expectGolden, fakeFile, filesUnder, fixtureFolders, nameOf } from './fixtures.js';
 import { nodeReader } from './nodeReads.js';
 import { isModelFixture, openTable, routeOf } from './views.js';
@@ -35,23 +34,26 @@ describe('golden Usage cells', { timeout: 60_000 }, () => {
   for (const folder of fixtureFolders()) {
     // The files the usage graph reads (GRAPH_GLOB): no projects, which define no variables.
     const graphFiles = filesUnder(folder).filter((rel) => isGraphPath(rel));
-    // The workspace's own reads, shared by every file in it, as one window shares its cache.
-    const cache = newSourceCache();
+    // The workspace's own reads and graphs, shared by every file in it, as one window shares its
+    // cache and its usage graphs.
     const files = graphFiles.map(fakeFile);
+    const graphs = new UsageGraphs({
+      // No tab is outside the folder, so the inputs never change and there is nothing to union:
+      // usageGraph.ts's `candidates` with `findFiles` answering the folder.
+      inputs: { inputsKey: () => '', candidates: async () => files, readerFor: (listed) => nodeReader(listed) },
+      cache: newSourceCache(),
+    });
     for (const rel of graphFiles) {
       const route = routeOf(nameOf(rel), new Uint8Array(bytesOf(rel))).kind;
       if (route === 'zip' || route === 'none') continue;
       it(rel, async () => {
         const view = await openTable(rel, LAZY_ROW_BUDGET);
         try {
-          // mirrors usageGraph.ts:138 buildGraph (findFiles first, then the tab, which is in the
-          // folder already) and usageSources.ts:33 scopedSummaries.
-          const graph = buildUsageGraphFromSummaries(await planSummaries(cache, nodeReader(files), files, view.uriString));
-          // The provider's filler: a model view's (usageGraph.ts:214 annotateModelRows) on the
+          // The provider's filler: a model view's (usageGraph.ts annotateModelRows) on the
           // read-only view of a model (BinaryEditorProvider.ts:260), and the data view's
-          // (usageGraph.ts:185 annotateDataRows) on every other view that fills the column.
-          if (route === 'readonly' && isModelFixture(rel)) annotateModelViewRows(view.uriString, view.rows, graph);
-          else annotateVariableRows(view.uriString, view.rows, graph);
+          // (usageGraph.ts annotateDataRows) on every other view that fills the column.
+          if (route === 'readonly' && isModelFixture(rel)) await graphs.annotateModelRows(view.uriString, view.rows);
+          else await graphs.annotateDataRows(view.uriString, view.rows);
           const cells: Record<string, unknown> = {};
           for (const row of view.rows) {
             // An empty cell is left out: its row is in table.json, so absence here says the fill

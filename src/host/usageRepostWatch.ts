@@ -1,46 +1,38 @@
 // Copyright 2026 The MathWorks, Inc.
-// The vscode half of usageRepost.ts: the watcher that tells the repost bus a model was created or
-// deleted, and the subscription a data tab takes out on it.
+// The vscode half of the Usage repost: the watcher that tells view's repost hub a model was created
+// or deleted, and the subscription a data tab takes out on it.
 //
-// The watcher lives here, beside the bus, rather than in extension.ts beside the one that keeps
-// the tree in sync. Two reasons. It exists only while a tab that fills a data file's Usage column
-// is open — created by the first subscription and disposed with the last, together with any
-// repost still pending — so a window with no such tab pays nothing for it. And everything from
-// the disk event to the repost is then one module's, so the integration suite (which bundles its
-// own copy of each src module, and so cannot see the running extension's state) drives the real
-// path end to end: test-integration/suite/usageRepostOnModelCreate.test.ts.
+// The bus (one repost per tab per burst of model changes, 300 ms trailing, a busy tab waited for)
+// and its lifecycle (the watch created by the first subscription and disposed with the last,
+// together with any repost still pending, so a window with no such tab pays nothing for it) are
+// view's `createUsageRepostHub`. What is VS Code's is the watch: a `FileSystemWatcher` on the
+// supported files, whose creates and deletes the hub narrows to models.
+//
+// The watcher lives here rather than in extension.ts beside the one that keeps the tree in sync,
+// so everything from the disk event to the repost is one module's, and the integration suite
+// (which bundles its own copy of each src module, and so cannot see the running extension's
+// state) drives the real path end to end: test-integration/suite/usageRepostOnModelCreate.test.ts.
 //
 // Create and delete only. A model CHANGED on disk can move a usage edge too (MATLAB saving it with
 // a new dictionary link, or a block reading a different variable), and does not repost an open
 // data tab yet.
 import * as vscode from 'vscode';
+import { createUsageRepostHub, type WatchModelSet } from 'data-explorer-view/model';
 import { SUPPORTED_GLOB } from '../common/fileTypes.js';
-import { invalidateUsageGraph } from './usageGraph.js';
-import { createUsageRepostBus, repostsUsageOn, type UsageRepostBus } from './usageRepost.js';
+import { usageGraphs } from './usageGraph.js';
 
-let live: { bus: UsageRepostBus; watcher: vscode.Disposable; tabs: number } | null = null;
-
-function start(): { bus: UsageRepostBus; watcher: vscode.Disposable; tabs: number } {
-  const bus = createUsageRepostBus();
-  // The same glob as extension.ts's watcher, so the two see the same events, then narrowed to
-  // the ones that can change a Usage cell.
+// The same glob as extension.ts's watcher, so the two see the same events; the hub keeps the
+// ones that can change a Usage cell.
+const watchModelSet: WatchModelSet = (changed) => {
   const watcher = vscode.workspace.createFileSystemWatcher(SUPPORTED_GLOB);
-  const onModelSetChange = (uri: vscode.Uri): void => {
-    if (!repostsUsageOn(uri.path)) return;
-    // Dropped here as well as by extension.ts's refreshAll, so that what the repost reads does
-    // not depend on another watcher's listener having run first. Cheap: the per-file summaries
-    // survive it (see invalidateUsageGraph).
-    invalidateUsageGraph();
-    bus.schedule();
-  };
-  const created = watcher.onDidCreate(onModelSetChange);
-  const deleted = watcher.onDidDelete(onModelSetChange);
-  return {
-    bus,
-    watcher: vscode.Disposable.from(created, deleted, watcher),
-    tabs: 0,
-  };
-}
+  const onCreateOrDelete = (uri: vscode.Uri): void => changed(uri.path);
+  return vscode.Disposable.from(watcher.onDidCreate(onCreateOrDelete), watcher.onDidDelete(onCreateOrDelete), watcher);
+};
+
+// The window's hub. A change drops the window's usage graphs before the reposts read them — here
+// as well as in extension.ts's refreshAll, so that what a repost reads does not depend on another
+// watcher's listener having run first.
+const hub = createUsageRepostHub({ watch: watchModelSet, graphs: usageGraphs });
 
 /**
  * Call `repost` when a model is created or deleted in the workspace, once per burst.
@@ -48,25 +40,11 @@ function start(): { bus: UsageRepostBus; watcher: vscode.Disposable; tabs: numbe
  * For a tab that fills a DATA file's Usage column — a dictionary or a `.mat`. A model's own tab
  * does not need it: its Usage is its own blocks and its own workspace, which no other model can
  * change (core's `usageScope`). `busy`, when given, defers the repost while it answers true; see
- * usageRepost.ts.
+ * view's usageRepost.ts.
  *
  * Dispose it with the tab.
  */
 export function subscribeUsageRepost(repost: () => void, busy?: () => boolean): vscode.Disposable {
-  if (!live) live = start();
-  const owner = live;
-  owner.tabs++;
-  const sub = owner.bus.subscribe(repost, busy);
-  let disposed = false;
-  return new vscode.Disposable(() => {
-    if (disposed) return;
-    disposed = true;
-    sub.dispose();
-    owner.tabs--;
-    if (owner.tabs === 0 && live === owner) {
-      owner.bus.dispose();
-      owner.watcher.dispose();
-      live = null;
-    }
-  });
+  const sub = hub.subscribe(repost, busy);
+  return new vscode.Disposable(() => sub.dispose());
 }

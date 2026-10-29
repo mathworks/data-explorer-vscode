@@ -13,8 +13,8 @@
 // pointed at, degrading the cell it was clicked from for the rest of the session.
 //
 // This has to be an integration test. The overwrite rule itself is pinned in vitest
-// (test/usageCells.test.ts, test/usageEndToEnd.test.ts), but the two functions that
-// WIRE it to the editors — annotateDataRows and annotateModelRows in usageGraph.ts —
+// (test/usageCells.test.ts here, view's test/usageEndToEnd.test.ts), but the two functions
+// that WIRE it to the editors — annotateDataRows and annotateModelRows in usageGraph.ts —
 // import `vscode` and are excluded from that suite, so nothing measured them.
 // Everything below goes through them.
 //

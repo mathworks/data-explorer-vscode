@@ -30,11 +30,11 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   annotateModelViewRows,
+  buildRows,
   buildUsageGraph,
+  parseNavTarget,
   type RawSource,
-} from '../src/host/usageCells.js';
-import { parseNavTarget } from '../src/host/navTarget.js';
-import { buildRows } from 'data-explorer-view/model';
+} from 'data-explorer-view/model';
 import { getModelFromBytes } from 'data-explorer-view/host';
 import { DexTreeTable, defineTreeTable, type TreeTableRow } from 'data-explorer-view/tree-table';
 

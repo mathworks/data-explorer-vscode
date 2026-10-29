@@ -10,16 +10,21 @@
 //   workspace:<paramName>@<source>  block row -> a model-workspace param
 //   <paramName>@<source>            block row -> a dictionary/MAT variable
 // <source> is a full uriString in every Usage cell, because the host writes those
-// from the workspace graph (usageCells.ts), whose sources are keyed by uri. A bare
+// from the workspace graph (view's usageCells.ts), whose sources are keyed by uri. A bare
 // basename still arrives in two places: a Model Reference or External Data link,
 // which is a file name as Simulink recorded it (see handleNavigate), and core's own
 // block -> parameter link `<param>@<dictionary name>`, which the host replaces with
 // the graph's and which survives only when that fill failed (rowBuilder.ts). A bare
 // name is resolved as the tree resolves it, preferring the referrer's own project or
-// folder (navTarget.resolveNavSource).
+// folder (view's resolveNavSource).
 import * as vscode from 'vscode';
-import { parseNavTarget, parseFileTarget, resolveNavSource, type ScopedResolve } from './navTarget.js';
-import { srcIdToUriString } from 'data-explorer-view/model';
+import {
+  parseNavTarget,
+  parseFileTarget,
+  resolveNavSource,
+  srcIdToUriString,
+  type ScopedResolve,
+} from 'data-explorer-view/model';
 
 export { parseNavTarget, parseFileTarget };
 

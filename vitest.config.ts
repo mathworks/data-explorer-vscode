@@ -39,11 +39,10 @@ export default defineConfig({
         'src/host/searchSources.ts',
         // The reading half of the shared source cache; the cache itself is core's.
         'src/host/sourceReads.ts',
+        // The vscode half of the Usage column's graphs; the graphs themselves are view's UsageGraphs.
         'src/host/usageGraph.ts',
-        // The watcher half of the Usage repost; the bus and its timing are usageRepost.ts.
+        // The watcher half of the Usage repost; the bus, its timing and its lifecycle are view's.
         'src/host/usageRepostWatch.ts',
-        // The Usage question over that cache; which files it needs is core's planSummaries.
-        'src/host/usageSources.ts',
         // The workspace watcher's change handler; the forget decision is core's forgetUnseenWrite.
         'src/host/workspaceChange.ts',
         'src/host/navigate.ts',
