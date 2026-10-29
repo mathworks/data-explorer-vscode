@@ -727,14 +727,19 @@ describe('the table and the gallery together', () => {
     expect(cssText).toContain(".columns-button[aria-expanded='true']");
 
     // The pressed rule carries a border as well as a surface, because in Light Modern the
-    // surface alone (#E8E8E8 selection over #F2F2F2 hover) is four percent of grey.
-    expect(cssText).toContain('--vscode-inputOption-activeBorder');
+    // surface alone (#E8E8E8 selection over #F2F2F2 hover) is four percent of grey. The widget
+    // reads it as --dex-border-color-active, which vscode-theme.css maps onto inputOption's.
+    const pressed = /\.add-button\[aria-expanded='true'\]\s*\{([^}]*)\}/.exec(cssText);
+    expect(pressed, 'no pressed rule').not.toBeNull();
+    expect(pressed![1]).toMatch(/border-color:\s*var\(--dex-border-color-active\b/);
+    expect(THEME_CSS).toMatch(/--dex-border-color-active:\s*var\(--vscode-inputOption-activeBorder\b/);
     // And the surface is NOT taken from that same group: inputOption.activeBackground is
     // registered `transparent` on the high-contrast themes, where a var() fallback therefore
     // never fires and the button would lose its only cue. Cheap to write, invisible to review,
     // and exactly the kind of regression a browser harness cannot catch either — the harness
     // leaves the HC token undefined, so the trap would measure as though it worked.
     expect(cssText).not.toContain('--vscode-inputOption-activeBackground');
+    expect(THEME_CSS).not.toContain('--vscode-inputOption-activeBackground');
 
     // And the attribute is a live answer on both, not decoration on one.
     const columns = el.shadowRoot!.querySelector('.columns-button') as HTMLElement;

@@ -1,5 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
-import 'data-explorer-view/theme/global.css';
+import 'data-explorer-view/theme.css';
+import './webview-page.css';
 import './vscode-theme.css';
 import { defineTreeTable } from 'data-explorer-view/widgets/tree-table/dex-tree-table.js';
 import { defineContextMenu } from 'data-explorer-view/widgets/context-menu/dex-context-menu.js';

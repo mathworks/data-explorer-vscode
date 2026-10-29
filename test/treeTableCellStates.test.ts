@@ -288,23 +288,30 @@ describe('the stylesheet spends each channel on one job', () => {
     const body = css.slice(at, css.indexOf('}', at)).replace(/\s+/g, ' ');
     expect(body).toMatch(/background:/);
     expect(body).toMatch(/(^|[;{]\s*)color\s*:/);
-    // Through the token vscode-theme.css declares BESIDE the surface, and through a fallback.
-    // Beside the surface because that is the only place the two can be switched together: a
-    // light or dark theme now takes editor.selectionBackground (a blue) with
-    // editor.selectionForeground, the high-contrast themes list.activeSelection*, and a rule
-    // that read list.activeSelectionForeground from here would have taken that colour's
-    // registry default — WHITE — onto the pale blue surface. The fallback is the ink this all
+    // Through the token vscode-theme.css declares BESIDE the surface. Beside the surface because
+    // that is the only place the two can be switched together: a light or dark theme now takes
+    // editor.selectionBackground (a blue) with editor.selectionForeground, the high-contrast
+    // themes list.activeSelection*, and a rule that read list.activeSelectionForeground from here
+    // would have taken that colour's registry default — WHITE — onto the pale blue surface.
+    expect(body).toMatch(/--dex-row-ink: var\(--dex-selection-fg, [^;]+\)/);
+    expect(body).toMatch(/(^|[;{]\s*)color: var\(--dex-row-ink, [^;]+\)/);
+    // The widget's own fallback is the view's light-theme ink, for a page with no theme sheet,
+    // and it is unreachable here: vscode-theme.css declares the token in every theme kind, as a
+    // VS Code colour falling back to --vscode-foreground. That fallback is the ink this all
     // replaces, and it is not optional: both selection foregrounds are registered NULL in some
     // variant (hcDark/hcLight for the list one, light/dark for the editor one), so an
-    // unfallbacked read is the normal path into a broken one.
-    expect(body).toContain('var(--dex-selection-fg, var(--vscode-foreground))');
-    // The INK declarations only. The surface keeps a literal fallback on purpose — that is
-    // --dex-color-accent-bg's business, and the theme trap behind it is pinned on
-    // --dex-selection-bg in vscodeThemeTokens.test.ts.
-    const ink = body.match(/(--dex-row-ink|[;{]\s*color)\s*:[^;]*/g) ?? [];
-    expect(ink.length).toBe(2);
-    for (const decl of ink) {
-      expect(decl, 'a selected row must not hard-code its ink').not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+    // unfallbacked read is the normal path into a broken one. (vscodeThemeTokens.test.ts pins
+    // that every declaration of the token reads the theme.)
+    const theme = readFileSync(resolve('src/webview/vscode-theme.css'), 'utf8').replace(
+      /\/\*[\s\S]*?\*\//g,
+      '',
+    );
+    const inks = [...theme.matchAll(/--dex-selection-fg:\s*([^;]*);/g)].map((m) =>
+      m[1].replace(/\s+/g, ' ').trim(),
+    );
+    expect(inks.length).toBeGreaterThan(0);
+    for (const ink of inks) {
+      expect(ink, 'the selection ink must fall back to the foreground').toMatch(/var\(--vscode-foreground\)\)$/);
     }
   });
 
@@ -320,7 +327,7 @@ describe('the stylesheet spends each channel on one job', () => {
     // shape this file already carries three examples of. So the percentages are compared
     // rather than trusted.
     const sel = sheet().indexOf('tr.data-row.selected {');
-    const rowMix = /--dex-color-text-muted:\s*color-mix\(\s*in srgb,\s*var\(--dex-row-ink\)\s*(\d+)%/.exec(
+    const rowMix = /--dex-color-text-muted:\s*color-mix\(\s*in srgb,\s*var\(--dex-row-ink(?:,[^)]*)?\)\s*(\d+)%/.exec(
       sheet().slice(sel),
     );
     expect(rowMix, 'the selected row does not redeclare --dex-color-text-muted').not.toBeNull();

@@ -270,6 +270,83 @@
      loaded still lays the popover out. */
   --dex-add-gallery-inset: 8px;
   --dex-add-gallery-min-width: 300px;
+
+  /* EVERY token the view's widgets read is declared in this file, the ones below included, and
+     vscodeThemeTokens.test.ts holds it to that against the installed view. The widgets fall back
+     to the light theme's literals and the view's theme.css declares its own light/dark/HC sets,
+     and neither may decide anything a VS Code user sees: a token left out here would render
+     theme.css's value, or the widget's light literal, in every VS Code theme.
+
+     Each one below replaced a var(--vscode-…) the widget used to read itself, and maps onto
+     exactly that variable and that fallback chain, so every theme renders what it rendered
+     before — including a theme where the variable is undefined, which takes the same fallback
+     it always did. */
+
+  /* The pressed Add/Columns button's border. inputOption.activeBorder is VS Code's own "this
+     toggle is on" colour — #005FB8 light, #2488DB dark, contrastBorder on both HC themes, i.e.
+     never invisible. Only the BORDER comes from that group, deliberately:
+     inputOption.activeBackground is registered fully transparent on the HC themes, and a
+     registered value satisfies var() — so taking the surface from it would hand HC a pressed
+     button with no surface at all and no fallback to rescue it, which is the one place this cue
+     is least affordable. The surface is --dex-bg-active, the selection surface. */
+  --dex-border-color-active: var(--vscode-inputOption-activeBorder, var(--dex-color-accent, #0078d4));
+  /* The tooltip that trails a dragged row: the editor's hover widget. */
+  --dex-tooltip-fg: var(--vscode-editorHoverWidget-foreground, #fff);
+  --dex-tooltip-bg: var(--vscode-editorHoverWidget-background, #252526);
+  --dex-tooltip-border: var(--vscode-editorHoverWidget-border, #454545);
+  --dex-color-progress: var(--vscode-progressBar-background, var(--dex-color-accent, #0e70c0));
+  /* The table's Status "Modified": the same theme colour as the sections tree's Modified badge
+     (DECORATIONS.modified), so "modified" is one colour on both surfaces. The fallback is
+     reached only where the colour is unregistered: the built-in git extension contributes it,
+     so it is absent when that extension is disabled and in VS Code for the Web. */
+  --dex-color-modified: var(--vscode-gitDecoration-modifiedResourceForeground, #b45309);
+
+  /* The project page (PROJECT_PAGE_CSS). Its text, page, borders, cards, hover and focus ring
+     read the tokens above, each of which maps onto the colour the page used to read directly. */
+  --dex-color-link: var(--vscode-textLink-foreground);
+  --dex-input-fg: var(--vscode-input-foreground, var(--vscode-foreground));
+  --dex-input-bg: var(--vscode-input-background, var(--vscode-editor-background));
+  --dex-input-border: var(--vscode-input-border, var(--vscode-panel-border));
+  /* The page used to `inherit` here, i.e. take the field's own ink; --dex-input-fg is that ink. */
+  --dex-input-placeholder-fg: var(--vscode-input-placeholderForeground, var(--dex-input-fg));
+  --dex-match-highlight-bg: var(--vscode-editor-findMatchHighlightBackground, rgba(234,92,0,.33));
+  /* The same palette as the table views' warning banner (BANNERS_HTML). */
+  --dex-warning-fg: var(--vscode-inputValidation-warningForeground, var(--vscode-foreground));
+  --dex-warning-bg: var(--vscode-inputValidation-warningBackground, rgba(255,190,60,0.12));
+  --dex-warning-border: var(--vscode-inputValidation-warningBorder, #b89500);
+  --dex-tag-bg: var(--vscode-badge-background, var(--vscode-editorWidget-background));
+  --dex-tag-fg: var(--vscode-badge-foreground, var(--vscode-foreground));
+
+  /* Not colours VS Code has a name for: the values these webviews have always rendered, stated
+     here so that the view's theme.css, which is free to change them for other apps, cannot.
+     --dex-bg-badge is the filter bar chip's wash, measured at exactly this value (see
+     columnFilterTokens.test.ts); --dex-border-color-ultralight is read only by the table's
+     unused light style. */
+  --dex-bg-badge: rgba(128, 128, 128, 0.18);
+  --dex-border-color-ultralight: rgba(0, 0, 0, 0.05);
+  --dex-row-height: 28px;
+  --dex-matrix-max-height: 320px;
+  --dex-matrix-max-width: 640px;
+
+  /* The shade the table's columns slide under once its frozen Name column holds content back:
+     one whole box-shadow layer, no var() in it — one unusable value invalidates the table's
+     whole box-shadow and takes the column's edge line down with it. Per theme kind, below. */
+  --dex-frozen-shade: 8px 0 6px -3px rgba(0, 0, 0, 0.28);
+}
+
+/* VS Code puts these classes on the webview's body. Dark themes get a heavier, wider shade and
+   still end up with the subtler band: black over a near-black editor background has barely any
+   room to darken it, so what contrast there is has to come from covering more ground. High
+   contrast wants no shade at all — a hard line is the idiom there — so the layer stays and only
+   turns transparent, keeping the layer count, and with it the transition, intact. HC Light's
+   body carries vscode-high-contrast too, so the second block covers both HC themes; the spread
+   stays at minus half the blur in all three (see dex-tree-table.ts). */
+body.vscode-dark {
+  --dex-frozen-shade: 11px 0 8px -4px rgba(0, 0, 0, 0.7);
+}
+
+body.vscode-high-contrast {
+  --dex-frozen-shade: 0 0 0 0 transparent;
 }
 
 /* A selected row is BLUE on every ordinary light or dark theme — the maintainer's ask
