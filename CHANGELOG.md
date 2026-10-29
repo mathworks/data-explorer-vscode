@@ -2,6 +2,10 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## [1.47.1] — 2026-10-29
+
+- Bug fixes.
+
 ## [1.47.0] — 2026-10-29
 
 - Bug fixes.
