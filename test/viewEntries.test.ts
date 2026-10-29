@@ -96,4 +96,12 @@ describe('data-explorer-view is imported through its entries only', () => {
     const deep = ofView.filter(({ specifier }) => !ENTRIES.has(specifier) && !ICON.test(specifier));
     expect(deep.map(({ file, line, specifier }) => `${file}:${line} ${specifier}`)).toEqual([]);
   });
+
+  // `/icon-assets` names every icon as `new URL('…/<id>.svg', import.meta.url)`, which vite would
+  // copy into dist/webview/assets under hashed names (and inline the small ones into the bundle),
+  // beside the icons/ folder copy:icons already ships and setIconBase points at: every icon twice.
+  it('leaves the icons-as-bundle-assets entry out: the folder ships as files', () => {
+    const assets = ofView.filter(({ specifier }) => specifier === `${VIEW}/icon-assets`);
+    expect(assets.map(({ file, line }) => `${file}:${line}`)).toEqual([]);
+  });
 });
