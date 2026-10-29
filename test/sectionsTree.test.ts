@@ -77,7 +77,7 @@ describe('a textual dictionary’s references, through the reader that ships', (
     // truncated dictionary is a file the read could not recover, which this host treats as a
     // failure rather than as an empty dictionary (slddContent.ts). Every workspace-wide caller
     // catches — the cheap tier answers an empty artifact for it, so the tree still lists the file
-    // with no edges (structuralIndex.test.ts pins that over a folder pass) — and the one caller
+    // with no edges (view's graphSources.test.ts pins that over a folder pass) — and the one caller
     // that shows a single file turns it into the "Failed to parse" banner instead of a table with
     // no rows.
     expect(() => refsOf(bytes('{ "Dictionary References": [oops }'))).toThrow();

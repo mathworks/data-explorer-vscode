@@ -4,15 +4,14 @@
 // tables.test.ts for why these exist): the relationship tree expanded all the way down, one
 // `hierarchy.json` per folder, under the folder's own snapshot directory.
 //
-// The tree is built the way SectionsTreeProvider builds it — every supported file in the folder
-// through the shared cache's cheap tier (`graphSourcesOf`) into a `RelGraph` — and each node is
-// recorded as the provider's `getTreeItem` draws it, which is the vscode half copied here. Every
-// row a user can expand is expanded, as a user clicking every twisty would; a cycle row offers no
-// twisty, and that is where an expansion ends.
+// The tree is built the way SectionsTreeProvider builds it — view's `FolderHierarchy` over every
+// supported file in the folder, through a shared source cache — and each row is recorded with the
+// fields the provider's `getTreeItem` draws from (the label, the twisty, the description, the file
+// it opens and its health badge). Every row a user can expand is expanded, as a user clicking
+// every twisty would; a cycle row offers no twisty, and that is where an expansion ends.
 import { describe, expect, it } from 'vitest';
 import { newSourceCache } from 'data-explorer-core';
-import { RelGraph, type GraphNode } from 'data-explorer-view/model';
-import { graphSourcesOf } from '../../src/host/structuralIndex.js';
+import { FolderHierarchy, type HierarchyItem } from 'data-explorer-view/model';
 import { expectGolden, fakeFile, filesUnder, fixtureFolders } from './fixtures.js';
 import { nodeReader } from './nodeReads.js';
 
@@ -30,52 +29,47 @@ interface TreeRow {
   children?: TreeRow[];
 }
 
-// mirrors SectionsTreeProvider.ts:55 getTreeItem, for the parts a user reads: the label, the
-// twisty, the description and the health badge. No document is dirty in a fresh window, so the
-// one health state a row can have is `cycle` (SectionsTreeProvider.ts:203 healthOf).
-function drawn(el: GraphNode): Omit<TreeRow, 'children'> {
-  if (el.kind === 'missing') {
-    return { label: el.label, kind: el.kind, collapsible: 'none', description: 'unresolved reference' };
-  }
-  if (el.kind === 'group') {
-    return {
-      label: el.label,
-      kind: el.kind,
-      groupKind: el.groupKind,
-      ...(el.groupKind === 'project' && el.uriString ? { id: el.uriString } : {}),
-      collapsible: el.hasChildren ? 'collapsed' : 'none',
-    };
-  }
-  return {
-    label: el.label,
-    kind: el.kind,
-    id: el.uriString,
-    health: el.cycle ? 'cycle' : null,
-    collapsible: el.cycle || !el.hasChildren ? 'none' : 'collapsed',
-    ...(el.cycle ? { description: '↻ circular reference' } : {}),
-  };
+// The fields of a row the provider's getTreeItem turns into what a user reads, in the order the
+// goldens record them. No document is dirty in a fresh window, so the one health state a row can
+// have is `cycle`.
+function drawn(item: HierarchyItem): TreeRow {
+  const row: Partial<TreeRow> = { label: item.label, kind: item.kind };
+  if (item.groupKind !== undefined) row.groupKind = item.groupKind;
+  if (item.id !== undefined) row.id = item.id;
+  if (item.health !== undefined) row.health = item.health;
+  row.collapsible = item.collapsible;
+  if (item.description !== undefined) row.description = item.description;
+  return row as TreeRow;
 }
 
-/** `nodes` drawn, and every one with a twisty expanded through `getChildren` (graph.children). */
-function expanded(graph: RelGraph, nodes: GraphNode[]): TreeRow[] {
-  return nodes.map((el) => {
-    const row: TreeRow = drawn(el);
-    if (row.collapsible === 'collapsed') row.children = expanded(graph, graph.children(el));
-    return row;
-  });
+/** `items` drawn, and every one with a twisty expanded through `getChildren` (`children`). */
+async function expanded(hierarchy: FolderHierarchy, items: HierarchyItem[]): Promise<TreeRow[]> {
+  const rows: TreeRow[] = [];
+  for (const item of items) {
+    const row = drawn(item);
+    if (row.collapsible === 'collapsed') {
+      row.children = await expanded(hierarchy, await hierarchy.children(item));
+    }
+    rows.push(row);
+  }
+  return rows;
 }
 
 // Generous, as in tables.test.ts: each test reads and parses a whole folder.
 describe('golden relationship trees', { timeout: 60_000 }, () => {
   for (const folder of fixtureFolders()) {
     it(folder, async () => {
-      // mirrors SectionsTreeProvider.ts:171 buildGraph, over the folder as the workspace, in
+      // mirrors SectionsTreeProvider.ts's FolderHierarchy, over the folder as the workspace, in
       // code-point order — `findFiles` promises none, and folder order is what decides which of
       // two same-named files a reference resolves to.
       const files = filesUnder(folder).map(fakeFile);
       expect(files.length, `${folder} has files to draw`).toBeGreaterThan(0);
-      const graph = new RelGraph(await graphSourcesOf(newSourceCache(), nodeReader(files), files));
-      await expectGolden(expanded(graph, graph.roots()), folder, 'hierarchy');
+      const hierarchy = new FolderHierarchy({
+        files: { list: async () => files },
+        reader: (listed) => nodeReader(listed),
+        cache: newSourceCache(),
+      });
+      await expectGolden(await expanded(hierarchy, await hierarchy.roots()), folder, 'hierarchy');
     });
   }
 });

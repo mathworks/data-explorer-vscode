@@ -30,6 +30,7 @@ export default defineConfig({
         'src/host/diskFollow.ts',
         'src/host/HealthDecorationProvider.ts',
         'src/host/PropertiesViewProvider.ts',
+        // The vscode half of the sidebar tree; the hierarchy itself is view's FolderHierarchy.
         'src/host/SectionsTreeProvider.ts',
         'src/host/SlddTextEditorProvider.ts',
         'src/host/editorHub.ts',

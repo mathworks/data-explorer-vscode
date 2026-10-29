@@ -9,7 +9,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { isTomlProjectFile, TOML_PROJECT_FILE, type SourceFile } from 'data-explorer-core';
-import type { GraphReader } from '../../src/host/structuralIndex.js';
+import type { GraphReader } from 'data-explorer-view/model';
 import { byCodePoint, REPO } from './fixtures.js';
 
 /** The repo path a fake `/fx/<rel>` path was made from. */
@@ -60,7 +60,7 @@ export function readProjectStore(abs: string): Record<string, string> {
 }
 
 /**
- * mirrors sourceReads.ts:149 readerFor, plus SectionsTreeProvider.ts:185 reader's project store.
+ * mirrors sourceReads.ts:149 readerFor, plus the project store SectionsTreeProvider.ts's `reader` adds.
  *
  * The version is the file's size and not `mtime:size` (scanRead.ts scanVersion): an mtime is the
  * checkout's, and within one run of one cache only the version's stability matters. The scan

@@ -108,8 +108,8 @@ async function resolveSource(
 //  - Model Reference / External Data links carry a bare filename: just open that
 //    file. There is no row to select.
 // `referrer` is the uriString of the document the link was clicked in; with `scoped` (the
-// tree's SectionsTreeProvider.resolveReference), it is what picks between two same-named
-// files in the workspace.
+// tree's SectionsTreeProvider.resolveReference, which is its FolderHierarchy's), it is what
+// picks between two same-named files in the workspace.
 export async function handleNavigate(
   target: string,
   open: (uri: vscode.Uri) => Promise<void>,
