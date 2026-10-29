@@ -51,8 +51,11 @@ const read = (p: string) => blankCommentsAndKeepLines(readFileSync(fileURLToPath
 // ── the vocabulary ────────────────────────────────────────────────────────────────
 // Taken from the union rather than restated, so the two cannot disagree. `UndoRedoMessage`
 // is the reason this reads discriminants and not interface names: one interface carries
-// two of them (`'undo' | 'redo'`), and it is the message TYPE a chain branches on.
-const protocol = read('src/common/protocol.ts');
+// two of them (`'undo' | 'redo'`), and it is the message TYPE a chain branches on. The read
+// half of the protocol (ready, select, requestChildren, requestMatrix, …) is declared by view,
+// whose wire format protocol.ts imports, so its declarations are read from the view this
+// extension ships, beside protocol.ts's own.
+const protocol = `${read('src/common/protocol.ts')}\n${read('node_modules/data-explorer-view/dist/model/source/wire.d.ts')}`;
 
 function discriminantsOf(unionName: string): string[] {
   const union = new RegExp(`export type ${unionName} =([\\s\\S]*?);`).exec(protocol);
@@ -377,7 +380,7 @@ describe('each editor answers everything its contract makes meaningful', () => {
 });
 
 describe('every setRows says which document it is describing', () => {
-  // The webview answers a link into its own document itself (webview/linkRoute.ts), which
+  // The webview answers a link into its own document itself (view's connectTable, by localLinkName), which
   // it can only do if it knows which document that is. `webview.postMessage` takes `any`,
   // so omitting the field at one of these call sites is not a type error, and the symptom
   // is silent: that one view's local links take the host round-trip instead. Three posts
