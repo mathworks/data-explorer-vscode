@@ -31,14 +31,12 @@ import {
   serializeEntryToXml,
   entrySelectorOf,
   findEntryObjectSpan,
-} from 'data-explorer-core';
-import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import {
   catalogFunctionRenameOf,
   catalogRenameOf,
   scXmlFunctionRenamePatch,
   scXmlRenamePatch,
-} from '../../src/host/scRename';
+} from 'data-explorer-core';
+import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 import { mutateEntry } from '../../src/host/entryOps';
 import { waitFor } from './tools/hostHarness';
 

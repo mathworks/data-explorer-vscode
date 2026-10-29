@@ -15,9 +15,17 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
-import { DataModel, DATA_PART_XML, entrySelectorOf, keptPartsViolations, spliceEntryObject } from 'data-explorer-core';
-import { savedChunkRefusal, SavedChunk } from '../src/host/binarySaveGate.js';
-import { entryKey, scanChunkEntries } from '../src/host/chunkEntries.js';
+import {
+  DataModel,
+  DATA_PART_XML,
+  entryKey,
+  entrySelectorOf,
+  keptPartsViolations,
+  savedChunkRefusal,
+  SavedChunk,
+  scanChunkEntries,
+  spliceEntryObject,
+} from 'data-explorer-core';
 import {
   applyEntryOps,
   entryRecord,

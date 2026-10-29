@@ -105,14 +105,23 @@ import {
   type StructuralResult,
   type TextPatch,
 } from './structuralEdit.js';
-import { editRefusalText, entrySelectorOf, minimalReplacement, planDeletion, type EntrySelector } from 'data-explorer-core';
+import {
+  catalogFunctionRenameOf,
+  catalogRenameOf,
+  editRefusalText,
+  entrySelectorOf,
+  minimalReplacement,
+  planDeletion,
+  scJsonFunctionRenameEdits,
+  scJsonRenameEdits,
+  type EntrySelector,
+} from 'data-explorer-core';
 import { copyEntriesToClipboard, dragEntries } from './clipboardAction.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { subscribeUsageRepost } from './usageRepostWatch.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { parsesAsJson } from './slddFormat.js';
 import { wideLanding } from './wideRepaint.js';
-import { catalogFunctionRenameOf, catalogRenameOf, scJsonFunctionRenameEdits, scJsonRenameEdits } from './scRename.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { addChildRefusal, addEntryRefusal, deleteRefusal, describeSource, refusedMessage, type RefusedGesture } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';

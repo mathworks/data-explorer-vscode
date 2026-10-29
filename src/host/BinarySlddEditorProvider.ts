@@ -20,7 +20,7 @@
 //    serializer bug that breaks the markup, or a chunk core would read as an empty
 //    dictionary, becomes a failed save;
 //  - it compares chunkXml with the chunk as last read or saved, entry by entry, with
-//    a scan of the markup rather than core's reader (binarySaveGate.ts, the
+//    a scan of the markup rather than core's reader (core's binarySaveGate, the
 //    maintainer's D12 addendum): an entry no edit changed must be its bytes, and an
 //    edited one must keep every part the edit did not change (core's
 //    keptPartsViolations), or the save is refused, naming the entry.
@@ -64,14 +64,24 @@ import {
   entrySelectorOf,
   planDeletion,
   spliceEntryObject,
+  changedEntryKeys,
+  savedChunkRefusal,
+  SavedChunk,
+  uncheckableEntries,
+  chunkEntryKey,
+  entryKey,
+  scanChunkEntries,
+  catalogFunctionRenameOf,
+  catalogRenameOf,
+  scXmlFunctionRenamePatch,
+  scXmlRenamePatch,
   type ParseWarning,
+  type ScPartPatch,
 } from 'data-explorer-core';
 // Never parseBinarySlddParts directly: readSlddParts is the same read plus the rule
 // that a dictionary this host could not read is not passed on as an empty one, which
 // the reader itself no longer enforces (it recovers and warns instead).
 import { readSlddParts } from 'data-explorer-view/model';
-import { changedEntryKeys, savedChunkRefusal, SavedChunk, uncheckableEntries } from './binarySaveGate.js';
-import { chunkEntryKey, entryKey, scanChunkEntries } from './chunkEntries.js';
 import { isZipBytes } from './slddFormat.js';
 import {
   findOwningEntry,
@@ -93,13 +103,6 @@ import {
   deleteEntriesByNameXml,
   type StructuralResult,
 } from './xmlStructuralEdit.js';
-import {
-  catalogFunctionRenameOf,
-  catalogRenameOf,
-  scXmlFunctionRenamePatch,
-  scXmlRenamePatch,
-  type ScPartPatch,
-} from './scRename.js';
 import {
   applyEntryOps,
   cellEdit,
@@ -347,7 +350,7 @@ class BinarySlddDocument implements vscode.CustomDocument, FollowedDocument {
 
   /**
    * The chunk as this document last read or wrote it — opened, saved, reverted or reloaded —
-   * which the save gate holds a save to (binarySaveGate.ts). A document restored from a hot-exit
+   * which the save gate holds a save to (core's binarySaveGate). A document restored from a hot-exit
    * backup read the backup, so that is its chunk until it is saved: the edits in a backup were
    * made in another session, and nothing is left that could check them.
    */
@@ -371,7 +374,7 @@ class BinarySlddDocument implements vscode.CustomDocument, FollowedDocument {
 
   /**
    * The entries the edits since `saved` have changed while core's check could not be held to
-   * them, each key mapped to every key that entry has gone by (binarySaveGate's
+   * them, each key mapped to every key that entry has gone by (core's
    * uncheckableEntries): the save gate refuses any of them whose text is not `saved`'s. Asked
    * when each edit is made, while the entry's node still holds the bytes it was read from, since
    * a redo or a re-read rebuilds the node from the text the edit wrote. Like `edited`, each undo
@@ -1738,7 +1741,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   //    reads-as-empty rule in readSlddParts matters most for: a chunk the reader cannot
   //    read yields a dictionary with no entries, and zipping that over the file on disk
   //    would take every entry with it, silently. Then the chunk is held to the chunk as
-  //    last read or saved (binarySaveGate.ts): what no edit changed must be its bytes,
+  //    last read or saved (core's binarySaveGate): what no edit changed must be its bytes,
   //    and an edited entry must keep what the edit did not change. Neither check says
   //    an edited value is right (see the header). It also compresses properly, because
   //    the result is what the user keeps.

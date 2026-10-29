@@ -46,20 +46,18 @@ import {
   serializeEntryToXml,
   entrySelectorOf,
   findEntryObjectSpan,
-} from 'data-explorer-core';
-import { readSlddParts } from 'data-explorer-view/model';
-import { getModel, findNode, invalidate } from 'data-explorer-view/host';
-import { findEntrySpan, detectIndent } from '../src/host/entrySplice.js';
-import { reserializeEntry, findOwningEntry } from '../src/host/structuralEdit.js';
-import { mutateEntry } from '../src/host/entryOps.js';
-import {
   catalogFunctionRenameOf,
   catalogRenameOf,
   scJsonFunctionRenameEdits,
   scJsonRenameEdits,
   scXmlFunctionRenamePatch,
   scXmlRenamePatch,
-} from '../src/host/scRename.js';
+} from 'data-explorer-core';
+import { readSlddParts } from 'data-explorer-view/model';
+import { getModel, findNode, invalidate } from 'data-explorer-view/host';
+import { findEntrySpan, detectIndent } from '../src/host/entrySplice.js';
+import { reserializeEntry, findOwningEntry } from '../src/host/structuralEdit.js';
+import { mutateEntry } from '../src/host/entryOps.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -281,7 +279,7 @@ function openBinary(fixtureName = 'arch_binary.sldd') {
 // The gate, which is the same sentence in both providers: WHICH renames carry. It has to
 // be read before the mutation (the catalog is keyed by the old name), it has to be scoped
 // to top-level entries (the catalog only lists those), and to the entries of the Design
-// namespace (the only ones it names — see test/scCatalogScope.test.ts).
+// namespace (the only ones it names — see test/scCatalogScope.test.ts in data-explorer-core).
 describe('the renames that reach the catalog', () => {
   const arch = { name: 'arch' };
 

@@ -12,7 +12,7 @@
 //
 // Neither editor saves through core's serializeSource. The binary one splices each edited entry
 // into the chunk it keeps as text (core's spliceEntryObject) and its save gate compares that chunk
-// with the file's, entry by entry (binarySaveGate.ts); the text one writes each edited entry's
+// with the file's, entry by entry (core's binarySaveGate); the text one writes each edited entry's
 // serialize() into the TextDocument. So this asks each editor, through the messages the table
 // sends (tools/hostHarness fakePanel): does the table offer the cells core takes and no others,
 // does the edit reach the saved bytes, does the gate let it through, does every other entry stay
