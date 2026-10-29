@@ -1,12 +1,15 @@
 // Copyright 2026 The MathWorks, Inc.
 // @vitest-environment happy-dom
 //
-// The project page's webview entry, driven for real. projectPageRender.test.ts covers
-// WHAT the page says; this covers the part that needs a document — the injected
-// stylesheet, the delegated listeners, and the postMessage boundary the hyperlinks go
-// through. It imports the SHIPPING module rather than reconstructing its listeners: a
-// rewritten copy is one rule on two paths, and it goes on passing after the real one
-// changes.
+// The project page's webview entry, driven for real. view's tests cover WHAT the page says and
+// how <dex-project-page> keeps its filters; this covers what the entry adds around the element —
+// the injected stylesheet, the error banner, and the postMessage boundary the hyperlinks go
+// through — and the page's behaviour as this webview shows it. It imports the SHIPPING module
+// rather than reconstructing its listeners: a rewritten copy is one rule on two paths, and it
+// goes on passing after the real one changes.
+//
+// The page is in the element's shadow root, and the element draws after an update, so every
+// query goes through `shadow()` and every step that changes the page awaits `drawn()`.
 //
 // Importable with one stub, `acquireVsCodeApi` as a global, because the module calls it
 // at top level. Imported once in beforeAll — not a choice, since a module body runs once
@@ -51,25 +54,32 @@ function send(msg: unknown): void {
   window.dispatchEvent(new MessageEvent('message', { data: msg }));
 }
 
-function setProject(over: Partial<ProjectPage> = {}, root = ROOT, warnings?: unknown): void {
+const element = () => document.querySelector('dex-project-page') as HTMLElement & { updateComplete: Promise<boolean> };
+const shadow = () => element().shadowRoot as ShadowRoot;
+/** Once the element has drawn what the last step changed. */
+const drawn = async (): Promise<void> => void (await element().updateComplete);
+
+async function setProject(over: Partial<ProjectPage> = {}, root = ROOT, warnings?: unknown): Promise<void> {
   send({ type: 'setProject', page: page(over), root, warnings });
+  await drawn();
 }
 
-const pageEl = () => document.querySelector('.dex-page') as HTMLElement;
+const pageEl = () => shadow().querySelector('.dex-page') as HTMLElement;
 const errorEl = () => document.getElementById('dex-error') as HTMLElement;
-const filter = () =>
-  document.querySelector('input.filter[data-section="shortcuts"]') as HTMLInputElement;
-const link = (path: string) => document.querySelector(`[data-open="${path}"]`) as HTMLElement;
+const filter = () => shadow().querySelector('input.filter[data-section="shortcuts"]') as HTMLInputElement;
+const link = (path: string) => shadow().querySelector(`[data-open="${path}"]`) as HTMLElement;
 
-function click(el: Element): void {
-  el.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+async function click(el: Element): Promise<void> {
+  el.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+  await drawn();
 }
 
 /** Types into a section's filter box the way a keystroke does: value, then `input`. */
-function type(input: HTMLInputElement, value: string, caret = value.length): void {
+async function type(input: HTMLInputElement, value: string, caret = value.length): Promise<void> {
   input.value = value;
   input.setSelectionRange(caret, caret);
-  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+  await drawn();
 }
 
 describe('the project page webview', () => {
@@ -82,17 +92,19 @@ describe('the project page webview', () => {
     atLoad = [...posted];
   }, 60_000);
 
-  beforeEach(() => {
-    setProject({ shortcuts: SHORTCUTS });
+  beforeEach(async () => {
+    await setProject({ shortcuts: SHORTCUTS });
     posted.length = 0;
   });
 
   it('builds its own DOM, so neither shell has markup to get wrong', () => {
     // Both shells (src/host/webviewHtml.ts and the vite dev shell project.html) are
     // empty on purpose — the split test/webviewOverlays.test.ts exists to catch for the
-    // table's banner strip cannot happen if there is nothing to copy.
+    // table's banner strip cannot happen if there is nothing to copy. The banner comes
+    // before the page, as it always did.
     expect(pageEl()).not.toBeNull();
     expect(errorEl()).not.toBeNull();
+    expect(errorEl().nextElementSibling).toBe(element());
   });
 
   it('injects its stylesheet before painting, so nothing flashes unstyled', () => {
@@ -116,25 +128,25 @@ describe('the project page webview', () => {
 });
 
 describe('clicking a hyperlink', () => {
-  beforeEach(() => {
-    setProject({ shortcuts: SHORTCUTS });
+  beforeEach(async () => {
+    await setProject({ shortcuts: SHORTCUTS });
     posted.length = 0;
   });
 
-  it('asks the host to open the path, not the text on screen', () => {
-    click(link('models/gain.slx'));
+  it('asks the host to open the path, not the text on screen', async () => {
+    await click(link('models/gain.slx'));
     expect(posted).toEqual([{ type: 'openFile', path: 'models/gain.slx' }]);
   });
 
-  it('still sends the whole path when the click lands on a highlighted part of it', () => {
+  it('still sends the whole path when the click lands on a highlighted part of it', async () => {
     // As soon as a filter matches inside a link its text is wrapped in <mark>, and that
     // <mark> is what a click on the highlighted characters targets. Reading the target's
     // own dataset would post nothing at all.
-    type(filter(), 'gain');
+    await type(filter(), 'gain');
     const mark = pageEl().querySelector('a.link mark') as HTMLElement;
     expect(mark).not.toBeNull();
     posted.length = 0;
-    click(mark);
+    await click(mark);
     expect(posted).toEqual([{ type: 'openFile', path: 'models/gain.slx' }]);
   });
 
@@ -155,19 +167,19 @@ describe('clicking a hyperlink', () => {
     expect(posted).toEqual([]);
   });
 
-  it('asks for nothing when the click misses every link', () => {
-    click(pageEl().querySelector('.section') as Element);
+  it('asks for nothing when the click misses every link', async () => {
+    await click(pageEl().querySelector('.section') as Element);
     expect(posted).toEqual([]);
   });
 
-  it('opens a location and a reference the same way', () => {
-    setProject({
+  it('opens a location and a reference the same way', async () => {
+    await setProject({
       locations: [{ key: 'SimulinkCacheFolder', label: 'Simulation cache', ref: 'work/cache' }],
       references: [{ name: 'Lib', path: '../Lib/Lib.prj' }],
     });
     posted.length = 0;
-    click(link('work/cache'));
-    click(link('../Lib/Lib.prj'));
+    await click(link('work/cache'));
+    await click(link('../Lib/Lib.prj'));
     expect(posted).toEqual([
       { type: 'openFile', path: 'work/cache' },
       { type: 'openFile', path: '../Lib/Lib.prj' },
@@ -176,62 +188,64 @@ describe('clicking a hyperlink', () => {
 });
 
 describe('filtering a section', () => {
-  beforeEach(() => {
-    setProject({ shortcuts: SHORTCUTS });
+  beforeEach(async () => {
+    await setProject({ shortcuts: SHORTCUTS });
     posted.length = 0;
   });
 
-  it('narrows the rows without asking the host for anything', () => {
-    type(filter(), 'gain');
+  it('narrows the rows without asking the host for anything', async () => {
+    await type(filter(), 'gain');
     expect(pageEl().innerHTML).toContain('gain.slx');
     expect(pageEl().innerHTML).not.toContain('s3.m');
     expect(posted).toEqual([]);
   });
 
-  it('keeps the focus and the caret across the repaint it causes', () => {
+  it('keeps the focus and the caret across the repaint it causes', async () => {
     // The repaint replaces the input element, so both have to be restored by hand.
-    // Focus alone left the caret at 0, which typed a query backwards.
-    type(filter(), 'gain', 2);
-    expect(document.activeElement).toBe(filter());
+    // Focus alone left the caret at 0, which typed a query backwards. (The document's own
+    // activeElement is the element; what has the keyboard inside it is the shadow root's.)
+    await type(filter(), 'gain', 2);
+    expect(document.activeElement).toBe(element());
+    expect(shadow().activeElement).toBe(filter());
     expect(filter().selectionStart).toBe(2);
     expect(filter().value).toBe('gain');
   });
 
-  it('expands a capped section when asked, and stays expanded', () => {
-    setProject({ pathFolders: Array.from({ length: ROW_CAP + 1 }, (_, i) => `f${i}`) });
+  it('expands a capped section when asked, and stays expanded', async () => {
+    await setProject({ pathFolders: Array.from({ length: ROW_CAP + 1 }, (_, i) => `f${i}`) });
     const rows = () => pageEl().querySelectorAll('.row.single').length;
     expect(rows()).toBe(ROW_CAP);
-    click(pageEl().querySelector('[data-expand="path"]') as Element);
+    await click(pageEl().querySelector('[data-expand="path"]') as Element);
     expect(rows()).toBe(ROW_CAP + 1);
     expect(posted).toEqual([]);
   });
 });
 
 describe('a repaint of the project already on screen', () => {
-  beforeEach(() => {
-    setProject({ shortcuts: SHORTCUTS });
+  beforeEach(async () => {
+    await setProject({ shortcuts: SHORTCUTS });
     posted.length = 0;
   });
 
-  it('keeps the filter a user typed', () => {
+  it('keeps the filter a user typed', async () => {
     // The page repaints when the store changes on disk. A user who has narrowed a
     // section while working is not asking for that to be undone because something saved.
-    type(filter(), 'gain');
-    setProject({ shortcuts: SHORTCUTS });
+    await type(filter(), 'gain');
+    await setProject({ shortcuts: SHORTCUTS });
     expect(filter().value).toBe('gain');
   });
 
-  it('starts clean when a different project arrives in the panel', () => {
-    type(filter(), 'gain');
-    setProject({ shortcuts: SHORTCUTS }, '/work/Other');
+  it('starts clean when a different project arrives in the panel', async () => {
+    await type(filter(), 'gain');
+    await setProject({ shortcuts: SHORTCUTS }, '/work/Other');
     expect(filter().value).toBe('');
     expect(pageEl().innerHTML).toContain('/work/Other');
   });
 });
 
 describe('an error from the host', () => {
-  beforeEach(() => {
-    setProject({ shortcuts: SHORTCUTS });
+  beforeEach(async () => {
+    await setProject({ shortcuts: SHORTCUTS });
     posted.length = 0;
   });
 
@@ -241,9 +255,9 @@ describe('an error from the host', () => {
     expect(errorEl().textContent).toBe('Could not read the project.');
   });
 
-  it('is cleared by the next project that does arrive', () => {
+  it('is cleared by the next project that does arrive', async () => {
     send({ type: 'error', message: 'Could not read the project.' });
-    setProject({ shortcuts: SHORTCUTS });
+    await setProject({ shortcuts: SHORTCUTS });
     expect(errorEl().style.display).toBe('none');
   });
 });
