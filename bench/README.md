@@ -104,7 +104,7 @@ keeps:
 | open a tab on a model | `sourceCache.parsedModelOf`, then `SlddModel.getModelFromParsed` — `BinaryEditorProvider.post`'s own sequence, `invalidate` included |
 | open a tab on a `.sldd`/`.mat` | `SlddModel.getModelFromBytes` (that read is not shared: a dictionary's rows come from its content, which the cheap tier's `FileSummaries` is not) |
 | fill the Usage column | `usagePlan.planSummaries` |
-| build the sections tree | `structuralIndex.graphSourcesOf` + `RelGraph` |
+| build the sections tree | view's `FolderHierarchy` (`graphSourcesOf` + `RelGraph`), as `SectionsTreeProvider` holds it |
 | build the search index | `nameScan.namesOfFile`, batched by the real `mapLimited` |
 
 Until the phase 7 rewire three of those were HAND-COPIES of the pre-cache host, so an
@@ -120,7 +120,7 @@ substitutions remain, both noted in `scenarios.bench.ts`:
   boundary. So read the MB column, not the ms, as the cost of a duplicate read — the
   bytes are exact and machine-independent, the milliseconds are a floor.
 - **the three vscode-side entry points** — `nameIndex.build`,
-  `SectionsTreeProvider.buildGraph` and `sourceReads.parsedModelForTab` all import
+  `SectionsTreeProvider`'s listing and `sourceReads.parsedModelForTab` all import
   `vscode`. Each is a `findFiles` plus a reader literal over a module the harness imports
   directly, so the harness writes that literal out: `dirtyBytes: () => null` for search
   (nothing is open in an editor here, which is the case that reaches the cache anyway), the

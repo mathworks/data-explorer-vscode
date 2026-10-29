@@ -2,7 +2,7 @@
 // Parity check: run the extension's TWO parsers against REAL MATLAB-generated
 // files and compare to the generator's ground_truth.json.
 //
-//   Tier-1 (quick) parser -> tree/relationships  (host/structuralIndex + graphModel)
+//   Tier-1 (quick) parser -> tree/relationships  (view's graphSources + graphModel)
 //   Tier-2 (detailed) parser -> table/content    (DataModel + node tree)
 //
 // Fixtures are produced by test/parity/generate.m (run under real MATLAB) into
@@ -12,8 +12,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel, extractSlxStructure, isModelFile, isSlddFile } from 'data-explorer-core';
-import { buildGraphSource } from '../../src/host/structuralIndex.js';
 import {
+  buildGraphSource,
   scanSldd,
   RelGraph,
   type GraphSource,
@@ -46,7 +46,7 @@ const FILES = ['common.sldd', 'util.sldd', 'params.sldd', 'plant.slx', 'sub.slx'
 
 // Build a GraphSource for a file the way the extension host does: extract the
 // tier-1 artifact from the bytes, then shape a node out of it. `buildGraphSource`
-// takes artifacts and never bytes (structuralIndex.ts), so the extraction is here
+// takes artifacts and never bytes (view's graphSources.ts), so the extraction is here
 // — which is where the host does it too, inside the shared cheap tier.
 //
 // `scanSldd` covers BOTH on-disk dictionary formats behind core's own format

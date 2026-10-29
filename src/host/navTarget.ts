@@ -40,9 +40,9 @@ export function parseFileTarget(target: string): string | null {
 }
 
 // The two lookups a bare name can go through. `scoped` is the tree's own group-first rule
-// (SectionsTreeProvider.resolveReference): the copy in the referrer's project or folder
-// wins. `firstMatch` is a plain workspace search, for when there is no referrer to scope by
-// or the tree's graph has no answer.
+// (SectionsTreeProvider.resolveReference, which is its FolderHierarchy's): the copy in the
+// referrer's project or folder wins. `firstMatch` is a plain workspace search, for when there
+// is no referrer to scope by or the tree's graph has no answer.
 export type ScopedResolve = (ref: string, referrer: string) => Promise<string | undefined>;
 export interface NavSourceLookups {
   scoped?: ScopedResolve;

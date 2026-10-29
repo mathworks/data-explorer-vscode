@@ -8,6 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { HIERARCHY_ICONS } from 'data-explorer-view/model';
 import { ICON_DIR } from '../src/host/iconAssets.js';
 import { ICON_SOURCES, iconsIn, shippedIcon } from './tools/shippedIcons.js';
 
@@ -15,7 +16,7 @@ function repoFile(rel: string): string {
   return readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), 'utf8');
 }
 
-// Tree node-kind icons (SectionsTreeProvider.ICON_BY_KIND).
+// Tree node-kind icons (view's FolderHierarchy, which names a row's icon for SectionsTreeProvider).
 const TREE_KIND_ICONS = ['simulink', 'simulink_database', 'matlabWorkspaceFile', 'link_database'];
 
 // SLDD dictionary + section icons (SlddNode: file icon + SECTION_DEFS).
@@ -79,15 +80,15 @@ describe('icon assets', () => {
   });
 });
 
-// Every id the sidebar tree hands svgIconFor, read off the provider rather than listed, so a new
-// group kind or file kind is checked the day it is written: the kind map, the group icons, the
-// fallback for a kind the map lacks, and svgIconFor's own default.
+// Every id the sidebar tree hands svgIconFor, read off the code rather than listed, so a new
+// group kind or file kind is checked the day it is written: every icon a hierarchy row can name
+// (view's HIERARCHY_ICONS — the kind map, the group icons, the fallback for a kind the map
+// lacks), any id the provider names itself, and svgIconFor's own default.
 describe("the sidebar tree's icons", () => {
   const tree = repoFile('src/host/SectionsTreeProvider.ts');
-  const byKind = /const ICON_BY_KIND[^=]*=\s*\{([\s\S]*?)\};/.exec(tree);
   const TREE_ICONS = [
     ...new Set([
-      ...[...(byKind?.[1] ?? '').matchAll(/:\s*'([\w-]+)'/g)].map((m) => m[1]),
+      ...HIERARCHY_ICONS,
       ...[...tree.matchAll(/\bicon\s*=\s*'([\w-]+)'/g)].map((m) => m[1]),
       ...[...tree.matchAll(/svgIconFor\([^)]*?'([\w-]+)'\s*\)/g)].map((m) => m[1]),
       ...[...repoFile('src/host/iconMap.ts').matchAll(/dexIconId \|\| '([\w-]+)'/g)].map((m) => m[1]),
@@ -95,7 +96,9 @@ describe("the sidebar tree's icons", () => {
   ].sort();
 
   it('reads the ids the provider names', () => {
-    // A reshaped provider that hid them from these patterns would leave the check below empty.
+    // A reshaped provider that hid them from these patterns would leave the check below empty. The
+    // provider draws every row with the icon its hierarchy item names, so that is checked too.
+    expect(tree).toContain('svgIconFor(this.extensionUri, el.icon)');
     for (const id of ['simulink', 'simulink_folder', 'simulink_project', 'typeGeneric']) expect(TREE_ICONS).toContain(id);
   });
 

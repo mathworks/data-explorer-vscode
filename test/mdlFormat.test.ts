@@ -8,8 +8,8 @@
 //   .mdl CLASSIC   the pre-R2012 nested-brace text format (`Model { Name "x" ... }`)
 //
 // Which one a file holds is decided by its BYTES, in core's parseModel — never by
-// its extension. These tests drive the host layers that call it (slxStructure,
-// structuralIndex, SlddModel) so the wiring is pinned, not just core's parser
+// its extension. These tests drive the layers this host calls it through (core's
+// slxStructure, view's graphSources and SlddModel) so the wiring is pinned, not just core's parser
 // (which the core repo tests directly, including the MATLAB parity suite).
 //
 // The fixtures come from test/fixtures/make-fixtures.mjs. model_with_refs.mdl is a
@@ -20,8 +20,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { extractSlxStructure, isModelFile, parseModel, refModelExt } from 'data-explorer-core';
-import { buildGraphSource } from '../src/host/structuralIndex.js';
-import { buildRows } from 'data-explorer-view/model';
+import { buildGraphSource, buildRows } from 'data-explorer-view/model';
 import { getModelFromBytes } from 'data-explorer-view/host';
 import { namesFromSlx } from '../src/host/nameExtract.js';
 
@@ -223,7 +222,7 @@ describe('buildGraphSource classifies a .mdl as a model', () => {
     //
     // A pure classification claim, so it needs no structure at all: what the type is decided
     // from is the PATH, never the content. `buildGraphSource` calls one classifier for that
-    // (`sourceKind`, mapped) — see structuralIndex.test.ts for the pin over every format.
+    // (`sourceKind`, mapped) — see view's graphSources.test.ts for the pin over every format.
     const s = buildGraphSource({ uriString: 'file:///L.MDL', path: '/L.MDL' });
     expect(s.type).toBe('model');
   });

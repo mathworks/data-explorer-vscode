@@ -227,7 +227,7 @@ suite('a TOML-format MATLAB project in a real VS Code', () => {
   }).timeout(60000);
 
   test('the tree discovers the project and labels it after its FOLDER', async () => {
-    // Through the provider, so this is the real `findFiles` → `graphSourcesOf` →
+    // Through the provider, so this is the real `findFiles` → `FolderHierarchy` →
     // `readProjectStore` → `parseProject` path and not a re-implementation of it. A fresh
     // provider per attempt because the graph is cached on the instance; the file is
     // seconds old, so a slow search service must read as slow rather than as a missing
@@ -254,8 +254,8 @@ suite('a TOML-format MATLAB project in a real VS Code', () => {
     assert.notStrictEqual(group[0].label, 'matlab');
 
     // The header is also the row that OPENS the page, so it must carry the marker itself.
-    assert.ok(group[0].uriString, 'the project header is openable');
-    assert.strictEqual(vscode.Uri.parse(group[0].uriString!).fsPath, markerUri.fsPath);
+    assert.ok(group[0].id, 'the project header is openable');
+    assert.strictEqual(vscode.Uri.parse(group[0].id!).fsPath, markerUri.fsPath);
   }).timeout(60000);
 
   test('the page renders from the real file on disk, named by its own `name` key', async () => {

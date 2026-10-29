@@ -15,7 +15,7 @@
 //              `SlddModel.getModelFromParsed` for its rows — BinaryEditorProvider.post's
 //              own sequence — or `SlddModel.getModelFromBytes` for a dictionary/MAT-file
 //   Usage      `usagePlan.planSummaries`
-//   the tree   `structuralIndex.graphSourcesOf` + `RelGraph`
+//   the tree   view's `FolderHierarchy` (`graphSourcesOf` + `RelGraph`)
 //   search     `nameScan.namesOfFile`, batched by the real `mapLimited`
 //
 // A benchmark that re-derived any of those would measure the benchmark. Until phase 7
@@ -34,8 +34,8 @@
 //     literal over a module that IS imported here. `nameIndex.build` becomes
 //     `buildNameIndex` (with `dirtyBytes: () => null` — nothing is open in an editor
 //     here, so the override that layers over the cache is inert);
-//     `SectionsTreeProvider.buildGraph` becomes `buildTree` (with the project store the
-//     cache deliberately never holds); `sourceReads.parsedModelForTab` becomes
+//     `SectionsTreeProvider`'s `FolderHierarchy` becomes `buildTree` (with the project store
+//     the cache deliberately never holds); `sourceReads.parsedModelForTab` becomes
 //     `parsedForTab` (version from the `stat`, then an UNCAPPED eager read, because a tab
 //     must not refuse the file the user named).
 //   * the ONE cache. `sourceReads.ts` names the window's `SourceCache` and imports
@@ -105,11 +105,16 @@ import {
   type SourceReader,
 } from 'data-explorer-core';
 import { toArrayBuffer } from '../src/common/bytes.js';
-import { basename, RelGraph, scanSldd } from 'data-explorer-view/model';
+import {
+  basename,
+  FolderHierarchy,
+  scanSldd,
+  type GraphReader,
+  type HierarchyItem,
+} from 'data-explorer-view/model';
 import type { NameRecord } from '../src/host/nameExtract.js';
 import { namesOfFile, type NameReader } from '../src/host/nameScan.js';
 import { isZipBytes } from '../src/host/slddFormat.js';
-import { graphSourcesOf, type GraphReader } from '../src/host/structuralIndex.js';
 import * as SlddModel from 'data-explorer-view/model';
 
 const CORPUS = fileURLToPath(new URL('corpus/', import.meta.url));
@@ -344,16 +349,22 @@ class World {
   }
 
   /**
-   * The sections tree: `graphSourcesOf` over the shared cheap tier, then
-   * `new RelGraph(sources)` — SectionsTreeProvider.buildGraph, minus the `findFiles`.
+   * The sections tree: SectionsTreeProvider's `FolderHierarchy`, over the shared cheap tier,
+   * minus the `findFiles`.
    */
-  async buildTree(): Promise<RelGraph> {
+  private readonly tree = new FolderHierarchy({
+    files: { list: async () => TREE_FILES },
+    reader: () => this.graphReader(),
+    cache: this.cache,
+  });
+
+  /** `SectionsTreeProvider.rebuild()`, then the `getChildren()` that builds the graph again. */
+  async buildTree(): Promise<HierarchyItem[]> {
     return this.counting(async () => {
-      const graph = new RelGraph(await graphSourcesOf(this.cache, this.graphReader(), TREE_FILES));
-      // The provider's first `getChildren()` — so anything the graph defers to a walk is
-      // inside the measurement rather than after it.
-      graph.roots();
-      return graph;
+      this.tree.rebuild();
+      // The top level drawn, so anything the graph defers to a walk is inside the
+      // measurement rather than after it.
+      return this.tree.roots();
     });
   }
 

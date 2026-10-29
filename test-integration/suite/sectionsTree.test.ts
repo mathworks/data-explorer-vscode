@@ -2,8 +2,8 @@
 // Integration tests for SectionsTreeProvider, run inside a real VS Code so the
 // `vscode` API (workspace.findFiles, TreeItem, ThemeIcon, Uri) is genuine. The
 // provider builds a cross-format relationship graph from the fixture workspace
-// (binary.sldd, data.sldd, model.slx) and maps each GraphNode to a TreeItem.
-// The pure graph logic is covered by the vitest suite (graphModel); here we
+// (binary.sldd, data.sldd, model.slx) through view's FolderHierarchy and maps each
+// of its rows to a TreeItem. The pure graph logic is covered in view; here we
 // assert the vscode-adapter contract the unit suite cannot reach: the actual
 // tree structure over the workspace and the TreeItem shape (collapsibility,
 // contextValue, open command, health resourceUri) for each node kind.
@@ -41,7 +41,7 @@ suite('SectionsTreeProvider', () => {
     const group = roots[0];
     assert.strictEqual(group.kind, 'group');
     assert.strictEqual(group.groupKind, 'folder');
-    assert.ok(group.hasChildren, 'the folder group is expandable');
+    assert.strictEqual(group.collapsible, 'collapsed', 'the folder group is expandable');
   });
 
   test('the folder group contains the three fixture files', async () => {
@@ -59,7 +59,7 @@ suite('SectionsTreeProvider', () => {
     const [group] = await provider.getChildren();
     const children = await provider.getChildren(group);
     const model = byLabel(children, 'model.slx')!;
-    assert.ok(model.hasChildren, 'model.slx is expandable');
+    assert.strictEqual(model.collapsible, 'collapsed', 'model.slx is expandable');
 
     const modelChildren = await provider.getChildren(model);
     const missing = byLabel(modelChildren, 'plant.slx');
@@ -134,14 +134,14 @@ suite('SectionsTreeProvider', () => {
   test('a project header left over from an earlier graph offers no open', async () => {
     await provider.getChildren(); // prime the uri map from the real folder
     const item = provider.getTreeItem({
+      label: 'Old',
       kind: 'group',
       groupKind: 'project',
-      groupKey: '/gone',
-      uriString: 'file:///gone/Old.prj',
-      label: 'Old',
-      ancestors: new Set<string>(),
-      cycle: false,
-      hasChildren: false,
+      id: 'file:///gone/Old.prj',
+      collapsible: 'none',
+      tooltip: 'Open the project page for "Old".',
+      icon: 'simulink_project',
+      key: '/project:%2Fgone',
     });
     assert.strictEqual(item.contextValue, 'dexProjectGroup');
     assert.strictEqual(item.command, undefined, 'no open for a .prj that is not in the folder');
@@ -164,7 +164,7 @@ suite('SectionsTreeProvider', () => {
     const ws = vscode.workspace.workspaceFolders![0];
     const uri = vscode.Uri.joinPath(ws.uri, 'data.sldd');
 
-    // Open and dirty the document so healthOf() reports "modified".
+    // Open and dirty the document so the row's health reports "modified".
     const doc = await vscode.workspace.openTextDocument(uri);
     const editor = await vscode.window.showTextDocument(doc);
     try {

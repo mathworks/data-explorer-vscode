@@ -326,7 +326,10 @@ describe('no consumer keeps its own copy of the list', () => {
     // candidate's names come from. It moved out when the model read went through the shared
     // cache, and the scan has to follow it, not the file it left.
     'src/host/nameScan.ts',
-    'src/host/structuralIndex.ts',
+    // The tree's file shaping (it was structuralIndex.ts), which moved to view with the rest of
+    // the hierarchy. Scanned where it ships, like view's other files below: it classifies every
+    // file the tree lists and names every project, and the tree this host draws runs it.
+    'node_modules/data-explorer-view/dist/model/hierarchy/graphSources.js',
     // The model relationships the tree draws, which moved to core beside the kind tests and the
     // lists. Scanned where they ship, as view's files below are: the tree still draws its edges
     // from this module, so a copy of the rule growing in it is still a copy this host runs.
@@ -385,7 +388,7 @@ describe('no consumer keeps its own copy of the list', () => {
   // A single extension anchored at the end, e.g. `/\.prj$/i` — the shape the alternation
   // above does not catch, because one extension is not an alternation. It is how the same
   // rule got written twice here: `graphModel` labelling a project group and
-  // `structuralIndex` naming a project for core's parser each spelled
+  // `structuralIndex` (now view's graphSources) naming a project for core's parser each spelled
   // `basename(p).replace(/\.prj$/i, '')`, and a label a user reads has to agree with the
   // name the parser is told. Both now call core's `projectNameOf` — and this is what stops
   // a third copy from growing here, in either repo's absence of a shared test.
@@ -466,7 +469,7 @@ describe('no consumer keeps its own copy of the list', () => {
   it('every consumer that discovers or routes files takes the rule from a shared module', () => {
     // Either source counts, because the rule now lives in two places on purpose: the
     // extension LIST here (globs, manifest) and the kind tests in core. A consumer
-    // that needs only to classify — SlddModel, structuralIndex, BinaryEditorProvider —
+    // that needs only to classify — SlddModel, graphSources, BinaryEditorProvider —
     // imports core alone and never mentions the list, which is correct. What must not
     // happen is a consumer deriving the rule from neither, and that is what the
     // literal scan above and this check bracket between them.
