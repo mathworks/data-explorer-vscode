@@ -38,8 +38,12 @@ const VSCODE_THEME = noComments(readFileSync(join(process.cwd(), 'src', 'webview
 const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const declared = (css: string): Set<string> => new Set([...css.matchAll(/(--dex-[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
+// In a widget's JavaScript a token is declared in its stylesheet (`--dex-row-ink: …`) or set on an
+// element through the CSSOM, as a quoted key (`'--dex-table-min-width': …`).
+const declaredInJs = (js: string): Set<string> =>
+  new Set([...js.matchAll(/(--dex-[a-z0-9-]+)['"]?\s*:/g)].map((m) => m[1]));
 const READ = new Set(WIDGETS.flatMap((js) => [...js.matchAll(/var\(\s*(--dex-[a-z0-9-]+)/g)].map((m) => m[1])));
-const IN_WIDGETS = new Set(WIDGETS.flatMap((js) => [...declared(js)]));
+const IN_WIDGETS = new Set(WIDGETS.flatMap((js) => [...declaredInJs(js)]));
 const IN_VIEW_THEME = declared(VIEW_THEME);
 const IN_VSCODE_THEME = declared(VSCODE_THEME);
 

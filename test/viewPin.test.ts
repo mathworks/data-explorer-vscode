@@ -24,8 +24,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 // A commit of view's main, between releases: its own commit.
-const REF = '204ad483eece92fa126d9b99bd2c3c197a4b37c4';
-const COMMIT = '204ad483eece92fa126d9b99bd2c3c197a4b37c4';
+const REF = '0a32fb29b257ce2d5168df3436c00422364fe969';
+const COMMIT = '0a32fb29b257ce2d5168df3436c00422364fe969';
 const VERSION = '0.1.0';
 
 const SPEC = `github:mathworks/data-explorer-view#${REF}`;
