@@ -35,12 +35,26 @@
 import * as vscode from 'vscode';
 import { unzipSync, zipSync } from 'fflate';
 import { renderTableWebview } from './webviewHtml.js';
-import { buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from 'data-explorer-view/model/rows/rowBuilder.js';
+import {
+  buildEntryRows,
+  COLUMNS,
+  COLUMN_LABELS,
+  COLUMN_GROUPS,
+  type ClipMark,
+  rowPlannerFor,
+  LAZY_ROW_BUDGET,
+  lazyRowsBanner,
+  answerChildRequest,
+  sectionRules,
+  sourceWarnings,
+  warningBanner,
+  postOrReport,
+  buildSectionRowId,
+  basename,
+  answerMatrixRequest,
+  binaryEditSrcId,
+} from 'data-explorer-view/model';
 import { clipMarkChange, clipMarkOfDoc } from './clipMarks.js';
-import { rowPlannerFor } from 'data-explorer-view/model/rows/rowPlanner.js';
-import { LAZY_ROW_BUDGET, lazyRowsBanner } from 'data-explorer-view/model/rows/lazyRows.js';
-import { answerChildRequest } from 'data-explorer-view/model/rows/childRequest.js';
-import { sectionRules } from 'data-explorer-view/model/actions/sectionRules.js';
 // DATA_PART_XML is core's name for the one zip member holding the entries, and the three
 // sites below are three roles of one rule: the lookup in `chunkOf`, the exclusion in
 // `passThroughParts`, and the re-insert in `writeTo`. Drift between them does not throw —
@@ -58,12 +72,10 @@ import {
 // Never parseBinarySlddParts directly: readSlddParts is the same read plus the rule
 // that a dictionary this host could not read is not passed on as an empty one, which
 // the reader itself no longer enforces (it recovers and warns instead).
-import { readSlddParts } from 'data-explorer-view/model/workspace/slddContent.js';
+import { readSlddParts } from 'data-explorer-view/model';
 import { changedEntryKeys, savedChunkRefusal, SavedChunk, uncheckableEntries } from './binarySaveGate.js';
 import { chunkEntryKey, entryKey, scanChunkEntries } from './chunkEntries.js';
 import { isZipBytes } from './slddFormat.js';
-import { sourceWarnings, warningBanner } from 'data-explorer-view/model/rows/parseWarnings.js';
-import { postOrReport } from 'data-explorer-view/model/rows/postPayload.js';
 import {
   findOwningEntry,
   refuseDisallowedPaste,
@@ -110,7 +122,6 @@ import {
   type EntryPatch,
   type EntryRecord,
 } from './entryOps.js';
-import { buildSectionRowId } from 'data-explorer-view/model/ids/sectionRowId.js';
 import { clipboardState } from './clipboard.js';
 import { getDrag, clearDrag } from './dragState.js';
 import {
@@ -125,12 +136,9 @@ import {
   deleteFromSource,
   NOT_FOUND_REASON,
 } from './editorHub.js';
-import { basename } from 'data-explorer-view/model/ids/pathUtil.js';
 import { runTransfer, type TransferAdapter, type TransferDeps } from './transfer.js';
 import { clipboardRegister, dragRegister } from './transferRegisters.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
-import { answerMatrixRequest } from 'data-explorer-view/model/matrix/matrixRequest.js';
-import { binaryEditSrcId } from 'data-explorer-view/model/ids/srcId.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { addChildRefusal, addEntryRefusal, deleteRefusal, describeSource, refusedMessage, type RefusedGesture } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';

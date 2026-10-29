@@ -15,17 +15,23 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, findNode, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
-import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
-import { sectionRules } from 'data-explorer-view/model/actions/sectionRules.js';
-import { dropFactsOf } from 'data-explorer-view/model/actions/dropFacts.js';
+import {
+  getModel,
+  findNode,
+  invalidate,
+  buildRows,
+  sectionRules,
+  dropFactsOf,
+  resolveOperands,
+  sectionRowIdOf,
+  dropDecision,
+  rejectReason,
+  buildSectionRowId,
+} from 'data-explorer-view/model';
 import { buildClipboardSnapshot, buildDragSnapshot, pasteEntry } from '../src/host/structuralEdit.js';
 import { setDrag, clearDrag, dragDescriptor } from '../src/host/dragState.js';
 import { planDeletion } from 'data-explorer-core';
-import { resolveOperands, sectionRowIdOf } from 'data-explorer-view/model/actions/operands.js';
-import { buildContextMenuItems, type MenuRow } from 'data-explorer-view/widgets/tree-table/menuItems.js';
-import { dropDecision, rejectReason } from 'data-explorer-view/model/actions/dropDecision.js';
-import { buildSectionRowId } from 'data-explorer-view/model/ids/sectionRowId.js';
+import { buildContextMenuItems, type MenuRow } from 'data-explorer-view/tree-table';
 import { blankCommentsAndKeepLines } from './tools/moduleGraph.js';
 import { isNoopMove } from '../src/host/transfer.js';
 

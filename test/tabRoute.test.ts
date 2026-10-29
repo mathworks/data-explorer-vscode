@@ -18,8 +18,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DataModel } from 'data-explorer-core';
-import { getModelForBinaryTab, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
-import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
+import { getModelForBinaryTab, invalidate, buildRows } from 'data-explorer-view/model';
 import { newSourceCache, parsedModelForOpenTab, type SourceFile } from '../src/host/sourceCache.js';
 
 const dir = join(import.meta.dirname, 'fixtures');

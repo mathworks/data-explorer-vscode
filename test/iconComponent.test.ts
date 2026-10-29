@@ -10,7 +10,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DexIcon, defineIcon, setIconBase } from 'data-explorer-view/widgets/shared/dex-icon.js';
+import { DexIcon, defineIcon, setIconBase } from 'data-explorer-view/icon';
 import { shippedIcon } from './tools/shippedIcons.js';
 
 // As table-main and pi-main do, before any icon renders.
@@ -73,7 +73,8 @@ describe('rendering an icon', () => {
       expect(set, `${entry} defines a widget before it sets the icon base`).toBeLessThan(code.search(/^define\w+\(\);$/m));
     }
     const project = readFileSync(join(process.cwd(), 'src', 'webview', 'project-main.ts'), 'utf8');
-    expect(project).not.toMatch(/from 'data-explorer-view\/widgets\/(?!project-page\/)/);
+    expect(project).toMatch(/from 'data-explorer-view\/project-page'/);
+    expect(project).not.toMatch(/from 'data-explorer-view\/(?!project-page'|model')/);
   });
 
   it('sizes the image on both axes so rows do not shift while icons load', async () => {

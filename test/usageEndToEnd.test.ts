@@ -38,9 +38,8 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { annotateVariableRows, buildUsageGraph, type RawSource } from '../src/host/usageCells.js';
-import { getModel, getModelFromBytes } from 'data-explorer-view/model/workspace/SlddModel.js';
-import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
-import { DexTreeTable, defineTreeTable, type TreeTableRow } from 'data-explorer-view/widgets/tree-table/dex-tree-table.js';
+import { getModel, getModelFromBytes, buildRows } from 'data-explorer-view/model';
+import { DexTreeTable, defineTreeTable, type TreeTableRow } from 'data-explorer-view/tree-table';
 
 defineTreeTable();
 

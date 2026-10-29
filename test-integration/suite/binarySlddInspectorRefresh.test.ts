@@ -21,9 +21,7 @@ import { tmpdir } from 'os';
 import { unzipSync, zipSync } from 'fflate';
 import { DataModel } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { InspectorSelection } from 'data-explorer-view/model/inspector/inspectorSelection.js';
-import { buildPropertyGroups } from 'data-explorer-view/model/inspector/piBuilder.js';
-import { findNode } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { InspectorSelection, buildPropertyGroups, findNode } from 'data-explorer-view/model';
 import { ctx, fakePanel, quiet, token, waitFor } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

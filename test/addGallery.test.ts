@@ -16,11 +16,14 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { defineAddGallery } from 'data-explorer-view/widgets/tree-table/dex-add-gallery.js';
-import type { DexAddGallery } from 'data-explorer-view/widgets/tree-table/dex-add-gallery.js';
-import { defineTreeTable } from 'data-explorer-view/widgets/tree-table/dex-tree-table.js';
-import type { DexTreeTable, TreeTableRow } from 'data-explorer-view/widgets/tree-table/dex-tree-table.js';
-import { ADD_CATALOG, allTiles } from 'data-explorer-view/model/ids/addCatalog.js';
+import {
+  defineAddGallery,
+  type DexAddGallery,
+  defineTreeTable,
+  type DexTreeTable,
+  type TreeTableRow,
+} from 'data-explorer-view/tree-table';
+import { ADD_CATALOG, allTiles } from 'data-explorer-view/model';
 
 defineAddGallery();
 defineTreeTable();

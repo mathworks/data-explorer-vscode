@@ -18,8 +18,7 @@
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import type { ParsedProject, ProjectPage } from 'data-explorer-core';
 import { detectMsp } from '../src/host/mspProject.js';
-import { renderProjectPage } from 'data-explorer-view/widgets/project-page/projectPage.js';
-import type { ProjectPagePayload } from 'data-explorer-view/widgets/project-page/projectPage.js';
+import { renderProjectPage, type ProjectPagePayload } from 'data-explorer-view/project-page';
 
 const IFACE = '110edaf7-5770-482c-b8a4-b92306ac967b';
 const PRIV = '3ced2a68-a1a2-4ddd-bd2a-ae1836d724de';

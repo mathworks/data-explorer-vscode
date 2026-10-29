@@ -34,9 +34,8 @@ import {
   type RawSource,
 } from '../src/host/usageCells.js';
 import { parseNavTarget } from '../src/host/navTarget.js';
-import { getModelFromBytes } from 'data-explorer-view/model/workspace/SlddModel.js';
-import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
-import { DexTreeTable, defineTreeTable, type TreeTableRow } from 'data-explorer-view/widgets/tree-table/dex-tree-table.js';
+import { getModelFromBytes, buildRows } from 'data-explorer-view/model';
+import { DexTreeTable, defineTreeTable, type TreeTableRow } from 'data-explorer-view/tree-table';
 
 defineTreeTable();
 

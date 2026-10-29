@@ -20,9 +20,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
-import { InspectorSelection } from 'data-explorer-view/model/inspector/inspectorSelection.js';
-import { InspectorPage } from 'data-explorer-view/model/inspector/inspectorPage.js';
-import { findNode } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { InspectorSelection, InspectorPage, findNode } from 'data-explorer-view/model';
 import { ctx, fakeTable, quiet, rowNamed, token, waitFor, wsUri } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

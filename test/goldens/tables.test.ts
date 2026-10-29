@@ -26,9 +26,8 @@
 // digested, in the same layout under <dir> (fixtures.ts expectGolden).
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DataModel, isProjectFile } from 'data-explorer-core';
-import { LAZY_ROW_BUDGET } from 'data-explorer-view/model/rows/lazyRows.js';
+import { LAZY_ROW_BUDGET, isSectionRowId } from 'data-explorer-view/model';
 import { clearClipboard } from '../../src/host/clipboard.js';
-import { isSectionRowId } from 'data-explorer-view/model/ids/sectionRowId.js';
 import { bytesOf, expectGolden, fixtureFiles, nameOf } from './fixtures.js';
 import { openTable, routeOf, type TableView } from './views.js';
 

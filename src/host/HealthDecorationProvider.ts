@@ -5,7 +5,7 @@
 // unit-tested health.ts — this is a thin vscode adapter (hence no unit test, per
 // the project convention for vscode-coupled host classes).
 import * as vscode from 'vscode';
-import { decode, DECORATIONS } from 'data-explorer-view/model/hierarchy/health.js';
+import { decode, DECORATIONS } from 'data-explorer-view/model';
 
 export class HealthDecorationProvider implements vscode.FileDecorationProvider {
   private readonly _onDidChange = new vscode.EventEmitter<vscode.Uri | vscode.Uri[] | undefined>();

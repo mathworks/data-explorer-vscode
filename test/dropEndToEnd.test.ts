@@ -11,16 +11,21 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, findNode, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
-import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
+import {
+  getModel,
+  findNode,
+  invalidate,
+  buildRows,
+  sectionRules,
+  dropDecision,
+  type DragSource,
+} from 'data-explorer-view/model';
 import {
   pasteEntries,
   deleteEntriesByName,
   resolveSectionForPaste,
   buildDragSnapshot,
 } from '../src/host/structuralEdit.js';
-import { sectionRules } from 'data-explorer-view/model/actions/sectionRules.js';
-import { dropDecision, type DragSource } from 'data-explorer-view/model/actions/dropDecision.js';
 import { setDrag, clearDrag, dragDescriptor } from '../src/host/dragState.js';
 
 const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');

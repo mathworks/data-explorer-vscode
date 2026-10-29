@@ -47,11 +47,10 @@ import {
   entrySelectorOf,
   findEntryObjectSpan,
 } from 'data-explorer-core';
-import { getModel, findNode, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { getModel, findNode, invalidate, readSlddParts } from 'data-explorer-view/model';
 import { findEntrySpan, detectIndent } from '../src/host/entrySplice.js';
 import { reserializeEntry, findOwningEntry } from '../src/host/structuralEdit.js';
 import { mutateEntry } from '../src/host/entryOps.js';
-import { readSlddParts } from 'data-explorer-view/model/workspace/slddContent.js';
 import {
   catalogFunctionRenameOf,
   catalogRenameOf,

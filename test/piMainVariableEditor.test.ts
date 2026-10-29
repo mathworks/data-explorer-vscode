@@ -21,9 +21,7 @@ import { readFileSync } from 'node:fs';
 // `join(import.meta.dirname, …)`, not `fileURLToPath(import.meta.url)`: under happy-dom
 // `import.meta.url` is an http URL, which fileURLToPath rejects.
 import { join } from 'node:path';
-import { getModelFromBytes, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
-import { buildPropertyGroups } from 'data-explorer-view/model/inspector/piBuilder.js';
-import { matrixCellsMessage } from 'data-explorer-view/model/matrix/matrixRequest.js';
+import { getModelFromBytes, invalidate, buildPropertyGroups, matrixCellsMessage } from 'data-explorer-view/model';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

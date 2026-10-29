@@ -43,11 +43,9 @@ import {
   type RangeReplacement,
 } from '../src/host/jsonEntrySync.js';
 import { applyEntryOps } from '../src/host/entryOps.js';
-import { getModel, invalidate, peekModel } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { getModel, invalidate, peekModel, buildRows, buildEntryRows, spliceEntryRows } from 'data-explorer-view/model';
 import { findEntrySpan } from '../src/host/entrySplice.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from '../src/host/slddBaseline.js';
-import { buildRows, buildEntryRows } from 'data-explorer-view/model/rows/rowBuilder.js';
-import { spliceEntryRows } from 'data-explorer-view/model/actions/rowUpdates.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

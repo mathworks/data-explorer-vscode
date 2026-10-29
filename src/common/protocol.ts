@@ -17,13 +17,9 @@
 // contravariant-callback errors rather than catch real bugs.
 
 import type { ProjectPage } from 'data-explorer-core';
-import type { MspProject } from 'data-explorer-view/model/ids/msp.js';
-import type { SectionRule } from 'data-explorer-view/model/actions/sectionRules.js';
+import type { MspProject, SectionRule, DropFacts, WarningBanner, MatrixPayload } from 'data-explorer-view/model';
 import type { DragDescriptor } from '../host/dragState.js';
 import type { ClipboardMode } from '../host/clipboard.js';
-import type { DropFacts } from 'data-explorer-view/model/actions/dropFacts.js';
-import type { WarningBanner } from 'data-explorer-view/model/rows/parseWarnings.js';
-import type { MatrixPayload } from 'data-explorer-view/model/matrix/matrixPayload.js';
 
 // --- Host -> Webview (table view: table-main.ts) ------------------------------
 
