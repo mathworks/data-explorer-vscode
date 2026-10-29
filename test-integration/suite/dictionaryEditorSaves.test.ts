@@ -16,6 +16,13 @@
 // integer literal is a dictionary MATLAB cannot open, so a change to how core writes a text
 // dictionary's numbers has to reach the editor's own writer too, or the two saves part here.
 //
+// The last edit types a cell over cLeaves{9}, a complex [1+2i 3-4i] the file holds as a MAT
+// stream. The JSON editor repaints the table before it writes the entry, and the repaint asks every
+// row whether it can take an Add or a Delete. Through core v1.52.0 that question, for an element
+// of a cell edited under a stream, changed the value it was asked about, so the editor saved
+// {[1 0], true} for {[1 2], true}, and a Delete right after the edit took the wrong elements. Two
+// tests below hold the JSON editor to the value as typed, without core's save to compare with.
+//
 // The fixtures are the R2027a text and binary dictionaries of core's edit-bash parity set.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
@@ -25,7 +32,7 @@ import { tmpdir } from 'os';
 import { createSession, ingest } from 'data-explorer-core';
 import { quiet, ws } from './tools/hostHarness';
 import { shownCells } from './tools/tables';
-import { binaryEditorSave, coreSave, jsonEditorSave, type Edit } from './tools/editorSaves';
+import { binaryEditorSave, coreSave, jsonEditorSave, nodeAt, type Edit } from './tools/editorSaves';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -52,12 +59,19 @@ const EDITS: Edit[] = [
   { path: 'pStruct.Value.b(1)', op: 'delete' },
   { path: 'sArr(2).b', op: 'value', key: 'Value', text: '18446744073709551615' },
   { path: 'cNest{1}{2}{2}', op: 'value', key: 'Value', text: '-9223372036854775808' },
+  { path: 'cLeaves{9}', op: 'value', key: 'Value', text: '{[1 2], true}' },
 ];
+const CELL_OVER_STREAM = EDITS[EDITS.length - 1];
 
 const FIXTURES = join(ws().fsPath, '..', 'editbash');
 const label = (e: Edit) => `${e.op} ${e.path}${e.key && e.op === 'prop' ? '.' + e.key : ''}${e.text !== undefined ? ' = ' + e.text : ''}`;
 // When an entry was last modified is the save's clock, not the edit.
 const withoutClock = (bytes: Uint8Array) => new TextDecoder().decode(bytes).replace(/("lastmod": ?")[^"]*"/g, '$1<T>"');
+/** The Value a fresh read of a dictionary shows at `path`. */
+function valueAt(bytes: Uint8Array, filename: string, path: string): string {
+  const row = nodeAt(ingest(createSession(), bytes, { filename }), path)?.toRow();
+  return String(row?.Value?.text ?? row?.Value ?? '(no row)');
+}
 /** What a fresh read of a dictionary shows of every entry, row for row. */
 function shownBy(bytes: Uint8Array, filename: string): Record<string, unknown> {
   const root: any = ingest(createSession(), bytes, { filename });
@@ -101,6 +115,23 @@ suite('A dictionary editor saves an edit as core saves it', () => {
       }
     }
     assert.deepStrictEqual(wrong, []);
+  });
+
+  test('JSON .sldd: a cell typed over an element held as a MAT stream is saved as typed', async () => {
+    const file = join(dir, 'json-cell.sldd');
+    writeFileSync(file, readFileSync(join(FIXTURES, 'values_text.sldd')));
+    const saved = await jsonEditorSave(file, CELL_OVER_STREAM);
+    assert.strictEqual(saved.answer, 'written', saved.reason);
+    assert.strictEqual(valueAt(saved.bytes!, 'values_text.sldd', 'cLeaves{9}'), '{[1 2], true}');
+  });
+
+  test('JSON .sldd: a Delete right after that edit deletes the one element', async () => {
+    const file = join(dir, 'json-cell-delete.sldd');
+    writeFileSync(file, readFileSync(join(FIXTURES, 'values_text.sldd')));
+    const saved = await jsonEditorSave(file, [CELL_OVER_STREAM, { path: 'cLeaves{9}{1}(1)', op: 'delete' }]);
+    assert.strictEqual(saved.answer, 'written', saved.reason);
+    assert.strictEqual(valueAt(saved.bytes!, 'values_text.sldd', 'cLeaves{9}{1}'), '2');
+    assert.strictEqual(valueAt(saved.bytes!, 'values_text.sldd', 'cLeaves{9}{2}'), 'true');
   });
 
   test('binary .sldd: the saved file reads back as core\'s save does', async () => {
