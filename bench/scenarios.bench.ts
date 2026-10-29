@@ -16,7 +16,7 @@
 //              own sequence — or `SlddModel.getModelFromBytes` for a dictionary/MAT-file
 //   Usage      core's `planSummaries`, which view's `UsageGraphs` runs
 //   the tree   view's `FolderHierarchy` (`graphSourcesOf` + `RelGraph`)
-//   search     `nameScan.namesOfFile`, batched by the real `mapLimited`
+//   search     view's `NameIndex` (`namesOfFile`, batched by the real `mapLimited`)
 //
 // A benchmark that re-derived any of those would measure the benchmark. Until phase 7
 // three of them WERE re-derived: `openModel`, `buildNameIndex` and `buildTree` were
@@ -31,7 +31,7 @@
 //     already validated for this design: the v1.19.0 numbers taken this way tracked the
 //     real window (621 ms here against 654 ms there).
 //   * the three vscode-side ENTRY POINTS, each of which is `findFiles` plus a reader
-//     literal over a module that IS imported here. `nameIndex.build` becomes
+//     literal over a module that IS imported here. `nameIndex`'s `NameIndex` becomes
 //     `buildNameIndex` (with `dirtyBytes: () => null` — nothing is open in an editor
 //     here, so the override that layers over the cache is inert);
 //     `SectionsTreeProvider`'s `FolderHierarchy` becomes `buildTree` (with the project store
@@ -94,7 +94,6 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   DataModel,
   GRAPH_EXTS,
-  mapLimited,
   MAX_SCAN_BYTES,
   newSourceCache,
   parsedModelOf,
@@ -108,12 +107,13 @@ import { toArrayBuffer } from '../src/common/bytes.js';
 import {
   basename,
   FolderHierarchy,
+  NameIndex,
   scanSldd,
   type GraphReader,
   type HierarchyItem,
+  type NameReader,
+  type NameRecord,
 } from 'data-explorer-view/model';
-import type { NameRecord } from '../src/host/nameExtract.js';
-import { namesOfFile, type NameReader } from '../src/host/nameScan.js';
 import { isZipBytes } from '../src/host/slddFormat.js';
 import * as SlddModel from 'data-explorer-view/model';
 
@@ -369,22 +369,21 @@ class World {
   }
 
   /**
-   * The name index's full build: `nameScan.namesOfFile` for every graph file, batched by
-   * the same `mapLimited` at the same concurrency — `nameIndex.build`, minus the
-   * `findFiles`, and including its rule that an empty bucket is not stored.
+   * The name index's full build: the window's view `NameIndex` (`namesOfFile` for every graph
+   * file, batched by `mapLimited` at the same concurrency, an empty bucket not stored), minus
+   * the `findFiles`.
    */
-  async buildNameIndex(): Promise<Map<string, NameRecord[]>> {
+  private readonly names = new NameIndex({
+    files: { list: async () => GRAPH_FILES },
+    reader: () => this.nameReader(),
+    cache: this.cache,
+  });
+
+  async buildNameIndex(): Promise<NameRecord[]> {
     return this.counting(async () => {
-      const reader = this.nameReader();
-      const found = await mapLimited(GRAPH_FILES, async (file) => ({
-        file,
-        records: await namesOfFile(this.cache, reader, file),
-      }));
-      const index = new Map<string, NameRecord[]>();
-      for (const { file, records } of found) {
-        if (records.length > 0) index.set(file.uriString, records);
-      }
-      return index;
+      // `nameIndex.invalidate()`, then the first search's `listEntries()`, which builds it.
+      this.names.invalidate();
+      return this.names.list();
     });
   }
 

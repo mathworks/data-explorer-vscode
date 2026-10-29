@@ -1,72 +1,21 @@
 // Copyright 2026 The MathWorks, Inc.
 // Workspace-wide index of entry NAMES inside Simulink data sources, powering a
-// global "search entries by name" feature. It is deliberately standalone: it
-// does not depend on the relationship graph or the usage graph, and it reads
-// only names (never resolves them).
+// global "search entries by name" feature: view's `NameIndex`, one for the window, over what only
+// this host knows — the folder `findFiles` lists, and an open document's unsaved text.
 //
-// The index is a Map<uriString, NameRecord[]> — one bucket per file — so that
-// (a) duplicate names within and across files are preserved (each occurrence is
-// its own record), and (b) an incremental update after a file change is a
-// single-key replace rather than a full rebuild. Built LAZILY on first query
-// and cached via a module Promise; invalidated wholesale via invalidate().
-//
-// This module does the vscode file I/O; where each name comes FROM — the shared
-// source cache for a model's parse, this file's own scanners for a .sldd or a
-// .mat, and an unsaved buffer over both — is nameScan.ts, and the pure
-// name-extraction core is nameExtract.ts. Both are vscode-free and unit-tested.
+// The index itself (one bucket per file, built lazily on first query and kept, a targeted
+// reindex for an edited file, invalidated wholesale), where each name comes from (view's
+// nameScan.ts) and the name extraction (view's nameExtract.ts) are view's. What is left here is
+// the vscode file I/O: the listing, the reads through the window's shared source cache, and the
+// dirty-buffer override.
 import * as vscode from 'vscode';
-import { mapLimited, type SourceFile } from 'data-explorer-core';
+import type { SourceFile } from 'data-explorer-core';
+import { NameIndex, type NameReader, type NameRecord } from 'data-explorer-view/model';
 import { toArrayBuffer } from '../common/bytes.js';
 import { GRAPH_GLOB } from '../common/fileTypes.js';
-import type { NameRecord } from './nameExtract.js';
-import { namesOfFile, type NameReader } from './nameScan.js';
 import { readerFor, sourceCache, sourceFilesOf } from './sourceReads.js';
 
-export type { EntryKind, NameRecord } from './nameExtract.js';
-
-// uriString -> that file's name records. Null when the lazy build hasn't run.
-let index: Map<string, NameRecord[]> | null = null;
-let buildPromise: Promise<void> | null = null;
-
-// Drop the whole index; the next ensureIndex() rebuilds it. Called on any
-// workspace file create/delete/change where a targeted reindex isn't enough.
-export function invalidate(): void {
-  index = null;
-  buildPromise = null;
-}
-
-export async function ensureIndex(): Promise<void> {
-  if (!buildPromise) buildPromise = build();
-  return buildPromise;
-}
-
-export async function listEntries(): Promise<NameRecord[]> {
-  await ensureIndex();
-  const out: NameRecord[] = [];
-  // NB: append with a loop, not `out.push(...bucket)`. A data source can hold
-  // tens of thousands of entries, and spreading a huge array as call arguments
-  // overflows the engine's argument limit ("Maximum call stack size exceeded").
-  for (const bucket of index?.values() ?? []) {
-    for (const rec of bucket) out.push(rec);
-  }
-  return out;
-}
-
-// Re-read + parse just this file and replace its bucket. Judgment call: if the
-// lazy build hasn't happened yet (index is null), this is a no-op — building an
-// index off a single file would give incomplete answers, so we let the first
-// listEntries() do the full scan instead. Once built, this keeps the index
-// current after an edit without a full rebuild.
-export async function reindexFile(uri: vscode.Uri): Promise<void> {
-  if (!index) return;
-  const [file] = sourceFilesOf([uri]);
-  index.set(uri.toString(), await namesOfFile(sourceCache, nameReader([uri]), file));
-}
-
-// Drop one file's bucket (e.g. the file was deleted). Safe before build.
-export function removeFile(uriString: string): void {
-  index?.delete(uriString);
-}
+export type { EntryKind, NameRecord } from 'data-explorer-view/model';
 
 // The file's UNSAVED bytes, when an open document has some, and `null` when the
 // scan should read disk instead.
@@ -83,11 +32,11 @@ export function removeFile(uriString: string): void {
 // own edit stack rather than a TextDocument, so `isDirty` here always implies the
 // JSON format and encoding the string back to bytes is lossless. A clean (or
 // unopened) document has no in-memory state worth preferring, so it reads disk —
-// which also keeps the full build() unaffected.
+// which also keeps the full build unaffected.
 //
-// Answering `null` rather than the disk bytes is what lets nameScan tell the two
+// Answering `null` rather than the disk bytes is what lets view's nameScan tell the two
 // cases apart, and it has to: buffer bytes must never be stored in the shared
-// cache, whose keys are the DISK file's `mtime:size` (see nameScan.ts).
+// cache, whose keys are the DISK file's `mtime:size`.
 function dirtyBytesOf(file: SourceFile): ArrayBuffer | null {
   const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === file.uriString);
   if (!open?.isDirty) return null;
@@ -103,27 +52,58 @@ function nameReader(uris: readonly vscode.Uri[]): NameReader {
   return { ...readerFor(uris), dirtyBytes: dirtyBytesOf };
 }
 
-async function build(): Promise<void> {
-  const map = new Map<string, NameRecord[]>();
-  let uris: vscode.Uri[] = [];
-  try {
-    uris = await vscode.workspace.findFiles(GRAPH_GLOB);
-  } catch {
-    /* no workspace folder open — nothing to scan; the index is legitimately empty */
-  }
-  // A few files at a time, and nothing oversized — see scanRead. This scan is the
-  // heaviest of the three (it needs each model's full parse to collect its block
-  // names), so it is also the one that must not hold the whole folder at once. One
-  // reader for the whole pass, so every file is versioned and read the same way.
-  const reader = nameReader(uris);
-  await mapLimited(sourceFilesOf(uris), async (file) => {
-    const records = await namesOfFile(sourceCache, reader, file);
-    if (records.length > 0) map.set(file.uriString, records);
-  });
-  // Assigned on exactly ONE path, deliberately. `index` non-null is what marks
-  // the build as done: reindexFile no-ops while it is null, and listEntries reads
-  // through it. A failure path that resolved buildPromise WITHOUT setting it
-  // would leave the module permanently half-built — ensureIndex() satisfied, so
-  // no rebuild is ever attempted, while every query returns nothing.
-  index = map;
+// The Uris each read goes through, rather than ones rebuilt from their strings: a pass's are the
+// Uris its own `findFiles` returned, by the listing `NameIndex` hands back to `reader`; a reindex's
+// is the Uri `reindexFile` was given, by its string.
+const listed = new WeakMap<readonly SourceFile[], readonly vscode.Uri[]>();
+const reindexed = new Map<string, vscode.Uri>();
+
+/** The window's name index. */
+export const nameIndex = new NameIndex({
+  files: {
+    async list() {
+      let uris: vscode.Uri[] = [];
+      try {
+        uris = await vscode.workspace.findFiles(GRAPH_GLOB);
+      } catch {
+        /* no workspace folder open — nothing to scan; the index is legitimately empty */
+      }
+      const files = sourceFilesOf(uris);
+      listed.set(files, uris);
+      return files;
+    },
+  },
+  reader: (files) =>
+    nameReader(listed.get(files) ?? files.map((f) => reindexed.get(f.uriString) ?? vscode.Uri.parse(f.uriString))),
+  cache: sourceCache,
+});
+
+// Drop the whole index; the next ensureIndex() rebuilds it. Called on any
+// workspace file create/delete/change where a targeted reindex isn't enough.
+export function invalidate(): void {
+  nameIndex.invalidate();
+}
+
+export function ensureIndex(): Promise<void> {
+  return nameIndex.ensure();
+}
+
+export function listEntries(): Promise<NameRecord[]> {
+  return nameIndex.list();
+}
+
+// Re-read + parse just this file and replace its bucket. If the lazy build hasn't happened yet,
+// this is a no-op — building an index off a single file would give incomplete answers, so the
+// first listEntries() does the full scan instead. Once built, this keeps the index current after
+// an edit without a full rebuild.
+export function reindexFile(uri: vscode.Uri): Promise<void> {
+  const [file] = sourceFilesOf([uri]);
+  reindexed.set(file.uriString, uri);
+  return nameIndex.reindex(file);
+}
+
+// Drop one file's bucket (e.g. the file was deleted). Safe before build.
+export function removeFile(uriString: string): void {
+  reindexed.delete(uriString);
+  nameIndex.remove(uriString);
 }

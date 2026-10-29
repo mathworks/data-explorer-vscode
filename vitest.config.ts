@@ -21,8 +21,8 @@ export default defineConfig({
         // a vscode-importing file left off it reports a flat 0% and drags the
         // headline number down as if it were untested, which hides a real gap
         // somewhere else. Their pure logic is split into sibling modules that ARE
-        // measured here (nameIndex→nameExtract, searchSources→searchFilter,
-        // webviewHtml→webviewShell).
+        // measured here (webviewHtml→webviewShell), or in view or core (the name index
+        // and search, the usage graphs, the folder hierarchy, the source cache).
         'src/host/BinaryEditorProvider.ts',
         'src/host/BinarySlddEditorProvider.ts',
         'src/host/MatEditorProvider.ts',
@@ -34,8 +34,10 @@ export default defineConfig({
         'src/host/SectionsTreeProvider.ts',
         'src/host/SlddTextEditorProvider.ts',
         'src/host/editorHub.ts',
+        // The vscode half of the name index; the index itself is view's NameIndex.
         'src/host/nameIndex.ts',
         'src/host/scanRead.ts',
+        // The search QuickPick; what each match says is view's searchItem.
         'src/host/searchSources.ts',
         // The reading half of the shared source cache; the cache itself is core's.
         'src/host/sourceReads.ts',

@@ -322,10 +322,11 @@ describe('no consumer keeps its own copy of the list', () => {
     // dispatches on the filename with its own (case-insensitive) kind tests — so a
     // rule about this extension's globs and predicates has nothing to say about it.
     'src/host/nameIndex.ts',
-    // nameScan.ts is the kind DISPATCH the name index used to hold itself: which reader a
+    // nameScan is the kind DISPATCH the name index used to hold itself: which reader a
     // candidate's names come from. It moved out when the model read went through the shared
-    // cache, and the scan has to follow it, not the file it left.
-    'src/host/nameScan.ts',
+    // cache, and to view with the name index; the scan follows it where it ships, as view's
+    // other files below.
+    'node_modules/data-explorer-view/dist/model/search/nameScan.js',
     // The tree's file shaping (it was structuralIndex.ts), which moved to view with the rest of
     // the hierarchy. Scanned where it ships, like view's other files below: it classifies every
     // file the tree lists and names every project, and the tree this host draws runs it.
@@ -495,22 +496,22 @@ describe('no consumer keeps its own copy of the list', () => {
     // and `scanModelStructure` dispatch on the same ZIP magic in the same core module,
     // the second being the first narrowed to three relationship fields over a filtered
     // set of OPC parts. So core's SlxStructure reads models with the scanner and
-    // nameScan.ts with the full parse — it needs block parameters, which the scanner
+    // view's nameScan with the full parse — it needs block parameters, which the scanner
     // deliberately does not carry — and neither is choosing a format on this host's
     // behalf. What is barred is reaching PAST the sniff to a single-format reader.
     //
-    // nameScan.ts, not nameIndex.ts: the name index's model read is the SHARED parse now
-    // (core's `parsedModelOf`), and the only model read left in this repo outside that
-    // one accessor is the buffer of an unsaved document, which nameScan owns.
+    // nameScan, not nameIndex: the name index's model read is the SHARED parse now (core's
+    // `parsedModelOf`), and the only other model read is the buffer of an unsaved document,
+    // which nameScan owns.
     //
     // The usage graph's model read is no longer in this repo at all — it is core's
     // `buildUsageIndex`, which dispatches through the same `parseModel`. Pinning that
     // by scanning a file in node_modules would assert against a pinned artifact, so it
-    // is pinned by BEHAVIOUR instead: test/usageEndToEnd.test.ts runs a classic
+    // is pinned by BEHAVIOUR instead: view's test/usageEndToEnd.test.ts runs a classic
     // legacy_ctrl.mdl through the graph and expects its blocks, and parseSlx on a
     // `.mdl` throws rather than returning nothing.
     for (const file of [
-      'src/host/nameScan.ts',
+      'node_modules/data-explorer-view/dist/model/search/nameScan.js',
       'node_modules/data-explorer-core/dist/datamodel/parser/SlxStructure.js',
     ]) {
       const src = code(file);

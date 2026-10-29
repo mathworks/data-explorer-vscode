@@ -6,7 +6,7 @@
 // anyone asked for its names — is all in core's source cache (`newSourceCache` and the calls
 // beside it), which is vscode-free so that it can be tested over real fixture bytes. This
 // module supplies `readForScan`/`scanVersion` and the cache instance, and nothing else: the
-// same split nameIndex->nameExtract and searchSources->searchFilter already make here, and it
+// same split nameIndex.ts and searchSources.ts make with view's name index and search, and it
 // exists so the properties the design rests on are pinned in the fast suite rather than only
 // in the integration suite. The one thing decided here rather than there is the difference
 // between how a SCAN reads a file and how a TAB does — see `parsedModelForTab`.

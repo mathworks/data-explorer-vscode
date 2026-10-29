@@ -2,7 +2,7 @@
 // Integration tests for the workspace name index, run inside a real VS Code so
 // `vscode.workspace.findFiles` and `workspace.fs.readFile` resolve against the
 // fixture workspace (binary.sldd, data.sldd, params.sldd, model.slx). The pure
-// name-extraction rules are unit-tested in test/nameExtract.test.ts; here we
+// name-extraction rules are unit-tested in view's test/nameExtract.test.ts; here we
 // prove the end-to-end contract the vitest suite cannot reach:
 //   - the index builds a COMPLETE name list from files that are never OPENED
 //     (the whole point of eager, standalone indexing);
@@ -89,7 +89,7 @@ suite('workspace name index', () => {
     // The flat fixture workspace has three .sldd sources that carry entries.
     // (model.slx is a minimal fixture with no model-workspace vars or block→param
     // usages, so it contributes no name records — the .slx extraction path is
-    // covered by the vitest unit suite, test/nameExtract.test.ts.)
+    // covered by view's unit suite, its test/nameExtract.test.ts.)
     for (const f of ['data.sldd', 'params.sldd', 'binary.sldd']) {
       assert.ok(labels.has(f), `the index includes entries from ${f}`);
     }

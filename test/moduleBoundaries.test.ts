@@ -214,7 +214,7 @@ describe('the coverage exclude list matches the files it claims to', () => {
 
   it('excludes no host file that does NOT import vscode', () => {
     // Every entry has to earn its place. A file whose `vscode` import was refactored
-    // away — the whole point of the nameIndex→nameExtract style split — becomes
+    // away — the whole point of the webviewHtml→webviewShell style split — becomes
     // measurable, and leaving it excluded throws away the coverage the split bought.
     const unearned = excluded
       .filter((p) => p.startsWith('src/host/') && !p.includes('*'))

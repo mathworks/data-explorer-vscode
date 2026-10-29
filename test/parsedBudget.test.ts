@@ -37,7 +37,7 @@ import {
   type SourceFile,
 } from 'data-explorer-core';
 import { blankCommentsAndKeepLines } from './tools/moduleGraph.js';
-import { namesOfFile, type NameReader } from '../src/host/nameScan.js';
+import { namesOfFile, type NameReader } from 'data-explorer-view/model';
 
 const dir = join(import.meta.dirname, 'fixtures');
 
@@ -124,8 +124,8 @@ describe('an eviction costs a re-derive and changes no answer', () => {
 describe('the tab pin is what keeps the folder pass from thrashing', () => {
   it('is the entry point the vscode adapter actually calls', () => {
     // The one seam no cache test can reach: `sourceReads.ts` imports `vscode`, so it cannot be
-    // loaded in this suite (see vitest.config.ts) and the openTab helpers in nameScan.test.ts and
-    // in core's own cache tests are all hand-copies of its inner sequence. Every one of them would
+    // loaded in this suite (see vitest.config.ts) and the openTab helpers in view's
+    // nameScan.test.ts and in core's own cache tests are all hand-copies of its inner sequence. Every one of them would
     // still pass if that module went back to `parsedModelOf` — and then the shipped host would
     // re-parse an open model on every folder pass while every suite agreed it did not. Checked as
     // TEXT because there is nothing else to check it with, and with the comments blanked so the

@@ -105,7 +105,7 @@ keeps:
 | open a tab on a `.sldd`/`.mat` | `SlddModel.getModelFromBytes` (that read is not shared: a dictionary's rows come from its content, which the cheap tier's `FileSummaries` is not) |
 | fill the Usage column | `usagePlan.planSummaries` |
 | build the sections tree | view's `FolderHierarchy` (`graphSourcesOf` + `RelGraph`), as `SectionsTreeProvider` holds it |
-| build the search index | `nameScan.namesOfFile`, batched by the real `mapLimited` |
+| build the search index | view's `NameIndex` (`namesOfFile`, batched by the real `mapLimited`), as `nameIndex.ts` holds it |
 
 Until the phase 7 rewire three of those were HAND-COPIES of the pre-cache host, so an
 after-run would have executed the old design and reported no improvement at all. Two

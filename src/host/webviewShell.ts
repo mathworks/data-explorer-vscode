@@ -1,8 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 // Pure (vscode-free) webview shell + Content-Security-Policy assembly. Split from
 // webviewHtml.ts (which resolves the vscode Uris) so the CSP is unit-testable
-// without a live vscode — mirrors the nameExtract.ts ↔ nameIndex.ts and
-// searchFilter.ts ↔ searchSources.ts pure-core / host-IO splits.
+// without a live vscode — the pure-core / host-IO split this host makes throughout.
 //
 // The CSP is the webview's only sandbox: `default-src 'none'` plus one allowance
 // per resource kind the table views actually load. Scripts are admitted by nonce
