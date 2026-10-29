@@ -115,7 +115,7 @@ import {
   type NameRecord,
 } from 'data-explorer-view/model';
 import { isZipBytes } from '../src/host/slddFormat.js';
-import * as SlddModel from 'data-explorer-view/model';
+import * as SlddModel from 'data-explorer-view/host';
 
 const CORPUS = fileURLToPath(new URL('corpus/', import.meta.url));
 const REPEATS = Math.max(1, Number(process.env.BENCH_REPEATS ?? 3));
