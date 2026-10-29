@@ -244,7 +244,7 @@
   "dependencies": {
     "@lit/context": "^1.1.6",
     "data-explorer-core": "github:mathworks/data-explorer-core#v1.47.0",
-    "data-explorer-view": "github:mathworks/data-explorer-view#094b7f0178ddd0d416642d5e3f9a2b5958792fdf",
+    "data-explorer-view": "github:mathworks/data-explorer-view#0f639a6ef8778d8d9e176d0a3ed551e8b3a81828",
     "fast-xml-parser": "^5.8.0",
     "fflate": "^0.8.3",
     "highlight.js": "^11.11.1",
