@@ -147,6 +147,27 @@ suite('SectionsTreeProvider', () => {
     assert.strictEqual(item.command, undefined, 'no open for a .prj that is not in the folder');
   });
 
+  // A row kind this tree does not draw as a file, such as the notice view's hierarchy adds when a
+  // listing was cut short (findFiles never is): its text, and nothing that would open, badge or
+  // decorate a file.
+  test('getTreeItem for a row kind it does not know: its text alone', async () => {
+    await provider.getChildren();
+    const item = provider.getTreeItem({
+      label: 'Showing the first 10,000 files',
+      kind: 'notice',
+      collapsible: 'none',
+      description: 'the folder holds more',
+      key: '/notice',
+    } as never);
+    assert.strictEqual(item.label, 'Showing the first 10,000 files');
+    assert.strictEqual(item.description, 'the folder holds more');
+    assert.strictEqual(item.collapsibleState, vscode.TreeItemCollapsibleState.None);
+    assert.strictEqual(item.command, undefined, 'no open command');
+    assert.strictEqual(item.iconPath, undefined, 'no file icon');
+    assert.strictEqual(item.contextValue, undefined, 'no file contextValue');
+    assert.strictEqual(item.resourceUri, undefined, 'no decoration');
+  });
+
   test('getTreeItem for a missing reference: warning icon, no open command', async () => {
     const [group] = await provider.getChildren();
     const model = byLabel(await provider.getChildren(group), 'model.slx')!;

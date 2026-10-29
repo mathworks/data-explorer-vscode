@@ -1,7 +1,13 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
 import type { SourceFile } from 'data-explorer-core';
-import { encode, FolderHierarchy, type GraphReader, type HierarchyItem } from 'data-explorer-view/model';
+import {
+  encode,
+  FolderHierarchy,
+  type GraphReader,
+  type HierarchyItem,
+  type SourceType,
+} from 'data-explorer-view/model';
 import { svgIconFor } from './iconMap.js';
 import { readProjectStore } from './projectStore.js';
 import { readerFor, sourceCache, sourceFilesOf } from './sourceReads.js';
@@ -18,6 +24,11 @@ import { SUPPORTED_GLOB } from '../common/fileTypes.js';
 // query and its `contextValue`.
 
 export type SlddTreeNode = HierarchyItem;
+
+// The row kinds drawn as files. Typed against view's SourceType, so a file kind view adds does
+// not compile here until it is drawn; a row kind that is no file (view is adding a `notice` for a
+// listing cut short, which `findFiles` never is) is drawn as its text alone.
+const FILE_KINDS: Record<SourceType, true> = { model: true, sldd: true, mat: true, project: true };
 
 export class SectionsTreeProvider implements vscode.TreeDataProvider<SlddTreeNode> {
   private _onDidChangeTreeData = new vscode.EventEmitter<SlddTreeNode | undefined>();
@@ -114,6 +125,13 @@ export class SectionsTreeProvider implements vscode.TreeDataProvider<SlddTreeNod
       }
       item.iconPath = svgIconFor(this.extensionUri, el.icon);
       item.contextValue = contextValue;
+      return item;
+    }
+
+    if (!Object.hasOwn(FILE_KINDS, el.kind)) {
+      const item = new vscode.TreeItem(el.label, collapsible);
+      if (el.description !== undefined) item.description = el.description;
+      if (el.tooltip !== undefined) item.tooltip = el.tooltip;
       return item;
     }
 
