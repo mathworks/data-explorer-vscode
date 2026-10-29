@@ -12,6 +12,8 @@ import {
   lazyRowsBanner,
   basename,
   projectPathSegments,
+  projectPageMessage,
+  MSP_CONFIG,
 } from 'data-explorer-view/model';
 import {
   getModelForBinaryTab,
@@ -34,16 +36,12 @@ import { subscribeUsageRepost } from './usageRepostWatch.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import { seededRead } from './seededRead.js';
-import { detectMsp, MSP_CONFIG } from './mspProject.js';
 import {
-  buildProjectPage,
   isMatFile,
   isModelFile,
   isProjectFile,
   isSlddFile,
   isTomlProjectFile,
-  parseProject,
-  projectFallbackName,
 } from 'data-explorer-core';
 import type { ProjectToHostMessage, TableToHostMessage } from '../common/protocol.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
@@ -424,32 +422,17 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           // definition and arrives as a one-entry map — projectStore.ts owns that
           // split, so nothing here reads differently for the two.
           //
-          // A PAGE, not a table — see core's ProjectPage.ts. Straight from
-          // `parseProject` rather than through the node tree the other formats build:
-          // what the page shows is the parse itself (run order, groups, label
-          // coverage), and a tree of rows is a shape none of that survives.
-          //
-          // `projectFallbackName` of the PATH, not a reduction of the name: every
-          // project in the TOML format spells its definition file identically, so
-          // stripping an extension would title all of them "matlab" (or, with
-          // `projectNameOf`, leave the page headed "matlab.toml"). The parent folder is
-          // what MATLAB calls a project it was handed the root of, and core publishes
-          // the rule so this page and the tree's project row agree on one string.
+          // A PAGE, not a table — see core's ProjectPage.ts. The message is view's
+          // (`projectPageMessage`): the parse straight to core's page model, the fallback name
+          // from the PATH (a `matlab.toml` is named after its folder, as the tree's project row
+          // is), what a Managed Simulink Project adds, and the warnings — so every app draws a
+          // project's page from the same message. The store is this host's own read, in the
+          // order workspace.fs lists it, as it always was.
           const files = await readProjectStore(document.uri);
-          const parsed = parseProject(files, projectFallbackName(document.uri.path));
           const root = projectRootOf(document.uri);
-          webview.postMessage({
-            type: 'setProject',
-            page: buildProjectPage(parsed),
-            root: root.fsPath,
-            // Undefined for every project that is not a Managed Simulink Project, which
-            // leaves the page byte-identical to what it rendered before this existed.
-            msp: detectMsp(parsed, await readTextIfPresent(root, MSP_CONFIG)),
-            // A project is the format this matters most for: its store is read by
-            // convention with no schema, so a document that did not survive its trip
-            // costs whatever entity it described and leaves a page that looks whole.
-            warnings: warningBanner(parsed.warnings),
-          });
+          webview.postMessage(
+            projectPageMessage(files, document.uri.path, root.fsPath, await readTextIfPresent(root, MSP_CONFIG)),
+          );
           return;
         }
 

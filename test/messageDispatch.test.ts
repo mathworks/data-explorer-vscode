@@ -428,18 +428,38 @@ describe('every setProject says where the project is', () => {
   // cannot derive it: a project store records nothing absolute, by design. Omit it and the
   // page renders `undefined` under the project's name, which no type will catch because
   // `webview.postMessage` takes `any`.
-  const bodies = PROVIDERS.flatMap((p) =>
-    [...read(`src/host/${p.file}`).matchAll(/postMessage\(\{\s*type: 'setProject'([\s\S]*?)\}\)/g)].map(
-      (m) => ({ file: p.file, body: m[1] }),
-    ),
-  );
+  //
+  // A post is either the message written out (`postMessage({ type: 'setProject', … })`) or
+  // view's builder of it (`postMessage(projectPageMessage(store, marker, root, …))`), which
+  // sets `page` from the store and `root` from its third argument.
+  const bodies = PROVIDERS.flatMap((p) => {
+    const src = read(`src/host/${p.file}`);
+    return [
+      ...[...src.matchAll(/postMessage\(\{\s*type: 'setProject'([\s\S]*?)\}\)/g)].map((m) => ({
+        file: p.file,
+        body: m[1],
+        built: false,
+      })),
+      ...[...src.matchAll(/postMessage\(\s*projectPageMessage\(([\s\S]*?)\)\s*,?\s*\)/g)].map((m) => ({
+        file: p.file,
+        body: m[1],
+        built: true,
+      })),
+    ];
+  });
 
   it('finds the post, so the assertion below is not vacuous', () => {
     expect(bodies.length).toBeGreaterThan(0);
   });
 
-  for (const { file, body } of bodies) {
+  for (const { file, body, built } of bodies) {
     it(`${file} sets page and root on its setProject post`, () => {
+      if (built) {
+        // The store, the marker, and the root — the third argument, which is the page's `root`.
+        expect(body.split(',').length, body).toBeGreaterThanOrEqual(3);
+        expect(body.split(',')[2], body).toMatch(/root/);
+        return;
+      }
       expect(body).toContain('page:');
       expect(body).toContain('root:');
     });
