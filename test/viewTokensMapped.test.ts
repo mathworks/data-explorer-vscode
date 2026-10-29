@@ -34,6 +34,9 @@ const WIDGETS = widgetFiles(join(VIEW, 'dist', 'widgets')).map((f) => noComments
 const VIEW_THEME = noComments(readFileSync(join(VIEW, 'src', 'theme', 'tokens.css'), 'utf8'));
 const VSCODE_THEME = noComments(readFileSync(join(process.cwd(), 'src', 'webview', 'vscode-theme.css'), 'utf8'));
 
+/** Text made literal inside a RegExp. */
+const escape = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const declared = (css: string): Set<string> => new Set([...css.matchAll(/(--dex-[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
 const READ = new Set(WIDGETS.flatMap((js) => [...js.matchAll(/var\(\s*(--dex-[a-z0-9-]+)/g)].map((m) => m[1])));
 const IN_WIDGETS = new Set(WIDGETS.flatMap((js) => [...declared(js)]));
@@ -47,7 +50,7 @@ const THEME_TOKENS = [...READ].filter((t) => !IN_WIDGETS.has(t) || IN_VIEW_THEME
 
 /** Every declared value of one custom property in vscode-theme.css, in source order. */
 const values = (name: string): string[] =>
-  [...VSCODE_THEME.matchAll(new RegExp(`(?:^|[;{\\s])${name}\\s*:([^;]*);`, 'g'))].map((m) =>
+  [...VSCODE_THEME.matchAll(new RegExp(`(?:^|[;{\\s])${escape(name)}\\s*:([^;]*);`, 'g'))].map((m) =>
     m[1].replace(/\s+/g, ' ').trim(),
   );
 
@@ -107,7 +110,7 @@ describe('the tokens that replaced a VS Code variable in a widget map onto that 
   it('"modified" is the sections tree badge colour', () => {
     // Read from the view's own decoration table, so the two surfaces cannot name different ids.
     const id = `--vscode-${DECORATIONS.modified.colorId.replace(/\./g, '-')}`;
-    expect(values('--dex-color-modified')[0]).toMatch(new RegExp(`^var\\(${id},`));
+    expect(values('--dex-color-modified')[0]).toMatch(new RegExp(`^var\\(${escape(id)},`));
   });
 });
 
@@ -116,7 +119,7 @@ describe('the frozen column shade keeps its three theme kinds', () => {
   // which only Chromium understands and which named VS Code; the same values, by the same
   // body classes, now live here. HC Light's body carries vscode-high-contrast as well.
   const block = (selector: string): string => {
-    const m = new RegExp(`(?:^|\\})\\s*${selector.replace(/\./g, '\\.')}\\s*\\{([^}]*)\\}`).exec(VSCODE_THEME);
+    const m = new RegExp(`(?:^|\\})\\s*${escape(selector)}\\s*\\{([^}]*)\\}`).exec(VSCODE_THEME);
     expect(m, `no ${selector} block`).not.toBeNull();
     return m![1].replace(/\s+/g, ' ');
   };
