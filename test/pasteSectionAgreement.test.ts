@@ -19,7 +19,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
 import { DataModel, DATA_PART_XML, parseBinarySlddParts } from 'data-explorer-core';
-import { getModel, invalidate, findNode, buildRows, buildSectionRowId, sectionRowIdOf } from 'data-explorer-view/model';
+import { buildRows, buildSectionRowId, sectionRowIdOf } from 'data-explorer-view/model';
+import { getModel, invalidate, findNode } from 'data-explorer-view/host';
 import { resolveSectionForPaste } from '../src/host/structuralEdit.js';
 import { buildContextMenuItems, type MenuRow } from 'data-explorer-view/tree-table';
 

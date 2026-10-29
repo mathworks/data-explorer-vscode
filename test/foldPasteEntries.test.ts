@@ -14,7 +14,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, invalidate, findNode, buildRows } from 'data-explorer-view/model';
+import { buildRows } from 'data-explorer-view/model';
+import { getModel, invalidate, findNode } from 'data-explorer-view/host';
 import {
   applyTextPatch,
   assertTypeAllowed,

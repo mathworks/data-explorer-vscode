@@ -37,7 +37,8 @@ import {
   buildUsageGraph,
   type RawSource,
 } from '../src/host/usageCells.js';
-import { getModel, getModelFromBytes, buildRows } from 'data-explorer-view/model';
+import { buildRows } from 'data-explorer-view/model';
+import { getModel, getModelFromBytes } from 'data-explorer-view/host';
 import { DexTreeTable, defineTreeTable, type TreeTableRow } from 'data-explorer-view/tree-table';
 
 defineTreeTable();

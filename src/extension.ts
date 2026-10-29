@@ -2,7 +2,8 @@
 import * as vscode from 'vscode';
 import { SectionsTreeProvider } from './host/SectionsTreeProvider.js';
 import { PropertiesViewProvider } from './host/PropertiesViewProvider.js';
-import { InspectorSelection, invalidate, findNode } from 'data-explorer-view/model';
+import { InspectorSelection } from 'data-explorer-view/model';
+import { invalidate, findNode } from 'data-explorer-view/host';
 import { BinaryEditorProvider } from './host/BinaryEditorProvider.js';
 import { SlddTextEditorProvider } from './host/SlddTextEditorProvider.js';
 import { BinarySlddEditorProvider } from './host/BinarySlddEditorProvider.js';

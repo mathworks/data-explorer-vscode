@@ -43,7 +43,8 @@ import {
   type RangeReplacement,
 } from '../src/host/jsonEntrySync.js';
 import { applyEntryOps } from '../src/host/entryOps.js';
-import { getModel, invalidate, peekModel, buildRows, buildEntryRows, spliceEntryRows } from 'data-explorer-view/model';
+import { buildRows, buildEntryRows, spliceEntryRows } from 'data-explorer-view/model';
+import { getModel, invalidate, peekModel } from 'data-explorer-view/host';
 import { findEntrySpan } from '../src/host/entrySplice.js';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from '../src/host/slddBaseline.js';
 

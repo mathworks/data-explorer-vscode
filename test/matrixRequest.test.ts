@@ -28,7 +28,7 @@ import {
   invalidate,
   answerMatrixRequest,
   matrixCellsMessage,
-} from 'data-explorer-view/model';
+} from 'data-explorer-view/host';
 
 function bytes(name: string): ArrayBuffer {
   const b = readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));

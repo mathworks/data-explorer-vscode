@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, invalidate, parseDetached } from 'data-explorer-view/model';
+import { getModel, invalidate, parseDetached } from 'data-explorer-view/host';
 import {
   baselineOwed,
   captureBaseline,
