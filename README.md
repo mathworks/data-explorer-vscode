@@ -25,13 +25,12 @@ You can install the extension from the
 To install a specific build by hand, for an air-gapped machine, or to
 pick up a release before it reaches the Marketplace, download the `.vsix` file from the
 [Releases page](https://github.com/mathworks/data-explorer-vscode/releases) and
-install it either from the command line:
+install it by using the Extensions view → **⋯** menu → **Install from VSIX…**. Or, from the command line:
 
 ```sh
 code --install-extension simulink-data-explorer-<version>.vsix
 ```
 
-Alternatively, install from within Visual Studio Code by using the Extensions view → **⋯** menu → **Install from VSIX…**.
 
 ### Open Simulink Data Explorer
 
