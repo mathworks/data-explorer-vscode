@@ -332,6 +332,11 @@
      one whole box-shadow layer, no var() in it — one unusable value invalidates the table's
      whole box-shadow and takes the column's edge line down with it. Per theme kind, below. */
   --dex-frozen-shade: 8px 0 6px -3px rgba(0, 0, 0, 0.28);
+  /* The icons as drawn, in every VS Code theme, dark ones included: what these webviews have
+     always shown, and what the sidebar tree shows from the same files, which no filter reaches.
+     The view's dark set inverts them; nothing here sets data-theme, but a token left undeclared
+     is one a later theme.css could decide. */
+  --dex-icon-filter: none;
 }
 
 /* VS Code puts these classes on the webview's body. Dark themes get a heavier, wider shade and

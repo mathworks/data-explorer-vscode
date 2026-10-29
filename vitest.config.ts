@@ -4,10 +4,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['test/**/*.test.ts'],
-    // data-explorer-view ships JavaScript for a bundler to finish: its icon reads
-    // `import.meta.env.BASE_URL`, which vite defines and Node does not. vitest hands a package
-    // in node_modules to Node as it is, so this one is inlined instead — run through vite, as
-    // these modules were when they lived in src/, which is also what lets a vi.mock reach them.
+    // vitest hands a package in node_modules to Node as it is; data-explorer-view is inlined
+    // instead — run through vite, as these modules were when they lived in src/, which is what
+    // lets a vi.mock reach them.
     server: { deps: { inline: [/data-explorer-view/] } },
     coverage: {
       provider: 'v8',

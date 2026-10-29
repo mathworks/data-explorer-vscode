@@ -229,7 +229,7 @@
     "build:webview": "vite build",
     "build:host": "node esbuild.mjs",
     "build:web": "node esbuild.mjs --web",
-    "copy:icons": "node -e \"const fs=require('fs');fs.mkdirSync('dist/webview/icons',{recursive:true});for(const f of fs.readdirSync('media/icons'))fs.copyFileSync('media/icons/'+f,'dist/webview/icons/'+f)\"",
+    "copy:icons": "node scripts/copy-icons.mjs",
     "build": "npm run build:webview && npm run copy:icons && npm run build:host",
     "watch:host": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",

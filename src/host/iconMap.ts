@@ -28,7 +28,7 @@ export function themeIconFor(dexIconId: string | undefined): vscode.ThemeIcon {
 // Resolve a dex icon id to the actual SVG shipped with the extension, matching the
 // icons the data explorer project renders. Falls back to a generic type icon
 // when the id is missing. See iconAssets.ts for why the directory is ICON_DIR and
-// not the `media/icons` sources.
+// not one of the folders it is copied from.
 export function svgIconFor(
   extensionUri: vscode.Uri,
   dexIconId: string | undefined,
