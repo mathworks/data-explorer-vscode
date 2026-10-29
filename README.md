@@ -1,34 +1,16 @@
 # Simulink Data Explorer Extension for Visual Studio Code
 
-**Explore Simulink&reg; models, data dictionaries, and projects directly in Visual Studio Code — no MATLAB&reg; or Simulink installation required.** Simulink Data Explorer reads `.slx`, `.mdl`, `.sldd`, `.mat`, and project files itself, so it works anywhere VS Code runs, including machines and CI agents with no MATLAB install. It adds a **relationship tree** that maps how your files reference each other, a **table editor** for browsing and editing their contents, and a **Properties panel** for the selected entry.
+This extension provides support for viewing data from Simulink&reg; models and projects and editing Simulink data dictionaries in Visual Studio Code. It includes a hierarchical relationship tree that maps how your files reference each other, a table for browsing and editing file contents, and detailed properties for the selected data entries.
+
+You can use this extension with or without MATLAB&reg; or Simulink installed on your system.
 
 ![Simulink Data Explorer in action: the relationship-tree sidebar and the table editor browsing a model, data dictionary, and MAT-file](media/screenshots/demo.gif)
 
-## Features
+## Get Started
 
-### Navigate & understand your models
+### Installation
 
-- **Relationship tree** — a dedicated activity-bar view that scans the workspace and renders how files relate: models referencing other models, models linked to data dictionaries (`.sldd`) and MAT-files (`.mat`), and dictionaries referencing other dictionaries. Entries expand lazily as you drill in.
-- **Jump-to-reference links** — a model's Model References and External Data render as clickable links; selecting one opens the referenced model, dictionary, or MAT-file, resolved from your workspace. A reference to a file your workspace doesn't contain shows as unresolved.
-- **Project & folder grouping** — the tree groups top-level entries by MATLAB Project or by containing folder, so files with the same name in different folders stay distinct. References resolve within a group first. A project is recognized from either marker — a `.prj` beside its `resources/project/` store, or the single `matlab.toml` an R2026b project is stored as — and its group header opens the project page.
-- **Health decorations** — tree rows are badged for at-a-glance status: circular references, orphaned dictionaries/MAT-files (nothing links to them), unsaved modifications, and unresolved (missing) references.
-
-### Browse & edit file contents
-
-- **Table editor** — open a model, dictionary, MAT-file, or project in a spreadsheet-style, tree-structured table. Sections are always shown (e.g. a dictionary's Design Data, Architectural Data, Configurations, Other Data), even when empty.
-- **Editing for `.sldd`** — edit a data dictionary directly in the table: change entry values and names, add child elements, and cut/copy/paste/delete entries via the right-click context menu, with **undo/redo, a dirty indicator, and save**.
-- **Live two-way sync with the JSON editor (textual `.sldd`)** — a textual `.sldd` is backed by its JSON text document, so you can switch to Visual Studio Code's built-in text editor at any time via **Reopen Editor With…**. Edits in the table and edits in the JSON update each other instantly, and there is a single shared undo history across both views.
-- **Properties panel** — a selection-following webview that shows the full properties of the entry selected in the table. It lives in its own view container in the secondary sidebar, and can be dragged anywhere else — activity bar or panel — like any other view.
-- **Variable Editor for matrix values** — a value with two or more dimensions stays a short descriptor in its cell (`<2x3x2 double>`) with a grid glyph beside it; clicking the glyph opens the whole array in a floating spreadsheet-style grid, laid out the way MATLAB displays it. Anything above rank 2 gets a `(:,:,k)` page selector to step through its trailing dimensions. Available from both the table and the Properties panel; view-only.
-- **Search** — the table's filter bar turns each condition you type and commit with <kbd>Enter</kbd> into a chip you can remove with its `×`; the `×` at the right end of the box clears the whole search. Scope a condition to one column by naming that column's header exactly as the header spells it — `Name:gain`, `Data Type=double`, `Value>10` — or right-click any column header to build the same thing from a popup, which shows you the text it writes. The operators are `:` (contains), `=`, `!=` (also `~=`), `>`, `<`, `>=` and `<=`, and spaces around one are ignored, so `Data Type: double` and `Value > 5` each read as a single condition. Quote a *value* that contains a space (`Name:"my var"`); a header's own space needs no quoting. Quoting only groups words, so `value:"5"` matches any value *containing* 5 — to ask for exactly 5, use `Value=5`.
-- **Workspace-wide search** — **Data Explorer: Search Data Source Entries** (<kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd>) searches every data source at once and lists each match with the file it comes from. A model's blocks are listed one hit per block, qualified by the subsystem the block sits in — so the several blocks named `Gain` a model may hold stay distinguishable, and the subsystem name is searchable too.
-- **Usage column, both directions** — a dictionary entry, MAT variable, or model-workspace variable lists the blocks that read it, qualified by the model they are in; a block's row shows which of its parameters resolved where (`Gain=Kp (params.sldd)`). Either link navigates to the other side. Resolution follows MATLAB: the mask parameters of the masked subsystems a block sits inside come first, then the model workspace, then the linked data dictionary and any dictionary it references, then linked MAT-files — so a `Gain = g1` inside a mask reads as the mask's own `g1` (`Gain=g1 (MulAdd)`), and the value that mask parameter was given is credited to the masked block.
-- **Block paths in the table** — where a model's blocks share a name, each row's Name shows the subsystem it lives in (`Gain (Controller)`), and hovering a block in the Usage column shows that block's full path.
-- **Theme-aware** — every pane follows your active Visual Studio Code color theme (light, dark, or high-contrast).
-
-## Getting Started
-
-1. Install **Simulink Data Explorer** from the
+You can install the extension from the
    [Visual Studio Code Marketplace](https://marketplace.visualstudio.com/items?itemName=mathworks.simulink-data-explorer):
    open the Extensions view (<kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>X</kbd>),
    search for *Simulink Data Explorer*, and click **Install**. Or, from the command line:
@@ -36,14 +18,12 @@
    ```sh
    code --install-extension mathworks.simulink-data-explorer
    ```
-2. Open a folder or workspace that contains Simulink files.
-3. Click the **Simulink Data Explorer** icon in the activity bar to see the relationship tree.
-4. Open any supported file — it opens in the Data Explorer table by default. Select a row to inspect it in the Properties panel.
 
-### Optional: install from a `.vsix`
 
-If you'd rather install a specific build by hand — for an air-gapped machine, or to
-pick up a release before it reaches the Marketplace — download the `.vsix` from the
+#### Optional: installation from a `.vsix`
+
+To install a specific build by hand, for an air-gapped machine, or to
+pick up a release before it reaches the Marketplace, download the `.vsix` file from the
 [Releases page](https://github.com/mathworks/data-explorer-vscode/releases) and
 install it either from the command line:
 
@@ -51,40 +31,72 @@ install it either from the command line:
 code --install-extension simulink-data-explorer-<version>.vsix
 ```
 
-or from within VS Code via the Extensions view → **⋯** menu → **Install from VSIX…**.
+Alternatively, install from within Visual Studio Code by using the Extensions view → **⋯** menu → **Install from VSIX…**.
+
+### Open Simulink Data Explorer
+
+1. Open a folder or workspace that contains Simulink files.
+2. Click the **Simulink Data Explorer** icon in the activity bar to see the relationship tree.
+3. Open any supported file. The extension it opens in the Data Explorer table by default. Select a row to inspect it in the Properties panel.
+
+## Features
+
+### File Relationship Tree
+
+The left pane organizes your data sources by folder, showing their hierarchical relationships. Supported files include:
+- Simulink data dictionaries (SLDD and JSON files)
+- Simulink models (SLX and MDL files)
+- MAT files
+- Projects (PRJ or TOML files)
+
+Status markers indicate unresolved links and circular references.
+
+### Data Viewer and Editor
+
+The center table shows the contents of the selected data source in a searchable and filterable tree structured table. You can use the table to view the contents of model, project, and MAT files, and to directly edit Simulink data dictionary files. When you select an entry in the table, the Properties panels shows a view only list of the full properties of the object. 
+
+A value with two or more dimensions shows a short descriptor in its cell (for example, `<2x3x2 double>`). Click the grid icon next to the descriptor to show the whole array in a (view only) floating grid. A value with more than two dimensions includes a `(:,:,k)` page selector to step through its trailing dimensions. To edit the individual values, in the table, expand the **Value** node.
+
+#### Search and Filter Data
+
+You can explore and filter the data in the table by using the column headers or the search bar.
+- To add a search condition to the table filters, type the condition in the search box and press <kbd>Enter</kbd>.
+- To scope a condition to one column, right-click the column header, select a search operator, specify the search text, and click **Apply**. The scoped search operation is added to the search bar. You can also type scoped conditions directly into the search bar using the column name, operator, and search text. The operators include `:` (contains), `=`, `!=` (also `~=`), `>`, `<`, `>=` and `<=`. Examples include `Name:gain`, `Data Type=double`, and `Value>10`.
+- To search every open data source, enter <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>Alt</kbd>+<kbd>E</kbd>.
+
+#### Synchronize Data Dictionary Edits with JSON Editor
+
+A textual Simulink data dictionary (SLDD) file is backed by a JSON text document. To edit the JSON file using Visual Studio Code's built-in text editor, right-click the tab for the SLDD file and click **Reopen Editor With…** > **Text Editor**. Edits in the table and edits in the JSON file update each other automatically and there is a single shared undo history across both views.
+
+
+
 
 ## Supported Files
 
-| Files | Formats | In the table |
+| Files | Formats | Support |
 | --- | --- | --- |
-| Simulink data dictionaries | `.sldd` — textual (JSON) and compressed-binary | **Editable** |
-| Simulink models | `.slx`, `.mdl` — the modern text format and the classic pre-R2012 format | Read-only |
-| MAT-files | `.mat` — Level 5, i.e. `-v6`/`-v7` | Read-only |
-| MATLAB Projects | `.prj` — with its `resources/project/` store in any of the three XML layouts — or `matlab.toml`, the single file an R2026b project is stored as | Read-only |
+| Simulink data dictionaries | `.sldd` JSON and compressed-binary | Read and write |
+| Simulink models | `.slx`, `.mdl` | Read only |
+| MAT-files | `.mat` Level 5 (`-v6`/`-v7`) | Read only |
+| MATLAB Projects | `.prj`, `matlab.toml` | Read only |
 
-## Requirements
+## Limitations
 
-Visual Studio Code 1.106.0 or later. Nothing else — Simulink Data Explorer reads and writes these files directly.
-
-## Known Limitations
-
-- `.mat` support covers the Level 5 format only. **`-v7.3`** files, which are HDF5 and are what MATLAB requires for variables above 2 GB, are reported as unsupported rather than opened.
-- Large textual (JSON) `.sldd` files are limited by size. Above **50 MB**, the file opens as a **read-only** table (VS Code cannot mirror a document that large for editing). Above **512 MB**, it cannot be rendered as a table at all and opens in VS Code's built-in **text editor** instead.
-- Paste creates a new top-level entry in the target section; pasting as a child of a struct/bus is not yet supported.
+- Requires Visual Studio Code 1.106.0 or later.
+- Editing supports Simulink data dictionary (SLDD) files. Simulink models, MAT files, and project files are read only.
+- `.mat` support covers the Level 5 format only. **`-v7.3`** files, which are HDF5 and are required by MATLAB for variables above 2 GB, are not supported.
+- Large textual (JSON) `.sldd` files are limited by size. Above **50 MB**, the file opens as a read only table. Above **512 MB**, the file opens in Visual Studio Code's text editor instead.
+- Paste creates a new top level entry in the target section. Pasting as a child of a structure or bus is not supported.
 - Reference resolution matches files by name (basename), preferring the referrer's own project or folder. Two project markers in the same directory are not supported.
-- `.m` files are not scanned, so a project whose members are only `.m` files appears as an empty group — which is common for a `matlab.toml` project.
-- A `matlab.toml` project page shows no member count and no label-coverage fraction: that file records no member list, so each label is shown with the entries it declares instead. Clicking `matlab.toml` in VS Code's Explorer opens it in the text editor, as it would any other text file; the project page is the tree's group header, or **Reopen Editor With… → Simulink Data Explorer**.
+- `.m` files are not scanned, so a project whose members are only `.m` files appears as an empty group, which is common for a `matlab.toml` project.
+- A `matlab.toml` project page shows no member count and no label coverage fraction: that file records no member list, so each label is shown with the entries it declares instead. Clicking `matlab.toml` in the Visual Studio Code Explorer opens it in the text editor.
 
-## Feedback
+## Contact Us
 
-Please open an issue on the [GitHub repository](https://github.com/mathworks/data-explorer-vscode) to report a bug or request a feature. If the extension is useful to you, a rating or review on the Marketplace helps others find it.
+We encourage all feedback. If you encounter a technical issue or have an enhancement request, create an issue here or contact MathWorks at support@mathworks.com.
 
 ## License
 
 Distributed under the BSD 3-Clause License. See [LICENSE](LICENSE) for details.
-
----
-
-MATLAB and Simulink are registered trademarks of The MathWorks, Inc. See [www.mathworks.com/trademarks](https://www.mathworks.com/trademarks) for a list of additional trademarks. Other product or brand names may be trademarks or registered trademarks of their respective holders.
 
 Copyright 2026 The MathWorks, Inc.
