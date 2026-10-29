@@ -20,7 +20,7 @@ import { isGraphPath } from '../../src/common/fileTypes.js';
 import { newSourceCache } from '../../src/host/sourceCache.js';
 import { planSummaries } from '../../src/host/usagePlan.js';
 import { annotateModelViewRows, annotateVariableRows, buildUsageGraphFromSummaries } from '../../src/host/usageCells.js';
-import { bytesOf, fakeFile, filesUnder, fixtureFolders, nameOf, snapshotPath, snapshotText } from './fixtures.js';
+import { bytesOf, expectGolden, fakeFile, filesUnder, fixtureFolders, nameOf } from './fixtures.js';
 import { nodeReader } from './nodeReads.js';
 import { isModelFixture, openTable, routeOf } from './views.js';
 
@@ -64,7 +64,7 @@ describe('golden Usage cells', { timeout: 60_000 }, () => {
             if (Object.hasOwn(cells, id)) throw new Error(`${view.uriString}: two rows answer for ${id}`);
             cells[id] = row.UsedBy;
           }
-          await expect(snapshotText(cells)).toMatchFileSnapshot(snapshotPath(rel, 'usage'));
+          await expectGolden(cells, rel, 'usage');
         } finally {
           view.close();
         }

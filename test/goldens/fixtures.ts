@@ -15,8 +15,9 @@
 // between a laptop and CI. So each file is opened as `file:///fx/<its path in the repo>`, a uri
 // that is the same on every machine and still says which fixture a row came from.
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { expect } from 'vitest';
 import { isSupportedPath } from '../../src/common/fileTypes.js';
 import type { SourceFile } from '../../src/host/sourceCache.js';
 
@@ -108,12 +109,15 @@ export function bytesOf(rel: string): ArrayBuffer {
   return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
 }
 
+/** The directory one fixture's (or fixture folder's) snapshots live in, under any root. */
+const snapshotKey = (rel: string): string => rel.split('/').join('__');
+
 /**
  * Where one fixture's snapshot of one kind lives — the layout other tooling reads, so it is
  * spelled once: `__snapshots__/<repo path with '/' as '__'>/<kind>.json`, beside this file.
  */
 export function snapshotPath(rel: string, kind: string): string {
-  return join(import.meta.dirname, '__snapshots__', rel.split('/').join('__'), `${kind}.json`);
+  return join(import.meta.dirname, '__snapshots__', snapshotKey(rel), `${kind}.json`);
 }
 
 /**
@@ -151,8 +155,8 @@ function digestRows(rows: unknown[]): unknown {
  * own, so a changed answer is still named by the row it belongs to.
  *
  * Equal digests mean equal payloads, which is the property a move has to keep. What a digest
- * cannot show is HOW an answer changed: for that, raise the limit, run the old and the new code,
- * and diff the full texts.
+ * cannot show is HOW an answer changed: for that, run the old and the new code with
+ * GOLDENS_FULL_DIR set (see FULL_DIR) and diff the two directories.
  */
 function digest(value: unknown): unknown {
   if (Array.isArray(value)) return value.map((m) => (m && Array.isArray(m.rows) ? { ...m, rows: digestRows(m.rows) } : m));
@@ -174,4 +178,25 @@ function digest(value: unknown): unknown {
 export function snapshotText(value: unknown): string {
   const full = JSON.stringify(value, null, 1);
   return (full.length <= FULL_SNAPSHOT_LIMIT ? full : JSON.stringify(digest(value), null, 1)) + '\n';
+}
+
+/**
+ * Where to write every payload WHOLE as well, never digested, or undefined to write none: the
+ * `GOLDENS_FULL_DIR` environment variable, in the same `<key>/<kind>.json` layout as the snapshots.
+ *
+ * For what a digest cannot do. A digest says THAT a payload changed; this is what shows how, by
+ * diffing two runs' directories (the code before a change and after it), and it is the only form
+ * that can be replayed into a webview, which needs every row. Outside the repo, deliberately: it
+ * is regenerated from whatever code is checked out, so committing it would pin nothing new.
+ */
+const FULL_DIR = process.env.GOLDENS_FULL_DIR ? resolve(process.env.GOLDENS_FULL_DIR) : undefined;
+
+/** Hold `value` to its golden snapshot of `kind` — and, when asked, write it out whole (FULL_DIR). */
+export async function expectGolden(value: unknown, rel: string, kind: string): Promise<void> {
+  if (FULL_DIR) {
+    const dir = join(FULL_DIR, snapshotKey(rel));
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${kind}.json`), JSON.stringify(value, null, 1) + '\n');
+  }
+  await expect(snapshotText(value)).toMatchFileSnapshot(snapshotPath(rel, kind));
 }
