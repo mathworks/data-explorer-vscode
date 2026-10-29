@@ -14,7 +14,7 @@
 //   a tab      `sourceCache.parsedModelOf` for a model's parse and then
 //              `SlddModel.getModelFromParsed` for its rows — BinaryEditorProvider.post's
 //              own sequence — or `SlddModel.getModelFromBytes` for a dictionary/MAT-file
-//   Usage      `usagePlan.planSummaries`
+//   Usage      core's `planSummaries`, which view's `UsageGraphs` runs
 //   the tree   view's `FolderHierarchy` (`graphSourcesOf` + `RelGraph`)
 //   search     `nameScan.namesOfFile`, batched by the real `mapLimited`
 //
@@ -213,7 +213,7 @@ class World {
 
   /**
    * The reader the plan is given: `version` from the `stat` alone, `bytes` counted.
-   * Mirrors usageSources.readerFor over node `fs`.
+   * Mirrors sourceReads.readerFor over node `fs`.
    */
   reader(): SourceReader {
     const byUri = new Map(TREE_FILES.map((f) => [f.uriString, f]));

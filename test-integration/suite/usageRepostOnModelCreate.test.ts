@@ -11,7 +11,7 @@
 // Usage cell.
 //
 // So an open data tab now reposts when a model file is created or deleted in the workspace,
-// once per burst (usageRepost.ts, debounced). Pinned here end to end, for both views that fill a
+// once per burst (view's usageRepost.ts, debounced). Pinned here end to end, for both views that fill a
 // data file's Usage column: the JSON dictionary's editable table and the MAT-file editor a
 // `.mat` opens in. Nothing in this file tells a provider anything; what is asserted is only
 // what each posted. The two absences are pinned too, since both are what keep the cost bounded:

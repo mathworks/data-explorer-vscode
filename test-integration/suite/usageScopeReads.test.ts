@@ -10,7 +10,7 @@
 // that file's answers: the models whose reference chain reaches it, plus those models'
 // chains. The arithmetic is unit-tested (core's test/usageScope.test.ts) and the claim that makes
 // it safe — a scoped answer equals the whole-folder answer, for every file in a corpus of
-// real fixture bytes — is pinned in test/usageScopeEquality.test.ts.
+// real fixture bytes — is pinned in view's test/usageScopeEquality.test.ts.
 //
 // What neither can reach is this: whether the scope survives the trip through the real
 // `findFiles` + open-tab candidate set. So this asserts it against two graphs built in the
@@ -19,7 +19,7 @@
 // into the graph at all.
 //
 // This is the end-to-end statement, not the read count: what a build READS is pinned where
-// it can be counted, by injecting the reader (test/usageScopeEquality.test.ts, "what a
+// it can be counted, by injecting the reader (view's test/usageScopeEquality.test.ts, "what a
 // scoped build actually reads"). Here the observable is that a model which cannot reach the
 // opened file is absent from that file's graph — which is what the whole-window graph could
 // never say, because it held every model in the folder.
@@ -29,7 +29,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { ensureUsageGraph, invalidateUsageGraph } from '../../src/host/usageGraph';
-import type { UsageGraph } from '../../src/host/usageCells';
+import type { UsageGraph } from 'data-explorer-view/model';
 import { waitFor } from './tools/hostHarness';
 
 const BINARY_VIEW = 'dataExplorer.binaryView';

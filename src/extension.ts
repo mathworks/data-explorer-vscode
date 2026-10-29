@@ -12,7 +12,7 @@ import { HealthDecorationProvider } from './host/HealthDecorationProvider.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, isZipBytes } from './host/slddFormat.js';
 import { handleNavigate, requestSelect } from './host/navigate.js';
 import { invalidateUsageGraph } from './host/usageGraph.js';
-import { clearUsageSources } from './host/usageSources.js';
+import { clearSources } from './host/sourceReads.js';
 import { searchDataSources } from './host/searchSources.js';
 import { openAddGalleryInActiveView } from './host/editorHub.js';
 import { followContentChanges } from './host/workspaceChange.js';
@@ -320,7 +320,7 @@ export function activate(context: vscode.ExtensionContext): void {
       // no eviction while a file can still be reached to be re-checked. A folder REMOVED
       // is the case where it cannot: its files leave `findFiles`, and their summaries
       // would sit in memory for the rest of the session.
-      clearUsageSources();
+      clearSources();
       refreshAll();
     }),
     // A tab opened in the wrong custom editor for its content: re-route it.

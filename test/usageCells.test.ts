@@ -26,7 +26,7 @@ import {
   type ParamLink,
   type RawSource,
   type UsageGraph,
-} from '../src/host/usageCells.js';
+} from 'data-explorer-view/model';
 
 const block = (name: string, type: string, prop: string, value: string): string =>
   `<Block BlockType="${type}" Name="${name}" SID="${name}"><P Name="${prop}">${value}</P></Block>`;
@@ -124,7 +124,7 @@ describe('blocksUsing — the cell a dictionary entry shows', () => {
   });
 
   it('prefixes the CHANNEL, which is this extension’s grammar and not core’s', () => {
-    // Core emits `name@srcId`; `blocks:` is what navTarget.ts routes on (a data row →
+    // Core emits `name@srcId`; `blocks:` is what view's navTarget.ts routes on (a data row →
     // a block, rather than a block row → a variable). Without it the click is parsed
     // as the other direction and looks for a variable named after the block.
     const [link] = graphOf(files).blocksUsing(DICT, 'Kp');

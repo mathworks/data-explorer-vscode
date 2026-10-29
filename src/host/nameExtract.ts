@@ -5,7 +5,7 @@
 // name-extraction rules are unit-testable without touching the filesystem.
 //
 // This module is deliberately independent of the usage graph (core's
-// `buildUsageIndex`, reached through usageCells.ts) and the relationship graph:
+// `buildUsageIndex`, reached through view's usageCells.ts) and the relationship graph:
 // it answers only "what entry names exist, and where", never how they resolve or
 // relate. Duplicate names across files are preserved (each becomes its own record)
 // so a global "search entries by name" can list every occurrence.

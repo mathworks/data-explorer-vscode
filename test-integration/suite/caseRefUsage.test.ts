@@ -10,7 +10,7 @@
 // reference resolve in the tree and silently not in the Usage column: parameters
 // that are plainly used rendered as unused, with no error.
 //
-// That keying is core's now (`buildUsageIndex`, reached through usageCells.ts) and
+// That keying is core's now (`buildUsageIndex`, reached through view's usageCells.ts) and
 // core tests it directly, so this file is no longer where the rule is pinned. What
 // it still covers is everything on THIS side of the call, none of which core can
 // vouch for: whether a differently-cased file reaches the graph at all (the findFiles

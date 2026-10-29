@@ -9,7 +9,7 @@
 // three (core's cache). That is a speed change whose whole risk is in the ANSWERS: every one of
 // the three is consumed somewhere a wrong answer is invisible — a tree edge that is simply not
 // drawn, a search that simply does not find a name, a Usage cell that simply says nothing. So this
-// suite is the equality, per fixture, in the style usageScopeEquality.test.ts uses for the scoped
+// suite is the equality, per fixture, in the style view's usageScopeEquality.test.ts uses for the scoped
 // usage graph: exhaustive over the corpus rather than illustrative, and read from the directory so
 // a fixture added for some other suite is covered here too.
 //

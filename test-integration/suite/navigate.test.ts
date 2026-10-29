@@ -6,7 +6,7 @@
 // the Model Reference / External Data links, whose target is a BARE filename
 // (e.g. "data.sldd") with no "@source" suffix: the handler must look the file up
 // by basename and open it. The pure target grammar is unit-tested in
-// test/navTarget.test.ts; here we prove the end-to-end resolve-and-open.
+// view's test/navTarget.test.ts; here we prove the end-to-end resolve-and-open.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { handleNavigate } from '../../src/host/navigate';

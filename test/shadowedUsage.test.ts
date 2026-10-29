@@ -34,10 +34,10 @@ import { join } from 'node:path';
 import {
   annotateModelViewRows,
   annotateVariableRows,
+  buildRows,
   buildUsageGraph,
   type RawSource,
-} from '../src/host/usageCells.js';
-import { buildRows } from 'data-explorer-view/model';
+} from 'data-explorer-view/model';
 import { getModel, getModelFromBytes } from 'data-explorer-view/host';
 import { DexTreeTable, defineTreeTable, type TreeTableRow } from 'data-explorer-view/tree-table';
 
