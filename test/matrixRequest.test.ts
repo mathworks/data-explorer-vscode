@@ -22,8 +22,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel } from 'data-explorer-core';
-import { getModel, getModelFromBytes, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
-import { answerMatrixRequest, matrixCellsMessage } from 'data-explorer-view/model/matrix/matrixRequest.js';
+import {
+  getModel,
+  getModelFromBytes,
+  invalidate,
+  answerMatrixRequest,
+  matrixCellsMessage,
+} from 'data-explorer-view/model';
 
 function bytes(name: string): ArrayBuffer {
   const b = readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));

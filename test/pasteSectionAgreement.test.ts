@@ -19,12 +19,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
 import { DataModel, DATA_PART_XML, parseBinarySlddParts } from 'data-explorer-core';
-import { getModel, invalidate, findNode } from 'data-explorer-view/model/workspace/SlddModel.js';
-import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
+import { getModel, invalidate, findNode, buildRows, buildSectionRowId, sectionRowIdOf } from 'data-explorer-view/model';
 import { resolveSectionForPaste } from '../src/host/structuralEdit.js';
-import { buildSectionRowId } from 'data-explorer-view/model/ids/sectionRowId.js';
-import { sectionRowIdOf } from 'data-explorer-view/model/actions/operands.js';
-import { buildContextMenuItems, type MenuRow } from 'data-explorer-view/widgets/tree-table/menuItems.js';
+import { buildContextMenuItems, type MenuRow } from 'data-explorer-view/tree-table';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

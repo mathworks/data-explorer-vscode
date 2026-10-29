@@ -19,9 +19,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { DataModel } from 'data-explorer-core';
 import { MatEditorProvider } from '../../src/host/MatEditorProvider';
-import { InspectorSelection } from 'data-explorer-view/model/inspector/inspectorSelection.js';
-import { buildPropertyGroups } from 'data-explorer-view/model/inspector/piBuilder.js';
-import { findNode } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { InspectorSelection, buildPropertyGroups, findNode } from 'data-explorer-view/model';
 import { clearClipboard } from '../../src/host/clipboard';
 import { ctx, fakePanel, quiet, token, waitFor } from './tools/hostHarness';
 

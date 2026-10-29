@@ -2,11 +2,19 @@
 import 'data-explorer-view/theme.css';
 import './webview-page.css';
 import './vscode-theme.css';
-import { defineTreeTable } from 'data-explorer-view/widgets/tree-table/dex-tree-table.js';
-import { defineContextMenu } from 'data-explorer-view/widgets/context-menu/dex-context-menu.js';
-import { defineErrorDialog } from 'data-explorer-view/widgets/error-dialog/dex-error-dialog.js';
-import { defineVariableEditor } from 'data-explorer-view/widgets/variable-editor/dex-variable-editor.js';
-import { setIconBase } from 'data-explorer-view/widgets/shared/dex-icon.js';
+import {
+  defineTreeTable,
+  buildContextMenuItems,
+  shouldShowContextMenu,
+  shouldOpenCellEditor,
+  resolveShortcutAction,
+  type ClipboardState,
+  type MenuRow,
+} from 'data-explorer-view/tree-table';
+import { defineContextMenu, type ContextMenuItem } from 'data-explorer-view/context-menu';
+import { defineErrorDialog } from 'data-explorer-view/error-dialog';
+import { defineVariableEditor } from 'data-explorer-view/variable-editor';
+import { setIconBase } from 'data-explorer-view/icon';
 import { installMatrixOpen } from './matrixOpen.js';
 import { renderBanners, renderError } from './banners.js';
 import {
@@ -16,15 +24,17 @@ import {
   spliceEntryRows,
   insertEntryRows,
   mergeChildRows,
-} from 'data-explorer-view/model/actions/rowUpdates.js';
-import { buildContextMenuItems, shouldShowContextMenu, shouldOpenCellEditor, resolveShortcutAction, type ClipboardState, type MenuRow } from 'data-explorer-view/widgets/tree-table/menuItems.js';
-import { dropDecision, type DragMode, type DropTarget } from 'data-explorer-view/model/actions/dropDecision.js';
-import { sectionRowIdOf } from 'data-explorer-view/model/actions/operands.js';
+  dropDecision,
+  type DragMode,
+  type DropTarget,
+  sectionRowIdOf,
+  type SectionRule,
+  isSectionRowId,
+  sectionNameFromRowId,
+  WHOLE_FILE_SECTION,
+} from 'data-explorer-view/model';
 import { linkRoute } from './linkRoute.js';
-import type { ContextMenuItem } from 'data-explorer-view/widgets/context-menu/dex-context-menu.js';
-import type { SectionRule } from 'data-explorer-view/model/actions/sectionRules.js';
 import type { DragDescriptor } from '../host/dragState.js';
-import { isSectionRowId, sectionNameFromRowId, WHOLE_FILE_SECTION } from 'data-explorer-view/model/ids/sectionRowId.js';
 import type { HostToTableMessage } from '../common/protocol.js';
 
 // Importing a widget no longer registers it, so this comes first: before the shell's table is

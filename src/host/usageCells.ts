@@ -33,7 +33,7 @@ import {
   type ParamOrigin,
   type UsageIndex,
 } from 'data-explorer-core';
-import { uriBasename } from 'data-explorer-view/model/ids/pathUtil.js';
+import { uriBasename } from 'data-explorer-view/model';
 
 // A file the graph is built from, already read. `path` decides how it is parsed
 // (never the caller's say-so) and `uriString` is what every link target carries.

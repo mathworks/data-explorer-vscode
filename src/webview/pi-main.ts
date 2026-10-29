@@ -2,9 +2,9 @@
 import 'data-explorer-view/theme.css';
 import './webview-page.css';
 import './vscode-theme.css';
-import { definePropertyInspector } from 'data-explorer-view/widgets/property-inspector/dex-property-inspector.js';
-import { defineVariableEditor } from 'data-explorer-view/widgets/variable-editor/dex-variable-editor.js';
-import { setIconBase } from 'data-explorer-view/widgets/shared/dex-icon.js';
+import { definePropertyInspector } from 'data-explorer-view/property-inspector';
+import { defineVariableEditor } from 'data-explorer-view/variable-editor';
+import { setIconBase } from 'data-explorer-view/icon';
 import { installMatrixOpen } from './matrixOpen.js';
 import type { HostToPropsMessage } from '../common/protocol.js';
 

@@ -18,12 +18,11 @@
 // extraction at its own call site and hands the result in, which is what `graphSourcesOf`
 // does through the cache. The relationship fields are then one mapping and the failure policy
 // one `catch`, with nothing left to drift against.
-import type { GraphSource, SourceType } from 'data-explorer-view/model/hierarchy/graphModel.js';
+import { type GraphSource, type SourceType, basename } from 'data-explorer-view/model';
 import { mapLimited } from './mapLimited.js';
 import { type SlxStructure } from './slxStructure.js';
 import { cheapAll, sourceKind, type SourceCache, type SourceFile, type SourceReader } from './sourceCache.js';
 import { isProjectFile, parseProject, projectFallbackName } from 'data-explorer-core';
-import { basename } from 'data-explorer-view/model/ids/pathUtil.js';
 
 /** A project's structure, keyed by store-relative POSIX path — see projectStore.ts. */
 export type ProjectStore = Record<string, string>;

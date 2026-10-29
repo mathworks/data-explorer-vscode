@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { clearClipboard, setClipboard, type ClipboardItem } from '../src/host/clipboard.js';
 import { clipMarkChange, clipMarkOfDoc, sameClipMark } from '../src/host/clipMarks.js';
-import { clipMarkKey, type ClipMark } from 'data-explorer-view/model/rows/rowStamp.js';
+import { clipMarkKey, type ClipMark } from 'data-explorer-view/model';
 
 const item = (name: unknown, sourceSection: string): ClipboardItem => ({
   payload: { name },

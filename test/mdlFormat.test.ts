@@ -22,8 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { isModelFile, parseModel, refModelExt } from 'data-explorer-core';
 import { extractSlxStructure } from '../src/host/slxStructure.js';
 import { buildGraphSource } from '../src/host/structuralIndex.js';
-import { getModelFromBytes } from 'data-explorer-view/model/workspace/SlddModel.js';
-import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
+import { getModelFromBytes, buildRows } from 'data-explorer-view/model';
 import { namesFromSlx } from '../src/host/nameExtract.js';
 
 function bytes(name: string): ArrayBuffer {

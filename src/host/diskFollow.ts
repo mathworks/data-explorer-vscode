@@ -15,7 +15,7 @@
 // What each format reads off the disk, and how it replaces its document with it, stays in its
 // provider: the two are handed in as `read` and `apply`.
 import * as vscode from 'vscode';
-import { basename } from 'data-explorer-view/model/ids/pathUtil.js';
+import { basename } from 'data-explorer-view/model';
 import { writeAndStamp } from './safeWrite.js';
 import { backupSource } from './backupId.js';
 import {

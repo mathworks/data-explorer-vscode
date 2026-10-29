@@ -41,8 +41,7 @@ import {
   blocksUsingVariable,
   invalidateUsageGraph,
 } from '../../src/host/usageGraph';
-import { getModel, getModelFromBytes, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
-import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
+import { getModel, getModelFromBytes, invalidate, buildRows } from 'data-explorer-view/model';
 import { toArrayBuffer } from '../../src/common/bytes';
 import { waitFor } from './tools/hostHarness';
 

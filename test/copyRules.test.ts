@@ -22,7 +22,7 @@ import { copyEntriesToClipboard, dragEntries } from '../src/host/clipboardAction
 import { clearClipboard, clipboardState, getClipboard, setClipboard } from '../src/host/clipboard.js';
 import { clearDrag, dragDescriptor, getDrag } from '../src/host/dragState.js';
 import { buildClipboardSnapshot, buildDragSnapshot, sourceSectionOf } from '../src/host/structuralEdit.js';
-import { getModel, findNode, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { getModel, findNode, invalidate } from 'data-explorer-view/model';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

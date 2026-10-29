@@ -1,22 +1,35 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
 import { renderProjectWebview, renderTableWebview } from './webviewHtml.js';
-import { getModelForBinaryTab, invalidate, openSourceView, releaseIfUnviewed, releaseSourceView } from 'data-explorer-view/model/workspace/SlddModel.js';
+import {
+  getModelForBinaryTab,
+  invalidate,
+  openSourceView,
+  releaseIfUnviewed,
+  releaseSourceView,
+  COLUMNS,
+  COLUMN_LABELS,
+  COLUMN_GROUPS,
+  rowPlannerFor,
+  sourceWarnings,
+  warningBanner,
+  capRows,
+  rowCapBanner,
+  LAZY_ROW_BUDGET,
+  lazyRowsBanner,
+  postOrFallback,
+  answerMatrixRequest,
+  answerChildRequest,
+  type UsageFiller,
+  basename,
+  projectPathSegments,
+} from 'data-explorer-view/model';
 import { forgetChangedSource, parsedModelForTab } from './sourceReads.js';
-import { COLUMNS, COLUMN_LABELS, COLUMN_GROUPS } from 'data-explorer-view/model/rows/rowBuilder.js';
-import { rowPlannerFor } from 'data-explorer-view/model/rows/rowPlanner.js';
 import { readProjectStore } from './projectStore.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, exceedsStringDecodeLimit, isZipBytes } from './slddFormat.js';
 import { annotateDataRows, annotateModelRows } from './usageGraph.js';
 import { subscribeUsageRepost } from './usageRepostWatch.js';
-import { sourceWarnings, warningBanner } from 'data-explorer-view/model/rows/parseWarnings.js';
-import { capRows, rowCapBanner } from 'data-explorer-view/model/rows/rowCap.js';
-import { LAZY_ROW_BUDGET, lazyRowsBanner } from 'data-explorer-view/model/rows/lazyRows.js';
-import { postOrFallback } from 'data-explorer-view/model/rows/postPayload.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
-import { answerMatrixRequest } from 'data-explorer-view/model/matrix/matrixRequest.js';
-import { answerChildRequest, type UsageFiller } from 'data-explorer-view/model/rows/childRequest.js';
-import { basename, projectPathSegments } from 'data-explorer-view/model/ids/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import { seededRead } from './seededRead.js';
 import { detectMsp, MSP_CONFIG } from './mspProject.js';

@@ -20,9 +20,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
 import { DataModel, parseBinarySlddParts } from 'data-explorer-core';
-import { buildEntryRows } from 'data-explorer-view/model/rows/rowBuilder.js';
+import { buildEntryRows, getModel, invalidate } from 'data-explorer-view/model';
 import { buildClipboardSnapshot, cloneForPaste, pasteEntries, sectionByName } from '../src/host/structuralEdit.js';
-import { getModel, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
 import { entryRecord } from '../src/host/entryOps.js';
 import { pasteEntriesXml } from '../src/host/xmlStructuralEdit.js';
 

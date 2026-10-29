@@ -31,7 +31,7 @@
 // this module neither knows nor imports any of it. That is also why it is vscode-free: every
 // branch above is unit-tested with a fake adapter (test/transfer.test.ts).
 import { entrySelectorOf, type EntrySelector } from 'data-explorer-core';
-import { uriBasename } from 'data-explorer-view/model/ids/pathUtil.js';
+import { uriBasename } from 'data-explorer-view/model';
 
 /** One entry a transfer carries: what to paste, and the section it was taken from. */
 export interface TransferItem {

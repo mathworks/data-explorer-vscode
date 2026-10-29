@@ -9,13 +9,25 @@ import {
   openSourceView,
   parseDetached,
   releaseSourceView,
-} from 'data-explorer-view/model/workspace/SlddModel.js';
+  buildEntryRows,
+  COLUMNS,
+  COLUMN_LABELS,
+  COLUMN_GROUPS,
+  type ClipMark,
+  rowPlannerFor,
+  LAZY_ROW_BUDGET,
+  lazyRowsBanner,
+  answerChildRequest,
+  sectionRules,
+  sourceWarnings,
+  warningBanner,
+  postOrReport,
+  answerMatrixRequest,
+  buildSectionRowId,
+  basename,
+} from 'data-explorer-view/model';
 import { findEntrySpan, detectIndent } from './entrySplice.js';
-import { buildEntryRows, COLUMNS, COLUMN_LABELS, COLUMN_GROUPS, type ClipMark } from 'data-explorer-view/model/rows/rowBuilder.js';
 import { clipMarkChange, clipMarkOfDoc } from './clipMarks.js';
-import { rowPlannerFor } from 'data-explorer-view/model/rows/rowPlanner.js';
-import { LAZY_ROW_BUDGET, lazyRowsBanner } from 'data-explorer-view/model/rows/lazyRows.js';
-import { answerChildRequest } from 'data-explorer-view/model/rows/childRequest.js';
 import {
   baselineOwed,
   captureBaseline,
@@ -73,7 +85,6 @@ import {
 } from './editorHub.js';
 import { runTransfer, type TransferAdapter, type TransferDeps } from './transfer.js';
 import { clipboardRegister, dragRegister } from './transferRegisters.js';
-import { sectionRules } from 'data-explorer-view/model/actions/sectionRules.js';
 import {
   deleteEntry,
   deleteChild,
@@ -96,15 +107,10 @@ import { editRefusalText, entrySelectorOf, minimalReplacement, planDeletion, typ
 import { copyEntriesToClipboard, dragEntries } from './clipboardAction.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { subscribeUsageRepost } from './usageRepostWatch.js';
-import { sourceWarnings, warningBanner } from 'data-explorer-view/model/rows/parseWarnings.js';
-import { postOrReport } from 'data-explorer-view/model/rows/postPayload.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
-import { answerMatrixRequest } from 'data-explorer-view/model/matrix/matrixRequest.js';
 import { parsesAsJson } from './slddFormat.js';
 import { wideLanding } from './wideRepaint.js';
 import { catalogFunctionRenameOf, catalogRenameOf, scJsonFunctionRenameEdits, scJsonRenameEdits } from './scRename.js';
-import { buildSectionRowId } from 'data-explorer-view/model/ids/sectionRowId.js';
-import { basename } from 'data-explorer-view/model/ids/pathUtil.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { addChildRefusal, addEntryRefusal, deleteRefusal, describeSource, refusedMessage, type RefusedGesture } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';

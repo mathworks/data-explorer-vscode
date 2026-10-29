@@ -16,8 +16,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { toArrayBuffer } from '../src/common/bytes.js';
-import { scanSldd } from 'data-explorer-view/model/workspace/slddContent.js';
-import { normalizeRefNames, refBasename } from 'data-explorer-view/model/hierarchy/slddRefs.js';
+import { scanSldd } from 'data-explorer-view/model';
+import { normalizeRefNames, refBasename } from 'data-explorer-core';
 
 function fixturePath(name: string): string {
   return fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));

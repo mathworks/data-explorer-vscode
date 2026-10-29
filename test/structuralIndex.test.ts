@@ -19,8 +19,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { zipSync, strToU8 } from 'fflate';
 import { SUPPORTED_EXTS } from '../src/common/fileTypes.js';
-import type { GraphSource, SourceType } from 'data-explorer-view/model/hierarchy/graphModel.js';
-import { scanSldd } from 'data-explorer-view/model/workspace/slddContent.js';
+import { type GraphSource, type SourceType, scanSldd } from 'data-explorer-view/model';
 import { extractSlxStructure } from '../src/host/slxStructure.js';
 import { newSourceCache, sourceKind, type SourceFile } from '../src/host/sourceCache.js';
 import {

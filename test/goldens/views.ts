@@ -18,17 +18,36 @@
 // `postMessage` refuses a payload, which no fixture comes near.
 import { unzipSync } from 'fflate';
 import { DATA_PART_XML, DataModel, isMatFile, isModelFile, isSlddFile, type ParseWarning } from 'data-explorer-core';
-import { getModel, getModelForBinaryTab, findNode, invalidate, releaseIfUnviewed } from 'data-explorer-view/model/workspace/SlddModel.js';
+import {
+  getModel,
+  getModelForBinaryTab,
+  findNode,
+  invalidate,
+  releaseIfUnviewed,
+  rowPlannerFor,
+  type PlanOptions,
+  type RowPlanner,
+  COLUMNS,
+  COLUMN_LABELS,
+  COLUMN_GROUPS,
+  lazyRowsBanner,
+  refuseIfUnreadable,
+  sourceWarnings,
+  warningBanner,
+  type WarningBanner,
+  sectionRules,
+  wholeFileRules,
+  readSlddParts,
+  answerChildRequest,
+  answerMatrixRequest,
+  InspectorSelection,
+  InspectorPage,
+  binaryEditSrcId,
+} from 'data-explorer-view/model';
 import { newSourceCache, parsedModelForOpenTab } from '../../src/host/sourceCache.js';
-import { rowPlannerFor, type PlanOptions, type RowPlanner } from 'data-explorer-view/model/rows/rowPlanner.js';
-import { COLUMNS, COLUMN_LABELS, COLUMN_GROUPS } from 'data-explorer-view/model/rows/rowBuilder.js';
-import { lazyRowsBanner } from 'data-explorer-view/model/rows/lazyRows.js';
-import { refuseIfUnreadable, sourceWarnings, warningBanner, type WarningBanner } from 'data-explorer-view/model/rows/parseWarnings.js';
 import { captureBaseline, clearBaseline, computeModified } from '../../src/host/slddBaseline.js';
 import { clipMarkOfDoc } from '../../src/host/clipMarks.js';
 import { clipboardState } from '../../src/host/clipboard.js';
-import { sectionRules, wholeFileRules } from 'data-explorer-view/model/actions/sectionRules.js';
-import { readSlddParts } from 'data-explorer-view/model/workspace/slddContent.js';
 import {
   exceedsStringDecodeLimit,
   exceedsTextSyncLimit,
@@ -37,11 +56,6 @@ import {
 } from '../../src/host/slddFormat.js';
 import { describeSource } from '../../src/host/refusal.js';
 import { SaveMarks } from '../../src/host/saveMarks.js';
-import { answerChildRequest } from 'data-explorer-view/model/rows/childRequest.js';
-import { answerMatrixRequest } from 'data-explorer-view/model/matrix/matrixRequest.js';
-import { InspectorSelection } from 'data-explorer-view/model/inspector/inspectorSelection.js';
-import { InspectorPage } from 'data-explorer-view/model/inspector/inspectorPage.js';
-import { binaryEditSrcId } from 'data-explorer-view/model/ids/srcId.js';
 import { bytesOf, fakeFile, nameOf } from './fixtures.js';
 
 /**

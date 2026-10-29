@@ -35,8 +35,7 @@ import {
   type SourceReader,
 } from '../src/host/sourceCache.js';
 import { planSummaries } from '../src/host/usagePlan.js';
-import { getModelForBinaryTab, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
-import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
+import { getModelForBinaryTab, invalidate, buildRows } from 'data-explorer-view/model';
 
 const dir = join(import.meta.dirname, 'fixtures');
 

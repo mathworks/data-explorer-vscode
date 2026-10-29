@@ -104,7 +104,7 @@ import {
 } from 'data-explorer-core';
 import type { FileSummaries, ParsedSlx } from 'data-explorer-core';
 import { mapLimited } from './mapLimited.js';
-import { scanSldd } from 'data-explorer-view/model/workspace/slddContent.js';
+import { scanSldd } from 'data-explorer-view/model';
 import { extractSlxStructure, structureFromParsed, type SlxStructure } from './slxStructure.js';
 
 /** A candidate file, before anything has been read: what it is called and where. */

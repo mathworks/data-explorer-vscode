@@ -16,8 +16,12 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BINARY_EDIT_SRC_PREFIX, binaryEditSrcId, srcIdToUriString } from 'data-explorer-view/model/ids/srcId.js';
+import { binaryEditSrcId, srcIdToUriString } from 'data-explorer-view/model';
 import { blankCommentsAndKeepLines, sourceFiles } from './tools/moduleGraph.js';
+
+// The prefix, as the model spells it: what it puts before an empty uriString. Not imported, because
+// view keeps the constant to itself; only the pair of functions is its interface.
+const BINARY_EDIT_SRC_PREFIX = binaryEditSrcId('');
 
 const URI = 'file:///w/Controller.sldd';
 const SRC = join(import.meta.dirname, '..', 'src');

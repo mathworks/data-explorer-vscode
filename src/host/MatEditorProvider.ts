@@ -36,26 +36,38 @@
 import * as vscode from 'vscode';
 import { DataModel, toEntrySelector, type PastePayload, type PasteResult } from 'data-explorer-core';
 import { renderTableWebview } from './webviewHtml.js';
-import { COLUMNS, COLUMN_LABELS, COLUMN_GROUPS } from 'data-explorer-view/model/rows/rowBuilder.js';
-import { rowPlannerFor } from 'data-explorer-view/model/rows/rowPlanner.js';
-import { buildMatVariableRows } from 'data-explorer-view/model/rows/matRowBuilder.js';
-import { LAZY_ROW_BUDGET, lazyRowsBanner } from 'data-explorer-view/model/rows/lazyRows.js';
-import { answerChildRequest } from 'data-explorer-view/model/rows/childRequest.js';
-import { answerMatrixRequest } from 'data-explorer-view/model/matrix/matrixRequest.js';
+import {
+  COLUMNS,
+  COLUMN_LABELS,
+  COLUMN_GROUPS,
+  rowPlannerFor,
+  buildMatVariableRows,
+  LAZY_ROW_BUDGET,
+  lazyRowsBanner,
+  answerChildRequest,
+  answerMatrixRequest,
+  refuseIfUnreadable,
+  sourceWarnings,
+  warningBanner,
+  type WarningBanner,
+  postOrReport,
+  WHOLE_FILE_SECTION,
+  wholeFileRules,
+  type ClipMark,
+  binaryEditSrcId,
+  basename,
+  matCatalog,
+} from 'data-explorer-view/model';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { subscribeUsageRepost } from './usageRepostWatch.js';
-import { refuseIfUnreadable, sourceWarnings, warningBanner, type WarningBanner } from 'data-explorer-view/model/rows/parseWarnings.js';
-import { postOrReport } from 'data-explorer-view/model/rows/postPayload.js';
 import { clearDrag, getDrag } from './dragState.js';
 import { clipboardState } from './clipboard.js';
 import { clipMarkChange, clipMarkOfDoc } from './clipMarks.js';
 import { copyEntriesToClipboard, dragEntries } from './clipboardAction.js';
 import { cloneForPaste } from './structuralEdit.js';
-import { WHOLE_FILE_SECTION, wholeFileRules } from 'data-explorer-view/model/actions/sectionRules.js';
 import { runTransfer, TransferRefused, type SourceDeleteResult, type TransferAdapter, type TransferDeps, type TransferTarget } from './transfer.js';
 import { clipboardRegister, dragRegister } from './transferRegisters.js';
-import type { ClipMark } from 'data-explorer-view/model/rows/rowStamp.js';
 import {
   NOT_FOUND_REASON,
   broadcastClipboardState,
@@ -75,14 +87,11 @@ import { SaveMarks, replacementsIn, type SaveMark, type SaveSnapshot } from './s
 import { saveSettled } from './settledSave.js';
 import { sameFile } from './safeWrite.js';
 import { backupId } from './backupId.js';
-import { binaryEditSrcId } from 'data-explorer-view/model/ids/srcId.js';
-import { basename } from 'data-explorer-view/model/ids/pathUtil.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { addChildRefusal, addEntryRefusal, deleteRefusal, describeSource, refusedMessage, type RefusedGesture } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 import { answerEditTextRequest } from './editTextRequest.js';
-import { matCatalog } from 'data-explorer-view/model/ids/addCatalog.js';
 
 /** One read of the file behind a document, with the stamp it was read under (diskFollow.readStamped). */
 interface DiskRead {

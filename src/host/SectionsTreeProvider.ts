@@ -1,10 +1,9 @@
 // Copyright 2026 The MathWorks, Inc.
 import * as vscode from 'vscode';
 import { svgIconFor } from './iconMap.js';
-import { RelGraph, type GraphNode } from 'data-explorer-view/model/hierarchy/graphModel.js';
+import { RelGraph, type GraphNode, encode, type HealthState } from 'data-explorer-view/model';
 import { graphSourcesOf, type GraphReader } from './structuralIndex.js';
 import { readProjectStore } from './projectStore.js';
-import { encode, type HealthState } from 'data-explorer-view/model/hierarchy/health.js';
 import { readerFor, sourceCache, sourceFilesOf } from './sourceReads.js';
 import { SUPPORTED_GLOB } from '../common/fileTypes.js';
 

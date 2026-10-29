@@ -24,7 +24,7 @@
 // the strip — in <body>'s normal flow, ahead of the absolutely-positioned table,
 // which therefore painted over it. The message was in the DOM and on screen
 // nowhere.
-import type { WarningBanner } from 'data-explorer-view/model/rows/parseWarnings.js';
+import type { WarningBanner } from 'data-explorer-view/model';
 
 /** What a setRows payload can say about the strip. Both parts are optional. */
 export interface BannerPayload {

@@ -8,7 +8,7 @@
 // bundles it into each importer.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { insertEntryRows, spliceEntryRows } from 'data-explorer-view/model/actions/rowUpdates.js';
+import { insertEntryRows, spliceEntryRows } from 'data-explorer-view/model';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

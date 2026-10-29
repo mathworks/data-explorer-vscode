@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
 import { DataModel, parseBinarySlddParts } from 'data-explorer-core';
 import { buildClipboardSnapshot, pasteEntries, sectionByName } from '../src/host/structuralEdit.js';
-import { getModel, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { getModel, invalidate } from 'data-explorer-view/model';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

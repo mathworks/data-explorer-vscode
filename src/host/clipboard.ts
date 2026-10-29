@@ -14,7 +14,7 @@
 //
 // It stays a register distinct from the drag register and from the plain-text view's
 // copy: three independent stores, by design.
-import type { DropFacts } from 'data-explorer-view/model/actions/dropFacts.js';
+import type { DropFacts } from 'data-explorer-view/model';
 
 export type ClipboardMode = 'cut' | 'copy';
 

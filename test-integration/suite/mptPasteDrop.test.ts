@@ -25,8 +25,8 @@ import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 import { clearClipboard } from '../../src/host/clipboard';
 import { clearDrag } from '../../src/host/dragState';
-import { dropDecision } from 'data-explorer-view/model/actions/dropDecision.js';
-import { buildContextMenuItems } from 'data-explorer-view/widgets/tree-table/menuItems.js';
+import { dropDecision } from 'data-explorer-view/model';
+import { buildContextMenuItems } from 'data-explorer-view/tree-table';
 import { chunkOf, ctx, fakePanel, isEntryRow, nameOf, quiet, token, waitFor, ws, wsUri } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

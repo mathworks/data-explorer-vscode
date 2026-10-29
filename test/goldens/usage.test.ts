@@ -14,7 +14,7 @@
 // (BinarySlddEditorProvider.ts:1507), so there is nothing past table.json to pin.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DataModel } from 'data-explorer-core';
-import { LAZY_ROW_BUDGET } from 'data-explorer-view/model/rows/lazyRows.js';
+import { LAZY_ROW_BUDGET } from 'data-explorer-view/model';
 import { clearClipboard } from '../../src/host/clipboard.js';
 import { isGraphPath } from '../../src/common/fileTypes.js';
 import { newSourceCache } from '../../src/host/sourceCache.js';

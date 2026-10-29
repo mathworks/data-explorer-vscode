@@ -22,7 +22,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
-import { findNode, peekModel } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { findNode, peekModel } from 'data-explorer-view/model';
 import { invalidateUsageGraph } from '../../src/host/usageGraph';
 import { ctx, entryNames, fakeTable, isEntryRow, nameOf, quiet, rowNamed, token, waitFor, wsUri } from './tools/hostHarness';
 

@@ -14,9 +14,8 @@
 // to assert the reserialized JSON has the right shape.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { getModel, findNode, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
-import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
-import { buildContextMenuItems, type ClipboardState } from 'data-explorer-view/widgets/tree-table/menuItems.js';
+import { getModel, findNode, invalidate, buildRows } from 'data-explorer-view/model';
+import { buildContextMenuItems, type ClipboardState } from 'data-explorer-view/tree-table';
 
 const NO_CLIP: ClipboardState = { canPaste: false, mode: null, items: [] };
 
