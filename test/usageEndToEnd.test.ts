@@ -38,9 +38,9 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { annotateVariableRows, buildUsageGraph, type RawSource } from '../src/host/usageCells.js';
-import { getModel, getModelFromBytes } from '../src/view/model/workspace/SlddModel.js';
-import { buildRows } from '../src/view/model/rows/rowBuilder.js';
-import { DexTreeTable, type TreeTableRow } from '../src/view/widgets/tree-table/dex-tree-table.js';
+import { getModel, getModelFromBytes } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
+import { DexTreeTable, type TreeTableRow } from 'data-explorer-view/widgets/tree-table/dex-tree-table.js';
 
 // import.meta.dirname, not a URL relative to import.meta.url: under happy-dom that
 // resolves against a document base rather than the file, and every read fails as

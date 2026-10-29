@@ -25,7 +25,7 @@
 //     `slddByName` by refBasename and the last assignment wins, so a set holding one of
 //     two same-named dictionaries picks a different collision winner than the folder does.
 //     Over-inclusion here is deliberate; the files it adds are the cheap ones.
-import { refBasename } from '../view/model/hierarchy/slddRefs.js';
+import { refBasename } from 'data-explorer-view/model/hierarchy/slddRefs.js';
 
 /** What a source resolves names through — a model, or a data file that can be resolved to. */
 export type ChainKind = 'model' | 'sldd' | 'mat';

@@ -15,7 +15,7 @@
 // happen when the row lands. The failure if it is not held is silent: the entry is created
 // and selected, the editor never opens, and the user is left renaming it by hand.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
-import '../src/view/widgets/tree-table/dex-add-gallery.js';
+import 'data-explorer-view/widgets/tree-table/dex-add-gallery.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

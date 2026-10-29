@@ -13,12 +13,12 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel, isModelFile, isSlddFile } from 'data-explorer-core';
 import { buildGraphSource } from '../../src/host/structuralIndex.js';
-import { scanSldd } from '../../src/view/model/workspace/slddContent.js';
+import { scanSldd } from 'data-explorer-view/model/workspace/slddContent.js';
 import { extractSlxStructure } from '../../src/host/slxStructure.js';
-import { RelGraph, type GraphSource } from '../../src/view/model/hierarchy/graphModel.js';
+import { RelGraph, type GraphSource } from 'data-explorer-view/model/hierarchy/graphModel.js';
 import { parseMat } from 'data-explorer-core';
 import { parseSlx } from 'data-explorer-core';
-import { getModel, getModelFromBytes, invalidate } from '../../src/view/model/workspace/SlddModel.js';
+import { getModel, getModelFromBytes, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
 
 const ART = (variant: string, name: string) =>
   fileURLToPath(new URL(`./artifacts/${variant}/${name}`, import.meta.url));

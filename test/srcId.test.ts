@@ -16,7 +16,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { BINARY_EDIT_SRC_PREFIX, binaryEditSrcId, srcIdToUriString } from '../src/view/model/ids/srcId.js';
+import { BINARY_EDIT_SRC_PREFIX, binaryEditSrcId, srcIdToUriString } from 'data-explorer-view/model/ids/srcId.js';
 import { blankCommentsAndKeepLines, sourceFiles } from './tools/moduleGraph.js';
 
 const URI = 'file:///w/Controller.sldd';
@@ -63,11 +63,13 @@ describe('the prefix is defined once', () => {
   // test but a link that opens a blank tab.
   const files = sourceFiles(SRC);
 
-  it('appears as a literal in view/model/ids/srcId.ts and nowhere else under src/', () => {
+  it('appears as a literal in data-explorer-view/model/ids/srcId.js and nowhere else under src/', () => {
     const holders = files.filter((f) =>
       blankCommentsAndKeepLines(readFileSync(join(SRC, f), 'utf8')).includes(BINARY_EDIT_SRC_PREFIX),
     );
-    expect(holders).toEqual(['view/model/ids/srcId.ts']);
+    expect(holders).toEqual([]);
+    const shipped = join(SRC, '../node_modules/data-explorer-view/dist/model/ids/srcId.js');
+    expect(blankCommentsAndKeepLines(readFileSync(shipped, 'utf8'))).toContain(BINARY_EDIT_SRC_PREFIX);
   });
 });
 

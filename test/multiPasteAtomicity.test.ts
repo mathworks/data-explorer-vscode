@@ -22,8 +22,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
 import { DataModel, parseBinarySlddParts } from 'data-explorer-core';
-import { getModel, invalidate, findNode } from '../src/view/model/workspace/SlddModel.js';
-import { buildRows } from '../src/view/model/rows/rowBuilder.js';
+import { getModel, invalidate, findNode } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
 import { pasteEntries } from '../src/host/structuralEdit.js';
 import { pasteEntriesXml } from '../src/host/xmlStructuralEdit.js';
 

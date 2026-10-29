@@ -30,7 +30,7 @@ import {
 } from '../src/host/binarySaveGate.js';
 import { chunkEntryKey, entryKey, scanChunkEntries } from '../src/host/chunkEntries.js';
 import { mutateEntry } from '../src/host/entryOps.js';
-import { readSlddParts } from '../src/view/model/workspace/slddContent.js';
+import { readSlddParts } from 'data-explorer-view/model/workspace/slddContent.js';
 import { addNewEntryXml, deleteEntryXml } from '../src/host/xmlStructuralEdit.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

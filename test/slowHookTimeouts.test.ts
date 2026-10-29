@@ -5,7 +5,9 @@
 // Two kinds are slow by design:
 // - rowBuilder's "builds every row instead of overflowing the argument limit" builds 200,000
 //   rows, because that is what overflowed. It takes ~250 ms on an idle machine and timed out
-//   at 5,683 ms and 5,252 ms on loaded ones (2026-10-03 and 10-04).
+//   at 5,683 ms and 5,252 ms on loaded ones (2026-10-03 and 10-04). That test went to
+//   data-explorer-view with the row builder, and its check went with it, to a file of this
+//   name there.
 // - every `beforeAll` that imports a whole webview entry (`../src/webview/<name>-main.js`) to
 //   drive the shipped listeners. A cold import of one is ~330 ms idle, and the import is the
 //   part of the suite that a loaded worker pool stretches.
@@ -14,17 +16,15 @@
 // every other test.
 //
 // No run can make the timeout happen on demand, since the repro is a loaded machine. So this
-// file checks the test sources: every such hook, and the 200,000-row test, passes an explicit
-// timeout. The hooks are found by what they do, so a new file that copies the pattern is
-// held to it too.
+// file checks the test sources: every such hook passes an explicit timeout. The hooks are
+// found by what they do, so a new file that copies the pattern is held to it too.
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 
 const TEST_DIR = import.meta.dirname;
-// vitest's own defaults, which these tests have to stand clear of.
-const DEFAULT_TEST_TIMEOUT = 5_000;
+// vitest's own default, which these hooks have to stand clear of.
 const DEFAULT_HOOK_TIMEOUT = 10_000;
 const WEBVIEW_ENTRY = /^\.\.\/src\/webview\/[\w-]+-main\.js$/;
 
@@ -119,23 +119,5 @@ describe('a beforeAll that imports a whole webview entry passes its own timeout'
       .filter((h) => !(h.timeout !== undefined && h.timeout > DEFAULT_HOOK_TIMEOUT))
       .map((h) => `${h.at}: imports ${h.imports.join(', ')} with ${h.timeout ?? 'no'} timeout`);
     expect(short).toEqual([]);
-  });
-});
-
-describe('the 200,000-row test passes its own timeout', () => {
-  it('above the default test timeout', () => {
-    const sf = parse(join(TEST_DIR, 'rowBuilder.test.ts'));
-    const title = 'builds every row instead of overflowing the argument limit';
-    const [test] = callsNamed(sf, 'it').filter((c) => {
-      const [name] = c.arguments;
-      return name !== undefined && ts.isStringLiteralLike(name) && name.text === title;
-    });
-    expect(test, 'the test is still in rowBuilder.test.ts under its title').toBeDefined();
-    // And it is still the one that builds 200,000 rows, which is why it gets the ceiling.
-    expect(test!.getText(sf)).toContain('const count = 200000;');
-    const timeout = timeoutArg(test!, 2);
-    expect(timeout ?? 0, `${where(sf, test!)}: passes ${timeout ?? 'no'} timeout`).toBeGreaterThan(
-      DEFAULT_TEST_TIMEOUT,
-    );
   });
 });

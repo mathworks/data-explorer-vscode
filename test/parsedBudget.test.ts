@@ -42,8 +42,8 @@ import {
 } from '../src/host/sourceCache.js';
 import { namesOfFile, type NameReader } from '../src/host/nameScan.js';
 import { planSummaries } from '../src/host/usagePlan.js';
-import { getModelFromParsed, invalidate } from '../src/view/model/workspace/SlddModel.js';
-import { buildRows } from '../src/view/model/rows/rowBuilder.js';
+import { getModelFromParsed, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
 
 const dir = join(import.meta.dirname, 'fixtures');
 

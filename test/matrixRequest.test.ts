@@ -22,8 +22,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { DataModel } from 'data-explorer-core';
-import { getModel, getModelFromBytes, invalidate } from '../src/view/model/workspace/SlddModel.js';
-import { answerMatrixRequest, matrixCellsMessage } from '../src/view/model/matrix/matrixRequest.js';
+import { getModel, getModelFromBytes, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { answerMatrixRequest, matrixCellsMessage } from 'data-explorer-view/model/matrix/matrixRequest.js';
 
 function bytes(name: string): ArrayBuffer {
   const b = readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
@@ -168,7 +168,7 @@ describe('every host that answers requestMatrix answers it from here', () => {
     ['src/host/BinarySlddEditorProvider.ts'],
     ['src/host/MatEditorProvider.ts'],
     ['src/host/BinaryEditorProvider.ts'],
-    ['src/host/PropertiesViewProvider.ts', 'src/view/model/inspector/inspectorPage.ts'],
+    ['src/host/PropertiesViewProvider.ts', 'node_modules/data-explorer-view/dist/model/inspector/inspectorPage.js'],
   ];
   const source = (file: string) => readFileSync(fileURLToPath(new URL(`../${file}`, import.meta.url)), 'utf8');
 
@@ -187,7 +187,7 @@ describe('every host that answers requestMatrix answers it from here', () => {
 
   it('is the only module that names the message at all', () => {
     const builder = readFileSync(
-      fileURLToPath(new URL('../src/view/model/matrix/matrixRequest.ts', import.meta.url)), 'utf8');
+      fileURLToPath(new URL('../node_modules/data-explorer-view/dist/model/matrix/matrixRequest.js', import.meta.url)), 'utf8');
     expect([...builder.matchAll(/'matrixCells'/g)].length).toBeGreaterThan(0);
   });
 

@@ -3,7 +3,7 @@
 // The seams between the paths a multi-row action travels, over a REAL model.
 //
 // One selection is resolved twice: by the webview, to label and enable a menu
-// (view/model/actions/operands.ts), and by the host, to perform the edit (core's planDeletion +
+// (data-explorer-view's src/model/actions/operands.ts), and by the host, to perform the edit (core's planDeletion +
 // structuralEdit's owningEntriesOf). Two answers to "which rows does this act on" is the
 // recurring defect in this repo, and it is invisible when it drifts: the menu says
 // "Delete 3 Items" and two disappear. So the resolutions are asserted against each other
@@ -15,17 +15,17 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, findNode, invalidate } from '../src/view/model/workspace/SlddModel.js';
-import { buildRows } from '../src/view/model/rows/rowBuilder.js';
-import { sectionRules } from '../src/view/model/actions/sectionRules.js';
-import { dropFactsOf } from '../src/view/model/actions/dropFacts.js';
+import { getModel, findNode, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
+import { sectionRules } from 'data-explorer-view/model/actions/sectionRules.js';
+import { dropFactsOf } from 'data-explorer-view/model/actions/dropFacts.js';
 import { buildClipboardSnapshot, buildDragSnapshot, pasteEntry } from '../src/host/structuralEdit.js';
 import { setDrag, clearDrag, dragDescriptor } from '../src/host/dragState.js';
 import { planDeletion } from 'data-explorer-core';
-import { resolveOperands, sectionRowIdOf } from '../src/view/model/actions/operands.js';
-import { buildContextMenuItems, type MenuRow } from '../src/view/widgets/tree-table/menuItems.js';
-import { dropDecision, rejectReason } from '../src/view/model/actions/dropDecision.js';
-import { buildSectionRowId } from '../src/view/model/ids/sectionRowId.js';
+import { resolveOperands, sectionRowIdOf } from 'data-explorer-view/model/actions/operands.js';
+import { buildContextMenuItems, type MenuRow } from 'data-explorer-view/widgets/tree-table/menuItems.js';
+import { dropDecision, rejectReason } from 'data-explorer-view/model/actions/dropDecision.js';
+import { buildSectionRowId } from 'data-explorer-view/model/ids/sectionRowId.js';
 import { blankCommentsAndKeepLines } from './tools/moduleGraph.js';
 import { isNoopMove } from '../src/host/transfer.js';
 

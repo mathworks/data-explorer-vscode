@@ -2,13 +2,13 @@
 import * as vscode from 'vscode';
 import { SectionsTreeProvider } from './host/SectionsTreeProvider.js';
 import { PropertiesViewProvider } from './host/PropertiesViewProvider.js';
-import { InspectorSelection } from './view/model/inspector/inspectorSelection.js';
+import { InspectorSelection } from 'data-explorer-view/model/inspector/inspectorSelection.js';
 import { BinaryEditorProvider } from './host/BinaryEditorProvider.js';
 import { SlddTextEditorProvider } from './host/SlddTextEditorProvider.js';
 import { BinarySlddEditorProvider } from './host/BinarySlddEditorProvider.js';
 import { MatEditorProvider } from './host/MatEditorProvider.js';
 import { HealthDecorationProvider } from './host/HealthDecorationProvider.js';
-import { invalidate, findNode } from './view/model/workspace/SlddModel.js';
+import { invalidate, findNode } from 'data-explorer-view/model/workspace/SlddModel.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, isZipBytes } from './host/slddFormat.js';
 import { handleNavigate, requestSelect } from './host/navigate.js';
 import { invalidateUsageGraph } from './host/usageGraph.js';

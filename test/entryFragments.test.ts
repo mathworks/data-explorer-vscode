@@ -26,7 +26,7 @@ import {
   removeEntries,
   type EntryOp,
 } from '../src/host/entryOps.js';
-import { readSlddParts } from '../src/view/model/workspace/slddContent.js';
+import { readSlddParts } from 'data-explorer-view/model/workspace/slddContent.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

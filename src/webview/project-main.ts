@@ -9,9 +9,9 @@
 // styles are injected from projectPageStyle.ts — see the header there for why that
 // is a string and not a `.css` file.
 
-import { renderProjectPage, newSectionState } from '../view/widgets/project-page/projectPage.js';
-import type { PageState, ProjectPagePayload } from '../view/widgets/project-page/projectPage.js';
-import { PROJECT_PAGE_CSS } from '../view/widgets/project-page/projectPageStyle.js';
+import { renderProjectPage, newSectionState } from 'data-explorer-view/widgets/project-page/projectPage.js';
+import type { PageState, ProjectPagePayload } from 'data-explorer-view/widgets/project-page/projectPage.js';
+import { PROJECT_PAGE_CSS } from 'data-explorer-view/widgets/project-page/projectPageStyle.js';
 import type { HostToProjectMessage, OpenFileMessage } from '../common/protocol.js';
 
 declare function acquireVsCodeApi(): { postMessage(msg: unknown): void };

@@ -54,7 +54,7 @@ const read = (rel: string): string =>
 // REPLACES some of global.css's values and adds no names of its own — a token declared
 // only in the theme file would be undeclared in a webview whose theme file never loaded.
 const DECLARED = new Set(
-  [read('../src/view/theme/global.css'), read('../src/webview/vscode-theme.css')]
+  [read('../node_modules/data-explorer-view/src/theme/global.css'), read('../src/webview/vscode-theme.css')]
     .flatMap((css) => [...css.matchAll(/(--dex-[a-z0-9-]+)\s*:/g)].map((m) => m[1])),
 );
 
@@ -72,8 +72,8 @@ const DECLARED = new Set(
 //
 // Add a file here when it is clean. Do not add an exemption to keep one in.
 const FILES = {
-  'dex-column-filter.ts': read('../src/view/widgets/tree-table/dex-column-filter.ts'),
-  'dex-filter-bar.ts': read('../src/view/widgets/tree-table/dex-filter-bar.ts'),
+  'dex-column-filter.ts': read('../node_modules/data-explorer-view/dist/widgets/tree-table/dex-column-filter.js'),
+  'dex-filter-bar.ts': read('../node_modules/data-explorer-view/dist/widgets/tree-table/dex-filter-bar.js'),
 };
 
 describe('the column filter popup and the filter bar read no token that nothing declares', () => {
@@ -131,7 +131,7 @@ describe('the filter bar chip wash is declared, at the value it was measured at'
   // chip's own fallback to the same value so the two cannot drift apart.
   const WASH = 'rgba(128, 128, 128, 0.18)';
   const sheets = {
-    'global.css': read('../src/view/theme/global.css'),
+    'global.css': read('../node_modules/data-explorer-view/src/theme/global.css'),
     'vscode-theme.css': read('../src/webview/vscode-theme.css'),
   };
 

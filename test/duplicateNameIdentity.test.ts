@@ -25,8 +25,8 @@ import {
   toEntrySelector,
   findEntryObjectSpan,
 } from 'data-explorer-core';
-import { getModel, findNode, invalidate } from '../src/view/model/workspace/SlddModel.js';
-import { buildRows } from '../src/view/model/rows/rowBuilder.js';
+import { getModel, findNode, invalidate } from 'data-explorer-view/model/workspace/SlddModel.js';
+import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
 import { findEntrySpan, findEntryElementSpan } from '../src/host/entrySplice.js';
 import { deleteEntry, deleteEntriesByName, pasteEntry } from '../src/host/structuralEdit.js';
 import { deleteEntryXml, pasteEntryXml, deleteEntriesByNameXml } from '../src/host/xmlStructuralEdit.js';

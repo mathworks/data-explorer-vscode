@@ -21,9 +21,9 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { DataModel } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { buildRows } from '../../src/view/model/rows/rowBuilder';
+import { buildRows } from 'data-explorer-view/model/rows/rowBuilder.js';
 import { handleNavigate } from '../../src/host/navigate';
-import { binaryEditSrcId } from '../../src/view/model/ids/srcId';
+import { binaryEditSrcId } from 'data-explorer-view/model/ids/srcId.js';
 import { waitFor } from './tools/hostHarness';
 
 function ctx(): vscode.ExtensionContext {

@@ -236,8 +236,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "check:leak": "node scripts/leak-check.mjs",
-    "check:view": "node scripts/check-view-boundary.mjs && tsc -p tsconfig.view-model.json",
-    "verify": "npm run typecheck && npm run check:view && npm run build && npm run build:web && npm run test && npm run check:leak",
+    "verify": "npm run typecheck && npm run build && npm run build:web && npm run test && npm run check:leak",
     "compile:test": "node esbuild.test.mjs",
     "test:integration": "npm run build && npm run compile:test && vscode-test",
     "package": "vsce package"
@@ -245,6 +244,7 @@
   "dependencies": {
     "@lit/context": "^1.1.6",
     "data-explorer-core": "github:mathworks/data-explorer-core#v1.47.0",
+    "data-explorer-view": "github:mathworks/data-explorer-view#v0.1.0",
     "fast-xml-parser": "^5.8.0",
     "fflate": "^0.8.3",
     "highlight.js": "^11.11.1",

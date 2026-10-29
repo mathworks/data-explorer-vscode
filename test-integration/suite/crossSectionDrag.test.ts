@@ -26,7 +26,7 @@ import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 import { clearDrag } from '../../src/host/dragState';
-import { dropDecision } from '../../src/view/model/actions/dropDecision';
+import { dropDecision } from 'data-explorer-view/model/actions/dropDecision.js';
 import { chunkOf, ctx, fakePanel, isEntryRow, nameOf, quiet, token, waitFor, ws, wsUri } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

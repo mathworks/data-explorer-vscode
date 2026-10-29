@@ -64,17 +64,19 @@ describe('the shared stylesheet name is one constant, not two literals', () => {
 // build time, so two components sharing one can still ship two different numbers, while a var() is
 // resolved once at run time and cannot disagree with itself.
 describe('a component stylesheet is CSS, with no TS interpolated into it', () => {
-  const dir = 'src/view/widgets';
+  // The components are data-explorer-view's, so this reads the JavaScript it ships, which is what
+  // the webview bundle is built from. tsc copies a css template into it as written.
+  const dir = 'node_modules/data-explorer-view/dist/widgets';
   const files = readdirSync(join(root, dir)).flatMap((widget) =>
     readdirSync(join(root, dir, widget))
-      .filter((f) => f.endsWith('.ts'))
+      .filter((f) => f.endsWith('.js'))
       .map((f) => `${dir}/${widget}/${f}`),
   );
 
   // The guard is only as good as the set it runs over — an empty glob passes everything.
   it('finds the components at all', () => {
-    expect(files).toContain(`${dir}/tree-table/dex-add-gallery.ts`);
-    expect(files).toContain(`${dir}/tree-table/dex-tree-table.ts`);
+    expect(files).toContain(`${dir}/tree-table/dex-add-gallery.js`);
+    expect(files).toContain(`${dir}/tree-table/dex-tree-table.js`);
     expect(files.length).toBeGreaterThan(10);
   });
 
@@ -84,8 +86,9 @@ describe('a component stylesheet is CSS, with no TS interpolated into it', () =>
       let found = 0;
       // Every css`…` body: from the tag to the backtick that closes it. A tagged template cannot
       // contain a backtick, so the next one is the end — which is also why the numbers had to be
-      // interpolated rather than written inline in the first place.
-      for (const tag of src.matchAll(/(^|[^\w.])css`/g)) {
+      // interpolated rather than written inline in the first place. tsc emits the tag with a
+      // space before the backtick, hence the `\s*`.
+      for (const tag of src.matchAll(/(^|[^\w.])css\s*`/g)) {
         const start = tag.index! + tag[0].length;
         const end = src.indexOf('`', start);
         expect(end, `unterminated css template in ${file}`).toBeGreaterThan(start);
@@ -98,7 +101,7 @@ describe('a component stylesheet is CSS, with no TS interpolated into it', () =>
       }
       // Not every component has styles of its own, but the ones named above do, and a regex that
       // silently matched nothing is the way this check would rot.
-      if (/dex-(add-gallery|tree-table)\.ts$/.test(file)) expect(found).toBeGreaterThan(0);
+      if (/dex-(add-gallery|tree-table)\.js$/.test(file)) expect(found).toBeGreaterThan(0);
     });
   }
 });
