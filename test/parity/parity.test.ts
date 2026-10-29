@@ -17,10 +17,8 @@ import {
   scanSldd,
   RelGraph,
   type GraphSource,
-  getModel,
-  getModelFromBytes,
-  invalidate,
 } from 'data-explorer-view/model';
+import { getModel, getModelFromBytes, invalidate } from 'data-explorer-view/host';
 import { parseMat } from 'data-explorer-core';
 import { parseSlx } from 'data-explorer-core';
 

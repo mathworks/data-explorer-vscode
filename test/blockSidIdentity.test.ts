@@ -34,7 +34,8 @@ import {
   type RawSource,
 } from '../src/host/usageCells.js';
 import { parseNavTarget } from '../src/host/navTarget.js';
-import { getModelFromBytes, buildRows } from 'data-explorer-view/model';
+import { buildRows } from 'data-explorer-view/model';
+import { getModelFromBytes } from 'data-explorer-view/host';
 import { DexTreeTable, defineTreeTable, type TreeTableRow } from 'data-explorer-view/tree-table';
 
 defineTreeTable();

@@ -18,7 +18,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModelFromBytes, findNode, invalidate, buildRows } from 'data-explorer-view/model';
+import { buildRows } from 'data-explorer-view/model';
+import { getModelFromBytes, findNode, invalidate } from 'data-explorer-view/host';
 import { captureBaseline, computeModified, clearBaseline } from '../src/host/slddBaseline.js';
 import { findEntrySpan, detectIndent } from '../src/host/entrySplice.js';
 

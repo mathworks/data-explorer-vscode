@@ -20,7 +20,7 @@ import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
-import { MAX_TABLE_ROWS } from 'data-explorer-view/model';
+import { MAX_TABLE_ROWS } from 'data-explorer-view/host';
 import { TEXT_SYNC_LIMIT } from '../../src/host/slddFormat';
 import { ctx, fakePanel, isEntryRow, nameOf, token, waitFor } from './tools/hostHarness';
 

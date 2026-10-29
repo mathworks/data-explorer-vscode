@@ -25,7 +25,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DataModel } from 'data-explorer-core';
 import { seededRead } from '../src/host/seededRead.js';
-import { getModelForBinaryTab, invalidate, buildRows } from 'data-explorer-view/model';
+import { buildRows } from 'data-explorer-view/model';
+import { getModelForBinaryTab, invalidate } from 'data-explorer-view/host';
 
 const dir = join(import.meta.dirname, 'fixtures');
 

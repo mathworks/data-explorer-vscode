@@ -15,7 +15,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getSectionMetadata } from 'data-explorer-core';
-import { getModel, findNode, invalidate, buildRows } from 'data-explorer-view/model';
+import { buildRows } from 'data-explorer-view/model';
+import { getModel, findNode, invalidate } from 'data-explorer-view/host';
 import { pasteEntry, pasteEntries } from '../src/host/structuralEdit.js';
 
 // The design/arch namespace URI, used to seed paste payloads. Read it from the

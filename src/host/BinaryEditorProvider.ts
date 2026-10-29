@@ -2,28 +2,30 @@
 import * as vscode from 'vscode';
 import { renderProjectWebview, renderTableWebview } from './webviewHtml.js';
 import {
-  getModelForBinaryTab,
-  invalidate,
-  openSourceView,
-  releaseIfUnviewed,
-  releaseSourceView,
   COLUMNS,
   COLUMN_LABELS,
   COLUMN_GROUPS,
   rowPlannerFor,
   sourceWarnings,
   warningBanner,
-  capRows,
-  rowCapBanner,
   LAZY_ROW_BUDGET,
   lazyRowsBanner,
+  basename,
+  projectPathSegments,
+} from 'data-explorer-view/model';
+import {
+  getModelForBinaryTab,
+  invalidate,
+  openSourceView,
+  releaseIfUnviewed,
+  releaseSourceView,
+  capRows,
+  rowCapBanner,
   postOrFallback,
   answerMatrixRequest,
   answerChildRequest,
   type UsageFiller,
-  basename,
-  projectPathSegments,
-} from 'data-explorer-view/model';
+} from 'data-explorer-view/host';
 import { forgetChangedSource, parsedModelForTab } from './sourceReads.js';
 import { readProjectStore } from './projectStore.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, exceedsStringDecodeLimit, isZipBytes } from './slddFormat.js';

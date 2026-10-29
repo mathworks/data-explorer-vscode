@@ -16,9 +16,6 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
-  getModel,
-  findNode,
-  invalidate,
   buildRows,
   sectionRules,
   dropFactsOf,
@@ -28,6 +25,7 @@ import {
   rejectReason,
   buildSectionRowId,
 } from 'data-explorer-view/model';
+import { getModel, findNode, invalidate } from 'data-explorer-view/host';
 import { buildClipboardSnapshot, buildDragSnapshot, pasteEntry } from '../src/host/structuralEdit.js';
 import { setDrag, clearDrag, dragDescriptor } from '../src/host/dragState.js';
 import { planDeletion } from 'data-explorer-core';

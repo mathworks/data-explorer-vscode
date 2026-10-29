@@ -8,7 +8,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { getModel, invalidate, buildRows, findNode } from 'data-explorer-view/model';
+import { buildRows } from 'data-explorer-view/model';
+import { getModel, invalidate, findNode } from 'data-explorer-view/host';
 import { pasteEntries } from '../src/host/structuralEdit.js';
 
 const archText = readFileSync(fileURLToPath(new URL('./fixtures/arch.sldd', import.meta.url)), 'utf8');

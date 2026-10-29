@@ -61,15 +61,13 @@ import {
 } from '../src/host/structuralEdit.js';
 import { minimalReplacement, planDeletion } from 'data-explorer-core';
 import {
-  getModel,
-  invalidate,
-  peekModel,
   buildRows,
   buildEntryRows,
   spliceEntryRows,
   insertEntryRows,
   buildSectionRowId,
 } from 'data-explorer-view/model';
+import { getModel, invalidate, peekModel } from 'data-explorer-view/host';
 import { captureBaseline, computeModified, isEntryModified, clearBaseline } from '../src/host/slddBaseline.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

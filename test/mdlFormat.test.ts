@@ -21,7 +21,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { extractSlxStructure, isModelFile, parseModel, refModelExt } from 'data-explorer-core';
 import { buildGraphSource } from '../src/host/structuralIndex.js';
-import { getModelFromBytes, buildRows } from 'data-explorer-view/model';
+import { buildRows } from 'data-explorer-view/model';
+import { getModelFromBytes } from 'data-explorer-view/host';
 import { namesFromSlx } from '../src/host/nameExtract.js';
 
 function bytes(name: string): ArrayBuffer {
