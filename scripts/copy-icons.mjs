@@ -4,15 +4,16 @@
 // where the webviews load them from (table-main and pi-main set dex-icon's base to `./icons/`,
 // under a <base href> of dist/webview), and where the host's sidebar tree reads its own.
 //
-// Two sources, one folder. data-explorer-view ships every icon its widgets can draw, which is
-// also every one the tree shares with them; media/icons keeps the few only the tree draws (the
-// folder group, the generic fallback). A name in both would be one icon kept twice, and whichever
-// copy landed last would win, so that fails the build rather than picking one.
+// One source: data-explorer-view ships every icon its widgets and its hierarchy draw, which is
+// every one the tree draws too (the two only the tree drew, the folder group and the generic
+// fallback, came with the hierarchy, out of the media/icons this extension used to keep). A
+// second source would be one icon kept twice, and whichever copy landed last would win, so a
+// name in two fails the build rather than picking one.
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const OUT = 'dist/webview/icons';
-const SOURCES = ['node_modules/data-explorer-view/icons', 'media/icons'];
+const SOURCES = ['node_modules/data-explorer-view/icons'];
 
 const from = new Map();
 for (const dir of SOURCES) {

@@ -1,12 +1,12 @@
 // Copyright 2026 The MathWorks, Inc.
 // Regression guard: every icon id the extension statically references must ship
 // as an SVG in dist/webview/icons/, which copy:icons fills from data-explorer-view's
-// icons/ and from media/icons/ (tools/shippedIcons.ts). Missing files silently fall
+// icons/ (tools/shippedIcons.ts). Missing files silently fall
 // back to a generic icon (tree) or render as a broken image (webview), which is hard
 // to catch by eye. This test pins the known-critical ids so a future edit that
 // references a new icon without adding the file fails fast.
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { ICON_DIR } from '../src/host/iconAssets.js';
 import { ICON_SOURCES, iconsIn, shippedIcon } from './tools/shippedIcons.js';
@@ -103,13 +103,12 @@ describe("the sidebar tree's icons", () => {
     expect(TREE_ICONS.filter((id) => !shippedIcon(id))).toEqual([]);
   });
 
-  it('keeps in media/icons only the icons the tree alone draws', () => {
-    // Everything a widget can draw comes from data-explorer-view; a copy here as well would be
-    // two sets of the same art that can drift apart, and copy-icons.mjs refuses a name in both.
+  it('are all data-explorer-view\'s, with no copy kept here', () => {
+    // A copy here as well would be two sets of the same art that can drift apart: the tree's
+    // own two (the folder group, the generic fallback) ship in view since its hierarchy did.
     const view = new Set(iconsIn('node_modules/data-explorer-view/icons'));
-    const own = iconsIn('media/icons').map((f) => f.slice(0, -'.svg'.length));
-    expect(own.filter((id) => view.has(`${id}.svg`)), 'also shipped by data-explorer-view').toEqual([]);
-    expect(own.filter((id) => !TREE_ICONS.includes(id)), 'drawn by nothing in the tree').toEqual([]);
+    expect(TREE_ICONS.filter((id) => !view.has(`${id}.svg`))).toEqual([]);
+    expect(existsSync(fileURLToPath(new URL('../media/icons', import.meta.url))), 'media/icons').toBe(false);
   });
 });
 
