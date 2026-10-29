@@ -13,12 +13,9 @@
 // A compressed dictionary has no usage.json: its editable view fills no Usage column at all
 // (BinarySlddEditorProvider.ts:1507), so there is nothing past table.json to pin.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DataModel } from 'data-explorer-core';
+import { DataModel, isGraphPath, newSourceCache, planSummaries } from 'data-explorer-core';
 import { LAZY_ROW_BUDGET } from 'data-explorer-view/model';
 import { clearClipboard } from '../../src/host/clipboard.js';
-import { isGraphPath } from '../../src/common/fileTypes.js';
-import { newSourceCache } from '../../src/host/sourceCache.js';
-import { planSummaries } from '../../src/host/usagePlan.js';
 import { annotateModelViewRows, annotateVariableRows, buildUsageGraphFromSummaries } from '../../src/host/usageCells.js';
 import { bytesOf, expectGolden, fakeFile, filesUnder, fixtureFolders, nameOf } from './fixtures.js';
 import { nodeReader } from './nodeReads.js';

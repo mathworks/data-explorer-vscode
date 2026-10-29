@@ -66,7 +66,7 @@ suite('The Data Explorer tree rebuilds only when the folder changed', () => {
       // (`/"Dictionary References"\s*:\s*(\[[^\]]*\])/`), which matched the first occurrence at any
       // depth, so a dictionary no MATLAB would write still produced an edge. That regex is gone —
       // one `scanSldd` now answers the references, the names and the usage summary from one read of
-      // either format (sourceCache.ts) — and `JSON.parse` keeps the LAST of two identical keys, so
+      // either format (core's cache) — and `JSON.parse` keeps the LAST of two identical keys, so
       // the top-level copy read as no references at all. What this test is about is unaffected: it
       // asserts that `rebuild()` re-reads the folder and `refresh()` does not, and it can only
       // assert that over a dictionary the extension actually reads.

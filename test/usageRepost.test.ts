@@ -217,7 +217,7 @@ describe('a tab with a write in flight', () => {
 });
 
 describe('which files repost', () => {
-  // Only a model can originate a usage edge (usageScope.ts), so only a model appearing or going
+  // Only a model can originate a usage edge (core's `usageScope`), so only a model appearing or going
   // away can change what an open data file's Usage column says. Everything else in a burst is
   // free — which is most of a branch switch.
   it.each([

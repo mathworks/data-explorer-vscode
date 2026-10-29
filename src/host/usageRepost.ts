@@ -2,11 +2,11 @@
 // When an open data tab reposts its Usage column because a model appeared or went away.
 //
 // A data file's Usage cell names the blocks that read each of its variables, and only a model can
-// add or remove such a block (usageScope.ts). So a model created or deleted in the workspace is
-// the event that can leave an open dictionary's column wrong, and the usage graph being dropped
-// (usageGraph.invalidateUsageGraph) was not enough on its own: the graph is rebuilt on the next
-// QUERY, and an open tab asks only when it reposts — from its own file's watcher or its own
-// edits. Until then it kept showing the edges of a folder that no longer existed.
+// add or remove such a block (core's `usageScope`). So a model created or deleted in the
+// workspace is the event that can leave an open dictionary's column wrong, and the usage graph
+// being dropped (usageGraph.invalidateUsageGraph) was not enough on its own: the graph is rebuilt
+// on the next QUERY, and an open tab asks only when it reposts — from its own file's watcher or
+// its own edits. Until then it kept showing the edges of a folder that no longer existed.
 //
 // Two things keep the repost affordable, and both are decided here. One repost per tab per BURST:
 // a branch switch can create or delete hundreds of models at once, and each repost rebuilds the

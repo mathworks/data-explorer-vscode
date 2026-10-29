@@ -16,7 +16,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { SUPPORTED_EXTS, SUPPORTED_NAMES } from '../src/common/fileTypes.js';
+import { SUPPORTED_EXTS, SUPPORTED_NAMES } from 'data-explorer-core';
 
 const pkg = JSON.parse(
   readFileSync(fileURLToPath(new URL('../package.json', import.meta.url)), 'utf8'),

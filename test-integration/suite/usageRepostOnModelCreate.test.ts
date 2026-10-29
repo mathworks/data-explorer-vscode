@@ -3,7 +3,7 @@
 // it — through the real providers, a real FileSystemWatcher and the rows they post.
 //
 // A dictionary's Usage cell names the blocks that read each entry, and only a model can
-// originate such an edge (usageScope.ts). Before this, a model created or deleted beside an
+// originate such an edge (core's `usageScope`). Before this, a model created or deleted beside an
 // open dictionary dropped the usage graph (extension.ts's refreshAll) and told no tab: each one
 // reposted only from its own file's watcher or its own edits, so the column stayed as it was
 // until the user edited, saved or reopened the dictionary. A `git checkout` that brought in the

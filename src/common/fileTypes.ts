@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
-// The supported file names, in ONE place — the extensions, plus the one marker named
-// outright.
+// The supported file names as VS Code spells them — `findFiles` globs over core's lists of
+// the extensions, plus the one marker named outright.
 //
 // This list was the most-duplicated rule in the repo: before this module it was
 // spelled out in six independent literals — two extension regexes, three
@@ -18,7 +18,7 @@
 // MATLAB repository sits beside, so admitting the extension would make every `Cargo.toml`,
 // `pyproject.toml` and `ruff.toml` in a workspace a MATLAB project — discovered, listed in
 // the tree, offered for opening, and then reported as a project that declares nothing. The
-// name comes from core (`TOML_PROJECT_FILE`) for the same reason the kind tests do; this
+// name comes from core (`SUPPORTED_NAMES`) for the same reason the kind tests do; this
 // module only has to get it into a glob.
 //
 // WHICH KIND a file is, though, is not this module's to say any more — it is core's
@@ -28,9 +28,15 @@
 // its own copy is a second opinion about whether `Params.SLDD` is a dictionary, and
 // the last time these disagreed the file was found by the glob, admitted to the usage
 // graph, and then classified as nothing at all. So every kind question in this host
-// goes to core, and what is left here is the extension LIST plus the things only
-// vscode needs it for — a `findFiles` glob and the `package.json` selector — neither
-// of which core has any concept of.
+// goes to core.
+//
+// The extension LIST went the same way, and for the same reason: the lists and the kind
+// tests are two halves of one rule — a format in the list but in none of the tests is
+// discovered and then unclassifiable, one in the tests but not the list is never
+// discovered at all — so core keeps them beside each other (`MODEL_EXTS`, `SUPPORTED_EXTS`,
+// `SUPPORTED_NAMES`, `GRAPH_EXTS`, and the matching predicates `isSupportedPath` /
+// `isGraphPath`). What is left here is only what vscode needs the list FOR — a `findFiles`
+// glob and the `package.json` selector — neither of which core has any concept of.
 //
 // The two name REDUCTIONS this module used to hold went the same way, and for the same
 // reason. Which extension completes a bare model reference (`refModelExt`) and what a
@@ -40,47 +46,12 @@
 // was told. Both are core's calls now, at the three sites that used to import them from
 // here, and the literal scan in test/fileTypes.test.ts is what stops a fourth.
 //
-// Those two are not independent: a format present in the list but in none of core's
-// tests is discovered and then unclassifiable, and one in core's tests but absent from
-// the list is never discovered at all. test/fileTypes.test.ts pins them against each
-// other in both directions, which is the only place that agreement can be checked —
-// and it also scans the host sources for stray literals, since a consumer that spells
-// its own `endsWith('.sldd')` is outside both.
+// test/fileTypes.test.ts still pins the lists against core's kind tests in both
+// directions, from this side of the pin — and it also scans the host sources for stray
+// literals, since a consumer that spells its own `endsWith('.sldd')` is outside both.
 //
 // These are pure (no vscode dependency) so both the host and its tests can use them.
-import { isMatFile, isModelFile, isProjectFile, isSlddFile, TOML_PROJECT_FILE } from 'data-explorer-core';
-
-/**
- * Simulink models.
- *
- * `.slx` is a ZIP OPC package. `.mdl` is either the SAME package written as text
- * (modern `save_system`) or the classic pre-R2012 nested-brace format — core's
- * `parseModel` decides which from the bytes, so nothing in this host has to tell
- * the two `.mdl` flavours apart, or even know there are two.
- */
-export const MODEL_EXTS = ['slx', 'mdl'] as const;
-
-/** Every format the extension opens that is identified by its EXTENSION. */
-export const SUPPORTED_EXTS = ['sldd', 'mat', 'prj', ...MODEL_EXTS] as const;
-
-/**
- * Every file the extension opens that is identified by its NAME.
- *
- * One entry, and a list anyway, because the two things that read it below both want to
- * treat the names as a set alongside the extensions — and because the next such marker
- * (MATLAB is adding formats to a project, not retiring them) should be one string here
- * rather than a second code path. See the header for why these cannot be extensions.
- */
-export const SUPPORTED_NAMES = [TOML_PROJECT_FILE] as const;
-
-/**
- * The files the usage and name graphs read: models, plus the data they reference.
- * A `.prj` is excluded deliberately — it defines no variables and no parameter
- * usages, so it contributes nothing to either graph. The same goes for the named
- * project marker, which is why SUPPORTED_NAMES has no counterpart here: a project is
- * a project to these graphs whichever format it is stored in, and that means absent.
- */
-export const GRAPH_EXTS = ['sldd', 'mat', ...MODEL_EXTS] as const;
+import { GRAPH_EXTS, SUPPORTED_EXTS, SUPPORTED_NAMES } from 'data-explorer-core';
 
 function extGlob(exts: readonly string[]): string {
   return `**/*.{${exts.join(',')}}`;
@@ -110,34 +81,3 @@ export const SUPPORTED_GLOB = `{${[
 
 /** `findFiles` glob for the usage/name graphs. */
 export const GRAPH_GLOB = extGlob(GRAPH_EXTS);
-
-/**
- * True if this extension opens `path` at all — the routing question, asked of a tab
- * or a changed document rather than of a folder listing.
- *
- * A union of core's kind tests rather than a regex over SUPPORTED_EXTS, so that being
- * "supported" means precisely "some reader will know what this is". Case-INSENSITIVE,
- * because core's tests are: that unifies a split which used to exist here, where the
- * host's routing regex was case-sensitive while the usage graph's was not, so
- * `Model.SLX` was a graph participant the editor router did not recognise. These files
- * live on case-insensitive filesystems (macOS, Windows), where that asymmetry is a bug.
- *
- * Asking core is also what makes a `matlab.toml` supported here for free, with nothing in
- * this function to change: `isProjectFile` is name-aware now. That is worth saying because
- * "supported" sounds like a routing decision and here it is not — this predicate's two
- * consumers (extension.ts: the dirty-badge/name-reindex on a text change, and the
- * refresh-on-disk-save) choose no editor at all, so admitting the marker cannot affect which
- * view a `matlab.toml` opens in. What it does buy is the side effect worth having: hand-edit
- * the one file a TOML project's definition lives in, save it, and its tree row re-reads.
- */
-export function isSupportedPath(path: string): boolean {
-  return isGraphPath(path) || isProjectFile(path);
-}
-
-/**
- * True if `path` names a file the usage/name graphs read. The same set as
- * `isSupportedPath` minus the project marker — see GRAPH_EXTS.
- */
-export function isGraphPath(path: string): boolean {
-  return isModelFile(path) || isSlddFile(path) || isMatFile(path);
-}

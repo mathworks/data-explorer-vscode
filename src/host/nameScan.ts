@@ -20,9 +20,9 @@
 //          directions come from the same fact: `parsedModelOf` is the only place this host
 //          parses a model.
 //   .sldd  the cheap tier's `Cheap.names` — the SCAN's own name list, which that tier now keeps
-//   .mat   beside the summary it reduces from it (sourceCache.ts). So a folder this index walks
-//          costs one scan per file whoever asked for it first, and the tree's or the usage
-//          plan's pass over the same folder pays for this one.
+//   .mat   beside the summary it reduces from it (core's sourceCache.ts). So a folder this
+//          index walks costs one scan per file whoever asked for it first, and the tree's or
+//          the usage plan's pass over the same folder pays for this one.
 //
 //          It reads `names` and NOT the summary, and the distinction is the whole reason that
 //          field exists. `DataSummary.names` is a `Set` of the non-empty names, and one
@@ -62,16 +62,20 @@
 // writable binary editor keeps its edits in its own edit stack — but nothing below depends on
 // that. A model force-opened in VS Code's own text editor and edited is a dirty document too,
 // and the rule holds for it unchanged: scan or parse the buffer, cache nothing.
-import { isMatFile, isModelFile, isSlddFile, parseModel, scanMat } from 'data-explorer-core';
-import { basename, scanSldd } from 'data-explorer-view/model';
-import { namesFromMat, namesFromSldd, namesFromSlx, type NameRecord } from './nameExtract.js';
 import {
   cheapOne,
+  isMatFile,
+  isModelFile,
+  isSlddFile,
+  parseModel,
   parsedModelOf,
+  scanMat,
   type SourceCache,
   type SourceFile,
   type SourceReader,
-} from './sourceCache.js';
+} from 'data-explorer-core';
+import { basename, scanSldd } from 'data-explorer-view/model';
+import { namesFromMat, namesFromSldd, namesFromSlx, type NameRecord } from './nameExtract.js';
 
 /**
  * How this scan reads: the shared cache's own reader, plus the one source the cache has no

@@ -8,12 +8,11 @@
 // Usage asks, which is `scopedSummaries`.
 //
 // The reasoning behind the answer is split the same way it always was: the tiers and the
-// version key in sourceCache.ts, and which files a Usage answer needs in usagePlan.ts. Both
-// are vscode-free so they can be tested over real fixture bytes.
+// version key in core's sourceCache.ts, and which files a Usage answer needs in its
+// usagePlan.ts. Both are vscode-free, and tested over real fixture bytes in core.
 import * as vscode from 'vscode';
 import { readerFor, sourceCache, sourceFilesOf, clearSources } from './sourceReads.js';
-import { planSummaries } from './usagePlan.js';
-import type { FileSummaries } from 'data-explorer-core';
+import { planSummaries, type FileSummaries } from 'data-explorer-core';
 
 /**
  * Drop every artifact held for every file.

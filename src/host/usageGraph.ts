@@ -12,7 +12,7 @@
 // beside one 13.8 MB model therefore cost 654 ms, and nothing survived the next
 // invalidation, so it cost it again. Only a MODEL can originate a usage edge, and a model
 // resolves through its own chain — so the files that can change one dictionary's answers are
-// the models whose chain reaches it, plus those models' chains. usageScope.ts picks that set
+// the models whose chain reaches it, plus those models' chains. Core's `usageScope` picks that set
 // and usageSources.ts reads it, cheaply and once per version.
 //
 // So there is one graph per file being VIEWED rather than one for the window. The graphs
@@ -26,7 +26,8 @@
 // navigation link targets carry FULL uriStrings (not basenames), so a click resolves to an
 // exact file even when two same-named files exist.
 import * as vscode from 'vscode';
-import { GRAPH_GLOB, isGraphPath } from '../common/fileTypes.js';
+import { isGraphPath } from 'data-explorer-core';
+import { GRAPH_GLOB } from '../common/fileTypes.js';
 import { scopedSummaries } from './usageSources.js';
 import {
   annotateModelViewRows,
