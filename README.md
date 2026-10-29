@@ -1,6 +1,6 @@
 # Simulink Data Explorer Extension for Visual Studio Code
 
-This extension provides support for viewing data from Simulink&reg; models and projects and editing Simulink data dictionaries in Visual Studio Code. It includes a hierarchical relationship tree that maps how your files reference each other, a table for browsing and editing file contents, and detailed properties for the selected data entries.
+This extension provides support for viewing data from Simulink&reg; models and projects and editing Simulink data dictionaries and MAT-files in Visual Studio Code. It includes a hierarchical relationship tree that maps how your files reference each other, a table for browsing and editing file contents, and detailed properties for the selected data entries.
 
 You can use this extension with or without MATLAB&reg; or Simulink installed on your system.
 
@@ -52,7 +52,7 @@ Status markers indicate unresolved links and circular references.
 
 ### Data Viewer and Editor
 
-The center table shows the contents of the selected data source in a searchable and filterable tree structured table. You can use the table to view the contents of model, project, and MAT files, and to directly edit Simulink data dictionary files. When you select an entry in the table, the Properties panels shows a view only list of the full properties of the object. 
+The center table shows the contents of the selected data source in a searchable and filterable tree structured table. You can use the table to view the contents of model and project files, and to directly edit Simulink data dictionary files and MAT-files. When you select an entry in the table, the Properties panels shows a view only list of the full properties of the object. 
 
 A value with two or more dimensions shows a short descriptor in its cell (for example, `<2x3x2 double>`). Click the grid icon next to the descriptor to show the whole array in a (view only) floating grid. A value with more than two dimensions includes a `(:,:,k)` page selector to step through its trailing dimensions. To edit the individual values, in the table, expand the **Value** node.
 
@@ -76,13 +76,13 @@ A textual Simulink data dictionary (SLDD) file is backed by a JSON text document
 | --- | --- | --- |
 | Simulink data dictionaries | `.sldd` JSON and compressed-binary | Read and write |
 | Simulink models | `.slx`, `.mdl` | Read only |
-| MAT-files | `.mat` Level 5 (`-v6`/`-v7`) | Read only |
+| MAT-files | `.mat` Level 5 (`-v6`/`-v7`) | Read and write |
 | MATLAB Projects | `.prj`, `matlab.toml` | Read only |
 
 ## Limitations
 
 - Requires Visual Studio Code 1.106.0 or later.
-- Editing supports Simulink data dictionary (SLDD) files. Simulink models, MAT files, and project files are read only.
+- Editing supports Simulink data dictionary (SLDD) files and MAT-files. Simulink models and project files are read only.
 - `.mat` support covers the Level 5 format only. **`-v7.3`** files, which are HDF5 and are required by MATLAB for variables above 2 GB, are not supported.
 - Large textual (JSON) `.sldd` files are limited by size. Above **50 MB**, the file opens as a read only table. Above **512 MB**, the file opens in Visual Studio Code's text editor instead.
 - Paste creates a new top level entry in the target section. Pasting as a child of a structure or bus is not supported.
