@@ -2,6 +2,10 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## [1.47.0] — 2026-10-29
+
+- Bug fixes.
+
 ## [1.46.0] — 2026-10-27
 
 - MAT-files now take the same edits as data dictionaries: delete a struct field, and add or delete elements of a string array.
