@@ -91,8 +91,9 @@ package).
 
 ## Typechecking
 
-`npm run typecheck` does not cover `bench/` — the root tsconfig's `rootDir` is `./src`.
-Use `npx tsc --noEmit -p bench`.
+`npm run typecheck` covers `bench/` through its own tsconfig (`tsc --noEmit -p bench`, the
+root one's `rootDir` being `./src`), so CI catches a bench import that a dependency stopped
+exporting even though nothing in CI runs the bench.
 
 ## What is real and what is substituted
 

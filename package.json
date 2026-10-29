@@ -232,7 +232,7 @@
     "copy:icons": "node scripts/copy-icons.mjs",
     "build": "npm run build:webview && npm run copy:icons && npm run build:host",
     "watch:host": "node esbuild.mjs --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p bench",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "check:leak": "node scripts/leak-check.mjs",
