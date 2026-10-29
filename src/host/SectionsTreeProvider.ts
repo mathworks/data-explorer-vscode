@@ -2,12 +2,12 @@
 import * as vscode from 'vscode';
 import type { SourceFile } from 'data-explorer-core';
 import {
-  encode,
   FolderHierarchy,
   type GraphReader,
   type HierarchyItem,
   type SourceType,
 } from 'data-explorer-view/model';
+import { encode } from 'data-explorer-view/host';
 import { svgIconFor } from './iconMap.js';
 import { readProjectStore } from './projectStore.js';
 import { readerFor, sourceCache, sourceFilesOf } from './sourceReads.js';

@@ -10,7 +10,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SectionsTreeProvider } from '../../src/host/SectionsTreeProvider';
-import { HEALTH_QUERY } from 'data-explorer-view/model';
+import { HEALTH_QUERY } from 'data-explorer-view/host';
 import { waitFor } from './tools/hostHarness';
 
 function extensionUri(): vscode.Uri {

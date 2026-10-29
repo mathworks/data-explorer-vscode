@@ -43,7 +43,6 @@ import {
   wholeFileRules,
   readSlddParts,
   InspectorSelection,
-  binaryEditSrcId,
 } from 'data-explorer-view/model';
 import {
   getModel,
@@ -54,6 +53,7 @@ import {
   answerChildRequest,
   answerMatrixRequest,
   InspectorPage,
+  binaryEditSrcId,
 } from 'data-explorer-view/host';
 import { captureBaseline, clearBaseline, computeModified } from '../../src/host/slddBaseline.js';
 import { clipMarkOfDoc } from '../../src/host/clipMarks.js';

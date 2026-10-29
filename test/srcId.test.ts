@@ -16,7 +16,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { binaryEditSrcId, srcIdToUriString } from 'data-explorer-view/model';
+import { srcIdToUriString } from 'data-explorer-view/model';
+import { binaryEditSrcId } from 'data-explorer-view/host';
 import { blankCommentsAndKeepLines, sourceFiles } from './tools/moduleGraph.js';
 
 // The prefix, as the model spells it: what it puts before an empty uriString. Not imported, because
