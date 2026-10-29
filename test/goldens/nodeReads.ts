@@ -8,9 +8,8 @@
 // Every file is read by its fake path (fixtures.ts), which maps back to one place in the repo.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { isTomlProjectFile, TOML_PROJECT_FILE } from 'data-explorer-core';
+import { isTomlProjectFile, TOML_PROJECT_FILE, type SourceFile } from 'data-explorer-core';
 import type { GraphReader } from '../../src/host/structuralIndex.js';
-import type { SourceFile } from '../../src/host/sourceCache.js';
 import { byCodePoint, REPO } from './fixtures.js';
 
 /** The repo path a fake `/fx/<rel>` path was made from. */

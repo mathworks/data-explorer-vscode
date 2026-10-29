@@ -21,8 +21,8 @@ import {
   removeFile,
   invalidate as invalidateNameIndex,
 } from './host/nameIndex.js';
-import { isSupportedPath, SUPPORTED_GLOB } from './common/fileTypes.js';
-import { isMatFile, isSlddFile, isTomlProjectFile } from 'data-explorer-core';
+import { SUPPORTED_GLOB } from './common/fileTypes.js';
+import { isMatFile, isSlddFile, isSupportedPath, isTomlProjectFile } from 'data-explorer-core';
 
 function isSlddUri(uri: vscode.Uri | undefined): boolean {
   return !!uri && isSlddFile(uri.path);

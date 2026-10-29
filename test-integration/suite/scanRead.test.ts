@@ -1,6 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
 // The scan read gate, against a real `vscode.workspace.fs` (the only place `stat` and
-// `readFile` exist). The batching half is unit-tested in test/mapLimited.test.ts; what
+// `readFile` exist). The batching half is unit-tested in core's test/mapLimited.test.ts; what
 // needs a real VS Code is the SIZE GATE, and the reason it exists: a folder holding a
 // dictionary larger than V8 can decode used to take the extension host to ~2 GB and
 // kill the window outright — no error, no dump the user could see, just a closed window.
@@ -10,7 +10,7 @@
 // would still work, slowly, if the gate were gone, so `null` is the whole contract.
 //
 // `scanVersion` is here for the same reason and is the sharper case: it is the KEY every
-// cached file summary is stored under (usagePlan.ts), and it is derived from a real
+// cached file summary is stored under (core's sourceCache.ts), and it is derived from a real
 // `stat`. The fast suite cannot reach that — its reader hands back a constant — so a
 // version that silently never repeated would leave every test green while the cache it
 // keys missed on every build and re-parsed the folder each time. Two facts pin it: an

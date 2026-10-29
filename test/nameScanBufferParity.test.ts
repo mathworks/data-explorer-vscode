@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { namesOfFile, type NameReader } from '../src/host/nameScan.js';
-import { newSourceCache, type SourceFile } from '../src/host/sourceCache.js';
+import { newSourceCache, type SourceFile } from 'data-explorer-core';
 
 const dir = join(import.meta.dirname, 'fixtures');
 

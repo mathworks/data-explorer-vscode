@@ -17,7 +17,16 @@
 // answer depends on the folder and not on the file); and the cap fallback, which only runs when
 // `postMessage` refuses a payload, which no fixture comes near.
 import { unzipSync } from 'fflate';
-import { DATA_PART_XML, DataModel, isMatFile, isModelFile, isSlddFile, type ParseWarning } from 'data-explorer-core';
+import {
+  DATA_PART_XML,
+  DataModel,
+  isMatFile,
+  isModelFile,
+  isSlddFile,
+  newSourceCache,
+  parsedModelForOpenTab,
+  type ParseWarning,
+} from 'data-explorer-core';
 import {
   getModel,
   getModelForBinaryTab,
@@ -44,7 +53,6 @@ import {
   InspectorPage,
   binaryEditSrcId,
 } from 'data-explorer-view/model';
-import { newSourceCache, parsedModelForOpenTab } from '../../src/host/sourceCache.js';
 import { captureBaseline, clearBaseline, computeModified } from '../../src/host/slddBaseline.js';
 import { clipMarkOfDoc } from '../../src/host/clipMarks.js';
 import { clipboardState } from '../../src/host/clipboard.js';

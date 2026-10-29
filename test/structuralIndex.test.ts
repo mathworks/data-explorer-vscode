@@ -18,10 +18,14 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { zipSync, strToU8 } from 'fflate';
-import { SUPPORTED_EXTS } from '../src/common/fileTypes.js';
+import {
+  extractSlxStructure,
+  newSourceCache,
+  sourceKind,
+  SUPPORTED_EXTS,
+  type SourceFile,
+} from 'data-explorer-core';
 import { type GraphSource, type SourceType, scanSldd } from 'data-explorer-view/model';
-import { extractSlxStructure } from '../src/host/slxStructure.js';
-import { newSourceCache, sourceKind, type SourceFile } from '../src/host/sourceCache.js';
 import {
   buildGraphSource,
   graphSourcesOf,
@@ -54,8 +58,9 @@ function modelFile(name: string): RawFile {
 /**
  * A dictionary as its consumer hands it over: the path, and the references read off its bytes.
  *
- * `scanSldd` is the one extraction, for either on-disk format, and it is what the cheap tier
- * calls (`dataCheapOf` in sourceCache.ts). It THROWS on a dictionary it cannot read, where the
+ * `scanSldd` is the one extraction, for either on-disk format, and it is the read the cheap
+ * tier makes (core's `scanSldd` with the same unreadable-source refusal, `dataCheapOf` in core's
+ * sourceCache.ts). It THROWS on a dictionary it cannot read, where the
  * regex this used to run over textual bytes answered an empty list — so the tolerance case is
  * asserted through `pass()` below, which is the route that catches in production.
  */
@@ -283,7 +288,7 @@ describe('buildGraphSource', () => {
 // of formats this extension opens.
 //
 // `typeOf` derives its answer from `sourceKind` — one classifier, exhaustively mapped — and the
-// thing that pin cannot cover on its own is the LIST. `sourceCache.test.ts` requires every
+// thing that pin cannot cover on its own is the LIST. Core's `sourceCache.test.ts` requires every
 // SUPPORTED_EXTS extension to name a `SourceKind`; nothing required every one of them to reach
 // a `SourceType`, and the gap matters because the unknown-extension case here is not an error,
 // it is `'sldd'`. So a `.slxp` added to core's predicates and to the list would classify as a

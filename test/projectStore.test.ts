@@ -3,7 +3,7 @@
 // One function, four project formats, ONE shape out — and the branch that decides which of
 // the two things on disk to read.
 //
-// `readProjectStore` is the whole of what this host knows about where a project's definition
+// `readProjectStore` is the whole of what this host asks about where a project's definition
 // lives. Until R2026b that was a single rule (walk `resources/project/` beside the `.prj`),
 // and `matlab.project.DefinitionFiles.Toml` makes it two: that format puts the entire
 // definition in one `matlab.toml` at the project root and DELETES both `resources/` and the
@@ -20,23 +20,24 @@
 // deliberately does NOT model is the one thing a stub cannot — `FileType` as a BITMASK over
 // symlinks, which is why test-integration/suite/projectStoreSymlink.test.ts exists and runs
 // inside a real VS Code.
+//
+// The walk itself is core's now (`readProjectStore` over a `StoreFs`), and core holds it to these
+// same cases over its own filesystems (its test/projectStore.test.ts). They stay here because
+// they are also the only unit check of this host's half: the `workspace.fs` adapter in
+// src/host/projectStore.ts, which turns core's paths back into uris and VS Code's `FileType` into
+// an entry type.
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, posix } from 'node:path';
+import { join } from 'node:path';
 import { parseProject, projectFallbackName, TOML_PROJECT_FILE } from 'data-explorer-core';
 
-// The `vscode` surface readProjectStore actually uses, over `node:fs`. `joinPath` normalises,
-// which matters: the function reaches the project root as `joinPath(marker, '..')`.
+// The `vscode` surface readProjectStore actually uses, over `node:fs`: the two reads, and the
+// `FileType` bits the listing is typed with. The uri itself is the `marker` below.
 vi.mock('vscode', () => {
   const FileType = { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 };
   return {
     FileType,
-    Uri: {
-      joinPath: (base: { path: string }, ...segments: string[]) => ({
-        path: posix.join(base.path, ...segments),
-      }),
-    },
     workspace: {
       fs: {
         readFile: async (uri: { path: string }) => new Uint8Array(readFileSync(uri.path)),
@@ -52,8 +53,12 @@ vi.mock('vscode', () => {
 
 const { readProjectStore } = await import('../src/host/projectStore.js');
 
-/** A marker path as the host sees one: a uri-ish object carrying only `.path`. */
-const marker = (path: string) => ({ path }) as never;
+/**
+ * A marker path as the host sees one: a uri-ish object carrying `.path`, and the `with({ path })`
+ * the adapter reaches every other file of the project through.
+ */
+const marker = (path: string): never =>
+  ({ path, with: (change: { path: string }) => marker(change.path) }) as never;
 
 let tmpRoot: string;
 
@@ -173,10 +178,9 @@ describe('a matlab.toml IS the definition', () => {
   });
 });
 
-// The seam, and the reason this test file is in THIS repo rather than in core: the key is
-// chosen here and dispatched on there, and nothing inside either repo can see both halves.
-// Core's own tests cover the TOML reader over its text; what is pinned here is that the map
-// this host builds is a map that reaches that reader at all.
+// The seam. The key is chosen by core's walk and dispatched on by core's parser, and core pins
+// the two together; what is pinned here is that the map this host's adapter hands back — read
+// through `workspace.fs` — is still a map that reaches that reader at all.
 describe('the map reaches core’s TOML reader', () => {
   it('parses as the TOML format, named after the project FOLDER', async () => {
     const path = join(tmpRoot, 'TomlProj', TOML_PROJECT_FILE);
