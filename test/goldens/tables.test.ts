@@ -102,7 +102,7 @@ describe('golden table payloads', { timeout: 60_000 }, () => {
         // header shows nothing (InspectorSelection), so it is not asked.
         const inspector = keyed(view, view.rows, (row) => (isSectionRowId(String(row.ID)) ? undefined : view.select(row.ID)));
         await expectGolden(inspector, rel, 'inspector');
-        // The id the panel asks with is the descriptor's (matrixOpen.ts), not the row's.
+        // The id the panel asks with is the descriptor's (view's connectTable), not the row's.
         const matrix = keyed(view, view.rows, (row) => (row._matrix ? view.matrix(row._matrix.nodeId) : undefined));
         await expectGolden(matrix, rel, 'matrix');
       });

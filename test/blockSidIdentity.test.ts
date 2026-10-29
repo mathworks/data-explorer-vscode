@@ -240,9 +240,12 @@ describe('the model view’s own rows, from the parse through the annotation', (
 
   // And that the matcher itself looks there. table-main.ts is a webview ENTRY module — it
   // builds the table and wires `window.addEventListener('message')` at import — so it is
-  // read rather than run, the same way webviewOverlays.test.ts reads it.
+  // read rather than run, the same way webviewOverlays.test.ts reads it. The matcher is view's
+  // connectTable now, which table-main hands the host's selectByName to.
   it('is matched by a webview that considers the key', () => {
     const src = readFileSync(join(import.meta.dirname, '..', 'src/webview/table-main.ts'), 'utf8');
-    expect(src).toContain('r._blockKey === pendingSelectName');
+    expect(src).toContain('handle.selectByName(msg.name)');
+    const connect = readFileSync(join(import.meta.dirname, '..', 'node_modules/data-explorer-view/dist/widgets/tree-table/connectTable.js'), 'utf8');
+    expect(connect).toContain('r._blockKey === pendingSelectName');
   });
 });

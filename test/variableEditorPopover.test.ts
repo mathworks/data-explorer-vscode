@@ -20,7 +20,9 @@ import {
 } from 'data-explorer-view/variable-editor';
 import type { MatrixCellsMessage } from '../src/common/protocol.js';
 import { DexMatrixOpen, defineMatrixOpen } from 'data-explorer-view/tree-table';
-import { installMatrixOpen } from '../src/webview/matrixOpen.js';
+import { connectInspector } from 'data-explorer-view/property-inspector';
+import { inspectorFeed } from 'data-explorer-view/model';
+import { vscodePort } from '../src/webview/vscodePort.js';
 
 defineVariableEditor();
 defineMatrixOpen();
@@ -39,7 +41,7 @@ afterEach(() => {
 });
 
 // What a ROW carries: everything needed to title the panel and to ask for the
-// rest. The cells are fetched when a panel opens — see matrixOpen.ts.
+// rest. The cells are fetched when a panel opens — see view's connectTable / connectInspector.
 function descriptor(over: Partial<MatrixDescriptor> = {}): MatrixDescriptor {
   return { name: 'A', className: 'double', dims: [2, 2], nodeId: 'n1', ...over };
 }
@@ -525,7 +527,7 @@ describe('the glyph is an affordance, not an opener', () => {
     expect(seen.length).toBe(1);
     expect(seen[0].matrix.name).toBe('Mat');
     // The node id travels with it, because the event is what starts the fetch:
-    // matrixOpen.ts turns this into a `requestMatrix` for exactly this node.
+    // connectTable / connectInspector turn this into a `requestMatrix` for exactly this node.
     expect(seen[0].matrix.nodeId).toBe('node-42');
     expect('cells' in seen[0].matrix).toBe(false);
     expect(seen[0].anchorEl).toBe(el);
@@ -580,12 +582,13 @@ describe('the glyph is an affordance, not an opener', () => {
   });
 });
 
-describe('installMatrixOpen is the whole wiring, for both webviews', () => {
-  // It now owns BOTH directions: the glyph's event out as a `requestMatrix`, and
-  // the host's `matrixCells` back in as a deliver(). Keeping the pair in one
-  // module is the point — a webview that asked but never listened would open a
-  // panel that waits forever, and that is exactly the kind of half-wiring this
-  // repo has shipped before when two mains each did their own.
+describe("the inspector webview's wiring: view's connectInspector over the VS Code port", () => {
+  // It owns BOTH directions: the glyph's event out as a `requestMatrix`, and the host's
+  // `matrixCells` back in as a deliver(). Keeping the pair in one place is the point — a
+  // webview that asked but never listened would open a panel that waits forever, and that is
+  // exactly the kind of half-wiring this repo has shipped before when two mains each did their
+  // own. Both mains now take it from view (connectTable for the table, connectInspector here);
+  // this drives the inspector's, through the port pi-main.ts gives it.
   let source: HTMLElement | null = null;
   let posted: any[] = [];
 
@@ -605,7 +608,18 @@ describe('installMatrixOpen is the whole wiring, for both webviews', () => {
       document.body.appendChild(editor);
       await editor.updateComplete;
     }
-    return installMatrixOpen(source, withEditor ? editor : null, post);
+    const feed = inspectorFeed(vscodePort({ postMessage: post }));
+    const handle = connectInspector(source as any, feed, { variableEditor: withEditor ? editor! : undefined, empty: () => {} });
+    // What connecting says first: the inspector is up (`ready`). The tests are about what follows.
+    posted.length = 0;
+    return {
+      // A page, which is what closes a grid this inspector opened: the host's showProps or empty.
+      page: () => hostSays({ type: 'empty' }),
+      dispose: () => {
+        handle.dispose();
+        feed.dispose();
+      },
+    };
   }
 
   function fire(detail: any): void {
@@ -638,6 +652,7 @@ describe('installMatrixOpen is the whole wiring, for both webviews', () => {
     fire({ matrix: descriptor({ nodeId: 'n1' }), anchorEl: makeAnchor() });
     await frame();
     hostSays(cells(payload({ nodeId: 'n1' })));
+    await frame();
     await editor!.updateComplete;
     await editor!.updateComplete;
     expect(grid(editor!).matrix!.cells).toEqual(['1', '2', '3', '4']);
@@ -655,15 +670,16 @@ describe('installMatrixOpen is the whole wiring, for both webviews', () => {
     for (const data of [undefined, null, 'matrixCells', { type: 'setRows', rows: [] }, { type: 'empty' }]) {
       expect(() => hostSays(data)).not.toThrow();
     }
+    await frame();
     expect(spy).not.toHaveBeenCalled();
     handle.dispose();
   });
 
-  it('exposes close(), which is what setRows/showProps call', async () => {
+  it('closes on the next page, which is what showProps and empty are', async () => {
     const handle = await wire();
     fire({ matrix: descriptor(), anchorEl: makeAnchor() });
     await frame();
-    handle.close();
+    handle.page();
     await editor!.updateComplete;
     expect(editor!.hasAttribute('open')).toBe(false);
     handle.dispose();
@@ -691,20 +707,20 @@ describe('installMatrixOpen is the whole wiring, for both webviews', () => {
     handle.dispose();
   });
 
-  // Regression: the first cut of this wiring took the editor from a tag in
-  // src/webview/table.html — but that file is only vite's dev entry. The real
-  // webview HTML is assembled by three host providers, none of which had the tag,
-  // so the element was null, close() threw inside the setRows handler, and the
-  // table came up EMPTY for every file. The handle must be inert instead: a
-  // missing editor costs the glyph, never the rows.
-  it('is inert when there is no editor element, so setRows cannot throw', async () => {
+  // The first cut of this wiring took the editor from a tag in src/webview/table.html — but that
+  // file is only vite's dev entry, and the shells the hosts build had none, so the element was
+  // null and the table came up EMPTY. pi-main.ts makes its editor and passes it; with none
+  // passed, connectInspector makes one, so a page without the tag still has its glyph.
+  it('makes an editor of its own when the page passes none', async () => {
     const handle = await wire(false);
-    expect(() => handle.close()).not.toThrow();
-    expect(() => fire({ matrix: descriptor(), anchorEl: makeAnchor() })).not.toThrow();
-    // And it does not ask for cells it has nowhere to put.
-    expect(posted).toEqual([]);
-    expect(() => hostSays(cells(payload()))).not.toThrow();
-    expect(() => handle.dispose()).not.toThrow();
+    fire({ matrix: descriptor({ name: 'Own' }), anchorEl: makeAnchor() });
+    await frame();
+    const made = document.body.querySelector('dex-variable-editor') as DexVariableEditor;
+    await made.updateComplete;
+    expect(made.hasAttribute('open')).toBe(true);
+    expect(posted).toEqual([{ type: 'requestMatrix', nodeId: descriptor().nodeId }]);
+    handle.dispose();
+    expect(document.body.querySelector('dex-variable-editor')).toBeNull();
   });
 
   it('stops listening in both directions after dispose', async () => {
@@ -717,6 +733,7 @@ describe('installMatrixOpen is the whole wiring, for both webviews', () => {
     expect(posted).toEqual([]);
     const spy = vi.spyOn(editor!, 'deliver');
     hostSays(cells(payload()));
+    await frame();
     expect(spy).not.toHaveBeenCalled();
   });
 });

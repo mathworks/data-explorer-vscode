@@ -155,10 +155,13 @@ describe('the loading state belongs to the table component, not to any shell', (
   });
 
   it('table-main.ts drives it as a property, not by reaching for an element', () => {
+    // Through view's connectTable, which table-main hands its table to.
     const src = read('src/webview/table-main.ts');
-    expect(src).toContain('table.loading = true');
-    expect(src).toContain('table.loading = false');
+    expect(src).toContain('connectTable(table, messageSource(');
     expect(src).not.toContain("getElementById('dex-loading')");
+    const connect = read('node_modules/data-explorer-view/dist/widgets/tree-table/connectTable.js');
+    expect(connect).toContain('table.loading = true');
+    expect(connect).toContain('table.loading = false');
   });
 
   it('the component owns the spinner and its keyframes', () => {
@@ -185,7 +188,8 @@ describe('the Property Inspector creates its overlay in code too', () => {
   it('pi-main.ts creates the Variable Editor itself', () => {
     const src = read('src/webview/pi-main.ts');
     expect(src).toContain("document.createElement('dex-variable-editor')");
-    expect(src).toContain('installMatrixOpen(pi, ');
+    // And hands it to view's connectInspector, which opens it from the inspector's glyph.
+    expect(src).toMatch(/connectInspector\(pi, [^\n]*\{ variableEditor,/);
   });
 
   it('still takes the inspector element from markup', () => {

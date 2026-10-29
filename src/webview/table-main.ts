@@ -3,6 +3,7 @@ import 'data-explorer-view/theme.css';
 import './webview-page.css';
 import './vscode-theme.css';
 import {
+  connectTable,
   defineTreeTable,
   buildContextMenuItems,
   shouldShowContextMenu,
@@ -15,25 +16,18 @@ import { defineContextMenu, type ContextMenuItem } from 'data-explorer-view/cont
 import { defineErrorDialog } from 'data-explorer-view/error-dialog';
 import { defineVariableEditor } from 'data-explorer-view/variable-editor';
 import { setIconBase } from 'data-explorer-view/icon';
-import { installMatrixOpen } from './matrixOpen.js';
 import { renderBanners, renderError } from './banners.js';
 import {
-  nextExpandedIds,
-  nextStickyIds,
-  pendingSelectionToApply,
-  spliceEntryRows,
-  insertEntryRows,
-  mergeChildRows,
+  messageSource,
   dropDecision,
   type DragMode,
   type DropTarget,
   sectionRowIdOf,
   type SectionRule,
-  isSectionRowId,
   sectionNameFromRowId,
   WHOLE_FILE_SECTION,
 } from 'data-explorer-view/model';
-import { linkRoute } from './linkRoute.js';
+import { vscodePort } from './vscodePort.js';
 import type { DragDescriptor } from '../host/dragState.js';
 import type { HostToTableMessage } from '../common/protocol.js';
 
@@ -72,11 +66,9 @@ function overlay(tag: string): any {
 
 const contextMenu = overlay('dex-context-menu');
 const errorDialog = overlay('dex-error-dialog');
-// The Variable Editor: a glyph in a matrix Value cell asks for a grid. The table
-// is the event source because the glyph lives inside its shadow tree.
+// The Variable Editor: a glyph in a matrix Value cell asks for a grid. connectTable opens and
+// fills it (below); it is made here with the other overlays so the shells stay interchangeable.
 const variableEditor = overlay('dex-variable-editor');
-const matrixOpen = installMatrixOpen(table, variableEditor, (m) => vscode.postMessage(m));
-
 // Menu state cached from host messages so the menu builds synchronously on
 // right-click (no round-trip): whether the doc is editable, and clipboard state.
 let editable = false;
@@ -202,211 +194,6 @@ function predictDrop(
   return dropDecision(dragDescriptor, target, mode);
 }
 
-// The rows the host asked us to select once they exist in the table. Set on a rename (the
-// row's id changes, so the old selection is stale), and on every edit that ADDS rows — a
-// paste or a drop of several entries names all of them, so the selection lands on the
-// whole group the user just created rather than on its last member. Applied as soon as
-// they are all present, otherwise held until the rebuilt rows arrive.
-let pendingSelectIds: string[] = [];
-
-function applyPendingSelection(): void {
-  const rows = (table.rows ?? []) as { ID: string; parent: string | null }[];
-  const toSelect = pendingSelectionToApply(rows, pendingSelectIds);
-  if (!toSelect) return;
-  table.selectedRowIds = toSelect;
-  // Keep the host (Property Inspector) in sync with the re-selected rows.
-  vscode.postMessage({ type: 'select', rowIds: toSelect });
-  pendingSelectIds = [];
-}
-
-// A row the host asked us to open the name editor on once it exists. Set only by an add
-// from the gallery: core names a new entry from its class's stem (`Param`, `Param1`, … for a
-// Simulink.Parameter) and saying what it really is is the user's next act (see
-// BeginRenameMessage). Held until the row arrives for
-// the same reason pendingSelectIds is — the request travels beside the repaint that carries
-// the row, and nothing here may assume which lands first.
-let pendingRenameId: string | null = null;
-
-function applyPendingRename(): void {
-  if (!pendingRenameId) return;
-  const rows = (table.rows ?? []) as { ID: string }[];
-  if (!rows.some((r) => r.ID === pendingRenameId)) return;
-  // Cleared whether or not the editor opened. A row that is present and NOT renameable is
-  // an answer, not a wait: holding the request would open the editor on whatever row next
-  // takes that id, which after an undo is a different entry.
-  table.beginRename(pendingRenameId);
-  pendingRenameId = null;
-}
-
-// A name a navigation asked us to select once its row exists. Set on a cross-tab
-// Usage-link click (the target is identified by name — block or variable — not
-// by hierarchical id); applied as soon as a matching row is present, else held
-// until rows arrive. Setting selectedRowIds makes the table expand ancestors and
-// scroll the row into view.
-let pendingSelectName: string | null = null;
-
-function applyPendingNameSelection(): void {
-  if (!pendingSelectName) return;
-  const rows = (table.rows ?? []) as {
-    ID: string;
-    parent?: string | null;
-    Name?: { label?: string };
-    _blockKey?: string;
-  }[];
-  // A row that is a top-level ENTRY: its parent is a section header, or — in a table with
-  // no section rows, a MAT-file's — it has no parent and is not a header itself, because
-  // there the variables ARE the top level. Same reading of the row shape as operands.ts,
-  // through the same `section:` spelling. A dictionary's top-level rows are all headers,
-  // so its answer is unchanged.
-  const isEntry = (r: { ID: string; parent?: string | null }): boolean =>
-    typeof r.parent === 'string' ? isSectionRowId(r.parent) : !isSectionRowId(r.ID);
-  const named = (r: { Name?: { label?: string } }): boolean => r.Name?.label === pendingSelectName;
-  // Two grammars share this one channel. A variable target (and a block in a file
-  // written before SIDs existed) is a NAME and matches the Name label; a block
-  // target is core's block KEY — the SID — which is not printed anywhere, so it is
-  // matched against the `_blockKey` the row publishes. Without that second pass a
-  // `blocks:65@<model>.slx` click would open the model and select nothing, since the
-  // row it means reads `<SID: 65>`. Name first, so every pre-SID target keeps its
-  // existing answer when a same-spelled key also exists.
-  //
-  // ENTRY rows first within the Name pass, because a name can be spelled at more than
-  // one depth and every by-name target on this channel means the top-level one: a Data
-  // Type link resolves through core's typeLinkIndex, which is `isEntry`-gated, and the
-  // Usage grammars name a dictionary/MAT variable or a model-workspace param. A nested
-  // row that happens to share the name is not what any of them means — and in an
-  // architectural dictionary that is not hypothetical, because a bus element named after
-  // the value type it references sits ABOVE that value type's own entry. First-in-
-  // document-order then answered with the row the click came FROM, so the link selected
-  // what was already selected and read as dead. The ungated pass stays as the fallback a
-  // pre-SID block target needs: its row is deep in the block tree, never an entry.
-  const match =
-    rows.find((r) => named(r) && isEntry(r)) ??
-    rows.find(named) ??
-    rows.find((r) => r._blockKey === pendingSelectName);
-  if (!match) return;
-  table.selectedRowIds = [match.ID];
-  vscode.postMessage({ type: 'select', rowIds: [match.ID] });
-  pendingSelectName = null;
-}
-
-// We are waiting for the first payload from the moment this module runs: the host
-// parses synchronously (and, on first open, scans the whole workspace for the
-// usage graph) before it can post 'setRows', which is several seconds on a large
-// file. Setting this at boot, ahead of the table's first paint, is what stops that
-// gap from being reported as "No data" — the table has no rows yet, but that is
-// not the same as the file having none.
-//
-// The table owns what the wait LOOKS like: a spinner in its own region, under a
-// search bar that stays, revealed only after a delay so a fast open never flashes
-// it (see .loading-state in dex-tree-table.ts). This module owns only when the
-// wait starts and ends. It used to own the whole thing — a timer here, revealing
-// an overlay pinned over the entire panel — and the overlay covered the search bar
-// on its way, which is the flicker that moved this into the component.
-table.loading = true;
-
-// The wait is over: the first payload (setRows) landed, or an error ended it.
-function hideLoading(): void {
-  table.loading = false;
-}
-
-// Through banners.ts, like the notice and the warning, because the error banner is
-// in the same strip and the table is offset by the strip's TOTAL height. Painted
-// from here it was styled and stacked as if it were alone: outside the strip, in
-// normal flow ahead of a table pinned at inset:0, so the table covered it and an
-// error message reached the DOM and no screen.
-function showError(message: string): void {
-  renderError(table, message);
-}
-function clearError(): void {
-  renderError(table, undefined);
-}
-
-// A selection whose every row a repaint removed is cleared, and the host told, ONE TASK
-// later rather than in the repaint. The host can repaint and then re-select as two messages
-// — a rename's narrow path sends updateEntryRows (the old id leaves) and then selectRows (the
-// new id) — and clearing on the first of the two posted `select []` and then `select [new]`,
-// so the Property Inspector blanked and came back. A selectRows cancels the clear (the host
-// has said what is selected), and the clear itself re-checks: a selection that names a row
-// again by the time it runs — re-applied, or made by the user — is left alone.
-let vanishedClear: ReturnType<typeof setTimeout> | null = null;
-
-function cancelVanishedClear(): void {
-  if (vanishedClear === null) return;
-  clearTimeout(vanishedClear);
-  vanishedClear = null;
-}
-
-function scheduleVanishedClear(): void {
-  cancelVanishedClear();
-  vanishedClear = setTimeout(() => {
-    vanishedClear = null;
-    const present = new Set(((table.rows ?? []) as { ID: string }[]).map((r) => r.ID));
-    const selection = selectedRowIds();
-    if (selection.length === 0 || selection.some((id) => present.has(id))) return;
-    table.selectedRowIds = [];
-    // Once: the next repaint starts from the empty selection, so it has nothing to report.
-    vscode.postMessage({ type: 'select', rowIds: [] });
-  }, 0);
-}
-
-// Whether a payload with rows has been shown yet. Until then there is no expansion of the
-// user's to keep, so the next one opens the top level (rowUpdates.nextExpandedIds); after
-// it, an empty expansion is the user's own — they collapsed everything — and stays empty.
-let shownRows = false;
-
-// Hand a new row array to the table and re-derive everything that depends on it.
-//
-// Shared by the two repaint messages — the whole-table `setRows` and the
-// entry-scoped `updateEntryRows` — because every rule here is about ROWS and none
-// of them is about how many arrived. Written once so the narrow path cannot drift
-// from the wide one: an entry-scoped repaint that forgot to invalidate
-// `_visibleRowsCache`, or to re-apply a pending selection, would be a bug visible
-// only after an edit and only on one of the two paths.
-function installRows(rows: any[]): void {
-  // Preserve the current selection across the rebuild if the row still exists.
-  // EVERY repaint (value edit, structural edit, text-view edit, undo, redo)
-  // arrives here, so this is what keeps selection stable through all of them.
-  const prevSelected: string[] = Array.isArray(table.selectedRowIds) ? table.selectedRowIds : [];
-  const prevExpanded: Set<string> | null = table._expandedIds instanceof Set ? table._expandedIds : null;
-  // Read BEFORE the new rows land: what the user is looking at is the answer to a
-  // search, and a row they have since edited out of that answer must not be deleted
-  // from under them.
-  const prevVisible: string[] =
-    typeof table._getVisibleRows === 'function'
-      ? table._getVisibleRows().map((r: { ID: string }) => r.ID)
-      : [];
-  table.rows = rows;
-  // Preserve expansion (keep still-existing expanded ids); default to the top level on
-  // the first load. Never collapse the tree under the user, nor reopen what they closed.
-  table._expandedIds = nextExpandedIds(shownRows ? (prevExpanded ?? new Set()) : null, rows);
-  if (rows.length > 0) shownRows = true;
-  // Preserve the filtered list: rows edited out of the active search stay until the
-  // user searches again. pendingSelectIds — the rows the host wants selected after this
-  // edit, so a renamed row under its new id, or the entries a paste added — are still
-  // unread here; applyPendingSelection() below is what consumes them.
-  table._stickyRowIds = nextStickyIds(table._filterText ?? '', prevVisible, rows, pendingSelectIds);
-  table._visibleRowsCache = null;
-  const present = new Set(rows.map((r: { ID: string }) => r.ID));
-  const stillSelected = prevSelected.filter((id) => present.has(id));
-  // Every selected row gone (a delete from the text view, the undo of an add): the
-  // selection named nothing any more, so the inspector showed a deleted entry and every
-  // chord found no operand. Cleared, and the host told — one task later, unless a pending
-  // selection takes over first, here or in the selectRows right behind (scheduleVanishedClear).
-  const vanished = prevSelected.length > 0 && stillSelected.length === 0;
-  if (stillSelected.length > 0) table.selectedRowIds = stillSelected;
-  if (typeof table.requestUpdate === 'function') table.requestUpdate();
-  // A rename/structural edit posts selectRows then triggers this rebuild;
-  // re-apply now that the rows it named exist.
-  applyPendingSelection();
-  // A cross-tab navigation may be waiting for its target row to appear.
-  applyPendingNameSelection();
-  if (vanished && !selectedRowIds().some((id) => present.has(id))) scheduleVanishedClear();
-  // AFTER the selection, because selecting expands the row's ancestors and scrolls it into
-  // view — an editor opened on a row still hidden under a collapsed section, or below the
-  // viewport, is a table that has silently stopped responding to the keyboard.
-  applyPendingRename();
-}
-
 // Whether a value read off a message is an object — the one shape every list element below
 // has to be before a field of it is read.
 function isRecord(x: unknown): x is Record<string, any> {
@@ -422,88 +209,21 @@ function wellFormedRules(rules: unknown): SectionRule[] {
     .map((r) => (Array.isArray(r.allowedTypes) ? r : { ...r, allowedTypes: [] }));
 }
 
-// Every handler below reads its message as the protocol types it (protocol.ts), but the
-// postMessage boundary is untyped, and a throw inside this listener is a table that stops
-// repainting without a word. So a message that is not an object is ignored, a row repaint it
-// cannot apply asks for the whole payload (as a splice that misses does), and the state
-// messages keep what is well-formed.
+// The table's display half of the protocol is view's: connectTable over messageSource (below)
+// paints setRows, updateEntryRows, insertEntryRows and childRows, answers the matrix glyph,
+// shows errors in the banner strip and keeps selection and expansion across a repaint. What is
+// left here is this extension's: the editing state a setRows carries, the host's selection,
+// rename and navigation requests, and the editing messages. Every handler reads its message as
+// the protocol types it (protocol.ts), but the postMessage boundary is untyped, and a throw
+// inside this listener is a table that stops answering without a word, so a message that is not
+// an object is ignored and the state messages keep what is well-formed.
+//
+// Registered BEFORE the table's source, so that for a setRows the editing state (editable, the
+// Add button, row drag) is set before the rows are installed, in the order it always was.
 window.addEventListener('message', (event: MessageEvent) => {
   const msg = event.data as HostToTableMessage;
   if (!isRecord(msg)) return;
-  if (msg.type === 'updateEntryRows') {
-    // Entry-scoped repaint: splice this entry's rows over the run already on
-    // screen. Nothing else about the view changes, so columns, banners, editable
-    // and the section rules are all left exactly as the last setRows set them.
-    // Rows that are not a list are not "no rows", which would remove the entry.
-    const spliced = Array.isArray(msg.rows) ? spliceEntryRows((table.rows ?? []) as any[], msg.entryRowId, msg.rows) : null;
-    if (!spliced) {
-      // The table doesn't hold the entry the host repainted, so the two are out of
-      // step and a splice would silently drop the edit. Ask for a full payload
-      // instead — which is exactly what `ready` requests, and what every provider
-      // already answers with post().
-      vscode.postMessage({ type: 'ready' });
-      return;
-    }
-    // Same reason setRows closes it: the grid is anchored to a cell in the rows
-    // being replaced, and its anchor glyph may not survive the repaint.
-    matrixOpen.close();
-    // Only a SUCCEEDING edit repaints this narrowly (every failure path in the host
-    // resyncs with a full setRows instead), so reaching here clears a banner left
-    // over from an earlier failure — as setRows does, for the same reason.
-    clearError();
-    installRows(spliced);
-  } else if (msg.type === 'insertEntryRows') {
-    // Entry-scoped repaint for an entry the table does not hold yet — a paste, a
-    // drop, or the undo of a delete. Same rules as the splice above; only finding
-    // the place differs, and the host states it (see insertEntryRows).
-    const inserted = Array.isArray(msg.rows)
-      ? insertEntryRows((table.rows ?? []) as any[], msg.sectionRowId, msg.beforeRowId, msg.rows)
-      : null;
-    if (!inserted) {
-      vscode.postMessage({ type: 'ready' });
-      return;
-    }
-    matrixOpen.close();
-    clearError();
-    installRows(inserted);
-  } else if (msg.type === 'childRows') {
-    // The children of a row the payload deferred (host: lazyRows.ts, childRequest.ts).
-    // Merged in place, NOT installed as a new payload: the rest of the table is
-    // untouched, so the banners, the columns, the selection and an open matrix grid all
-    // stay as they are — this adds rows under one row the user just opened.
-    // Rows that are not a list are no answer at all — not "no children", which would
-    // unmark the row for good — so the message is dropped like a stale one.
-    if (!Array.isArray(msg.rows)) return;
-    const merged = mergeChildRows((table.rows ?? []) as any[], msg.nodeId, msg.rows);
-    // No row by that id any more, so this answers a question the table has stopped
-    // asking (a repaint rebuilt the tree while the fetch was in flight). Dropped, not
-    // escalated to a full repaint: nothing is out of step, the answer is simply stale.
-    if (merged) installRows(merged);
-    // The host could not fit all of this row's children. They have no row and no
-    // twisty, so without this the short list reads as the whole list — and the file's
-    // own banner cannot say it, because it was written before the user opened anything.
-    if (merged && typeof msg.truncated === 'number' && msg.truncated > 0) {
-      showError(
-        `This item has more rows than one view can show: ${msg.truncated.toLocaleString('en-US')} ` +
-          'of its contents are not listed.',
-      );
-    }
-  } else if (msg.type === 'setRows') {
-    hideLoading();
-    clearError();
-    // Every row is about to be replaced, so an open grid describes a payload the
-    // user can no longer see the source of — and its anchor glyph may not survive
-    // the repaint. Close it rather than leave it floating over new data.
-    matrixOpen.close();
-    // The banner strip: the persistent read-only notice (size-limited JSON .sldd)
-    // and what the parse could not read. Passed together because they stack in one
-    // container whose total height the table is offset by; either can be absent,
-    // and a payload carrying neither clears the strip.
-    renderBanners(table, {
-      notice: typeof msg.notice === 'string' ? msg.notice : undefined,
-      warnings: msg.warnings,
-    });
-    const rows = Array.isArray(msg.rows) ? msg.rows : [];
+  if (msg.type === 'setRows') {
     editable = !!msg.editable;
     hasTextView = !!msg.hasTextView;
     // A row drag is a structural edit, so it needs an editable document.
@@ -519,9 +239,6 @@ window.addEventListener('message', (event: MessageEvent) => {
     table.canAdd = editable;
     // A MAT-file's gallery offers the classes its host lists, a dictionary's every tile.
     table.addClasses = msg.add && Array.isArray(msg.add.classes) ? msg.add.classes.filter((c) => typeof c === 'string') : null;
-    table.columns = msg.columns ?? null;
-    table.columnLabels = msg.columnLabels ?? null;
-    table.columnGroups = (msg.columnGroups as Record<string, string> | undefined) ?? null;
     // A view that is read-only now has no drop rule left that is about it. Only then: an
     // editable payload's rules are re-sent AFTER it (the providers post sectionRules behind
     // setRows), so wiping them here would leave the view rule-less until the next message —
@@ -532,29 +249,19 @@ window.addEventListener('message', (event: MessageEvent) => {
     // host broadcasts the end itself (dragEnd, and after every drop). Cleared here, a repaint
     // landing mid-drag (a file changed on disk, a Usage repost) would leave this table
     // refusing the rest of that drag.
-    installRows(rows);
-    // AFTER the install, which is the requests' one chance at this payload: a full payload
-    // holds every row it is going to, so a selection or a rename still waiting now would
-    // otherwise land on whatever row next takes that id — after an undo, another entry.
-    pendingSelectIds = [];
-    pendingRenameId = null;
   } else if (msg.type === 'selectByName') {
     // Cross-tab navigation: select the row whose name matches (block or
-    // variable). Apply now if present, else hold until the next setRows.
-    pendingSelectName = typeof msg.name === 'string' ? msg.name : null;
-    applyPendingNameSelection();
+    // variable). Applied now if present, else held until the next setRows.
+    if (typeof msg.name === 'string') handle.selectByName(msg.name);
   } else if (msg.type === 'selectRows') {
-    // Select rows by id (a rename changed one, a paste added several). Apply now if they
-    // are all present, else stash until a rebuild brings the rest. Either way the host has
+    // Select rows by id (a rename changed one, a paste added several). Applied now if they
+    // are all present, else held until a rebuild brings the rest. Either way the host has
     // said what is selected, so a vanished selection's pending clear is moot.
-    cancelVanishedClear();
-    pendingSelectIds = Array.isArray(msg.rowIds) ? msg.rowIds.filter((id) => typeof id === 'string') : [];
-    applyPendingSelection();
+    handle.select(Array.isArray(msg.rowIds) ? msg.rowIds : []);
   } else if (msg.type === 'beginRename') {
-    // Open the name editor on a just-created entry. Apply now if its row is already here
-    // (the host paints the new rows before it asks), else hold until the repaint arrives.
-    pendingRenameId = typeof msg.rowId === 'string' ? msg.rowId : null;
-    applyPendingRename();
+    // Open the name editor on a just-created entry. Applied now if its row is already here
+    // (the host paints the new rows before it asks), else held until the repaint arrives.
+    if (typeof msg.rowId === 'string') handle.beginRename(msg.rowId);
   } else if (msg.type === 'openAddGallery') {
     // The Add-gallery accelerator (dataExplorer.addEntry) arriving from the host. Handed
     // straight to the same method the button calls, so the keyboard and the pointer share
@@ -579,9 +286,6 @@ window.addEventListener('message', (event: MessageEvent) => {
     dragDescriptor = isRecord(d) && Array.isArray(d.items)
       ? ({ ...d, items: d.items.filter(isRecord) } as DragDescriptor)
       : null;
-  } else if (msg.type === 'error') {
-    hideLoading();
-    showError(msg.message);
   } else if (msg.type === 'validationError') {
     // Invalid cell edit: modal scoped to this webview (not the whole window).
     // The host follows this message with a repaint of the rejected row's entry, so
@@ -603,6 +307,29 @@ window.addEventListener('message', (event: MessageEvent) => {
     else if (typeof msg.reason === 'string') errorDialog.show({ title: 'Cannot Edit', reason: msg.reason });
   }
 });
+
+// The table, fed by the host through view's connectTable: the same rules table-main used to
+// hold (installRows, the vanished-selection clear, pending selections, lazy rows, the matrix
+// glyph, local links, Ctrl+F), now one implementation every app shares. The banners are drawn
+// in this shell's strip (banners.ts), whose height the full-bleed table is offset by; the menu is
+// this file's (menu: false), because it is the editing menu.
+const handle = connectTable(table, messageSource(vscodePort(vscode)), {
+  variableEditor,
+  menu: false,
+  banners: (banners) => {
+    renderError(table, banners.error);
+    renderBanners(table, { notice: banners.notice, warnings: banners.warnings });
+  },
+});
+
+// Relay row selection to the host, for the Property Inspector, which is another webview: the
+// user's, and the ones the table applies for the host and for a link.
+handle.on('select', (rowIds) => vscode.postMessage({ type: 'select', rowIds }));
+
+// A link the table does not answer itself goes to the host, which opens the referenced file and
+// selects the row there (see navigate.ts): each table is its own webview, with no page around
+// it to navigate within.
+handle.on('navigate', ({ target }) => vscode.postMessage({ type: 'navigate', target }));
 
 // Whether this keystroke is TEXT ENTRY rather than a gesture on the grid: the search
 // box, the column-filter popup, the inline cell editor. Read off the COMPOSED PATH,
@@ -661,23 +388,6 @@ table.addEventListener(
       ev.preventDefault();
       ev.stopPropagation();
       postAction('locateInText', anchorRowId);
-    }
-  },
-  true,
-);
-
-// Cmd/Ctrl+F: focus the search/filter input above the table. The built-in
-// webview find widget is not enabled for these panels, so this chord is free to
-// claim. Pure client-side (no host round-trip) — just forward focus to the
-// component's filter input. Skipped with modifiers we don't own (Shift/Alt).
-table.addEventListener(
-  'keydown',
-  (e: Event) => {
-    const ev = e as KeyboardEvent;
-    if ((ev.key === 'f' || ev.key === 'F') && (ev.metaKey || ev.ctrlKey) && !ev.shiftKey && !ev.altKey) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      table.focusFilter?.();
     }
   },
   true,
@@ -772,57 +482,6 @@ table.addEventListener('dex-row-drop', (e: Event) => {
   vscode.postMessage({ type: 'drop', rowId, mode: detail.mode });
 });
 
-// A row whose children the payload held back was opened: ask the host for them. The
-// table has already marked the row as asked-about, so a second click does not re-ask,
-// and the answer arrives as `childRows` above. Not gated on `editable` — this is how a
-// read-only view of a large file (a .slx, a MAT-file opened read-only) is navigated at all.
-table.addEventListener('dex-request-children', (e: Event) => {
-  const nodeId = (e as CustomEvent).detail?.nodeId;
-  if (typeof nodeId === 'string' && nodeId !== '') vscode.postMessage({ type: 'requestChildren', nodeId });
-});
-
-// Relay row selection to the host (for PI + tree sync in later phases).
-table.addEventListener('dex-row-selected', (e: Event) => {
-  const detail = (e as CustomEvent).detail;
-  vscode.postMessage({ type: 'select', rowIds: detail.rowIds ?? [] });
-});
-
-// A link was clicked. Most targets name a row in ANOTHER tab, so they go to the host,
-// which opens the referenced file and selects the row there (see navigate.ts) —
-// cross-tab navigation is host-mediated because each table is its own webview, with no
-// page around it to navigate within.
-//
-// A Data Type link is the exception: core built its target from the source the entry
-// lives in, so the row is already in this table. The host path would still work — it
-// opens the tab the user is looking at and posts a selectByName back — so this is a
-// round-trip and a tab focus saved, not a bug fixed. linkRoute owns the decision, and
-// nothing here re-derives it.
-table.addEventListener('dex-link-clicked', (e: Event) => {
-  const target = (e as CustomEvent).detail?.target;
-  if (typeof target !== 'string') return;
-  const route = linkRoute(target, docUri);
-  if (route.kind !== 'local') {
-    vscode.postMessage({ type: 'navigate', target });
-    return;
-  }
-  // The same name-matching path a cross-tab selectByName lands on, so a local jump and a
-  // remote one select the same row, expand the same ancestors and tell the host about the
-  // selection the same way.
-  pendingSelectName = route.name;
-  applyPendingNameSelection();
-  if (pendingSelectName !== null) {
-    // A local MISS. applyPendingNameSelection clears the slot on a hit and leaves it set
-    // otherwise, so this is the table saying the row is not here after all — a target whose
-    // name half is an expression rather than a whole name, say (core resolves those; this
-    // table cannot). Hand it to the host, which can, rather than swallowing the click. The
-    // slot is cleared either way: a local target that missed must not hijack the next
-    // repaint the way a legitimately-early cross-tab target is allowed to.
-    pendingSelectName = null;
-    vscode.postMessage({ type: 'navigate', target });
-    return;
-  }
-});
-
 // A tile in the Add gallery was clicked: ask the host to create one entry of that class in
 // the section the tile names. Nothing about the current selection is sent, and that is the
 // point — a tile carries its own destination, so the add means the same thing wherever the
@@ -860,4 +519,3 @@ table.addEventListener('dex-edit-completed', (e: Event) => {
   });
 });
 
-vscode.postMessage({ type: 'ready' });
