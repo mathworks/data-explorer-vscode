@@ -62,8 +62,11 @@ function refusalIn(posts: any[]): Answer | null {
   return null;
 }
 
-/** `edit` of the JSON dictionary at `file`, in a fresh text-table editor, then its TextDocument saved. */
-export async function jsonEditorSave(file: string, edit: Edit): Promise<Answer> {
+/**
+ * `edit` of the JSON dictionary at `file`, in a fresh text-table editor, then its TextDocument saved.
+ * A list of edits is made in that one editor, each answered before the next is sent, and saved once.
+ */
+export async function jsonEditorSave(file: string, edits: Edit | Edit[]): Promise<Answer> {
   const uri = vscode.Uri.file(file);
   const doc = await vscode.workspace.openTextDocument(uri);
   const view = fakePanel();
@@ -71,20 +74,24 @@ export async function jsonEditorSave(file: string, edit: Edit): Promise<Answer> 
     await new SlddTextEditorProvider(ctx()).resolveCustomTextEditor(doc, view.panel, token());
     view.send({ type: 'ready' });
     await waitFor('the first rows', () => view.posts.some((m) => m.type === 'setRows' || m.type === 'error'));
-    const node = nodeAt(peekModel(uri.toString()), edit.path);
-    if (!node) return { answer: 'absent' };
-    const version = doc.version;
-    const mark = view.posts.length;
-    view.send(messageFor(node, edit));
-    const after = () => view.posts.slice(mark);
-    try {
-      await waitFor('the edit answered', () => doc.version !== version || refusalIn(after()) !== null, 5000);
-    } catch {
-      return { answer: 'none' };
+    let refused: Answer | null = null;
+    for (const edit of Array.isArray(edits) ? edits : [edits]) {
+      const node = nodeAt(peekModel(uri.toString()), edit.path);
+      if (!node) return { answer: 'absent' };
+      const version = doc.version;
+      const mark = view.posts.length;
+      view.send(messageFor(node, edit));
+      const after = () => view.posts.slice(mark);
+      try {
+        await waitFor('the edit answered', () => doc.version !== version || refusalIn(after()) !== null, 5000);
+      } catch {
+        return { answer: 'none' };
+      }
+      await quiet(30, 'an error the write may post after the text moved');
+      const answer = refusalIn(after());
+      if (doc.version === version) return answer ?? { answer: 'none' };
+      refused ??= answer;
     }
-    await quiet(30, 'an error the write may post after the text moved');
-    const refused = refusalIn(after());
-    if (doc.version === version) return refused ?? { answer: 'none' };
     if (!(await doc.save())) return { answer: 'error', reason: 'TextDocument.save() returned false' };
     const bytes = new Uint8Array(readFileSync(file));
     return refused ? { ...refused, bytes } : { answer: 'written', bytes };
