@@ -2,29 +2,37 @@
 //
 // A listed sweep of gestures through the editors, in real VS Code, each file an editor saves written out
 // for a comparison outside the test: in the dictionary editors, gallery adds, pastes (from the file
-// itself, another dictionary, a MAT-file), moves within a file and across files, and renames, each
-// followed, where this host can, by an undo and a save, then a redo and a save; in the MAT-file editor,
-// gallery adds and pastes into the whole file. editorSaveSweep.test.ts and p4MatEditorSweep.test.ts beside
-// this are the ones for single edits.
+// itself, another dictionary, a MAT-file), moves within a file and across files and formats, drags that
+// move or copy, and renames, each followed, where this host can, by an undo and a save, then a redo and a
+// save; in the MAT-file editor, gallery adds, and pastes, moves and drops into the whole file.
+// editorSaveSweep.test.ts and p4MatEditorSweep.test.ts beside this are the ones for single edits.
 //
 // Runs only when EB_P4_GESTURE_OUT is set. EB_P4_GESTURE names the dictionary gestures, one JSON object a line:
 //   { id, i, format: 'json' | 'bin', orig, edit, undoRedo }
 //   edit: { op: 'gallery', section, className } | { op: 'rename', path, text }
 //       | { op: 'paste' | 'move' | 'xmove', from: { format, orig, section, name }, to: { section } }
+//       | { op: 'drag', mode: 'move' | 'copy', within?: true, from: { format, orig, section, name }, to: { section } }
+// `from.format` may be another format than the target's, a MAT-file (`mat27`, section '') included.
 // Each gesture is made on fresh copies of its files, by the messages the table sends (addEntry; edit of
-// the Name; copy or cut, then paste on the section's row), then the editor's own save. A move across
-// files saves its source too. A binary edit is undone and redone through the edit VS Code was handed;
-// a JSON one through VS Code's own undo and redo, when this host's undo reaches an editor at all (see
-// cutPasteUndo.test.ts's canary). One line a gesture goes to <out>/<format>-gesture.jsonl, and each
-// saved file to <out>/<format>-gesture/<i>[-source|-undo|-redo].sldd.
+// the Name; copy or cut, then paste on the section's row; dragStart in the source's table, then drop on
+// the section's row and the source's dragEnd), then the editor's own save. A drag is within the target's
+// own table when `within` is set, and from a second file otherwise. A move across files (xmove, or a
+// drag move from a second file) saves its source too, as <i>-source.<sldd|mat>. A binary edit is undone
+// and redone through the edit VS Code was handed; a JSON one through VS Code's own undo and redo, when
+// this host's undo reaches an editor at all (see cutPasteUndo.test.ts's canary). One line a gesture goes
+// to <out>/<format>-gesture.jsonl, and each saved file to <out>/<format>-gesture/<i>[-source|-undo|-redo]
+// (.sldd, or .mat for a MAT-file source).
 //
 // EB_P4_MAT_GESTURE names the MAT-file gestures, each on a fresh copy of `case.orig`:
-//   { id, i, edit: { path: '', op: 'gallery', className } | { path: '', op: 'paste', from: { format, orig,
-//     section, name } }, case: { orig } }
+//   { id, i, edit: { path: '', op: 'gallery', className } | { path: '', op: 'paste' | 'xmove', from: { format,
+//     orig, section, name } } | { path: '', op: 'drag', mode: 'move' | 'copy', within?: true, from: … },
+//     case: { orig } }
 // A gallery add is the tile's addEntry; a paste copies the entry `name` (of section `section` of a
 // dictionary, or a variable of a MAT-file) in its own editor, a variable of the file itself in the file's
-// own editor, then pastes into the whole file (rowId ''). One line a gesture, with the names it added,
-// goes to <out>/mat-gesture.jsonl, and each saved file to <out>/mat-gesture/<i>.mat.
+// own editor, then pastes into the whole file (rowId ''); an xmove cuts it instead, from a second file;
+// a drag starts in the source's table and is let go over the whole file. One line a gesture, with the
+// names it added, goes to <out>/mat-gesture.jsonl, and each saved file to <out>/mat-gesture/<i>.mat (and
+// a move's source, saved too, to <i>-source.<sldd|mat>).
 import * as vscode from 'vscode';
 import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs';
 import { basename, join } from 'path';
@@ -32,7 +40,7 @@ import { buildSectionRowId } from 'data-explorer-view/model';
 import { waitFor } from './tools/hostHarness';
 import { closeAll, type Opened } from './tools/tables';
 import { nodeAt } from './tools/editorSaves';
-import { EXT, answered, openTab, take, type Tab } from './tools/gestures';
+import { EXT, answered, dragFrom, dropOn, openTab, take, type Tab } from './tools/gestures';
 import { clearClipboard } from '../../src/host/clipboard';
 import { clearDrag } from '../../src/host/dragState';
 
@@ -99,6 +107,19 @@ async function runCase(c: Listed): Promise<Record<string, unknown>> {
       const node = nodeAt(target.model(), g.path);
       if (!node) return { ...line, answer: 'absent' };
       r = await answered(target, { type: 'edit', rowId: node.id, columnId: 'Name', oldValue: String(node.toRow()?.Name?.label ?? node.name), newValue: g.text });
+    } else if (g.op === 'drag') {
+      source = g.within ? target : await openTab(g.from.format, opened, dir, `source.${EXT[g.from.format]}`, g.from.orig);
+      const started = await dragFrom(source, g.from.section, g.from.name);
+      if (started) return { ...line, ...started };
+      const sourceEdits = source.edits();
+      r = await dropOn(target, source, buildSectionRowId(g.to.section), g.mode);
+      if (g.mode === 'move' && source !== target && r.edited) {
+        try {
+          await waitFor('the source to delete what moved', () => source!.edits() > sourceEdits, 5000);
+        } catch {
+          line.sourceNote = 'the source took nothing out';
+        }
+      }
     } else {
       const same = g.op === 'move' || (g.op === 'paste' && g.from.format === c.format && g.from.orig === c.orig);
       source = same ? target : await openTab(g.from.format, opened, dir, `source.${EXT[g.from.format]}`, g.from.orig);
@@ -120,10 +141,11 @@ async function runCase(c: Listed): Promise<Record<string, unknown>> {
     await target.save();
     line.saved = `${stem}.sldd`;
     copyFileSync(target.path, `${stem}.sldd`);
-    if (g.op === 'xmove' && source && source !== target) {
+    if ((g.op === 'xmove' || (g.op === 'drag' && g.mode === 'move')) && source && source !== target) {
+      const saved = `${stem}-source.${EXT[g.from.format]}`;
       await source.save();
-      line.source = `${stem}-source.sldd`;
-      copyFileSync(source.path, `${stem}-source.sldd`);
+      line.source = saved;
+      copyFileSync(source.path, saved);
     }
     if (c.format === 'bin' && target.events?.length) {
       const last = target.events[target.events.length - 1];
@@ -148,7 +170,7 @@ async function runCase(c: Listed): Promise<Record<string, unknown>> {
 /** The names of a MAT-file editor's variables. */
 const variablesOf = (tab: Tab): string[] => ((tab.model()?.children ?? []) as any[]).map((v) => v.name);
 
-/** One MAT-file gesture: a gallery add or a whole-file paste, then the editor's own save. */
+/** One MAT-file gesture: a gallery add, or a whole-file paste, move or drop, then the editor's own save. */
 async function runMatCase(c: any): Promise<Record<string, unknown>> {
   const line: Record<string, unknown> = { id: c.id, format: 'mat' };
   const file = join(OUT!, 'mat-gesture', `${String(c.i).padStart(4, '0')}.mat`);
@@ -162,13 +184,33 @@ async function runMatCase(c: any): Promise<Record<string, unknown>> {
     const before = variablesOf(target);
     const g = c.edit;
     let r: { answer: string; reason?: string; edited: boolean };
+    let source: Tab | null = null;
+    let moved = false;
     if (g.op === 'gallery') {
       r = await answered(target, { type: 'addEntry', section: '', className: g.className, rename: false });
     } else {
-      const source = g.from.format === 'mat27' ? target : await openTab(g.from.format, opened, dir, `source.${EXT[g.from.format]}`, g.from.orig);
-      const taken = await take(source, g.from.section, g.from.name, 'copy');
-      if (taken) return { ...line, ...taken };
-      r = await answered(target, { type: 'paste', rowId: '' });
+      // A paste of the file's own variable is made in the file's own table; an xmove, and a drag that
+      // is not `within`, come from a second file, of whatever format.
+      const fromItself = g.op === 'paste' ? g.from.format === 'mat27' : g.op === 'drag' && !!g.within;
+      source = fromItself ? target : await openTab(g.from.format, opened, dir, `source.${EXT[g.from.format]}`, g.from.orig);
+      const sourceEdits = source.edits();
+      if (g.op === 'drag') {
+        const started = await dragFrom(source, g.from.section, g.from.name);
+        if (started) return { ...line, ...started };
+        r = await dropOn(target, source, '', g.mode);
+      } else {
+        const taken = await take(source, g.from.section, g.from.name, g.op === 'xmove' ? 'cut' : 'copy');
+        if (taken) return { ...line, ...taken };
+        r = await answered(target, { type: 'paste', rowId: '' });
+      }
+      moved = (g.op === 'xmove' || (g.op === 'drag' && g.mode === 'move')) && source !== target;
+      if (moved && r.edited) {
+        try {
+          await waitFor('the source to delete what moved', () => source!.edits() > sourceEdits, 5000);
+        } catch {
+          line.sourceNote = 'the source took nothing out';
+        }
+      }
     }
     line.answer = r.answer;
     line.reason = r.reason ?? null;
@@ -177,6 +219,12 @@ async function runMatCase(c: any): Promise<Record<string, unknown>> {
     await target.save();
     copyFileSync(target.path, file);
     line.saved = file;
+    if (moved && source) {
+      const saved = file.replace(/\.mat$/, `-source.${EXT[g.from.format]}`);
+      await source.save();
+      line.source = saved;
+      copyFileSync(source.path, saved);
+    }
     return line;
   } catch (err) {
     return { ...line, answer: 'crash', reason: err instanceof Error ? (err.stack ?? err.message) : String(err) };
