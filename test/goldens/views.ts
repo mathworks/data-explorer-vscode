@@ -65,7 +65,7 @@ import {
   isZipBytes,
 } from '../../src/host/slddFormat.js';
 import { describeSource } from '../../src/host/refusal.js';
-import { SaveMarks } from '../../src/host/saveMarks.js';
+import { SaveMarks } from 'data-explorer-view/host';
 import { bytesOf, fakeFile, nameOf } from './fixtures.js';
 
 /**

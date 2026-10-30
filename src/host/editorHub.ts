@@ -20,6 +20,7 @@
 //     format-appropriate deleter here, keyed by its URI, so the drop handler
 //     completes the source-delete without knowing the format.
 import * as vscode from 'vscode';
+import type { RegisterListener } from 'data-explorer-view/model';
 import { clipboardState } from './clipboard.js';
 import { dragDescriptor } from './dragState.js';
 import type { SourceDeleteResult, SourceSelector } from './transfer.js';
@@ -48,10 +49,17 @@ export type SourceDeleter = (targets: DeleteTarget[]) => Promise<SourceDeleteRes
  */
 export const NOT_FOUND_REASON = 'nothing in it answers to that name any more';
 
-// Live table webviews → their repaint callback. A repaint (not just a state
-// post) is needed because a lazy cut makes no document edit, yet its source row
-// must gain/lose the dimmed affordance, so the owning view must repaint.
-const liveWebviews = new Map<vscode.Webview, () => void>();
+// Live tables → how a broadcast reaches each, in the order they were registered. A table webview is
+// posted the state and repainted (registerWebview): a repaint (not just a state post) is needed
+// because a lazy cut makes no document edit, yet its source row must gain/lose the dimmed
+// affordance, so the owning view must repaint. A table of one of view's engines hears it as a
+// listener of the registers (registerTableListener; hubRegisters.ts), and its host posts what it
+// says.
+interface LiveTable {
+  clipboard(state: ReturnType<typeof clipboardState>): void;
+  drag(descriptor: ReturnType<typeof dragDescriptor>): void;
+}
+const liveWebviews = new Map<object, LiveTable>();
 
 // Each open editable document registers how to delete named entries from ITSELF,
 // in its own format. Present for every view that can be a drag source (the source
@@ -60,11 +68,30 @@ const liveWebviews = new Map<vscode.Webview, () => void>();
 const sourceDeleters = new Map<string, SourceDeleter>();
 
 export function registerWebview(wv: vscode.Webview, repaint: () => void): void {
-  liveWebviews.set(wv, repaint);
+  liveWebviews.set(wv, {
+    clipboard: (state) => {
+      reach(() => wv.postMessage({ type: 'clipboardState', ...state }));
+      reach(repaint);
+    },
+    drag: (descriptor) => reach(() => wv.postMessage({ type: 'dragState', descriptor })),
+  });
 }
 
 export function unregisterWebview(wv: vscode.Webview): void {
   liveWebviews.delete(wv);
+}
+
+/**
+ * Have a broadcast reach `listener`, a table of one of view's engines, in its place among the
+ * webviews, until the returned function is called.
+ */
+export function registerTableListener(listener: RegisterListener): () => void {
+  const key = {};
+  liveWebviews.set(key, {
+    clipboard: (state) => reach(() => listener.clipboard?.(state)),
+    drag: (descriptor) => reach(() => listener.drag?.(descriptor)),
+  });
+  return () => void liveWebviews.delete(key);
 }
 
 // Every open EDITABLE table view → how to open its Add gallery. Keyed by the panel
@@ -124,10 +151,7 @@ export function unregisterSourceDeleter(uriString: string): void {
 // clipboard state those tables showed was then simply wrong (Paste disabled with a cut on it).
 export function broadcastClipboardState(): void {
   const state = clipboardState();
-  for (const [wv, repaint] of [...liveWebviews]) {
-    reach(() => wv.postMessage({ type: 'clipboardState', ...state }));
-    reach(repaint);
-  }
+  for (const table of [...liveWebviews.values()]) table.clipboard(state);
 }
 
 // Broadcast the current drag descriptor (or null when the drag ends) to every
@@ -138,9 +162,7 @@ export function broadcastClipboardState(): void {
 // Per view, for the reason given at broadcastClipboardState.
 export function broadcastDragState(): void {
   const descriptor = dragDescriptor();
-  for (const wv of [...liveWebviews.keys()]) {
-    reach(() => wv.postMessage({ type: 'dragState', descriptor }));
-  }
+  for (const table of [...liveWebviews.values()]) table.drag(descriptor);
 }
 
 // Run one view's half of a broadcast, keeping whatever it throws — now or, for a postMessage,

@@ -16,6 +16,7 @@
 // provider: the two are handed in as `read` and `apply`.
 import * as vscode from 'vscode';
 import { basename } from 'data-explorer-view/model';
+import type { EditIndex } from 'data-explorer-view/host';
 import { writeAndStamp } from './safeWrite.js';
 import { backupSource } from './backupId.js';
 import {
@@ -26,7 +27,6 @@ import {
   OVERWRITE,
   REVERT,
   type DiskStamp,
-  type EditStackMirror,
 } from './diskConflict.js';
 
 /** The file's mtime+size as VS Code reports them, or `undefined` if it cannot be stat'd (gone). */
@@ -83,7 +83,7 @@ export interface FollowedDocument {
    * This document's copy of the dirty flag VS Code keeps, which the API gives no way to
    * read. The watcher uses it to choose between reloading and keeping unsaved edits.
    */
-  readonly edits: EditStackMirror;
+  readonly edits: EditIndex;
   /**
    * The file's mtime+size as this view last loaded, reverted to, or wrote it. A save compares
    * the disk with this, and the watcher ignores any event that leaves the disk matching it.
