@@ -7,9 +7,10 @@
 //
 // The table's own Undo is VS Code's `undo` on the dictionary's TextDocument, which holds every edit the
 // table wrote as a WorkspaceEdit. Whether a test host applies `undo` to such an edit at all is probed
-// first, on a scratch document (see cutPasteUndo.test.ts, whose canary probes an editor's own edit): on a
-// host where it does not, the round trips are skipped and say why, rather than failing for a reason that
-// says nothing about the table.
+// first, on a scratch document (see cutPasteUndo.test.ts, whose canary probes an editor's own edit). On a
+// desktop host where it does not, the round trips are skipped and say why, rather than failing for a
+// reason that says nothing about the table. On CI (`CI` set), whose window does undo, a failed probe is a
+// failure with its reason: a skip there would hide the very regression this test is for.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { mkdtempSync, readFileSync } from 'fs';
@@ -96,22 +97,28 @@ async function roundTrip(label: string, gesture: (tab: Tab) => Promise<{ edited:
   }
 }
 
+const NO_UNDO =
+  'this VS Code host does not apply `undo` to a WorkspaceEdit (a scratch document kept the edit), so a ' +
+  'round trip would say nothing about the table';
+
 suite('A JSON dictionary table gesture, undone and redone by VS Code', () => {
   let undoAvailable = false;
+
+  /** Go on where the host undoes; skip with the reason on a desktop that does not; fail on CI. */
+  function needUndo(test: Mocha.Context): void {
+    if (undoAvailable) return;
+    if (process.env.CI) assert.fail(`on CI, ${NO_UNDO}`);
+    test.skip();
+  }
 
   suiteSetup(async () => {
     await vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.activate();
     undoAvailable = await hostUndoesWorkspaceEdits();
-    if (!undoAvailable) {
-      console.log(
-        '[jsonTableUndoRedo] SKIPPING: this VS Code host does not apply `undo` to a WorkspaceEdit (a ' +
-          'scratch document kept the edit), so a round trip would say nothing about the table.',
-      );
-    }
+    if (!undoAvailable) console.log(`[jsonTableUndoRedo] ${process.env.CI ? 'FAILING' : 'SKIPPING'}: ${NO_UNDO}.`);
   });
 
   test('cell edits: undo saves the original bytes, redo saves the edit\'s', async function () {
-    if (!undoAvailable) this.skip();
+    needUndo(this);
     this.timeout(60000);
     for (const [path, column, text] of [
       ['dScalar', 'Value', '7'],
@@ -125,7 +132,7 @@ suite('A JSON dictionary table gesture, undone and redone by VS Code', () => {
   });
 
   test('adds and deletes: undo saves the original bytes, redo saves the edit\'s', async function () {
-    if (!undoAvailable) this.skip();
+    needUndo(this);
     this.timeout(60000);
     for (const [op, path] of [
       ['addChild', 'sLeaves.dRow'],
@@ -141,7 +148,7 @@ suite('A JSON dictionary table gesture, undone and redone by VS Code', () => {
   });
 
   test('the gallery, a paste and a move: undo saves the original bytes, redo saves the edit\'s', async function () {
-    if (!undoAvailable) this.skip();
+    needUndo(this);
     this.timeout(60000);
     await roundTrip('gallery add of a Simulink.Parameter', (tab) => answered(tab, { type: 'addEntry', section: 'design', className: 'Simulink.Parameter', rename: false }));
     await roundTrip('copy and paste of bus into Design Data', async (tab) => {
