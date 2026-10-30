@@ -57,28 +57,49 @@ interface Listed {
 
 const OUT = process.env.EB_P4_GESTURE_OUT;
 
-/** Whether this host's `undo` reaches an editor: false until a JSON undo has landed, null untried. */
-let jsonUndoWorks: boolean | null = null;
+/**
+ * JSON undos or redos in a row that did not land. One that misses is tried once more, the document
+ * shown again first; past MISSES_IN_A_ROW in a row, this host's `undo` is taken not to reach an editor
+ * at all, and the rest are not tried. (Until this, the first case's miss stood for every case after
+ * it, and one slow first undo cost a run all of them.)
+ */
+let jsonUndoMisses = 0;
+const MISSES_IN_A_ROW = 10;
+
+/**
+ * Run `command` on the document shown, and say whether its text moved within a second and a half;
+ * once more if it did not, unless the first one landed late (it is never sent twice for one move).
+ */
+async function lands(doc: vscode.TextDocument, command: 'undo' | 'redo'): Promise<boolean> {
+  const v = doc.version;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await vscode.window.showTextDocument(doc, { preview: false });
+    if (doc.version !== v) return true;
+    await vscode.commands.executeCommand(command);
+    try {
+      await waitFor(`the ${command} to land`, () => doc.version !== v, 1500);
+      return true;
+    } catch {
+      /* tried again below, the document shown first */
+    }
+  }
+  return doc.version !== v;
+}
 
 /** A JSON document's last edit undone by VS Code, saved, then redone, saved. */
 async function undoRedoJson(doc: vscode.TextDocument, stem: string, path: string, line: Record<string, unknown>): Promise<void> {
-  if (jsonUndoWorks === false) {
-    line.undoNote = 'not run: this host\'s undo did not reach an editor';
+  if (jsonUndoMisses >= MISSES_IN_A_ROW) {
+    line.undoNote = `not run: this host's undo did not reach an editor ${MISSES_IN_A_ROW} times in a row`;
     return;
   }
-  await vscode.window.showTextDocument(doc, { preview: false });
   try {
     for (const [command, key] of [['undo', 'undo'], ['redo', 'redo']] as const) {
-      const v = doc.version;
-      await vscode.commands.executeCommand(command);
-      try {
-        await waitFor(`the ${command} to land`, () => doc.version !== v, 1500);
-      } catch {
-        if (jsonUndoWorks === null) jsonUndoWorks = false;
+      if (!(await lands(doc, command))) {
+        jsonUndoMisses++;
         line.undoNote = `not run: this host's ${command} did not reach the editor`;
         return;
       }
-      jsonUndoWorks = true;
+      jsonUndoMisses = 0;
       await doc.save();
       copyFileSync(path, `${stem}-${key}.sldd`);
       line[key] = `${stem}-${key}.sldd`;
