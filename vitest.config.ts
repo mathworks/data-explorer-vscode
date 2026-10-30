@@ -26,6 +26,8 @@ export default defineConfig({
         'src/host/BinaryEditorProvider.ts',
         'src/host/BinarySlddEditorProvider.ts',
         'src/host/MatEditorProvider.ts',
+        // The MAT-file editor's document: view's engine with VS Code's end of its hooks.
+        'src/host/matDocument.ts',
         // The vscode half of following a file on disk; the rules are diskConflict.ts.
         'src/host/diskFollow.ts',
         'src/host/HealthDecorationProvider.ts',

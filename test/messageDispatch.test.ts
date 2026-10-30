@@ -221,7 +221,9 @@ const PROVIDERS: Provider[] = [
     // this regex finds is the thing that guarantees the fetch is answered by the same
     // rule the payload was built with — the branch it replaced named one builder, and
     // was true of exactly the one format that had been planned so far.
-    defersRows: /rowPlannerFor\(/.test(source),
+    // A table of one of view's engines (`engine.view()`) is planned by the engine's own view, which
+    // takes the same planner (data-explorer-view's MatView).
+    defersRows: /rowPlannerFor\(/.test(source) || /\.engine\.view\(\)/.test(source),
     ...answered(source),
   };
 });
@@ -408,7 +410,12 @@ describe('every setRows says which document it is describing', () => {
     }
     return out;
   };
-  const posts = PROVIDERS.map((p) => ({ file: p.file, bodies: payloadsOf(read(`src/host/${p.file}`)) }));
+  // A provider that posts an engine's table through engineTable.ts posts the setRows it spells.
+  const sourcesOf = (file: string): string[] => {
+    const source = read(`src/host/${file}`);
+    return /engineTable\(/.test(source) ? [source, read('src/host/engineTable.ts')] : [source];
+  };
+  const posts = PROVIDERS.map((p) => ({ file: p.file, bodies: sourcesOf(p.file).flatMap(payloadsOf) }));
 
   it('finds all four posts, so none of them is missed below', () => {
     // A regex that matched nothing would make the loop vacuous.

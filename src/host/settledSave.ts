@@ -21,7 +21,7 @@
 //  - A round that fails fails the save VS Code is waiting on: VS Code keeps the document dirty
 //    and says why (core's refusal of the newer edit, the conflict prompt). The rounds before it
 //    did write, and the provider has recorded that (the stamp, the Status column), but VS Code's
-//    save point has not moved, so the dirty-flag copy (EditStackMirror) does not move either.
+//    save point has not moved, so the dirty-flag copy (an EditIndex) does not move either.
 //    That is why `saved` is called here, once, at the end, and not by a provider's round.
 //  - A cancelled save stops. VS Code cancels a save's token when it starts another save of the
 //    same document, and from then on ignores the first one's result: the save point is the
@@ -36,7 +36,7 @@
 // decides it. No extension can see it.
 //
 // vscode-free, so the rule is unit-tested (test/settledSave.test.ts).
-import type { EditStackMirror } from './diskConflict.js';
+import type { EditIndex } from 'data-explorer-view/host';
 
 /** The one thing a save asks of VS Code's cancellation token. */
 export interface SaveCancellation {
@@ -48,7 +48,7 @@ export interface SaveCancellation {
  * one runs with the stack still, then move the dirty-flag copy's save point to where it ran.
  */
 export async function saveSettled(
-  edits: EditStackMirror,
+  edits: EditIndex,
   token: SaveCancellation | undefined,
   round: () => Promise<void>,
 ): Promise<void> {
