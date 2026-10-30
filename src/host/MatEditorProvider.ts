@@ -118,7 +118,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       // A Value editor is opening on a summary: its whole text.
       requestEditText: (rowId) => table.requestEditText?.(rowId),
       // Stamped as the payload was, so a fetched row's menu offers what its siblings' does.
-      requestChildren: (nodeId) => void table.children(nodeId).then((rows) => webview.postMessage({ type: 'childRows', ...rows })),
+      requestChildren: (nodeId) => panel.children(nodeId),
       undo: () => void vscode.commands.executeCommand('undo'),
       redo: () => void vscode.commands.executeCommand('redo'),
     };

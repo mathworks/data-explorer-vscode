@@ -33,8 +33,15 @@ export interface EngineTableOptions {
   afterPaint?(): void;
 }
 
-/** The panel's end of `table`, until `dispose()`; `ready()` answers the webview's `ready`. */
-export function engineTable(table: DeliveredTable, webview: TablePanel, options: EngineTableOptions): { ready(): void; dispose(): void } {
+/**
+ * The panel's end of `table`, until `dispose()`. `ready()` answers the webview's `ready`, and
+ * `children()` its fetch of the rows under a row.
+ */
+export function engineTable(
+  table: DeliveredTable,
+  webview: TablePanel,
+  options: EngineTableOptions,
+): { ready(): void; children(nodeId: string): void; dispose(): void } {
   let closed = false;
   const { name } = options;
 
@@ -107,6 +114,11 @@ export function engineTable(table: DeliveredTable, webview: TablePanel, options:
           post({ type: 'error', message: err instanceof Error ? err.message : String(err) });
         },
       );
+    },
+    // As the editors answered a fetch (childRequest.ts): through postOrReport, so rows that cannot
+    // be delivered say "Failed to show …" rather than leave the twisty waiting.
+    children(nodeId) {
+      void table.children(nodeId).then((rows) => (closed ? undefined : postOrReport(webview, { type: 'childRows', ...rows }, name)));
     },
     dispose() {
       closed = true;

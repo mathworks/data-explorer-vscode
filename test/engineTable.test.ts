@@ -119,6 +119,33 @@ describe("the MAT-file editor's panel of the engine's table", () => {
     expect(panel.posted[0].message).toMatch(/^Failed to show cases\.mat: /);
   });
 
+  it('answers a fetch of the rows under a row as the editor did, and says rows it cannot deliver failed to show', async () => {
+    const engine = document();
+    const posted: any[] = [];
+    let refuse = false;
+    const panel = {
+      postMessage: async (m: any) => {
+        if (refuse && m.type === 'childRows') throw new Error('the payload is too large to post');
+        posted.push(m);
+        return true;
+      },
+    };
+    const relay = engineTable(engine.view(), panel, { name: 'cases.mat' });
+    relay.ready();
+    await settle();
+    const rows = posted.find((m) => m.type === 'setRows').rows as any[];
+    const parent = rows.find((r) => rows.some((c) => c.parent === r.ID));
+    relay.children(parent.ID);
+    await settle();
+    const answer = posted.at(-1);
+    expect(Object.keys(answer)).toEqual(['type', 'nodeId', 'rows', 'truncated']);
+    expect([answer.type, answer.nodeId, answer.rows.length > 0]).toEqual(['childRows', parent.ID, true]);
+    refuse = true;
+    relay.children(parent.ID);
+    await settle();
+    expect(posted.at(-1)).toEqual({ type: 'error', message: expect.stringMatching(/^Failed to show cases\.mat: /) });
+  });
+
   it('posts nothing more once disposed, and a paint waiting on it is let go', async () => {
     const engine = document();
     const panel = heldPanel();
