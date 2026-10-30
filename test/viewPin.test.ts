@@ -24,9 +24,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 // A release tag, and the commit it points at.
-const REF = 'v1.2.3';
-const COMMIT = '618edfc92c4a744824776c4feead204572c18893';
-const VERSION = '1.2.3';
+const REF = 'v1.2.4';
+const COMMIT = '1059c6f07752a54264d7fae67aee2acfa7524acd';
+const VERSION = '1.2.4';
 
 const SPEC = `github:mathworks/data-explorer-view#${REF}`;
 
