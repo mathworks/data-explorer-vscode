@@ -108,93 +108,9 @@ export function promptsForConflict(state: {
 }
 
 /**
- * A copy of the dirty flag VS Code computes for a custom document from its own edit stack.
- *
- * The provider needs it because "reload when there are no unsaved edits" asks VS Code's
- * question, and the API has no getter for the answer. VS Code's MainThreadCustomEditorModel
- * keeps a current index and a save point in its list of edits. A document is dirty when the
- * two differ, or when it was restored from a hot-exit backup and has not been saved or
- * reverted since. This class moves the same way, driven by the same events: an edit pushed,
- * an undo or redo VS Code asked for, a save, and a revert.
- *
- * One case is deliberately different, in the safe direction. A new edit discards the redo
- * tail, and the save point can be inside that tail (save, undo, then edit). VS Code leaves its
- * save-point index where it was, so enough further edits bring the current index back to it,
- * and VS Code then calls the document clean although its text has never been saved. Here
- * the save point becomes unreachable instead: the document stays dirty until it is saved or
- * reverted. When the two disagree, this copy says dirty. The only consequence is that a
- * reload waits, so unsaved edits are never discarded.
+ * A copy of the dirty flag VS Code computes for a custom document from its own edit stack: view's
+ * EditStackIndex, which the editors on view's engines are given as their EditIndex, and which is
+ * this class as it was here, line for line. The name stays for this module's tests until the
+ * suites are rebalanced onto view's (step 6b, V6).
  */
-export class EditStackMirror {
-  /** How many edits are applied: VS Code's `_currentEditIndex + 1`. */
-  private position = 0;
-  /** The position that matches the file on disk, or `null` once that state is unreachable. */
-  private savedAt: number | null = 0;
-  private fromBackup: boolean;
-  /** How many times the stack has moved: see `moves`. */
-  private moved = 0;
-
-  constructor(fromBackup = false) {
-    this.fromBackup = fromBackup;
-  }
-
-  get dirty(): boolean {
-    return this.fromBackup || this.savedAt !== this.position;
-  }
-
-  /** A new edit, which discards any redo tail. */
-  pushed(): void {
-    if (this.savedAt !== null && this.savedAt > this.position) this.savedAt = null;
-    this.position++;
-    this.moved++;
-  }
-
-  undone(): void {
-    this.position--;
-    this.moved++;
-  }
-
-  redone(): void {
-    this.position++;
-    this.moved++;
-  }
-
-  /** Where the stack is now, for a save to hand back to `saved` once its write lands. */
-  here(): number {
-    return this.position;
-  }
-
-  /**
-   * How many times the stack has moved (an edit, an undo, a redo, a revert), for a save to tell
-   * whether the document it wrote is still the one it holds (settledSave.ts). The position alone
-   * cannot say: an undo and then a new edit put it back where it was, over another document.
-   */
-  get moves(): number {
-    return this.moved;
-  }
-
-  /**
-   * What was applied at `at` is what is on disk: a save succeeded.
-   *
-   * `at` is the position when the save READ the document, not when its write finished. An
-   * edit can land while the write is in flight, and the file does not have it. VS Code moves
-   * its save point when the save resolves, so it would count that edit as saved; a save run by
-   * `saveSettled` writes again before it resolves, so that VS Code never does. Here, an edit
-   * after `at` stays unsaved, which is the safe direction.
-   */
-  saved(at: number = this.position): void {
-    this.savedAt = at;
-    this.fromBackup = false;
-  }
-
-  /**
-   * The document now holds what is on disk: a revert, or a reload. VS Code moves its current
-   * index to the save point and drops the edits after it, so the next undo starts one step
-   * before the save point. Only the distance between the two matters, so the save point moves
-   * to the current position instead.
-   */
-  reverted(): void {
-    this.saved();
-    this.moved++;
-  }
-}
+export { EditStackIndex as EditStackMirror } from 'data-explorer-view/host';

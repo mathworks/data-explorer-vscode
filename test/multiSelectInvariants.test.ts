@@ -406,16 +406,23 @@ describe('a drag is a no-op exactly where the same cut and paste is (V-002)', ()
   // The host side's rule is transfer.ts's isNoopMove — a move into the section EVERY item came
   // from does nothing — and it is the rule for a paste AND a drop, because both providers hand
   // both gestures to runTransfer. So the oracle below is the function itself, and the providers
-  // are read only to check that they still route both gestures through it.
+  // are read only to check that they still route both gestures through it. A provider that hosts
+  // one of view's engines hands both to the engine's table, which runs view's runTransfer (the same
+  // rule, pinned in view by its own transfer tests).
   for (const provider of ['SlddTextEditorProvider', 'BinarySlddEditorProvider']) {
     it(`${provider} pastes and drops through runTransfer`, () => {
       const text = blankCommentsAndKeepLines(
         readFileSync(fileURLToPath(new URL(`../src/host/${provider}.ts`, import.meta.url)), 'utf8'),
       );
-      // Each register reaches runTransfer — directly, or (for a queued drop, which captures its
-      // register as the message arrives) through the one statement that queues it.
-      expect(text).toMatch(/runTransfer\([^;]*clipboardRegister\(/);
-      expect(text).toMatch(/runTransfer\([^;]*dragRegister\(|dragRegister\([^;]*\);\s*return queueStructural\(\(\) => runTransfer\(/);
+      if (/\.engine\.view\(\)/.test(text)) {
+        expect(text).toMatch(/msg\?\.type === 'paste'\) table\.paste\?\.\(/);
+        expect(text).toMatch(/msg\?\.type === 'drop'\) table\.drop\?\.\(/);
+      } else {
+        // Each register reaches runTransfer — directly, or (for a queued drop, which captures its
+        // register as the message arrives) through the one statement that queues it.
+        expect(text).toMatch(/runTransfer\([^;]*clipboardRegister\(/);
+        expect(text).toMatch(/runTransfer\([^;]*dragRegister\(|dragRegister\([^;]*\);\s*return queueStructural\(\(\) => runTransfer\(/);
+      }
       expect(text, 'and no copy of the no-op rule of its own').not.toMatch(/\.every\(\(it\) => it\.sourceSection ===/);
     });
   }

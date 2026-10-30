@@ -8,7 +8,10 @@
 //
 // Here the first save's write is held (the provider's writeUserFile, as a slow disk holds one), a
 // second save of a newer edit writes, and then the first lands. The save after that is the one this
-// suite asks about.
+// suite asks about: it writes the newest edits. Before this editor moved onto view's engine it was
+// refused as a fault in the editor ("Refusing to save: entry "gravity" would be written with bytes
+// other than the file's"), the save gate holding the chunk to the older file with the edit it
+// differs by given to the newer save; the engine gives that edit back when the older save lands.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { mkdtempSync, readFileSync, rmSync } from 'fs';
@@ -46,7 +49,7 @@ suite('Binary .sldd: saves whose writes land out of order', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test('a save whose write lands after a newer save leaves the file older, and the next save is refused as a fault in the editor', async () => {
+  test('a save whose write lands after a newer save leaves the file older, and the next save writes the newest edits', async () => {
     const tab = await openBinary(opened, dir, 'save_order.sldd');
     const rows = { gravity: entryRow(tab.view.posts, 'gravity'), scalarD: entryRow(tab.view.posts, 'scalarD') };
     const shown: Record<string, string> = { gravity: '9.81', scalarD: String(rows.scalarD.Value) };
@@ -82,11 +85,12 @@ suite('Binary .sldd: saves whose writes land out of order', () => {
 
     // The user edits again, and saves.
     await edit('scalarD', '42');
-    await assert.rejects(
-      tab.provider.saveCustomDocument(tab.doc, token()),
-      /^Error: Refusing to save: entry "gravity" would be written with bytes other than the file’s, though no edit changed it\. This is a fault in the editor/,
-      'the save gate held the chunk to the older file, with the edit it differs by given to the newer save',
+    await tab.provider.saveCustomDocument(tab.doc, token());
+    assert.deepStrictEqual(
+      [valueOnDisk(tab.path, 'gravity'), valueOnDisk(tab.path, 'scalarD')],
+      ['9.6', '42.0'],
+      'the save writes the newest edit of each entry (a double as core writes one)',
     );
-    assert.strictEqual(valueOnDisk(tab.path, 'gravity'), '9.7', 'and nothing was written');
+    assert.strictEqual(tab.doc.edits.dirty, false);
   });
 });

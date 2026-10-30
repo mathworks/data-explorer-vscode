@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createSession } from 'data-explorer-core';
 import { createRegisters } from 'data-explorer-view/model';
-import { EditStack, EditStackIndex, MatEngine } from 'data-explorer-view/host';
+import { BinaryEngine, EditStack, EditStackIndex, MatEngine } from 'data-explorer-view/host';
 import { engineTable } from '../src/host/engineTable.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -158,5 +158,75 @@ describe("the MAT-file editor's panel of the engine's table", () => {
     panel.deliver();
     await settle();
     expect(panel.types()).toEqual(['setRows']);
+  });
+});
+
+const PARAMS_BINARY = new Uint8Array(readFileSync(join(import.meta.dirname, '..', 'test', 'parity', 'artifacts', 'binary', 'params.sldd')));
+
+function dictionary() {
+  const stack = new EditStack();
+  return new BinaryEngine({
+    session: createSession(),
+    uri: 'file:///work/params.sldd',
+    name: 'params.sldd',
+    bytes: PARAMS_BINARY,
+    sink: { push: (e) => stack.push(e), undo: () => stack.undo(), redo: () => stack.redo() },
+    index: new EditStackIndex(),
+    registers: createRegisters(),
+    trailerAfterDelivery: true,
+  });
+}
+
+/** The compressed dictionary editor's own setRows literal, as binaryRows in its provider spells it. */
+const binaryRows = (view: any) => ({
+  type: 'setRows',
+  docUri: view.docUri,
+  rows: view.rows,
+  columns: view.columns,
+  columnLabels: view.columnLabels,
+  columnGroups: view.columnGroups,
+  editable: view.editable,
+  warnings: view.warnings,
+});
+
+describe("the compressed dictionary editor's panel of the engine's table (rows not awaited)", () => {
+  it("posts a paint as the editor's post() did: the rows, then in the same run what follows them, then the drain", async () => {
+    const engine = dictionary();
+    const posted: any[] = [];
+    const said: string[] = [];
+    const panel = { postMessage: async (m: any) => (posted.push(m), true) };
+    const relay = engineTable(engine.view(), panel, {
+      name: 'params.sldd',
+      awaitRows: false,
+      setRows: binaryRows,
+      afterPaint: () => said.push(`drained after ${posted.map((m) => m.type).join(',')}`),
+    });
+    relay.ready();
+    await settle();
+    expect(posted.map((m) => m.type)).toEqual(['setRows', 'sectionRules', 'clipboardState']);
+    expect(Object.keys(posted[0])).toEqual(['type', 'docUri', 'rows', 'columns', 'columnLabels', 'columnGroups', 'editable', 'warnings']);
+    // A repaint the engine starts: all of it in the run that said it.
+    posted.length = 0;
+    said.length = 0;
+    engine.repaintAll();
+    expect(posted.map((m) => m.type)).toEqual(['setRows', 'sectionRules', 'clipboardState']);
+    expect(said).toEqual(['drained after setRows,sectionRules,clipboardState']);
+    relay.dispose();
+  });
+
+  it('says rows it cannot deliver failed to show, after what follows them, as the unawaited post did', async () => {
+    const engine = dictionary();
+    const posted: any[] = [];
+    const panel = {
+      postMessage: async (m: any) => {
+        if (m.type === 'setRows') throw new Error('the payload is too large to post');
+        posted.push(m);
+        return true;
+      },
+    };
+    engineTable(engine.view(), panel, { name: 'params.sldd', awaitRows: false, setRows: binaryRows }).ready();
+    await settle();
+    expect(posted.map((m) => m.type)).toEqual(['sectionRules', 'clipboardState', 'error']);
+    expect(posted.at(-1).message).toMatch(/^Failed to show params\.sldd: /);
   });
 });

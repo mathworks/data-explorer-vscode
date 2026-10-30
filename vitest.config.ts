@@ -25,6 +25,8 @@ export default defineConfig({
         // and search, the usage graphs, the folder hierarchy, the source cache).
         'src/host/BinaryEditorProvider.ts',
         'src/host/BinarySlddEditorProvider.ts',
+        // The compressed dictionary editor's document: view's engine with VS Code's end of its hooks.
+        'src/host/binaryDocument.ts',
         'src/host/MatEditorProvider.ts',
         // The MAT-file editor's document: view's engine with VS Code's end of its hooks.
         'src/host/matDocument.ts',

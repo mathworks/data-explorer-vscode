@@ -19,7 +19,6 @@ import * as vscode from 'vscode';
 import { unzipSync } from 'fflate';
 import { DataModel } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { computeModified } from '../../src/host/slddBaseline';
 import { waitFor } from './tools/hostHarness';
 
 /** A payload the reader cannot recover, so the gate must refuse it. */
@@ -175,7 +174,7 @@ suite('Binary .sldd save gate vs hot-exit backup', () => {
     assert.ok(root, 'the save registered the tree it read');
     assert.strictEqual(firstEntry(root).name, 'Kp', 'built from the payload it wrote');
     assert.deepStrictEqual(
-      [...computeModified(uri.toString(), root)],
+      [...(doc as any).modified(root)],
       [],
       'and baselined that same tree, so the save leaves no row wearing a Modified mark',
     );
@@ -225,7 +224,7 @@ suite('Binary .sldd save gate vs hot-exit backup', () => {
       'the registered tree describes the document, not the read the gate happened to have',
     );
     assert.deepStrictEqual(
-      [...computeModified(uri.toString(), root)],
+      [...(doc as any).modified(root)],
       [],
       'and the baseline was captured from that same tree',
     );

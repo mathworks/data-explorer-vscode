@@ -131,13 +131,12 @@ describe('no host file keeps its own copy of the part names', () => {
     });
   }
 
-  it('and the two files that navigate the part take the names from core', () => {
+  it('and the file that navigates the part takes the names from core', () => {
     // The other direction: a scan for absent literals also passes for a file that stopped
-    // navigating the part at all, so name the two that must still be doing it.
-    for (const file of ['src/host/jsonEntryScan.ts', 'src/host/BinarySlddEditorProvider.ts']) {
-      expect(code(file), `${file} must import the names`).toContain("from 'data-explorer-core'");
-    }
+    // navigating the part at all, so name the one that must still be doing it. The compressed
+    // dictionary editor no longer does: its engine (view's BinaryEngine) reads and writes the
+    // package through core's own readBinarySlddPackage and writeBinarySlddPackage.
+    expect(code('src/host/jsonEntryScan.ts'), 'src/host/jsonEntryScan.ts must import the names').toContain("from 'data-explorer-core'");
     expect(code('src/host/jsonEntryScan.ts')).toContain('TEXT_PARTS');
-    expect(code('src/host/BinarySlddEditorProvider.ts')).toContain('DATA_PART_XML');
   });
 });
