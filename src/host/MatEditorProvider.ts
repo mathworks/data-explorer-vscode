@@ -182,8 +182,11 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     await saveSettled(document.edits, token, () => this.writeDocument(document));
   }
 
-  /** One write of the document as it stands, the save's own: one round of `saveSettled`. */
-  private async writeDocument(document: MatDocument): Promise<void> {
+  /**
+   * One write of the document as it stands, the save's own: one round of `saveSettled`. True when it
+   * landed behind a newer save that had already landed (the engine's answer).
+   */
+  private async writeDocument(document: MatDocument): Promise<boolean> {
     document.saving = true;
     let save: MatSave | undefined;
     try {
@@ -206,7 +209,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     document.inConflict = false;
     document.overwriteStamp = undefined;
     // The Status column is measured from what was written, and the rows it moved are repainted.
-    document.engine.saved(save);
+    return document.engine.saved(save);
   }
 
   async saveCustomDocumentAs(document: MatDocument, dest: vscode.Uri, token: vscode.CancellationToken): Promise<void> {

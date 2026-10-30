@@ -211,8 +211,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     await saveSettled(document.edits, token, () => this.writeDocument(document));
   }
 
-  /** One write of the document as it stands, the save's own: one round of `saveSettled`. */
-  private async writeDocument(document: BinarySlddDocument): Promise<void> {
+  /**
+   * One write of the document as it stands, the save's own: one round of `saveSettled`. True when it
+   * landed behind a newer save that had already landed (the engine's answer).
+   */
+  private async writeDocument(document: BinarySlddDocument): Promise<boolean> {
     // The gate and the zip run before the first await, so the text gated and zipped is the text
     // the document held when the save was called; an edit landing on the awaits below goes into
     // the next save, as its text does. The disk check runs after them, right before the write,
@@ -238,7 +241,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     document.overwriteStamp = undefined;
     // What the next save is held to: the text this one wrote. Then the Status column's baseline
     // from it, and every row painted from the tree the save registered.
-    document.engine.saved(save);
+    return document.engine.saved(save);
   }
 
   async saveCustomDocumentAs(

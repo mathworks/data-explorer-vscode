@@ -18,26 +18,29 @@ import { saveSettled } from '../src/host/settledSave.js';
  * The older of two saves, as VS Code runs it: its round reads the stack, then, on its write's await,
  * the user edits and saves again, which cancels this save's token and lands first, moving the save
  * point (`edits.saved`) to the newer position. The round then lands behind it. `after` is what the
- * user does once the newer save has landed. Each later round records the position it wrote.
+ * user does once the newer save has landed; `duringExtra[i]` what lands on the i-th extra round's
+ * write; `behind(i)` whether round i reports it landed behind (by default the first only). Each
+ * round records the position it read.
  */
-function olderSave(after?: (edits: EditStackMirror) => void) {
+function olderSave(opts: { after?: (edits: EditStackMirror) => void; duringExtra?: ((edits: EditStackMirror) => void)[]; behind?: (round: number) => boolean } = {}) {
   const edits = new EditStackMirror();
   const token = { isCancellationRequested: false };
   const written: number[] = [];
   let rounds = 0;
   const round = async (): Promise<boolean> => {
-    const first = rounds++ === 0;
+    const i = rounds++;
     const at = edits.here();
     await Promise.resolve();
-    if (first) {
+    if (i === 0) {
       edits.pushed();
       token.isCancellationRequested = true;
       edits.saved(edits.here());
-      after?.(edits);
+      opts.after?.(edits);
+    } else {
+      opts.duringExtra?.[i - 1]?.(edits);
     }
     written.push(at);
-    // The engine's answer: the first round's write landed behind the newer save's.
-    return first;
+    return opts.behind ? opts.behind(i) : i === 0;
   };
   edits.pushed();
   return { edits, token, written, round };
@@ -52,9 +55,41 @@ describe('saveSettled: a save VS Code cancelled whose write lands after the newe
   });
 
   it('writes nothing more when the document moved since the newer save: VS Code shows it dirty', async () => {
-    const d = olderSave((e) => e.pushed());
+    const d = olderSave({ after: (e) => e.pushed() });
     await saveSettled(d.edits, d.token, d.round);
     expect(d.written).toEqual([1]);
     expect(d.edits.dirty, 'the next save writes it all').toBe(true);
+  });
+
+  it('loses no edit that lands on the extra write: the save point stays, and the document reads dirty', async () => {
+    const d = olderSave({ duringExtra: [(e) => e.pushed()] });
+    await saveSettled(d.edits, d.token, d.round);
+    expect(d.written, 'the extra round wrote the document as the newer save left it').toEqual([1, 2]);
+    expect(d.edits.dirty, 'the edit on its write is not called saved').toBe(true);
+    expect(d.edits.here(), 'and is still applied').toBe(3);
+  });
+
+  it('runs one extra round per save that landed behind: a round that keeps saying so with nothing moved stops', async () => {
+    const d = olderSave({ behind: () => true });
+    await saveSettled(d.edits, d.token, d.round);
+    expect(d.written, 'the older write and one more, and no further').toEqual([1, 2]);
+    expect(d.edits.dirty).toBe(false);
+  });
+
+  it('and one more only for an extra round that landed behind a save the user made while it wrote', async () => {
+    // On the extra round's write the user edits and saves again, and that save lands first: the
+    // extra round then landed behind it, and is written over once in its turn.
+    const d = olderSave({
+      duringExtra: [
+        (e) => {
+          e.pushed();
+          e.saved(e.here());
+        },
+      ],
+      behind: (i) => i < 2,
+    });
+    await saveSettled(d.edits, d.token, d.round);
+    expect(d.written).toEqual([1, 2, 3]);
+    expect(d.edits.dirty).toBe(false);
   });
 });

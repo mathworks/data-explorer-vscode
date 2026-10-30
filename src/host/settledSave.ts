@@ -26,6 +26,19 @@
 //  - A cancelled save stops. VS Code cancels a save's token when it starts another save of the
 //    same document, and from then on ignores the first one's result: the save point is the
 //    newer save's to move, and so is the copy's.
+//  - But VS Code lets the cancelled save's write finish, and when it lands after the newer save's,
+//    the file holds the OLDER document while VS Code shows the tab clean: closing it asks nothing
+//    and loses the newer edit (open-questions 16 B). The round says so (the engine's `saved`
+//    answers true), and the document is then written once more, as it stands, which is what the
+//    newer save wrote: the file is then what VS Code calls saved. Two rules keep that safe:
+//      - Not when the document reads dirty: an edit made after the newer save is VS Code's to
+//        save (the tab shows it dirty, and the next save writes it all, D44). And never the save
+//        point: it is the newer save's, and an edit that lands on the extra round's write leaves
+//        the document dirty, as it must.
+//      - One extra round per save that landed behind. Another follows only if that round landed
+//        behind too, which needs the user to have edited and saved again while it was writing
+//        (the stack moved). With nothing moved there is nothing a newer save could have written,
+//        and it stops: a round that keeps saying it landed behind cannot loop.
 //
 // A follow-up `vscode.workspace.save` after a plain save was the other way to do it. It leaves
 // a window in which VS Code shows clean what is not on disk (close the tab in it, and the edit is
@@ -46,21 +59,38 @@ export interface SaveCancellation {
 /**
  * Run `round` (one save: serialize the document before its first await, then write it) until
  * one runs with the stack still, then move the dirty-flag copy's save point to where it ran.
+ * `round` resolves true when its write landed behind a newer save's that had already landed.
  */
 export async function saveSettled(
   edits: EditIndex,
   token: SaveCancellation | undefined,
-  round: () => Promise<void>,
+  round: () => Promise<boolean | void>,
 ): Promise<void> {
   for (;;) {
     // Read where the round reads the document, before its first await.
     const at = edits.here();
     const moves = edits.moves;
-    await round();
-    if (token?.isCancellationRequested) return;
+    const behind = (await round()) === true;
+    if (token?.isCancellationRequested) {
+      await writeOverWhileBehind(edits, moves, behind, round);
+      return;
+    }
     if (edits.moves === moves) {
       edits.saved(at);
       return;
     }
+  }
+}
+
+/**
+ * A save VS Code cancelled whose write landed behind the newer save's (`behind`): the document
+ * written once more as it stands, while it reads clean, and again only for a round that landed
+ * behind with the stack moved under it (`moves`, where it was when that round began). The save
+ * point is not moved.
+ */
+async function writeOverWhileBehind(edits: EditIndex, moves: number, behind: boolean, round: () => Promise<boolean | void>): Promise<void> {
+  while (behind && !edits.dirty && edits.moves !== moves) {
+    moves = edits.moves;
+    behind = (await round()) === true;
   }
 }
