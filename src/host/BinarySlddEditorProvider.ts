@@ -149,6 +149,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
     const panel = engineTable(table, webview, {
       name,
       awaitRows: false,
+      readyOpens: false,
       setRows: binaryRows,
       afterPaint: () => drainNavigateSelect(webview, uriString),
     });

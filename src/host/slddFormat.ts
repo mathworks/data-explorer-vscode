@@ -1,86 +1,16 @@
 // Copyright 2026 The MathWorks, Inc.
-
-// Pure content-format detection for .sldd routing. A .sldd is either editable
-// JSON (→ text-backed table view with native undo/redo) or a zip/binary archive
-// (→ read-only binary view). Kept VS-Code-free so it is unit-testable.
-
-/** True if `bytes` begins with the ZIP local-file-header magic (PK\x03\x04). */
-export function isZipBytes(bytes: Uint8Array): boolean {
-  return (
-    bytes.length >= 4 &&
-    bytes[0] === 0x50 &&
-    bytes[1] === 0x4b &&
-    bytes[2] === 0x03 &&
-    bytes[3] === 0x04
-  );
-}
-
-// V8 refuses to create a string longer than 0x1fffffe8 (~512 MB) code units, so
-// `new TextDecoder().decode(bytes)` THROWS above that — we can neither validate
-// nor JSON.parse the content, so no table can be built. (JSON .sldd is ~ASCII,
-// so UTF-16 code-unit count ≈ byte length; gating on byte length is safe and
-// only conservative for the multibyte case, which .sldd never hits.) Such files
-// are routed to the plain text editor instead. Distinct from and larger than
-// TEXT_SYNC_LIMIT: 50 MB–512 MB JSON .sldd still renders as a read-only table.
-export const STRING_DECODE_LIMIT = 0x1fffffe8;
-
-/** True if `bytes` is too large to decode into a single JS string (V8 limit). */
-export function exceedsStringDecodeLimit(bytes: Uint8Array): boolean {
-  return bytes.length > STRING_DECODE_LIMIT;
-}
-
-/**
- * True if `text` is well-formed JSON.
- *
- * Every JSON .sldd write is a text splice, and the splice helpers parse with
- * jsonc-parser, which is deliberately tolerant: it recovers from a missing brace
- * or a stray character and still reports an entry span. That tolerance is right
- * for READING text the user is mid-way through typing, but a splice computed
- * against a recovered parse writes back text that was never valid and now has a
- * chunk cut out of it. So each write path checks the document parses strictly
- * FIRST, and reports rather than edits when it does not.
- */
-export function parsesAsJson(text: string): boolean {
-  try {
-    JSON.parse(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * True if the bytes are an editable JSON .sldd: not a zip archive AND valid
- * JSON. Binary/zip .sldd and non-JSON content return false (→ read-only view).
- * Content too large to decode also returns false (→ handled upstream), so this
- * never attempts a decode that would throw.
- */
-export function isEditableJsonSlddBytes(bytes: Uint8Array): boolean {
-  if (isZipBytes(bytes)) return false;
-  if (exceedsStringDecodeLimit(bytes)) return false;
-  try {
-    return parsesAsJson(new TextDecoder().decode(bytes));
-  } catch {
-    // decode itself can throw on malformed input; treat that as not-JSON.
-    return false;
-  }
-}
-
-// VS Code refuses to mirror a TextDocument larger than TextModel._MODEL_SYNC_LIMIT
-// (50 MB) into the extension host. Our editable JSON .sldd table is a
-// CustomTextEditorProvider, which depends on that mirror — so past this size,
-// resolving it throws "Unable to retrieve document from URI" in the ext host
-// before our provider code ever runs, and the table fails to open. Such files
-// are routed to the read-only byte-backed view instead (it reads bytes directly
-// via workspace.fs, so it isn't subject to the sync limit). Editing is
-// impossible above the limit regardless, since VS Code won't sync the document.
 //
-// VS Code measures the model in UTF-16 code units; we gate on byte length, which
-// is always >= the UTF-16 length for UTF-8. So any file kept on the editable path
-// (byte length <= limit) is guaranteed to sync — no false downgrades.
-export const TEXT_SYNC_LIMIT = 50 * 1024 * 1024;
-
-/** True if `bytes` is too large for VS Code to sync as an editable TextDocument. */
-export function exceedsTextSyncLimit(bytes: Uint8Array): boolean {
-  return bytes.length > TEXT_SYNC_LIMIT;
-}
+// Pure content-format detection for .sldd routing: core's (data-explorer-core's slddFormat), which
+// this file was word for word. A .sldd is either editable JSON (→ text-backed table view with
+// native undo/redo) or a zip/binary archive; a JSON one too large for the extension host to sync
+// as a TextDocument opens read-only. Re-exported under the names extension.ts, the binary
+// providers and this extension's tests import until they are rehomed (step 6b's V6).
+export {
+  STRING_DECODE_LIMIT,
+  TEXT_SYNC_LIMIT,
+  exceedsStringDecodeLimit,
+  exceedsTextSyncLimit,
+  isEditableJsonSlddBytes,
+  isZipBytes,
+  parsesAsJson,
+} from 'data-explorer-core';

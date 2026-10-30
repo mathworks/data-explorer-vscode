@@ -27,6 +27,8 @@ export default defineConfig({
         'src/host/BinarySlddEditorProvider.ts',
         // The compressed dictionary editor's document: view's engine with VS Code's end of its hooks.
         'src/host/binaryDocument.ts',
+        // The JSON dictionary editor's document: view's engine with VS Code's end of its hooks.
+        'src/host/jsonDocument.ts',
         'src/host/MatEditorProvider.ts',
         // The MAT-file editor's document: view's engine with VS Code's end of its hooks.
         'src/host/matDocument.ts',

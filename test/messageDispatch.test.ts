@@ -221,9 +221,10 @@ const PROVIDERS: Provider[] = [
     // this regex finds is the thing that guarantees the fetch is answered by the same
     // rule the payload was built with — the branch it replaced named one builder, and
     // was true of exactly the one format that had been planned so far.
-    // A table of one of view's engines (`engine.view()`) is planned by the engine's own view, which
-    // takes the same planner (data-explorer-view's MatView).
-    defersRows: /rowPlannerFor\(/.test(source) || /\.engine\.view\(\)/.test(source),
+    // A table of one of view's engines (`engine.view()`, or the JSON engine's through
+    // jsonDocument.ts's `openJsonTable`) is planned by the engine's own view, which takes the same
+    // planner (data-explorer-view's MatView, BinaryView and JsonView).
+    defersRows: /rowPlannerFor\(/.test(source) || /\.engine\.view\(\)|\bopenJsonTable\(/.test(source),
     ...answered(source),
   };
 });

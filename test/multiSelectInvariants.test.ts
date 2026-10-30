@@ -414,7 +414,7 @@ describe('a drag is a no-op exactly where the same cut and paste is (V-002)', ()
       const text = blankCommentsAndKeepLines(
         readFileSync(fileURLToPath(new URL(`../src/host/${provider}.ts`, import.meta.url)), 'utf8'),
       );
-      if (/\.engine\.view\(\)/.test(text)) {
+      if (/\.engine\.view\(\)|\bopenJsonTable\(/.test(text)) {
         expect(text).toMatch(/msg\?\.type === 'paste'\) table\.paste\?\.\(/);
         expect(text).toMatch(/msg\?\.type === 'drop'\) table\.drop\?\.\(/);
       } else {
