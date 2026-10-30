@@ -61,12 +61,15 @@ jobs:
             echo "Tag $GITHUB_REF_NAME (=$VERSION) does not match package.json version $PKG_VERSION" >&2
             exit 1
           fi
+          # The README's images point at this tag, not at HEAD, so a version's Marketplace
+          # listing keeps the images it shipped with. The tag exists: it is what triggered this.
+          IMAGES="https://github.com/mathworks/data-explorer-vscode/raw/v${VERSION}"
           MINOR="$(echo "$VERSION" | cut -d. -f2)"
           if [ $((MINOR % 2)) -eq 1 ]; then
-            npx vsce package --pre-release --out "simulink-data-explorer-${VERSION}.vsix"
+            npx vsce package --pre-release --baseImagesUrl "$IMAGES" --out "simulink-data-explorer-${VERSION}.vsix"
             echo "prerelease=true" >> "$GITHUB_OUTPUT"
           else
-            npx vsce package --out "simulink-data-explorer-${VERSION}.vsix"
+            npx vsce package --baseImagesUrl "$IMAGES" --out "simulink-data-explorer-${VERSION}.vsix"
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
