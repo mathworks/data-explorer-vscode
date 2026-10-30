@@ -4,7 +4,8 @@
 // `JsonEngine`), which holds what belongs to the document rather than to one of its tables (the
 // Status column's baseline, where it came from, the file's stamp, every table's repaint), with VS
 // Code's end of every hook it takes. One engine per open document, shared by its tables and made by
-// the first of them (perDocument.ts), as the editor's own document state was.
+// the first of them (perDocument.ts), as the editor's own document state was, and only while it is
+// still that TextDocument, open: the engine reads and writes that document's text.
 //
 // The text is the TextDocument's (textDocumentStore.ts): its edits are WorkspaceEdits, its undo,
 // redo, dirty state, save, revert, reload and hot-exit backup VS Code's own. The tree is read into
@@ -15,7 +16,7 @@ import * as vscode from 'vscode';
 import type { Notify } from 'data-explorer-view/model';
 import { JsonEngine, defaultRegistry } from 'data-explorer-view/host';
 import { hubRegisters } from './hubRegisters.js';
-import { PerDocument } from './perDocument.js';
+import { PerDocument, sameOpenDocument } from './perDocument.js';
 import { textDocumentStore, type TextDocumentApi } from './textDocumentStore.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 import { subscribeUsageRepost } from './usageRepostWatch.js';
@@ -42,7 +43,14 @@ const textApi = (document: vscode.TextDocument): TextDocumentApi<vscode.Position
   reasons: { undo: vscode.TextDocumentChangeReason.Undo, redo: vscode.TextDocumentChangeReason.Redo },
 });
 
-const engines = new PerDocument<JsonEngine>();
+/** A document's engine, and the TextDocument whose text it reads and writes. */
+interface HeldEngine {
+  engine: JsonEngine;
+  document: vscode.TextDocument;
+  dispose(): void;
+}
+
+const engines = new PerDocument<HeldEngine>();
 
 function engineOf(document: vscode.TextDocument, name: string): JsonEngine {
   const uri = document.uri.toString();
@@ -94,8 +102,17 @@ export function openJsonTable(
   name: string,
   changed: () => void,
 ): { table: ReturnType<JsonEngine['view']>; close(): void } {
-  const held = engines.open(document.uri.toString(), () => engineOf(document, name));
-  const table = held.value.view({ changed });
+  // A held engine of another TextDocument of this uri, or of one closed since (a table that was
+  // never closed), is not this document's: it goes, and this table makes a fresh one.
+  const held = engines.open(
+    document.uri.toString(),
+    (): HeldEngine => {
+      const engine = engineOf(document, name);
+      return { engine, document, dispose: () => engine.dispose() };
+    },
+    (h) => sameOpenDocument(h, document),
+  );
+  const table = held.value.engine.view({ changed });
   return {
     table,
     close: () => {

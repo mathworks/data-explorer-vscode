@@ -26,6 +26,7 @@ import { describeSource } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 import { engineTable, jsonRows } from './engineTable.js';
 import { openJsonTable } from './jsonDocument.js';
+import { closingOnThrow } from './perDocument.js';
 
 export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
   public static readonly viewType = 'dataExplorer.tableView';
@@ -74,95 +75,98 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
     const describe = describeSource(uriString, name);
 
     // This tab's table of the document, which says each of its repaints to this provider's hook.
-    const { table, close } = openJsonTable(document, name, () => this.onChanged?.(uriString));
-    // Posted as this editor's post() posted a paint: the rows, then in the same run what follows
-    // them, then the Usage link's selection to drain. The webview's `ready` opens the table.
-    const panel = engineTable(table, webview, {
-      name,
-      awaitRows: false,
-      setRows: jsonRows,
-      afterPaint: () => drainNavigateSelect(webview, uriString),
-    });
+    // Closed again if anything below throws before the panel's dispose is wired (closingOnThrow), so
+    // that no engine is left holding this document for a later tab.
+    closingOnThrow(openJsonTable(document, name, () => this.onChanged?.(uriString)), ({ table, close }) => {
+      // Posted as this editor's post() posted a paint: the rows, then in the same run what follows
+      // them, then the Usage link's selection to drain. The webview's `ready` opens the table.
+      const panel = engineTable(table, webview, {
+        name,
+        awaitRows: false,
+        setRows: jsonRows,
+        afterPaint: () => drainNavigateSelect(webview, uriString),
+      });
 
-    // --- Location in Text (reveal the row's entry in the plain-text view) -------
-    // The engine resolves the right-clicked row to its owning top-level entry and that entry's
-    // `{...}` span in the live JSON, and says in the table why it cannot; this opens the native
-    // text editor and reveals the span. Nested children (struct fields, bus elements) have no
-    // standalone JSON span, so they fall back to their owning entry's object.
-    const applyLocateInText = async (msg: { rowId: string }): Promise<void> => {
-      const span = table.locateInText(msg.rowId);
-      if (!span) return;
-      try {
-        // showTextDocument opens the native text editor (same view as
-        // "View as Text") beside the table and selects the entry's span,
-        // scrolling it into view. A second tab for the same URI is expected —
-        // table and text coexist (see the viewAsText note in extension.ts).
-        await vscode.window.showTextDocument(document, {
-          selection: new vscode.Range(document.positionAt(span.offset), document.positionAt(span.offset + span.length)),
-          viewColumn: vscode.ViewColumn.Beside,
-          preview: false,
-        });
-      } catch (err) {
-        webview.postMessage({ type: 'error', message: `Failed to locate in text: ${describe((err as Error).message)}` });
-      }
-    };
+      // --- Location in Text (reveal the row's entry in the plain-text view) -------
+      // The engine resolves the right-clicked row to its owning top-level entry and that entry's
+      // `{...}` span in the live JSON, and says in the table why it cannot; this opens the native
+      // text editor and reveals the span. Nested children (struct fields, bus elements) have no
+      // standalone JSON span, so they fall back to their owning entry's object.
+      const applyLocateInText = async (msg: { rowId: string }): Promise<void> => {
+        const span = table.locateInText(msg.rowId);
+        if (!span) return;
+        try {
+          // showTextDocument opens the native text editor (same view as
+          // "View as Text") beside the table and selects the entry's span,
+          // scrolling it into view. A second tab for the same URI is expected —
+          // table and text coexist (see the viewAsText note in extension.ts).
+          await vscode.window.showTextDocument(document, {
+            selection: new vscode.Range(document.positionAt(span.offset), document.positionAt(span.offset + span.length)),
+            viewColumn: vscode.ViewColumn.Beside,
+            preview: false,
+          });
+        } catch (err) {
+          webview.postMessage({ type: 'error', message: `Failed to locate in text: ${describe((err as Error).message)}` });
+        }
+      };
 
-    // --- Message wiring ---------------------------------------------------------
-    // The messages every table view answers alike (tableDispatch.ts), keyed by message type.
-    const common: CommonHandlers = {
-      ready: () => panel.ready(),
-      select: (rowIds) => this.onSelect?.(uriString, rowIds),
-      navigate: (target) => this.onNavigate?.(target, uriString),
-      // A Variable Editor panel is opening: send its cells. One shared answer for all four
-      // webview hosts — see matrixRequest.ts.
-      requestMatrix: (nodeId) => answerMatrixRequest(webview, uriString, nodeId),
-      // A Value editor is opening on a summary: its whole text, read off the tree the text says.
-      requestEditText: (rowId) => table.requestEditText?.(rowId),
-      // A row the payload deferred is being opened: send the rows under it, through postOrReport.
-      requestChildren: (nodeId) => panel.children(nodeId),
-      // Single native stack: the table view is the active editor when its menu is used, so
-      // these target the shared TextDocument undo history.
-      undo: () => void vscode.commands.executeCommand('undo'),
-      redo: () => void vscode.commands.executeCommand('redo'),
-    };
+      // --- Message wiring ---------------------------------------------------------
+      // The messages every table view answers alike (tableDispatch.ts), keyed by message type.
+      const common: CommonHandlers = {
+        ready: () => panel.ready(),
+        select: (rowIds) => this.onSelect?.(uriString, rowIds),
+        navigate: (target) => this.onNavigate?.(target, uriString),
+        // A Variable Editor panel is opening: send its cells. One shared answer for all four
+        // webview hosts — see matrixRequest.ts.
+        requestMatrix: (nodeId) => answerMatrixRequest(webview, uriString, nodeId),
+        // A Value editor is opening on a summary: its whole text, read off the tree the text says.
+        requestEditText: (rowId) => table.requestEditText?.(rowId),
+        // A row the payload deferred is being opened: send the rows under it, through postOrReport.
+        requestChildren: (nodeId) => panel.children(nodeId),
+        // Single native stack: the table view is the active editor when its menu is used, so
+        // these target the shared TextDocument undo history.
+        undo: () => void vscode.commands.executeCommand('undo'),
+        redo: () => void vscode.commands.executeCommand('redo'),
+      };
 
-    // This editor's own: its edits, the clipboard and row drags, each the table's command (the
-    // structural ones one text state at a time, which the table sees to), and Location in Text.
-    const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
-      if (dispatchCommon(msg, common)) return;
-      if (msg?.type === 'edit') table.edit?.(msg);
-      else if (msg?.type === 'copy') table.copy?.(msg.rowIds);
-      else if (msg?.type === 'delete') table.delete?.(msg.rowIds);
-      else if (msg?.type === 'addChild') table.addChild?.(msg.rowId);
-      else if (msg?.type === 'cut') table.cut?.(msg.rowIds);
-      else if (msg?.type === 'paste') table.paste?.(msg.rowId);
-      else if (msg?.type === 'addEntry') table.addEntry?.(msg);
-      else if (msg?.type === 'dragStart') table.dragStart?.(msg.rowIds);
-      else if (msg?.type === 'dragEnd') table.dragEnd?.();
-      else if (msg?.type === 'drop') table.drop?.(msg.rowId, msg.mode);
-      else if (msg?.type === 'locateInText') void applyLocateInText(msg);
-    });
+      // This editor's own: its edits, the clipboard and row drags, each the table's command (the
+      // structural ones one text state at a time, which the table sees to), and Location in Text.
+      const sub = webview.onDidReceiveMessage((msg: TableToHostMessage) => {
+        if (dispatchCommon(msg, common)) return;
+        if (msg?.type === 'edit') table.edit?.(msg);
+        else if (msg?.type === 'copy') table.copy?.(msg.rowIds);
+        else if (msg?.type === 'delete') table.delete?.(msg.rowIds);
+        else if (msg?.type === 'addChild') table.addChild?.(msg.rowId);
+        else if (msg?.type === 'cut') table.cut?.(msg.rowIds);
+        else if (msg?.type === 'paste') table.paste?.(msg.rowId);
+        else if (msg?.type === 'addEntry') table.addEntry?.(msg);
+        else if (msg?.type === 'dragStart') table.dragStart?.(msg.rowIds);
+        else if (msg?.type === 'dragEnd') table.dragEnd?.();
+        else if (msg?.type === 'drop') table.drop?.(msg.rowId, msg.mode);
+        else if (msg?.type === 'locateInText') void applyLocateInText(msg);
+      });
 
-    // Register the keyboard's way into the Add gallery. The command (dataExplorer.addEntry)
-    // has no view of its own to act on, so each editable view says here how to open its
-    // gallery, and the hub picks the one whose panel is active.
-    registerAddGalleryView(webviewPanel, () => void webview.postMessage({ type: 'openAddGallery' }));
-    const navSub = wireNavigateSelect(webview, uriString);
+      // Register the keyboard's way into the Add gallery. The command (dataExplorer.addEntry)
+      // has no view of its own to act on, so each editable view says here how to open its
+      // gallery, and the hub picks the one whose panel is active.
+      registerAddGalleryView(webviewPanel, () => void webview.postMessage({ type: 'openAddGallery' }));
+      const navSub = wireNavigateSelect(webview, uriString);
 
-    // The editor/title "View as Text" toggle is gated on the built-in
-    // `activeCustomEditorId == dataExplorer.tableView` context key (set
-    // automatically by VS Code), so no custom context key is needed here.
+      // The editor/title "View as Text" toggle is gated on the built-in
+      // `activeCustomEditorId == dataExplorer.tableView` context key (set
+      // automatically by VS Code), so no custom context key is needed here.
 
-    webview.html = this.getHtml(webview, distRoot);
-    webviewPanel.onDidDispose(() => {
-      // First, so nothing still in flight is posted to this view from here on.
-      panel.dispose();
-      // Its registers, its drag, its listeners and its hold on the tree; with the LAST tab of this
-      // document its source deleter and its baseline (see jsonDocument.ts).
-      close();
-      unregisterAddGalleryView(webviewPanel);
-      sub.dispose();
-      navSub.dispose();
+      webview.html = this.getHtml(webview, distRoot);
+      webviewPanel.onDidDispose(() => {
+        // First, so nothing still in flight is posted to this view from here on.
+        panel.dispose();
+        // Its registers, its drag, its listeners and its hold on the tree; with the LAST tab of this
+        // document its source deleter and its baseline (see jsonDocument.ts).
+        close();
+        unregisterAddGalleryView(webviewPanel);
+        sub.dispose();
+        navSub.dispose();
+      });
     });
   }
 
