@@ -687,6 +687,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   askSaveConflict: (message: string) => Thenable<string | undefined> = (message) =>
     vscode.window.showErrorMessage(message, OVERWRITE, REVERT);
 
+  /**
+   * Write the user's file, and answer the stamp the write left (diskFollow.writeUserFile). A
+   * property so that the integration suite can hold a save's write, as a slow disk holds one.
+   */
+  writeUserFile: (uri: vscode.Uri, bytes: Uint8Array) => Promise<DiskStamp | undefined> = writeUserFile;
+
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   async openCustomDocument(
@@ -1798,6 +1804,6 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       await vscode.workspace.fs.writeFile(dest, zipped);
       return { gated, stamp: undefined, parts };
     }
-    return { gated, stamp: await writeUserFile(dest, zipped), parts };
+    return { gated, stamp: await this.writeUserFile(dest, zipped), parts };
   }
 }
