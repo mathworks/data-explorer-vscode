@@ -410,10 +410,17 @@ describe('every setRows says which document it is describing', () => {
     }
     return out;
   };
-  // A provider that posts an engine's table through engineTable.ts posts the setRows it spells.
+  // A provider that posts an engine's table through engineTable.ts posts the setRows of the builder
+  // it hands engineTable (`setRows: matRows`), whose literal is in engineTable.ts: that one literal
+  // is read with the provider.
   const sourcesOf = (file: string): string[] => {
     const source = read(`src/host/${file}`);
-    return /engineTable\(/.test(source) ? [source, read('src/host/engineTable.ts')] : [source];
+    const builder = /engineTable\(/.test(source) ? /\bsetRows: (\w+)/.exec(source)?.[1] : undefined;
+    if (!builder) return [source];
+    const relay = read('src/host/engineTable.ts');
+    const at = relay.indexOf(`export const ${builder} = `);
+    if (at < 0) throw new Error(`engineTable.ts has no builder ${builder}`);
+    return [source, relay.slice(at, relay.indexOf('\n});\n', at) + 4)];
   };
   const posts = PROVIDERS.map((p) => ({ file: p.file, bodies: sourcesOf(p.file).flatMap(payloadsOf) }));
 

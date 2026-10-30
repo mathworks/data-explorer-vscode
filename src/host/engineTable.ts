@@ -6,13 +6,15 @@
 // A whole paint goes out as the editors' own `post()` sends one:
 //  - its rows (`setRows`), through postOrReport, so that rows that cannot be delivered say "Failed to
 //    show …" in their place;
-//  - then, once that post has settled, what follows the rows (the drop rules, the clipboard, the
-//    clip mark: the engine's trailer, which waits for `opened()`; trailerAfterDelivery);
+//  - then what follows the rows (the drop rules, the clipboard, the clip mark: the engine's
+//    trailer, which waits for `opened(view)`; trailerAfterDelivery): once that post has settled,
+//    where the editor awaited it (the MAT-file editor, `awaitRows`), or at once, in the same run,
+//    where it did not (the compressed dictionary editor);
 //  - then whatever the host runs after a paint (`afterPaint`: the Usage link's selection to drain).
 // Everything else the engine says, while a paint's rows are on their way or not, is posted at once,
 // in the order it was said: a gesture's rows during that await go out ahead of the trailer, as they
-// did. Each message is spelled as the editors spelled it, keys in their order, and a `setRows`
-// carries `notice`, `add` and `warnings` even when they are undefined.
+// did. Each message is spelled as the editors spelled it, keys in their order; a `setRows` by the
+// editor's own builder below (matRows, binaryRows), which its provider hands over as `setRows`.
 import type { EditableTableSource, TableChange, TableView } from 'data-explorer-view/model';
 import { postOrReport } from 'data-explorer-view/host';
 
@@ -21,17 +23,55 @@ export interface TablePanel {
   postMessage(message: unknown): PromiseLike<boolean>;
 }
 
-/** A table of an engine whose host delivers its paints (MatEngine's `view()`, trailerAfterDelivery). */
-export type DeliveredTable = EditableTableSource & { repaintAll(): Promise<void> };
+/** A table of an engine whose host delivers its paints (an engine's `view()`, trailerAfterDelivery). */
+export type DeliveredTable = EditableTableSource & { repaintAll(): Promise<void>; opened(view?: TableView): void };
 
 export interface EngineTableOptions {
   /** The file's name, which a paint that cannot be delivered names. */
   name: string;
+  /**
+   * Whether what follows a paint's rows waits for their post to settle (the MAT-file editor's
+   * `post()` awaited it), or goes out at once, in the same run (the compressed dictionary
+   * editor's did not; its `ready` was answered in the run that asked, by a repaint, and so is it
+   * here). Default: true.
+   */
+  awaitRows?: boolean;
+  /** A whole paint's rows, as the editor's own `setRows` literal spelled them (matRows, binaryRows). */
+  setRows(view: TableView): Record<string, unknown>;
   /** Called with each whole paint's view, before its rows are posted (the lock on a read-only tab). */
   onRows?(view: TableView): void;
   /** Called after each whole paint's trailer is posted. */
   afterPaint?(): void;
 }
+
+/**
+ * A whole paint's rows, as the MAT-file editor's `post()` spelled its `setRows`: `notice`, `add` and
+ * `warnings` present even when they are undefined.
+ */
+export const matRows = (view: TableView) => ({
+  type: 'setRows',
+  docUri: view.docUri,
+  rows: view.rows,
+  columns: view.columns,
+  columnLabels: view.columnLabels,
+  columnGroups: view.columnGroups,
+  editable: view.editable,
+  notice: view.notice,
+  add: view.add,
+  warnings: view.warnings,
+});
+
+/** A whole paint's rows, as the compressed dictionary editor's `post()` spelled its `setRows`: no notice, no gallery list. */
+export const binaryRows = (view: TableView) => ({
+  type: 'setRows',
+  docUri: view.docUri,
+  rows: view.rows,
+  columns: view.columns,
+  columnLabels: view.columnLabels,
+  columnGroups: view.columnGroups,
+  editable: view.editable,
+  warnings: view.warnings,
+});
 
 /**
  * The panel's end of `table`, until `dispose()`. `ready()` answers the webview's `ready`, and
@@ -45,26 +85,22 @@ export function engineTable(
   let closed = false;
   const { name } = options;
 
-  const setRows = (view: TableView) => ({
-    type: 'setRows',
-    docUri: view.docUri,
-    rows: view.rows,
-    columns: view.columns,
-    columnLabels: view.columnLabels,
-    columnGroups: view.columnGroups,
-    editable: view.editable,
-    notice: view.notice,
-    add: view.add,
-    warnings: view.warnings,
-  });
+  const { setRows } = options;
 
-  // A whole paint: its rows, and once they are delivered (or reported), what follows them.
+  // What follows a paint's rows: its own trailer, then the host's after-paint work.
+  const delivered = (view: TableView): void => {
+    if (closed) return;
+    table.opened(view);
+    options.afterPaint?.();
+  };
+
+  // A whole paint: its rows, and what follows them once they are delivered (or reported), or at once.
   const paint = async (view: TableView): Promise<void> => {
     options.onRows?.(view);
-    await postOrReport(webview, setRows(view), name);
-    if (closed) return;
-    table.opened?.();
-    options.afterPaint?.();
+    const rows = postOrReport(webview, setRows(view), name);
+    if (options.awaitRows === false) return delivered(view);
+    await rows;
+    delivered(view);
   };
 
   const post = (message: unknown): void => void webview.postMessage(message);
@@ -106,6 +142,9 @@ export function engineTable(
 
   return {
     ready() {
+      // In the run that asked: the engine's repaint says its rows at once, and they are posted as
+      // every repaint's are.
+      if (options.awaitRows === false) return void table.repaintAll();
       table.open().then(
         (view) => (closed ? undefined : paint(view)),
         // A table closed while it was asked has nowhere to say it (SourceClosed).

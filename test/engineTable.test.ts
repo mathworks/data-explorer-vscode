@@ -10,8 +10,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createSession } from 'data-explorer-core';
 import { createRegisters } from 'data-explorer-view/model';
-import { EditStack, EditStackIndex, MatEngine } from 'data-explorer-view/host';
-import { engineTable } from '../src/host/engineTable.js';
+import { BinaryEngine, EditStack, EditStackIndex, MatEngine } from 'data-explorer-view/host';
+import { binaryRows, engineTable, matRows } from '../src/host/engineTable.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -68,6 +68,7 @@ describe("the MAT-file editor's panel of the engine's table", () => {
     const table = engine.view();
     const relay = engineTable(table, panel, {
       name: 'cases.mat',
+      setRows: matRows,
       onRows: (view) => said.push(`rows ${view.editable}`),
       afterPaint: () => said.push(`drained after ${panel.types().join(',')}`),
     });
@@ -90,8 +91,8 @@ describe("the MAT-file editor's panel of the engine's table", () => {
     const second = heldPanel();
     const one = engine.view();
     const two = engine.view();
-    engineTable(one, first, { name: 'cases.mat' }).ready();
-    engineTable(two, second, { name: 'cases.mat' }).ready();
+    engineTable(one, first, { name: 'cases.mat', setRows: matRows }).ready();
+    engineTable(two, second, { name: 'cases.mat', setRows: matRows }).ready();
     await settle();
     first.deliver();
     second.deliver();
@@ -111,7 +112,7 @@ describe("the MAT-file editor's panel of the engine's table", () => {
   it('says rows it cannot deliver failed to show, and sends what follows them all the same', async () => {
     const engine = document();
     const panel = heldPanel(true);
-    engineTable(engine.view(), panel, { name: 'cases.mat' }).ready();
+    engineTable(engine.view(), panel, { name: 'cases.mat', setRows: matRows }).ready();
     await settle();
     panel.deliver();
     await settle();
@@ -130,7 +131,7 @@ describe("the MAT-file editor's panel of the engine's table", () => {
         return true;
       },
     };
-    const relay = engineTable(engine.view(), panel, { name: 'cases.mat' });
+    const relay = engineTable(engine.view(), panel, { name: 'cases.mat', setRows: matRows });
     relay.ready();
     await settle();
     const rows = posted.find((m) => m.type === 'setRows').rows as any[];
@@ -150,7 +151,7 @@ describe("the MAT-file editor's panel of the engine's table", () => {
     const engine = document();
     const panel = heldPanel();
     const table = engine.view();
-    const relay = engineTable(table, panel, { name: 'cases.mat' });
+    const relay = engineTable(table, panel, { name: 'cases.mat', setRows: matRows });
     relay.ready();
     await settle();
     relay.dispose();
@@ -158,5 +159,63 @@ describe("the MAT-file editor's panel of the engine's table", () => {
     panel.deliver();
     await settle();
     expect(panel.types()).toEqual(['setRows']);
+  });
+});
+
+const PARAMS_BINARY = new Uint8Array(readFileSync(join(import.meta.dirname, '..', 'test', 'parity', 'artifacts', 'binary', 'params.sldd')));
+
+function dictionary() {
+  const stack = new EditStack();
+  return new BinaryEngine({
+    session: createSession(),
+    uri: 'file:///work/params.sldd',
+    name: 'params.sldd',
+    bytes: PARAMS_BINARY,
+    sink: { push: (e) => stack.push(e), undo: () => stack.undo(), redo: () => stack.redo() },
+    index: new EditStackIndex(),
+    registers: createRegisters(),
+    trailerAfterDelivery: true,
+  });
+}
+
+describe("the compressed dictionary editor's panel of the engine's table (rows not awaited)", () => {
+  it("posts a paint as the editor's post() did: the rows, then in the same run what follows them, then the drain", async () => {
+    const engine = dictionary();
+    const posted: any[] = [];
+    const said: string[] = [];
+    const panel = { postMessage: async (m: any) => (posted.push(m), true) };
+    const relay = engineTable(engine.view(), panel, {
+      name: 'params.sldd',
+      awaitRows: false,
+      setRows: binaryRows,
+      afterPaint: () => said.push(`drained after ${posted.map((m) => m.type).join(',')}`),
+    });
+    relay.ready();
+    await settle();
+    expect(posted.map((m) => m.type)).toEqual(['setRows', 'sectionRules', 'clipboardState']);
+    expect(Object.keys(posted[0])).toEqual(['type', 'docUri', 'rows', 'columns', 'columnLabels', 'columnGroups', 'editable', 'warnings']);
+    // A repaint the engine starts: all of it in the run that said it.
+    posted.length = 0;
+    said.length = 0;
+    engine.repaintAll();
+    expect(posted.map((m) => m.type)).toEqual(['setRows', 'sectionRules', 'clipboardState']);
+    expect(said).toEqual(['drained after setRows,sectionRules,clipboardState']);
+    relay.dispose();
+  });
+
+  it('says rows it cannot deliver failed to show, after what follows them, as the unawaited post did', async () => {
+    const engine = dictionary();
+    const posted: any[] = [];
+    const panel = {
+      postMessage: async (m: any) => {
+        if (m.type === 'setRows') throw new Error('the payload is too large to post');
+        posted.push(m);
+        return true;
+      },
+    };
+    engineTable(engine.view(), panel, { name: 'params.sldd', awaitRows: false, setRows: binaryRows }).ready();
+    await settle();
+    expect(posted.map((m) => m.type)).toEqual(['sectionRules', 'clipboardState', 'error']);
+    expect(posted.at(-1).message).toMatch(/^Failed to show params\.sldd: /);
   });
 });

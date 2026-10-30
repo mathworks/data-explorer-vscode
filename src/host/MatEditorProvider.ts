@@ -33,7 +33,7 @@ import { toArrayBuffer } from '../common/bytes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { describeSource } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
-import { engineTable } from './engineTable.js';
+import { engineTable, matRows } from './engineTable.js';
 import { MatDocument, SharedBackup, type DiskRead } from './matDocument.js';
 
 async function readDisk(uri: vscode.Uri): Promise<DiskRead> {
@@ -95,6 +95,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     const table = document.engine.view();
     const panel = engineTable(table, webview, {
       name,
+      setRows: matRows,
       // The padlock the read-only view wears, only where this one is read-only too.
       onRows: (view) => void (webviewPanel.iconPath = view.notice ? new vscode.ThemeIcon('lock') : undefined),
       afterPaint: () => drainNavigateSelect(webview, uriString),

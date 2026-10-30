@@ -14,14 +14,15 @@
 // of `uncheckableEntries` in `unchecked` (markUnchecked: every key of a group maps to the group),
 // and writeTo hands the gate `saved`, the chunk, `edited`, the registered model and `unchecked`.
 //
-// One refusal is the provider's own, not the gate's: a chunk that does not read back. Its text is
-// pinned here from the provider's source, with the order writeTo keeps (read, gate, zip, with no
-// await between them, so the text gated is the text written).
+// One refusal is the save's own, not the gate's: a chunk that does not read back. The save is view's
+// binary engine's (BinaryEngine.beginSave), whose words and order are pinned here (read, gate, zip,
+// in one synchronous call), and the provider calls it before the save's first await.
 import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
 import {
+  createSession,
   DataModel,
   DATA_PART_XML,
   changedEntryKeys,
@@ -33,7 +34,8 @@ import {
   spliceEntryObject,
 } from 'data-explorer-core';
 import { mutateEntry } from '../src/host/entryOps.js';
-import { readSlddParts } from 'data-explorer-view/model';
+import { createRegisters, readSlddParts } from 'data-explorer-view/model';
+import { BinaryEngine, EditStackIndex } from 'data-explorer-view/host';
 import { addNewEntryXml, deleteEntryXml } from '../src/host/xmlStructuralEdit.js';
 import { blankCommentsAndKeepLines } from './tools/moduleGraph.js';
 
@@ -163,34 +165,39 @@ describe('the edit-time answer holds at the save, whatever has rebuilt the node 
   });
 });
 
-describe("writeTo — the provider's own half of the save gate", () => {
-  // BinarySlddEditorProvider imports `vscode`, so its save is read from its source: the method,
-  // with the comments blanked so that only code is matched.
-  const writeTo = (() => {
-    const src = blankCommentsAndKeepLines(readFileSync(repo('src/host/BinarySlddEditorProvider.ts'), 'utf8'));
-    const start = src.indexOf('  private async writeTo(');
-    expect(start, 'the provider still has writeTo').toBeGreaterThan(-1);
-    return src.slice(start, src.indexOf('\n  }\n', start));
-  })();
+describe("the save's own half of the gate: the engine's beginSave, before the save's first await", () => {
+  // The provider's save is view's binary engine's (BinaryEngine.beginSave): the gate's read, the
+  // gate and the zip. The engine runs here; the provider imports `vscode`, so where it calls the
+  // engine is read from its source, with the comments blanked so that only code is matched.
+  const engine = () =>
+    new BinaryEngine({
+      session: createSession(),
+      uri: 'file:///work/params.sldd',
+      name: 'params.sldd',
+      bytes: new Uint8Array(readFileSync(repo('test/parity/artifacts/binary/params.sldd'))),
+      sink: { push: () => {}, undo: () => {}, redo: () => {} },
+      index: new EditStackIndex(),
+      registers: createRegisters(),
+    });
 
   it('refuses a chunk that does not read back, in the words the user is shown', () => {
-    // The gate's own texts are core's, and pinned there; this one is the provider's.
-    expect(writeTo).toContain(
-      "throw new Error('Refusing to save: the document did not re-parse (' + (err as Error).message + ').');",
-    );
+    const e = engine();
+    e.forTests.setChunk('<Root><unterminated');
+    expect(() => e.beginSave()).toThrow(/^Refusing to save: the document did not re-parse \(.+\)\.$/);
   });
 
   it('reads the chunk, gates it and zips it with no await between, so the text gated is the text written', () => {
-    // An edit that lands on an await between the gate and the zip would be written ungated, and
-    // then marked saved with the gated text.
-    const read = writeTo.indexOf('const chunkXml = document.chunkXml;');
-    const reparse = writeTo.indexOf('did not re-parse', read);
-    const gate = writeTo.indexOf('savedChunkRefusal(', reparse);
-    const zip = writeTo.indexOf('zipSync(', gate);
-    expect(read).toBeGreaterThan(-1);
-    expect(reparse).toBeGreaterThan(read);
-    expect(gate).toBeGreaterThan(reparse);
-    expect(zip).toBeGreaterThan(gate);
-    expect(writeTo.slice(read, zip)).not.toMatch(/\bawait\b/);
+    // One synchronous call: what it hands back is the bytes, not a promise of them.
+    const save = engine().beginSave();
+    expect(save.bytes).toBeInstanceOf(Uint8Array);
+    // And the save calls it before its first await, so an edit landing on the awaits that follow
+    // is the next save's, as its text is.
+    const src = blankCommentsAndKeepLines(readFileSync(repo('src/host/BinarySlddEditorProvider.ts'), 'utf8'));
+    const start = src.indexOf('  private async writeDocument(');
+    expect(start, 'the provider still has writeDocument').toBeGreaterThan(-1);
+    const body = src.slice(start, src.indexOf('\n  }\n', start));
+    const begin = body.indexOf('document.engine.beginSave()');
+    expect(begin).toBeGreaterThan(-1);
+    expect(body.slice(0, begin)).not.toMatch(/\bawait\b/);
   });
 });
