@@ -13,9 +13,8 @@
 //  - then whatever the host runs after a paint (`afterPaint`: the Usage link's selection to drain).
 // Everything else the engine says, while a paint's rows are on their way or not, is posted at once,
 // in the order it was said: a gesture's rows during that await go out ahead of the trailer, as they
-// did. Each message is spelled as the editors spelled it, keys in their order; a `setRows` as the
-// editor's own literal spelled it (`setRows`: the MAT-file editor's carries `notice`, `add` and
-// `warnings` even when they are undefined).
+// did. Each message is spelled as the editors spelled it, keys in their order; a `setRows` by the
+// editor's own builder below (matRows, binaryRows), which its provider hands over as `setRows`.
 import type { EditableTableSource, TableChange, TableView } from 'data-explorer-view/model';
 import { postOrReport } from 'data-explorer-view/host';
 
@@ -37,13 +36,42 @@ export interface EngineTableOptions {
    * here). Default: true.
    */
   awaitRows?: boolean;
-  /** A whole paint's rows, as the editor's own `setRows` literal spelled them. Default: the MAT-file editor's. */
-  setRows?(view: TableView): Record<string, unknown>;
+  /** A whole paint's rows, as the editor's own `setRows` literal spelled them (matRows, binaryRows). */
+  setRows(view: TableView): Record<string, unknown>;
   /** Called with each whole paint's view, before its rows are posted (the lock on a read-only tab). */
   onRows?(view: TableView): void;
   /** Called after each whole paint's trailer is posted. */
   afterPaint?(): void;
 }
+
+/**
+ * A whole paint's rows, as the MAT-file editor's `post()` spelled its `setRows`: `notice`, `add` and
+ * `warnings` present even when they are undefined.
+ */
+export const matRows = (view: TableView) => ({
+  type: 'setRows',
+  docUri: view.docUri,
+  rows: view.rows,
+  columns: view.columns,
+  columnLabels: view.columnLabels,
+  columnGroups: view.columnGroups,
+  editable: view.editable,
+  notice: view.notice,
+  add: view.add,
+  warnings: view.warnings,
+});
+
+/** A whole paint's rows, as the compressed dictionary editor's `post()` spelled its `setRows`: no notice, no gallery list. */
+export const binaryRows = (view: TableView) => ({
+  type: 'setRows',
+  docUri: view.docUri,
+  rows: view.rows,
+  columns: view.columns,
+  columnLabels: view.columnLabels,
+  columnGroups: view.columnGroups,
+  editable: view.editable,
+  warnings: view.warnings,
+});
 
 /**
  * The panel's end of `table`, until `dispose()`. `ready()` answers the webview's `ready`, and
@@ -57,20 +85,7 @@ export function engineTable(
   let closed = false;
   const { name } = options;
 
-  const matRows = (view: TableView) => ({
-    type: 'setRows',
-    docUri: view.docUri,
-    rows: view.rows,
-    columns: view.columns,
-    columnLabels: view.columnLabels,
-    columnGroups: view.columnGroups,
-    editable: view.editable,
-    notice: view.notice,
-    add: view.add,
-    warnings: view.warnings,
-  });
-
-  const setRows = options.setRows ?? matRows;
+  const { setRows } = options;
 
   // What follows a paint's rows: its own trailer, then the host's after-paint work.
   const delivered = (view: TableView): void => {

@@ -18,7 +18,6 @@
 // messages every table answers alike. Each panel is one of the engine's tables, posted as this editor
 // has always posted it (engineTable.ts).
 import * as vscode from 'vscode';
-import type { TableView } from 'data-explorer-view/model';
 import { answerMatrixRequest, type BinarySave } from 'data-explorer-view/host';
 import { renderTableWebview } from './webviewHtml.js';
 import { isZipBytes } from './slddFormat.js';
@@ -31,7 +30,7 @@ import { saveSettled } from './settledSave.js';
 import { followDisk, readForOpen, readStamped, refuseIfChangedOnDisk, watchDisk, writeUserFile } from './diskFollow.js';
 import { backupId } from './backupId.js';
 import { sameFile } from './safeWrite.js';
-import { engineTable } from './engineTable.js';
+import { binaryRows, engineTable } from './engineTable.js';
 import { BinarySlddDocument } from './binaryDocument.js';
 
 // viewType of the default byte-backed view (BinaryEditorProvider), which owns the rule
@@ -45,18 +44,6 @@ interface DiskRead {
   stamp: DiskStamp | undefined;
   bytes: Uint8Array;
 }
-
-/** A whole paint's rows, as this editor's `post()` spelled its `setRows`: no notice, no gallery list. */
-const binaryRows = (view: TableView) => ({
-  type: 'setRows',
-  docUri: view.docUri,
-  rows: view.rows,
-  columns: view.columns,
-  columnLabels: view.columnLabels,
-  columnGroups: view.columnGroups,
-  editable: view.editable,
-  warnings: view.warnings,
-});
 
 export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<BinarySlddDocument> {
   public static readonly viewType = 'dataExplorer.binarySlddView';
