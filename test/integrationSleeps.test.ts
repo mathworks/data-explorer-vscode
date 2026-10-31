@@ -9,6 +9,7 @@
 // machine the sleep runs out first and the test fails as a confusing assertion, and on an idle
 // one every run pays the whole sleep. They now wait on a named predicate through `waitFor`
 // (test-integration/suite/tools/hostHarness.ts), which fails as "timed out waiting for <what>".
+// undoOfTableEdit has since moved to view's JSON engine tests, with no VS Code to wait for.
 //
 // treeRefreshKeepsGraph's second test is the other member, and its cause was a shared file:
 // the first test rewrites data.sldd on disk and restores it, and a model of data.sldd that an
@@ -56,7 +57,7 @@ function fixedSleeps(file: string): string[] {
 }
 
 describe('the integration tests that flaked under load wait on a predicate', () => {
-  for (const file of ['typeLinkBinary.test.ts', 'binarySlddEdit.test.ts', 'undoOfTableEdit.test.ts']) {
+  for (const file of ['typeLinkBinary.test.ts', 'binarySlddEdit.test.ts']) {
     it(`${file} sleeps for no fixed time`, () => {
       expect(fixedSleeps(file)).toEqual([]);
       // The witness that the file still waits for its asynchronous work at all, rather than
@@ -185,7 +186,7 @@ describe('every integration suite file waits on a named condition, or is quiet f
   it('reads the whole suite', () => {
     // A glob that matched nothing would pass every check below.
     expect(SUITE_FILES.length).toBeGreaterThan(40);
-    expect(SUITE_FILES).toContain('undoOfTableEdit.test.ts');
+    expect(SUITE_FILES).toContain('binarySlddEdit.test.ts');
   });
 
   for (const file of SUITE_FILES) {

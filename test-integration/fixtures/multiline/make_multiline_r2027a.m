@@ -2,8 +2,9 @@ function make_multiline_r2027a(outDir)
   % Copyright 2026 The MathWorks, Inc.
   % Authors multiline_r2027a.mat, multiline_r2027a_text.sldd and multiline_r2027a_binary.sldd:
   % the same three Simulink.Parameter objects in a MAT-file and in a dictionary of each format,
-  % whose Descriptions MATLAB itself wrote with line breaks, so the integration tests can open,
-  % edit and save a multi-line Description in each table editor (multiLineDescription.test.ts):
+  % whose Descriptions MATLAB itself wrote with line breaks, so the tests can open, edit and save a
+  % multi-line Description in each table editor (view's editors/multiLineDescription.test.ts, and
+  % liveGateSaves.test.ts for the live gate):
   %
   %   pLF    Value 3, Description 'two' LF 'lines, it''s'  (newline, MATLAB's own line break)
   %   pCRLF  Value 4, Description 'first line' CR LF 'second line'
