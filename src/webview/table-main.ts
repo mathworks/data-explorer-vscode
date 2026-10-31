@@ -28,7 +28,7 @@ import {
   WHOLE_FILE_SECTION,
 } from 'data-explorer-view/model';
 import { vscodePort } from './vscodePort.js';
-import type { DragDescriptor } from '../host/dragState.js';
+import type { DragDescriptor } from 'data-explorer-view/model';
 import type { HostToTableMessage } from '../common/protocol.js';
 
 // Importing a widget no longer registers it, so this comes first: before the shell's table is

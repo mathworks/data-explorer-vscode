@@ -40,21 +40,25 @@ const under = (dir: string, file: string): boolean => file === `${dir}.ts` || fi
 // not counts — they fail if the tree moves or the matcher stops matching, and are not
 // meant to be bumped whenever a file is added. The module floor was 60 until the folder
 // reads, the hierarchy, Usage, search and the project page's model moved to core and view,
-// which left the tree at 60; 40 is still far above a walker that read nothing.
+// which left the tree at 60; 40 is still far above a walker that read nothing. The edge floor was
+// 100 until the editors' shared copies (clipboard, transfer, the structural edits) went for view's
+// and core's, which left fewer than 100; 60 is still far above a walker that read nothing.
 describe('the walker is actually reading this tree', () => {
   it('finds the modules and the imports between them', () => {
     expect(graph.files.length).toBeGreaterThan(40);
     expect(graph.files).toContain('extension.ts');
-    expect(runtimeEdges(graph).length).toBeGreaterThan(100);
+    expect(runtimeEdges(graph).length).toBeGreaterThan(60);
   });
 
   it('sees the `type` keyword, which the layering tests depend on', () => {
     // Without this, the two layering tests below would fail QUIETLY rather than
     // loudly: they would report erased edges as violations. Pinned on a known pair —
-    // `protocol.ts` names four host types and runs none of their code.
-    const protocolToHost = graph.edges.filter((e) => e.from === 'common/protocol.ts' && e.to?.startsWith('host/'));
-    expect(protocolToHost.length).toBeGreaterThan(0);
-    expect(protocolToHost.every((e) => e.typeOnly)).toBe(true);
+    // `table-main.ts` names the protocol's host messages and runs none of its code.
+    // (It was `protocol.ts` naming host types, until the drag and clipboard types it
+    // named became view's.)
+    const tableToProtocol = graph.edges.filter((e) => e.from === 'webview/table-main.ts' && e.to === 'common/protocol.ts');
+    expect(tableToProtocol.length).toBeGreaterThan(0);
+    expect(tableToProtocol.every((e) => e.typeOnly)).toBe(true);
     const hostRuns = runtimeEdges(graph).filter((e) => under('host', e.from) && under('host', e.to));
     expect(hostRuns.length, 'and a real value edge still reads as one').toBeGreaterThan(0);
   });

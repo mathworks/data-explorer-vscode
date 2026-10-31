@@ -33,11 +33,11 @@ import {
   findEntryObjectSpan,
   catalogFunctionRenameOf,
   catalogRenameOf,
+  mutateEntry,
   scXmlFunctionRenamePatch,
   scXmlRenamePatch,
 } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { mutateEntry } from '../../src/host/entryOps';
 import { waitFor } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -122,7 +122,7 @@ function renameEntry(doc: any, root: any, name: string, newName: string) {
   const catalogRename = catalogRenameOf('Name', newName, entry, entry);
   assert.ok(catalogRename, 'a top-level rename is a rename the catalog can carry');
 
-  assert.strictEqual(mutateEntry(entry, () => entry.setProperty('Name', newName)), true);
+  assert.strictEqual(mutateEntry(entry, () => entry.setProperty('Name', newName), DataModel), true);
 
   const before = doc.chunkXml as string;
   const span = findEntryObjectSpan(before, selector);
@@ -151,7 +151,7 @@ function renameFunction(doc: any, root: any, entryName: string, name: string, ne
   const functionRename = catalogFunctionRenameOf('Name', newName, node, entry);
   assert.ok(functionRename, 'a function of a top-level service interface is a rename the catalog can carry');
 
-  assert.strictEqual(mutateEntry(entry, () => node.setProperty('Name', newName)), true);
+  assert.strictEqual(mutateEntry(entry, () => node.setProperty('Name', newName), DataModel), true);
 
   const before = doc.chunkXml as string;
   const span = findEntryObjectSpan(before, selector);

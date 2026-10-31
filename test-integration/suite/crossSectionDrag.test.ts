@@ -25,7 +25,7 @@ import * as vscode from 'vscode';
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { clearDrag } from '../../src/host/dragState';
+import { registers } from '../../src/host/windowRegisters';
 import { dropDecision } from 'data-explorer-view/model';
 import { chunkOf, ctx, fakePanel, isEntryRow, nameOf, quiet, token, waitFor, ws, wsUri } from './tools/hostHarness';
 
@@ -134,7 +134,7 @@ suite('A drag across two sections, on a JSON .sldd', () => {
       await dragBothOntoArch({ view, rows, painted, derived });
     } finally {
       view.close();
-      clearDrag();
+      registers.clearDrag();
       await vscode.workspace.fs.delete(uri);
     }
   }).timeout(60000);
@@ -182,7 +182,7 @@ suite('A drag across two sections, on a compressed-binary .sldd', () => {
     } finally {
       view.close();
       doc.dispose();
-      clearDrag();
+      registers.clearDrag();
       await vscode.workspace.fs.delete(uri);
     }
   }).timeout(60000);

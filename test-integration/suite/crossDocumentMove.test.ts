@@ -16,7 +16,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { clearClipboard, getClipboard } from '../../src/host/clipboard';
+import { registers } from '../../src/host/windowRegisters';
 import { ctx, entryNames, fakePanel, isEntryRow, nameOf, quiet, token, waitFor, ws, wsUri } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -111,7 +111,7 @@ async function cutAndPaste(
   const view = fakePanel();
   try {
     source.send({ type: 'cut', rowIds: [rowOf(source.rows, MOVED).ID] });
-    assert.strictEqual(getClipboard()?.mode, 'cut', 'the cut is on the clipboard');
+    assert.strictEqual(registers.getClipboard()?.mode, 'cut', 'the cut is on the clipboard');
     if (closeSourceFirst) source.close();
 
     const doc = await vscode.workspace.openTextDocument(uri);
@@ -123,7 +123,7 @@ async function cutAndPaste(
     view.send({ type: 'paste', rowId: 'section:design' });
     await waitFor('the paste to land or be refused', () => doc.version > version || errorsIn(view.posts).length > 0);
     // The source delete runs after the paste's write, and its report after that.
-    await waitFor('the move to finish', () => getClipboard() === null);
+    await waitFor('the move to finish', () => registers.getClipboard() === null);
     await quiet(150, 'a report after the move finished');
     return {
       errors: errorsIn(view.posts),
@@ -132,7 +132,7 @@ async function cutAndPaste(
     };
   } finally {
     view.close();
-    clearClipboard();
+    registers.clearClipboard();
     await vscode.workspace.fs.delete(uri);
   }
 }

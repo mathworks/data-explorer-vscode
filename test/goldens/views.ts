@@ -43,6 +43,8 @@ import {
   wholeFileRules,
   readSlddParts,
   InspectorSelection,
+  createRegisters,
+  describeSource,
 } from 'data-explorer-view/model';
 import {
   getModel,
@@ -54,19 +56,23 @@ import {
   answerMatrixRequest,
   InspectorPage,
   binaryEditSrcId,
+  clipMarkOfDoc,
 } from 'data-explorer-view/host';
-import { captureBaseline, clearBaseline, computeModified } from '../../src/host/slddBaseline.js';
-import { clipMarkOfDoc } from '../../src/host/clipMarks.js';
-import { clipboardState } from '../../src/host/clipboard.js';
 import {
   exceedsStringDecodeLimit,
   exceedsTextSyncLimit,
   isEditableJsonSlddBytes,
   isZipBytes,
 } from '../../src/host/slddFormat.js';
-import { describeSource } from '../../src/host/refusal.js';
 import { SaveMarks } from 'data-explorer-view/host';
 import { bytesOf, fakeFile, nameOf } from './fixtures.js';
+
+/**
+ * The goldens' window registers, as the extension's one (windowRegisters.ts): the clipboard every
+ * view's clip mark and clipboardState read. Empty unless a suite fills it; tables.test.ts and
+ * usage.test.ts clear it between cases.
+ */
+export const registers = createRegisters();
 
 /**
  * Which editor a file lands in when it is opened the ordinary way — an Explorer click, which
@@ -264,11 +270,10 @@ async function openText(rel: string, name: string, raw: ArrayBuffer, budget: num
   try {
     invalidate(uriString);
     const node = getModel(uriString, name, text);
-    // A document opened clean owes its baseline (slddBaseline.baselineOwed), so the first paint
-    // takes it, and so marks nothing modified.
-    captureBaseline(uriString, node);
-    const modified = computeModified(uriString, node);
-    const clipMark = clipMarkOfDoc(uriString);
+    // A document opened clean owes its baseline (baselineOwed), so the first paint takes it from
+    // the very tree it paints, and so marks nothing modified.
+    const modified = new Set<string>();
+    const clipMark = clipMarkOfDoc(registers, uriString);
     const planned = planner.payload(node, budget, { modifiedNames: modified, clipMark });
     rows = planned.rows;
     // mirrors SlddTextEditorProvider.ts:468-484, the payload literal.
@@ -285,7 +290,7 @@ async function openText(rel: string, name: string, raw: ArrayBuffer, budget: num
     });
     // mirrors SlddTextEditorProvider.ts:489-490.
     messages.push({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
-    messages.push({ type: 'clipboardState', ...clipboardState() });
+    messages.push({ type: 'clipboardState', ...registers.clipboardState() });
   } catch (err) {
     // mirrors SlddTextEditorProvider.ts:500-508.
     invalidate(uriString);
@@ -299,7 +304,6 @@ async function openText(rel: string, name: string, raw: ArrayBuffer, budget: num
     ...answers(uriString, name, planner, undefined),
     close: () => {
       releaseIfUnviewed(uriString);
-      clearBaseline(uriString);
     },
   };
 }
@@ -354,9 +358,9 @@ async function openZip(rel: string, name: string, raw: ArrayBuffer, budget: numb
     const warnings: ParseWarning[] = [];
     const content = readSlddParts(chunkXml, zipMeta, warnings);
     const node = DataModel.addDataSource(srcId, content, { path: name }, warnings);
-    captureBaseline(uriString, node);
-    const modified = computeModified(uriString, node);
-    const clipMark = clipMarkOfDoc(uriString);
+    // The baseline is taken from the tree this first paint paints, so it marks nothing modified.
+    const modified = new Set<string>();
+    const clipMark = clipMarkOfDoc(registers, uriString);
     const planned = planner.payload(node, budget, { modifiedNames: modified, clipMark });
     rows = planned.rows;
     // mirrors BinarySlddEditorProvider.ts:824-838, the payload literal.
@@ -372,7 +376,7 @@ async function openZip(rel: string, name: string, raw: ArrayBuffer, budget: numb
     });
     // mirrors BinarySlddEditorProvider.ts:841-842.
     messages.push({ type: 'sectionRules', docUri: uriString, rules: sectionRules(node) });
-    messages.push({ type: 'clipboardState', ...clipboardState() });
+    messages.push({ type: 'clipboardState', ...registers.clipboardState() });
   } catch (err) {
     // mirrors BinarySlddEditorProvider.ts:845.
     messages.push(failed(`Failed to parse ${name}: ${describe((err as Error).message)}`));
@@ -385,7 +389,6 @@ async function openZip(rel: string, name: string, raw: ArrayBuffer, budget: numb
     ...answers(uriString, name, planner, undefined),
     close: () => {
       DataModel.removeDataSource(srcId);
-      clearBaseline(uriString);
     },
   };
 }
@@ -409,7 +412,7 @@ async function openMat(rel: string, name: string, raw: ArrayBuffer, budget: numb
     banner && { headline: describe(banner.headline), details: banner.details.map((d) => describe(d)) };
   // mirrors MatEditorProvider.ts:710 stamps: a fresh document's clipboard mark, and its Status
   // column measured against a save it has not had (MatDocument.marks, a fresh SaveMarks).
-  const stamps = (): PlanOptions => ({ canCopy: true, clipMark: clipMarkOfDoc(uriString) });
+  const stamps = (): PlanOptions => ({ canCopy: true, clipMark: clipMarkOfDoc(registers, uriString) });
   const close = () => DataModel.removeDataSource(srcId);
 
   // mirrors MatEditorProvider.ts:254 MatDocument.model.
@@ -482,7 +485,7 @@ async function openMat(rel: string, name: string, raw: ArrayBuffer, budget: numb
     });
     // mirrors MatEditorProvider.ts:786-787.
     messages.push({ type: 'sectionRules', docUri: uriString, rules: notice ? [] : wholeFileRules(mat, name) });
-    messages.push({ type: 'clipboardState', ...clipboardState() });
+    messages.push({ type: 'clipboardState', ...registers.clipboardState() });
   } catch (err) {
     // mirrors MatEditorProvider.ts:794.
     messages.push(failed(`Failed to show ${name}: ${describe(err)}`));

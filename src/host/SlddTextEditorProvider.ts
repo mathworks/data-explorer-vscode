@@ -16,13 +16,12 @@
 // Binary .sldd / .slx / .mat / .prj are handled by the read-only
 // BinaryEditorProvider instead (they can't be opened as text documents).
 import * as vscode from 'vscode';
-import { basename } from 'data-explorer-view/model';
+import { basename, describeSource } from 'data-explorer-view/model';
 import { answerMatrixRequest } from 'data-explorer-view/host';
 import { renderTableWebview } from './webviewHtml.js';
 import { registerAddGalleryView, unregisterAddGalleryView } from './editorHub.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import type { TableToHostMessage } from '../common/protocol.js';
-import { describeSource } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 import { engineTable, jsonRows } from './engineTable.js';
 import { openJsonTable } from './jsonDocument.js';

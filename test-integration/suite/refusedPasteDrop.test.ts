@@ -26,8 +26,7 @@ import { DataModel } from 'data-explorer-core';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 import { peekModel } from 'data-explorer-view/host';
-import { clearClipboard } from '../../src/host/clipboard';
-import { clearDrag, getDrag } from '../../src/host/dragState';
+import { registers } from '../../src/host/windowRegisters';
 import { chunkOf, ctx, entryNames, fakePanel, isEntryRow, nameOf, quiet, token, waitFor, ws, wsUri } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -99,8 +98,8 @@ async function withTextTab(copyName: string, run: (tab: TextTab) => Promise<void
     });
   } finally {
     view.close();
-    clearClipboard();
-    clearDrag();
+    registers.clearClipboard();
+    registers.clearDrag();
     await vscode.workspace.fs.delete(uri);
   }
 }
@@ -182,7 +181,7 @@ suite('A refused paste or drop into a JSON .sldd', () => {
         restore();
       }
       assert.deepStrictEqual(errorsIn(tab.view.posts), [DRAG_REFUSAL], 'the refusal is reported, in core\'s words');
-      assert.strictEqual(getDrag(), null, 'and the drag register is empty');
+      assert.strictEqual(registers.getDrag(), null, 'and the drag register is empty');
     });
   }).timeout(60000);
 
@@ -196,8 +195,8 @@ suite('A refused paste or drop into a JSON .sldd', () => {
       // does not need.)
       tab.view.send({ type: 'copy', rowIds: [source.ID] });
       tab.view.send({ type: 'dragStart', rowIds: [source.ID] });
-      await waitFor('the drag to start', () => getDrag() !== null);
-      assert.ok(getDrag(), 'the drag started');
+      await waitFor('the drag to start', () => registers.getDrag() !== null);
+      assert.ok(registers.getDrag(), 'the drag started');
 
       const restore = refuse(tab.entry(), 'serialize', (self) => COPY.test(String(self.name)));
       try {
@@ -207,7 +206,7 @@ suite('A refused paste or drop into a JSON .sldd', () => {
       }
       assert.deepStrictEqual(errorsIn(tab.view.posts), [`Failed to apply edit: ${REFUSAL}`], 'the refusal is reported');
       assert.strictEqual(tab.doc.getText(), before, 'and the document is untouched');
-      assert.strictEqual(getDrag(), null, 'and the drag is over');
+      assert.strictEqual(registers.getDrag(), null, 'and the drag is over');
 
       // The drop's half of the model repair, asked the same way as the paste's above.
       await answered(tab, { type: 'paste', rowId: source.ID });
@@ -242,7 +241,7 @@ async function withBinaryTab(
   } finally {
     view.close();
     doc.dispose();
-    clearDrag();
+    registers.clearDrag();
     await vscode.workspace.fs.delete(uri);
   }
 }
@@ -260,7 +259,7 @@ suite('A refused drag or drop on a compressed-binary .sldd', () => {
         restore();
       }
       assert.deepStrictEqual(errorsIn(view.posts), [DRAG_REFUSAL], 'the refusal is reported, in core\'s words');
-      assert.strictEqual(getDrag(), null, 'and the drag register is empty');
+      assert.strictEqual(registers.getDrag(), null, 'and the drag register is empty');
     });
   }).timeout(60000);
 
@@ -269,17 +268,17 @@ suite('A refused drag or drop on a compressed-binary .sldd', () => {
       const source = rowOf(rows, ENTRY);
       const before = doc.chunkXml as string;
       view.send({ type: 'dragStart', rowIds: [source.ID] });
-      await waitFor('the drag to start', () => getDrag() !== null);
-      assert.ok(getDrag(), 'the drag started');
+      await waitFor('the drag to start', () => registers.getDrag() !== null);
+      assert.ok(registers.getDrag(), 'the drag started');
 
       // The same real refusal as the JSON cut above: a matrix dropped into Architectural Data.
       view.posts.length = 0;
       view.send({ type: 'drop', rowId: 'section:arch', mode: 'copy' });
       await waitFor('the refusal', () => errorsIn(view.posts).length > 0);
-      await waitFor('the refused drop to end the drag', () => getDrag() === null);
+      await waitFor('the refused drop to end the drag', () => registers.getDrag() === null);
       assert.match(errorsIn(view.posts)[0], /must be scalar and numeric/);
       assert.strictEqual(doc.chunkXml, before, 'the document is untouched');
-      assert.strictEqual(getDrag(), null, 'and the drag is over');
+      assert.strictEqual(registers.getDrag(), null, 'and the drag is over');
     });
   }).timeout(60000);
 });

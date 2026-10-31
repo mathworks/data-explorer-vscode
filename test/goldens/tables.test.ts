@@ -27,9 +27,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DataModel, isProjectFile } from 'data-explorer-core';
 import { LAZY_ROW_BUDGET, isSectionRowId } from 'data-explorer-view/model';
-import { clearClipboard } from '../../src/host/clipboard.js';
 import { bytesOf, expectGolden, fixtureFiles, nameOf } from './fixtures.js';
-import { openTable, routeOf, type TableView } from './views.js';
+import { openTable, registers, routeOf, type TableView } from './views.js';
 
 /**
  * Small enough that any fixture of more than a handful of rows, with anything below its names,
@@ -70,7 +69,7 @@ async function withTable(rel: string, budget: number, use: (view: TableView) => 
 
 beforeAll(() => {
   // What `clipboardState` and every clip mark read: the empty clipboard of a fresh window.
-  clearClipboard();
+  registers.clearClipboard();
   DataModel.removeAll();
 });
 

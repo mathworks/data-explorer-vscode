@@ -21,7 +21,7 @@ import { DataModel } from 'data-explorer-core';
 import { MatEditorProvider } from '../../src/host/MatEditorProvider';
 import { InspectorSelection, buildPropertyGroups } from 'data-explorer-view/model';
 import { findNode } from 'data-explorer-view/host';
-import { clearClipboard } from '../../src/host/clipboard';
+import { registers } from '../../src/host/windowRegisters';
 import { ctx, fakePanel, quiet, token, waitFor } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -73,7 +73,7 @@ suite('MAT-file: the Property Inspector follows the variable it shows', () => {
       view.close();
       doc.dispose();
     }
-    clearClipboard();
+    registers.clearClipboard();
     await quiet(200, 'the disposed watchers to stop watching before their directory goes');
     rmSync(dir, { recursive: true, force: true });
   });

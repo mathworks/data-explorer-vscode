@@ -7,8 +7,7 @@ import * as vscode from 'vscode';
 import { readFileSync } from 'fs';
 import { DataModel } from 'data-explorer-core';
 import { peekModel } from 'data-explorer-view/host';
-import { getClipboard } from '../../../src/host/clipboard';
-import { getDrag } from '../../../src/host/dragState';
+import { registers } from '../../../src/host/windowRegisters';
 import { quiet, token, waitFor } from './hostHarness';
 import { openBinary, openJson, openMat, type Opened } from './tables';
 
@@ -73,11 +72,11 @@ export async function take(tab: Tab, section: string, name: string, mode: 'copy'
   const mark = tab.view.posts.length;
   tab.view.send({ type: mode, rowIds: [node.id] });
   try {
-    await waitFor('the copy taken', () => getClipboard() !== null || refusalIn(tab.view.posts.slice(mark)) !== null, 5000);
+    await waitFor('the copy taken', () => registers.getClipboard() !== null || refusalIn(tab.view.posts.slice(mark)) !== null, 5000);
   } catch {
     return { answer: 'none', reason: `the ${mode} filled no register` };
   }
-  return getClipboard() !== null ? null : refusalIn(tab.view.posts.slice(mark));
+  return registers.getClipboard() !== null ? null : refusalIn(tab.view.posts.slice(mark));
 }
 
 /** Start a drag of an entry, as its table does: null once the drag register holds it, or the word the start posted. */
@@ -87,11 +86,11 @@ export async function dragFrom(tab: Tab, section: string, name: string): Promise
   const mark = tab.view.posts.length;
   tab.view.send({ type: 'dragStart', rowIds: [node.id] });
   try {
-    await waitFor('the drag started', () => getDrag() !== null || refusalIn(tab.view.posts.slice(mark)) !== null, 5000);
+    await waitFor('the drag started', () => registers.getDrag() !== null || refusalIn(tab.view.posts.slice(mark)) !== null, 5000);
   } catch {
     return { answer: 'none', reason: 'the drag filled no register' };
   }
-  return getDrag() !== null ? null : refusalIn(tab.view.posts.slice(mark));
+  return registers.getDrag() !== null ? null : refusalIn(tab.view.posts.slice(mark));
 }
 
 /**

@@ -23,8 +23,7 @@ import * as vscode from 'vscode';
 import { unzipSync, zipSync, strFromU8, strToU8 } from 'fflate';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { clearClipboard } from '../../src/host/clipboard';
-import { clearDrag } from '../../src/host/dragState';
+import { registers } from '../../src/host/windowRegisters';
 import { dropDecision } from 'data-explorer-view/model';
 import { buildContextMenuItems } from 'data-explorer-view/tree-table';
 import { chunkOf, ctx, fakePanel, isEntryRow, nameOf, quiet, token, waitFor, ws, wsUri } from './tools/hostHarness';
@@ -191,8 +190,8 @@ suite('A paste and a drop of an mpt entry, on a JSON .sldd', () => {
       });
     } finally {
       view.close();
-      clearClipboard();
-      clearDrag();
+      registers.clearClipboard();
+      registers.clearDrag();
       await vscode.workspace.fs.delete(uri);
     }
   }).timeout(60000);
@@ -246,8 +245,8 @@ suite('A paste and a drop of an mpt entry, on a compressed-binary .sldd', () => 
     } finally {
       view.close();
       doc.dispose();
-      clearClipboard();
-      clearDrag();
+      registers.clearClipboard();
+      registers.clearDrag();
       await vscode.workspace.fs.delete(uri);
     }
   }).timeout(60000);

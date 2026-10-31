@@ -13,14 +13,13 @@
 //
 // The scan's own rules (what is an entry, what it reads past, what it cannot vouch for, how a key
 // decodes) are core's, and pinned there (test/chunkEntries.test.ts in data-explorer-core), over
-// core's fixtures. These run over the dictionaries this host is tested with, through the entry
-// record the host's edits make, which core does not have.
+// core's fixtures. These run over the dictionaries this host is tested with, which core does not
+// track, through the entry record an edit makes (core's entryRecord, which the editors' engine uses).
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { unzipSync } from 'fflate';
-import { DataModel, DATA_PART_XML, chunkEntryKey, entryKey, findEntryObjectSpan, scanChunkEntries } from 'data-explorer-core';
-import { entryRecord } from '../src/host/entryOps.js';
+import { DataModel, DATA_PART_XML, chunkEntryKey, entryKey, entryRecord, findEntryObjectSpan, scanChunkEntries } from 'data-explorer-core';
 import { readSlddParts } from 'data-explorer-view/model';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

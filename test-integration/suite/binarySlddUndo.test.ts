@@ -21,9 +21,8 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { unzipSync } from 'fflate';
-import { DataModel } from 'data-explorer-core';
+import { DataModel, applyEntryOps, entryRecord } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { applyEntryOps, entryRecord } from '../../src/host/entryOps';
 import { waitFor } from './tools/hostHarness';
 
 function ctx(): vscode.ExtensionContext {
@@ -109,7 +108,7 @@ suite('Binary .sldd undo/redo', () => {
     // behind — a rename makes those two ids different, which is what makes it worth testing.
     const beforeRecord = entryRecord(entry);
     const preId: string = entry.id;
-    const applied = applyEntryOps(root, [{ kind: 'replace', rowId: preId, record: { ...beforeRecord, name: 'Ki' } }]);
+    const applied = applyEntryOps(root, [{ kind: 'replace', rowId: preId, record: { ...beforeRecord, name: 'Ki' } }], DataModel);
     const renamed = (applied[0] as any).entry;
     const postId: string = renamed.id;
     assert.notStrictEqual(postId, preId, 'the rename moved the entry’s id');

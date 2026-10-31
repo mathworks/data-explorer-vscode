@@ -4,8 +4,8 @@
 // drop the table posts, through the real providers, into what each document then holds, what VS
 // Code was handed to undo, and what a save writes.
 //
-// A MAT-file takes the same gestures a dictionary does, through the same rules (transfer.ts,
-// clipboardAction.ts): a copy pasted into the file it came from is a duplicate under a unique
+// A MAT-file takes the same gestures a dictionary does, through the same rules (view's transfer.ts
+// and clipboardAction.ts): a copy pasted into the file it came from is a duplicate under a unique
 // name, a move within it is the no-op of a move back into its own section (the file is one
 // section, ''), and a move into another document is the paste there and the delete here, each its
 // own document's undo step. What is the MAT-file's own is what the edit IS: core's pasteEntries,
@@ -21,8 +21,7 @@ import { mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync 
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { DataModel } from 'data-explorer-core';
-import { clearClipboard, getClipboard } from '../../src/host/clipboard';
-import { clearDrag, getDrag } from '../../src/host/dragState';
+import { registers } from '../../src/host/windowRegisters';
 import { quiet, waitFor } from './tools/hostHarness';
 import {
   closeAll,
@@ -78,7 +77,7 @@ async function onBinary(tab: BinaryTab, msg: any, what = msg.type): Promise<void
 }
 
 /** A cut's move finishes with the source's delete, after the paste; the clipboard empties first. */
-const moveDone = () => waitFor('the cut to be spent', () => getClipboard() === null);
+const moveDone = () => waitFor('the cut to be spent', () => registers.getClipboard() === null);
 
 /**
  * A scratch directory per test, and everything a test opened closed after it, with both
@@ -93,13 +92,13 @@ function scratch(): { opened: Opened; dir: () => string } {
   });
   setup(() => {
     dir = mkdtempSync(join(tmpdir(), 'dex-matclip-'));
-    clearClipboard();
-    clearDrag();
+    registers.clearClipboard();
+    registers.clearDrag();
   });
   teardown(async () => {
     closeAll(opened);
-    clearClipboard();
-    clearDrag();
+    registers.clearClipboard();
+    registers.clearDrag();
     await quiet(200, 'the disposed watchers to stop watching before their directory goes');
     rmSync(dir, { recursive: true, force: true });
   });
@@ -130,8 +129,8 @@ suite('MAT-file clipboard and row drags, within one file', () => {
   test('a copy pasted into its own file is a duplicate under a unique name; one undo takes it out, redo puts it back', async () => {
     const m = await openMat(opened, dir, 'gains.mat', matFixture('pv_basic.mat'));
     m.view.send({ type: 'copy', rowIds: [variableRow(m.view.posts, 'x').ID] });
-    assert.strictEqual(getClipboard()?.mode, 'copy');
-    assert.deepStrictEqual(getClipboard()!.items.map((i) => [i.sourceSection, i.payload.name]), [['', 'x']]);
+    assert.strictEqual(registers.getClipboard()?.mode, 'copy');
+    assert.deepStrictEqual(registers.getClipboard()!.items.map((i) => [i.sourceSection, i.payload.name]), [['', 'x']]);
 
     await onMat(m, { type: 'paste', rowId: variableRow(m.view.posts, 'p').ID });
     assert.deepStrictEqual(errorsIn(m.view.posts), []);
@@ -141,7 +140,7 @@ suite('MAT-file clipboard and row drags, within one file', () => {
     assert.strictEqual(m.doc.edits.dirty, true);
     assert.deepStrictEqual(selected(m.view.posts), [m.variable('x1').id], 'the duplicate is selected');
     assert.deepStrictEqual(shownCells(m.variable('x1'))['.'], { ...shownCells(m.variable('x'))['.'], Name: 'x1' });
-    assert.ok(getClipboard(), 'a copy stays on the clipboard');
+    assert.ok(registers.getClipboard(), 'a copy stays on the clipboard');
     await waitFor('the duplicate painted', () => tableOf(m.view.posts).some((r) => r.parent == null && r.Name?.label === 'x1'));
     assert.strictEqual(variableRow(m.view.posts, 'x1').Status, 'New');
 
@@ -157,10 +156,10 @@ suite('MAT-file clipboard and row drags, within one file', () => {
     const m = await openMat(opened, dir, 'gains.mat', matFixture('pv_basic.mat'));
     const q = variableRow(m.view.posts, 'q').ID;
     m.view.send({ type: 'cut', rowIds: [variableRow(m.view.posts, 'x').ID] });
-    assert.strictEqual(getClipboard()?.mode, 'cut');
+    assert.strictEqual(registers.getClipboard()?.mode, 'cut');
     m.view.posts.length = 0;
     m.view.send({ type: 'paste', rowId: q });
-    await waitFor('the cut to be spent', () => getClipboard() === null);
+    await waitFor('the cut to be spent', () => registers.getClipboard() === null);
     await quiet(150, 'an edit or a word the no-op must not make');
     assert.deepStrictEqual(errorsIn(m.view.posts), []);
     assert.strictEqual(m.events.length, 0, 'no edit');
@@ -171,7 +170,7 @@ suite('MAT-file clipboard and row drags, within one file', () => {
   test('a copy of two variables pastes two, as ONE edit one undo takes out', async () => {
     const m = await openMat(opened, dir, 'gains.mat', matFixture('pv_basic.mat'));
     m.view.send({ type: 'copy', rowIds: [variableRow(m.view.posts, 'x').ID, variableRow(m.view.posts, 'p').ID] });
-    assert.deepStrictEqual(getClipboard()!.items.map((i) => i.payload.name), ['x', 'p']);
+    assert.deepStrictEqual(registers.getClipboard()!.items.map((i) => i.payload.name), ['x', 'p']);
     await onMat(m, { type: 'paste', rowId: '' });
     assert.deepStrictEqual(errorsIn(m.view.posts), []);
     assert.deepStrictEqual(m.names(), ['p', 'q', 'str', 'x', 'x1', 'p1']);
@@ -300,7 +299,7 @@ suite('MAT-file clipboard and row drags, between a MAT-file and a dictionary', (
     }
     assert.strictEqual(m.events.length, 0);
     assert.strictEqual(m.doc.edits.dirty, false);
-    assert.ok(getClipboard(), 'a copy stays on the clipboard');
+    assert.ok(registers.getClipboard(), 'a copy stays on the clipboard');
   });
 
   test('a MAT-file cut pasted into a JSON dictionary moves the variable: its removal is the MAT-file\'s own undo step', async () => {
@@ -382,7 +381,7 @@ suite('MAT-file clipboard and row drags, between a MAT-file and a dictionary', (
     const xmlRefusal = DataModel.copyRefusal(m.variable('s_fh').id, 'xml');
     assert.ok(xmlRefusal, 'core says a binary dictionary cannot hold it');
     m.view.send({ type: 'copy', rowIds: [variableRow(m.view.posts, 's_fh').ID] });
-    assert.ok(getClipboard(), 'it can be copied');
+    assert.ok(registers.getClipboard(), 'it can be copied');
     await onJson(j, { type: 'paste', rowId: 'section:design' });
     assert.deepStrictEqual(errorsIn(j.view.posts), []);
     assert.ok(j.names().includes('s_fh'), 'a text dictionary takes it');
@@ -411,7 +410,7 @@ suite('MAT-file clipboard and row drags, between a MAT-file and a dictionary', (
     await waitFor('the original moved out', () => !m.names().includes('x'));
     assert.ok(j.names().includes('x'));
     assert.strictEqual(m.events.length, 1);
-    assert.strictEqual(getDrag(), null);
+    assert.strictEqual(registers.getDrag(), null);
 
     // MAT-file -> binary dictionary, copied.
     m.view.send({ type: 'dragStart', rowIds: [variableRow(m.view.posts, 'str').ID] });
@@ -431,7 +430,7 @@ suite('MAT-file clipboard and row drags, between a MAT-file and a dictionary', (
     await waitFor('the entry moved out of the binary dictionary', () => !b.names().includes('gravity'));
     assert.ok(m.names().includes('gravity'));
     assert.deepStrictEqual(errorsIn(m.view.posts), []);
-    assert.strictEqual(getDrag(), null);
+    assert.strictEqual(registers.getDrag(), null);
   });
 
   test('MAT-file to MAT-file: a copy, a cut, a drop that moves and one that copies', async () => {
@@ -450,11 +449,11 @@ suite('MAT-file clipboard and row drags, between a MAT-file and a dictionary', (
     assert.strictEqual(a.events.length, 1);
 
     a.view.send({ type: 'dragStart', rowIds: [variableRow(a.view.posts, 'q').ID] });
-    assert.ok(getDrag(), 'the drag is on');
+    assert.ok(registers.getDrag(), 'the drag is on');
     await onMat(c, { type: 'drop', rowId: '', mode: 'move' });
     await waitFor('the original moved out', () => !a.names().includes('q'));
     assert.deepStrictEqual(c.names(), ['x', 'str', 'q']);
-    assert.strictEqual(getDrag(), null, 'a drop ends the drag');
+    assert.strictEqual(registers.getDrag(), null, 'a drop ends the drag');
 
     a.view.send({ type: 'dragStart', rowIds: [variableRow(a.view.posts, 'p').ID] });
     await onMat(c, { type: 'drop', rowId: variableRow(c.view.posts, 'x').ID, mode: 'copy' });
@@ -469,7 +468,7 @@ suite('MAT-file clipboard and row drags, between a MAT-file and a dictionary', (
     a.view.send({ type: 'dragStart', rowIds: [x] });
     a.view.posts.length = 0;
     a.view.send({ type: 'drop', rowId: p, mode: 'move' });
-    await waitFor('the drag to end', () => getDrag() === null);
+    await waitFor('the drag to end', () => registers.getDrag() === null);
     await quiet(150, 'an edit or a word the no-op must not make');
     assert.deepStrictEqual(errorsIn(a.view.posts), []);
     assert.strictEqual(a.events.length, 0);
@@ -537,7 +536,7 @@ suite('MAT-file pastes and drops refused', () => {
     await onMat(m, { type: 'paste', rowId: '' });
     assert.match(errorsIn(m.view.posts)[0], /^Cannot paste "MyLUT" into "gains\.mat": it is a Simulink\.LookupTable, /);
     unchanged(m, was);
-    assert.strictEqual(getClipboard()?.mode, 'cut', 'the cut is kept for another try');
+    assert.strictEqual(registers.getClipboard()?.mode, 'cut', 'the cut is kept for another try');
     await quiet(150, 'a source delete the refusal must not make');
     assert.ok(j.names().includes('MyLUT'), 'and its source keeps the entry');
 
@@ -562,7 +561,7 @@ suite('MAT-file pastes and drops refused', () => {
     await onMat(ro, { type: 'drop', rowId: '', mode: 'move' });
     assert.match(errorsIn(ro.view.posts)[0], /^Read-only: /);
     unchanged(ro, was);
-    assert.strictEqual(getDrag(), null);
+    assert.strictEqual(registers.getDrag(), null);
     assert.ok(j.names().includes('charStr'), 'the refused move left its source alone');
   });
 
@@ -584,10 +583,10 @@ suite('MAT-file pastes and drops refused', () => {
       d.view.posts.length = 0;
       d.view.send({ type: mode, rowIds: [x] });
       assert.deepStrictEqual(errorsIn(d.view.posts), [`Could not ${mode} the selected item.`]);
-      assert.strictEqual(getClipboard(), null);
+      assert.strictEqual(registers.getClipboard(), null);
     }
     d.view.send({ type: 'cut', rowIds: [str] });
-    assert.deepStrictEqual(getClipboard()?.items.map((i) => i.payload.name), ['str']);
+    assert.deepStrictEqual(registers.getClipboard()?.items.map((i) => i.payload.name), ['str']);
   });
 
   test('a move whose original became one of two of its name is pasted, and the original kept, said', async () => {
@@ -707,12 +706,12 @@ suite('MAT-file pastes and drops refused', () => {
     await onMat(m, { type: 'drop', rowId: '', mode: 'copy' });
     assert.deepStrictEqual(errorsIn(m.view.posts), []);
     assert.ok(m.names().includes('charStr'));
-    assert.strictEqual(getDrag(), null, 'landed');
+    assert.strictEqual(registers.getDrag(), null, 'landed');
 
     j.view.send({ type: 'dragStart', rowIds: [entryRow(j.view.posts, 'MyEnum').ID] });
     await onMat(m, { type: 'drop', rowId: '', mode: 'copy' });
     assert.match(errorsIn(m.view.posts)[0], /^Cannot paste "MyEnum" into "gains\.mat"/);
-    assert.strictEqual(getDrag(), null, 'refused');
+    assert.strictEqual(registers.getDrag(), null, 'refused');
 
     const paste = (DataModel as any).pasteEntries;
     (DataModel as any).pasteEntries = () => {
@@ -727,7 +726,7 @@ suite('MAT-file pastes and drops refused', () => {
       (DataModel as any).pasteEntries = paste;
     }
     assert.deepStrictEqual(errorsIn(m.view.posts), ['Failed to apply edit: the paste broke']);
-    assert.strictEqual(getDrag(), null, 'failed');
+    assert.strictEqual(registers.getDrag(), null, 'failed');
     assert.ok(j.names().includes('myStruct'), 'a failed move takes nothing out of its source');
   });
 });
