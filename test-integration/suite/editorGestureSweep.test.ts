@@ -37,7 +37,7 @@ import * as vscode from 'vscode';
 import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs';
 import { basename, join } from 'path';
 import { buildSectionRowId } from 'data-explorer-view/model';
-import { waitFor } from './tools/hostHarness';
+import { quiet, waitFor } from './tools/hostHarness';
 import { closeAll, type Opened } from './tools/tables';
 import { nodeAt } from './tools/editorSaves';
 import { EXT, answered, dragFrom, dropOn, openTab, take, type Tab } from './tools/gestures';
@@ -67,39 +67,55 @@ let jsonUndoMisses = 0;
 const MISSES_IN_A_ROW = 10;
 
 /**
- * Run `command` on the document shown, and say whether its text moved within a second and a half;
- * once more if it did not, unless the first one landed late (it is never sent twice for one move).
+ * Run `command` on the document shown, and say whether its text moved within a second and a half, and
+ * whether that took a second try. The version is read again right before the retry, so a first try
+ * that landed meanwhile is not sent again; one that lands later still, after the retry was sent, is
+ * caught by undoRedoJson's check of the text.
  */
-async function lands(doc: vscode.TextDocument, command: 'undo' | 'redo'): Promise<boolean> {
+async function lands(doc: vscode.TextDocument, command: 'undo' | 'redo'): Promise<'once' | 'retried' | false> {
   const v = doc.version;
   for (let attempt = 0; attempt < 2; attempt++) {
     await vscode.window.showTextDocument(doc, { preview: false });
-    if (doc.version !== v) return true;
+    if (doc.version !== v) return attempt === 0 ? 'once' : 'retried';
     await vscode.commands.executeCommand(command);
     try {
       await waitFor(`the ${command} to land`, () => doc.version !== v, 1500);
-      return true;
+      return attempt === 0 ? 'once' : 'retried';
     } catch {
       /* tried again below, the document shown first */
     }
   }
-  return doc.version !== v;
+  return doc.version !== v ? 'retried' : false;
 }
 
-/** A JSON document's last edit undone by VS Code, saved, then redone, saved. */
-async function undoRedoJson(doc: vscode.TextDocument, stem: string, path: string, line: Record<string, unknown>): Promise<void> {
+/**
+ * A JSON document's last edit undone by VS Code, saved, then redone, saved. `opened` is the text the
+ * document opened with, before the gesture: what its undo must give back, as its redo must give back
+ * the gesture's. A text that is neither (an undo sent twice, the first one only slow) is not saved: the
+ * case says so instead of keeping a wrong file.
+ */
+async function undoRedoJson(doc: vscode.TextDocument, opened: string, stem: string, path: string, line: Record<string, unknown>): Promise<void> {
   if (jsonUndoMisses >= MISSES_IN_A_ROW) {
     line.undoNote = `not run: this host's undo did not reach an editor ${MISSES_IN_A_ROW} times in a row`;
     return;
   }
+  const expected = { undo: opened, redo: doc.getText() };
   try {
     for (const [command, key] of [['undo', 'undo'], ['redo', 'redo']] as const) {
-      if (!(await lands(doc, command))) {
+      const landed = await lands(doc, command);
+      if (!landed) {
         jsonUndoMisses++;
         line.undoNote = `not run: this host's ${command} did not reach the editor`;
         return;
       }
       jsonUndoMisses = 0;
+      // A retried command whose first try was only slow lands twice: let a late one land, then hold
+      // the text, retried or not, to the one this step must give back.
+      if (landed === 'retried') await quiet(500, `a late ${command} to land before the text is read`);
+      if (doc.getText() !== expected[key]) {
+        line.undoNote = `not saved: the ${command} left a text other than ${key === 'undo' ? 'the one the document opened with' : "the gesture's"}`;
+        return;
+      }
       await doc.save();
       copyFileSync(path, `${stem}-${key}.sldd`);
       line[key] = `${stem}-${key}.sldd`;
@@ -119,6 +135,7 @@ async function runCase(c: Listed): Promise<Record<string, unknown>> {
   clearDrag();
   try {
     const target = await openTab(c.format, opened, dir, `target.${EXT[c.format]}`, c.orig);
+    const openedText = target.doc?.getText() ?? '';
     const g = c.edit;
     let source: Tab | null = null;
     let r: { answer: string; reason?: string; edited: boolean };
@@ -177,7 +194,7 @@ async function runCase(c: Listed): Promise<Record<string, unknown>> {
         copyFileSync(target.path, `${stem}-${key}.sldd`);
       }
     } else if (c.format === 'json' && target.doc) {
-      await undoRedoJson(target.doc, stem, target.path, line);
+      await undoRedoJson(target.doc, openedText, stem, target.path, line);
     }
     return line;
   } catch (err) {
