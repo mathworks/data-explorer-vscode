@@ -1,23 +1,29 @@
 // Copyright 2026 The MathWorks, Inc.
 // The dirty-flag copy the binary .sldd and MAT-file documents keep (src/host/settledSave.ts,
 // EditStackCopy), held to VS Code's own custom-editor model, which decides the tab's dot, the close
-// prompt and hot exit. VS Code's save point is an index into its edit list: save, undo past the save,
-// make a different edit, and the new edit sits at the saved index, so VS Code alone would read the tab
-// clean over a file that lacks it. A document restored from a hot-exit backup is the second such case:
-// VS Code counts the backup only while its edit list is empty, so one edit and its undo read clean.
-// The copy tells VS Code of the push (`lost`), and the document sends a content change, which keeps
-// VS Code dirty until the next save or revert. customEditorSavePoint.test.ts (integration) shows the
-// first case on real tabs; the second needs a window reload, which ends a test host, so this model of
-// VS Code 1.144's source is its proof.
+// prompt and hot exit, and to what the document holds against what the file holds.
+//
+// VS Code's save point is an index into its edit list. Save, undo past the save, make a different edit,
+// and the new edit sits at the saved index, so VS Code alone would read the tab clean over a file that
+// lacks it. A document restored from a hot-exit backup is a second case: VS Code counts the backup only
+// while its edit list is empty, so one edit and its undo read clean. And once a save point has been
+// lost, VS Code's revert leaves its index at that stale save point, over edits whose undo and redo no
+// longer lead to the file. The copy tells VS Code of each (`lost`), and the document sends a content
+// change, which keeps VS Code dirty until the next save or revert.
+//
+// customEditorSavePoint.test.ts (integration) shows the first case on real tabs. The others need a
+// window reload, or more steps than a real-tab test can make one at a time, so this model of VS Code
+// 1.144's workbench source is their proof.
 import { describe, it, expect } from 'vitest';
 import { EditStackCopy } from '../src/host/settledSave.js';
 
 /**
  * VS Code 1.144's custom-editor model, as far as its dirty flag goes (workbench.desktop.main.js:
- * `isDirty`, `pushEdit`/`spliceEdits`, `undo`, `redo`, `saveCustomEditor`, `revert`, `changeContent`).
+ * `isDirty`, `pushEdit`/`spliceEdits`, `undo`, `redo`, `saveCustomEditor`, `revert`, `changeContent`),
+ * its edit list an array spliced as the bundle splices it.
  */
 class VsCodeModel {
-  length = 0;
+  edits: number[] = [];
   current = -1;
   savePoint = -1;
   fromContentChange = false;
@@ -26,21 +32,24 @@ class VsCodeModel {
   constructor(public fromBackup = false) {}
 
   get dirty(): boolean {
-    return this.fromContentChange ? true : this.length > 0 ? this.savePoint !== this.current : this.fromBackup;
+    return this.fromContentChange ? true : this.edits.length > 0 ? this.savePoint !== this.current : this.fromBackup;
   }
-  push(): void {
-    this.length = this.current + 2;
-    this.current = this.length - 1;
+  push(id: number): void {
+    this.edits.splice(this.current + 1, this.edits.length - this.current, id);
+    this.current = this.edits.length - 1;
   }
-  undo(): boolean {
-    if (this.current < 0) return false;
+  /** The edit VS Code's undo hands the extension host: undefined past its list (the host then finds none). */
+  undo(): { id: number | undefined } | null {
+    if (this.current < 0) return null;
+    const id = this.edits[this.current];
     this.current--;
-    return true;
+    return { id };
   }
-  redo(): boolean {
-    if (this.current >= this.length - 1) return false;
+  redo(): { id: number | undefined } | null {
+    if (this.current >= this.edits.length - 1) return null;
+    const id = this.edits[this.current + 1];
     this.current++;
-    return true;
+    return { id };
   }
   save(): void {
     this.fromContentChange = false;
@@ -52,7 +61,7 @@ class VsCodeModel {
     this.fromContentChange = false;
     this.fromBackup = false;
     this.current = this.savePoint;
-    this.length = Math.min(this.length, this.current + 1);
+    this.edits.splice(this.current + 1, this.edits.length - this.current);
     return true;
   }
   changeContent(): void {
@@ -63,36 +72,64 @@ class VsCodeModel {
 type Op = 'push' | 'undo' | 'redo' | 'save' | 'revert';
 const OPS: Op[] = ['push', 'undo', 'redo', 'save', 'revert'];
 
-/** VS Code's model and a document's copy, driven as VS Code and the engines drive them. */
-function pair(wired = true, fromBackup = false) {
+/**
+ * How an engine undoes and redoes an edit: the binary engine restores the edit's stored snapshots;
+ * the MAT engine does nothing to its tree for an edit made before the file was read again (its
+ * generation), and moves the stack all the same.
+ */
+type Engine = 'binary' | 'mat';
+
+/** A document as VS Code, the engines and the copy drive it, with what it holds and what the file holds. */
+function document(engine: Engine, fromBackup = false, wired = true) {
   const vscode = new VsCodeModel(fromBackup);
-  let lost = 0;
+  let told = 0;
   const copy = new EditStackCopy(fromBackup, () => {
-    lost++;
+    told++;
     if (wired) vscode.changeContent();
   });
+  let content = fromBackup ? 'restored' : '';
+  let disk = '';
+  let generation = 0;
+  let next = 1;
+  const edits = new Map<number, { before: string; after: string; generation: number }>();
   const run = (op: Op): void => {
     switch (op) {
-      case 'push': // the engine moves the copy, then puts the edit on VS Code's stack
+      case 'push': {
+        // The engine moves the copy, then puts the edit on VS Code's stack.
+        const id = next++;
+        const before = content;
+        content = `${content}.${id}`;
+        edits.set(id, { before, after: content, generation });
         copy.pushed();
-        vscode.push();
+        vscode.push(id);
         break;
-      case 'undo': // VS Code's command; the document hears of it only when VS Code undoes
-        if (vscode.undo()) copy.undone();
+      }
+      case 'undo':
+      case 'redo': {
+        // VS Code's command; the document hears of it only when VS Code hands it an edit it holds.
+        const moved = op === 'undo' ? vscode.undo() : vscode.redo();
+        const edit = moved?.id === undefined ? undefined : edits.get(moved.id);
+        if (!edit) break;
+        if (op === 'undo') copy.undone();
+        else copy.redone();
+        if (engine === 'binary' || edit.generation === generation) content = op === 'undo' ? edit.before : edit.after;
         break;
-      case 'redo':
-        if (vscode.redo()) copy.redone();
-        break;
+      }
       case 'save': // saveSettled, once the write lands
         vscode.save();
+        disk = content;
         copy.saved(copy.here());
         break;
-      case 'revert': // VS Code reverts only a dirty document, and then the provider reverts the copy
-        if (vscode.revert()) copy.reverted();
+      case 'revert': // VS Code reverts only a dirty document; the provider then reads the file again
+        if (vscode.revert()) {
+          content = disk;
+          generation++;
+          copy.reverted();
+        }
         break;
     }
   };
-  return { vscode, copy, run, lost: () => lost };
+  return { vscode, copy, run, told: () => told, unsaved: () => content !== disk };
 }
 
 /** Every sequence of `n` ops. */
@@ -101,98 +138,116 @@ function* sequences(n: number): Generator<Op[]> {
   for (const head of sequences(n - 1)) for (const op of OPS) yield [...head, op];
 }
 
-describe('EditStackCopy and VS Code agree on a byte-backed document being dirty', () => {
+const CASES: { engine: Engine; fromBackup: boolean; name: string }[] = [
+  { engine: 'binary', fromBackup: false, name: 'a binary dictionary' },
+  { engine: 'binary', fromBackup: true, name: 'a restored binary dictionary' },
+  { engine: 'mat', fromBackup: false, name: 'a MAT-file' },
+  { engine: 'mat', fromBackup: true, name: 'a restored MAT-file' },
+];
+
+describe('A byte-backed document never reads clean in VS Code while it differs from the file', () => {
   it('a different edit after undoing past the save: VS Code alone reads clean, told, it reads dirty', () => {
     for (const wired of [false, true]) {
-      const p = pair(wired);
-      for (const op of ['push', 'save', 'undo', 'push'] as Op[]) p.run(op);
-      expect(p.copy.dirty, 'the copy: the file lacks the new edit').toBe(true);
-      expect(p.lost(), 'the copy saw the push discard the save point').toBe(1);
-      expect(p.vscode.dirty, wired ? 'VS Code, told of it' : "VS Code's own flag: the save point index is the new edit's").toBe(wired);
+      const d = document('binary', false, wired);
+      for (const op of ['push', 'save', 'undo', 'push'] as Op[]) d.run(op);
+      expect(d.unsaved(), 'the file lacks the new edit').toBe(true);
+      expect(d.copy.dirty).toBe(true);
+      expect(d.vscode.dirty, wired ? 'VS Code, told of it' : "VS Code's own flag: the saved index is the new edit's").toBe(wired);
     }
-  });
-
-  it('it stays dirty through any undo or redo until a save, and a revert clears it', () => {
-    const p = pair();
-    for (const op of ['push', 'save', 'undo'] as Op[]) p.run(op);
-    for (const op of ['push', 'undo', 'redo', 'undo', 'undo', 'redo'] as Op[]) {
-      p.run(op);
-      expect(p.vscode.dirty).toBe(true);
-      expect(p.copy.dirty).toBe(true);
-    }
-    p.run('save');
-    expect([p.vscode.dirty, p.copy.dirty]).toEqual([false, false]);
-    for (const op of ['undo', 'push', 'revert'] as Op[]) p.run(op);
-    expect([p.vscode.dirty, p.copy.dirty]).toEqual([false, false]);
-  });
-
-  it('tells VS Code only when a push discards the save point, once each time', () => {
-    const p = pair();
-    // Edits, saves, undos and redos that never push over the save point.
-    for (const op of ['push', 'push', 'save', 'undo', 'redo', 'push', 'undo', 'undo', 'redo', 'redo', 'save'] as Op[]) p.run(op);
-    expect(p.lost()).toBe(0);
-    // Two undos past the save, then two edits: the first push discards it, the second has nothing to.
-    for (const op of ['undo', 'undo', 'push', 'push'] as Op[]) p.run(op);
-    expect(p.lost()).toBe(1);
-    expect(p.vscode.dirty, "VS Code's index is back at the saved one, and still dirty").toBe(true);
-    // Saved again, the same thing tells it again.
-    for (const op of ['save', 'undo', 'push'] as Op[]) p.run(op);
-    expect(p.lost()).toBe(2);
-  });
-
-  it('agree after every step of every sequence of seven pushes, undos, redos, saves and reverts', () => {
-    let steps = 0;
-    for (const fromBackup of [false, true]) {
-      for (const ops of sequences(7)) {
-        const p = pair(true, fromBackup);
-        for (const [i, op] of ops.entries()) {
-          p.run(op);
-          steps++;
-          // A revert past a discarded save point leaves VS Code's index beyond its own list (its
-          // `revert` sets the index to the save point and splices nothing): VS Code's own state, which
-          // the extension cannot repair, so the sequence ends there.
-          if (p.vscode.current > p.vscode.length - 1) break;
-          if (p.vscode.dirty !== p.copy.dirty) {
-            expect.fail(`${fromBackup ? 'restored, then ' : ''}after ${ops.slice(0, i + 1).join(', ')}: VS Code ${p.vscode.dirty}, the copy ${p.copy.dirty}`);
-          }
-        }
-      }
-    }
-    expect(steps).toBeGreaterThan(1_000_000);
-  });
-
-  it('without telling VS Code, the same sequences find it reading clean while the copy is dirty', () => {
-    const disagreements = (fromBackup: boolean) =>
-      [...sequences(4)]
-        .filter((ops) => {
-          const p = pair(false, fromBackup);
-          return ops.some((op) => (p.run(op), p.vscode.current <= p.vscode.length - 1 && !p.vscode.dirty && p.copy.dirty));
-        })
-        .map((ops) => ops.join(','));
-    expect(disagreements(false)).toContain('push,save,undo,push');
-    expect(disagreements(true)).toContain('push,undo,redo,redo');
   });
 
   it('a document restored from a backup: VS Code alone reads one edit and its undo clean, told, dirty', () => {
     for (const wired of [false, true]) {
-      const p = pair(wired, true);
-      expect([p.vscode.dirty, p.copy.dirty], 'restored: dirty with no edits').toEqual([true, true]);
-      p.run('push');
-      p.run('undo');
-      expect(p.copy.dirty, 'the copy: the file never held the restored document').toBe(true);
-      expect(p.vscode.dirty, wired ? 'VS Code, told of it' : "VS Code's own flag: back at the save point").toBe(wired);
+      const d = document('mat', true, wired);
+      expect([d.vscode.dirty, d.copy.dirty], 'restored: dirty with no edits').toEqual([true, true]);
+      d.run('push');
+      d.run('undo');
+      expect(d.unsaved(), 'the file never held the restored document').toBe(true);
+      expect(d.copy.dirty).toBe(true);
+      expect(d.vscode.dirty, wired ? 'VS Code, told of it' : "VS Code's own flag: back at the save point").toBe(wired);
     }
-    // Told once, on the first push; a save or a revert ends it, as it ends VS Code's.
-    const p = pair(true, true);
-    for (const op of ['push', 'push', 'undo', 'undo', 'redo'] as Op[]) p.run(op);
-    expect(p.lost()).toBe(1);
-    p.run('save');
-    for (const op of ['undo', 'redo', 'push'] as Op[]) p.run(op);
-    expect([p.lost(), p.vscode.dirty, p.copy.dirty]).toEqual([1, true, true]);
-    const r = pair(true, true);
-    r.run('revert');
-    expect([r.vscode.dirty, r.copy.dirty]).toEqual([false, false]);
-    r.run('push');
-    expect(r.lost(), 'after a revert, an edit is an ordinary one').toBe(0);
+  });
+
+  // review186 M1: a revert after a lost save point puts VS Code's index at it, over stale edits.
+  for (const [engine, ops] of [
+    ['binary', 'push,save,undo,push,revert,undo,redo'],
+    ['binary', 'push,push,save,undo,undo,push,revert,push'],
+    ['mat', 'push,push,save,undo,undo,push,revert,push'],
+    ['binary', 'push,save,undo,push,revert,push,undo,save,undo,redo'],
+  ] as [Engine, string][]) {
+    it(`${engine}: ${ops} reads dirty while it differs from the file, at every step`, () => {
+      const d = document(engine);
+      for (const op of ops.split(',') as Op[]) {
+        d.run(op);
+        if (d.unsaved()) expect([op, d.vscode.dirty, d.copy.dirty]).toEqual([op, true, true]);
+      }
+      expect(d.unsaved(), 'the last step leaves the document unsaved').toBe(true);
+    });
+  }
+
+  it(
+    'over every sequence of eight pushes, undos, redos, saves and reverts, in both engines, fresh and restored',
+    () => {
+      let steps = 0;
+      for (const { engine, fromBackup, name } of CASES) {
+        for (const ops of sequences(8)) {
+          const d = document(engine, fromBackup);
+          for (const [i, op] of ops.entries()) {
+            d.run(op);
+            steps++;
+            if (d.unsaved() && !(d.vscode.dirty && d.copy.dirty)) {
+              expect.fail(`${name}, after ${ops.slice(0, i + 1).join(', ')}: unsaved, VS Code ${d.vscode.dirty}, the copy ${d.copy.dirty}`);
+            }
+          }
+        }
+      }
+      expect(steps).toBe(4 * 8 * 5 ** 8);
+    },
+    60_000,
+  );
+
+  it(
+    'until a save point is lost, VS Code and the copy agree at every step, and nothing more is told',
+    () => {
+      for (const { engine, fromBackup, name } of CASES) {
+        for (const ops of sequences(7)) {
+          const d = document(engine, fromBackup);
+          // Ordinary edits, undos, redos, saves and reverts tell VS Code nothing. A restored document's
+          // first push before its first save or revert does, once.
+          let expected = 0;
+          let settled = false;
+          for (const [i, op] of ops.entries()) {
+            // VS Code's own test of a lost save point: a push while the saved index is past the current one.
+            if (op === 'push' && d.vscode.savePoint > d.vscode.current) break;
+            if (op === 'push' && fromBackup && !settled) expected = 1;
+            if (op === 'save' || (op === 'revert' && d.vscode.dirty)) settled = true;
+            d.run(op);
+            if (d.vscode.dirty !== d.copy.dirty || d.told() !== expected) {
+              expect.fail(`${name}, after ${ops.slice(0, i + 1).join(', ')}: VS Code ${d.vscode.dirty}, the copy ${d.copy.dirty}, told ${d.told()}`);
+            }
+          }
+        }
+      }
+    },
+    60_000,
+  );
+
+  it('without telling VS Code, it reads clean over unsaved content in every case above', () => {
+    const found = (engine: Engine, fromBackup: boolean) =>
+      [...sequences(4)]
+        .filter((ops) => {
+          const d = document(engine, fromBackup, false);
+          return ops.some((op) => (d.run(op), d.unsaved() && !d.vscode.dirty));
+        })
+        .map((ops) => ops.join(','));
+    expect(found('binary', false)).toContain('push,save,undo,push');
+    expect(found('mat', true)).toContain('push,undo,save,undo');
+  });
+
+  it('errs dirty once a save point is lost: an undo back to a later save still reads dirty', () => {
+    const d = document('binary');
+    for (const op of ['push', 'save', 'undo', 'push', 'save', 'push', 'undo'] as Op[]) d.run(op);
+    expect(d.unsaved(), 'the document is the file again').toBe(false);
+    expect([d.vscode.dirty, d.copy.dirty], 'both read dirty: the safe direction').toEqual([true, true]);
   });
 });
