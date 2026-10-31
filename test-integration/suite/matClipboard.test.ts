@@ -2,7 +2,8 @@
 //
 // The MAT-file editor's clipboard, end to end: a cross-format paste through the real providers,
 // saved by VS Code, and read back. The gestures themselves (copy, cut, paste, dragStart and drop,
-// and what each document then holds and undoes) are view's MAT-file engine's tests now.
+// and what each document then holds and undoes) are view's engine tests now: the MAT-file
+// engine's, and the dictionary engines' for the pastes and drags into a dictionary.
 //
 // A MAT-file takes the same gestures a dictionary does, through the same rules (view's transfer.ts
 // and clipboardAction.ts): a copy pasted into the file it came from is a duplicate under a unique

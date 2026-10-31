@@ -4,8 +4,8 @@
 // The whole text of a Value shown as a summary, through the webview entry point as it ships
 // (table-main.ts): opening the Value editor asks the host for it (`requestEditText`), the host's
 // `editText` answer opens the editor on it, and an answer with none opens nothing, saying core's
-// reason where it gives one. A read-only view asks for nothing. The host's half is
-// test/editTextRequest.test.ts, and the round trip is view's editors/longValueEdit.test.ts.
+// reason where it gives one. A read-only view asks for nothing. The host's half is view's
+// editText.test.ts, and the round trip is view's editors/longValueEdit.test.ts.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
