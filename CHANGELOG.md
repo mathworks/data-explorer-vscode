@@ -2,6 +2,14 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## [1.51.0] — 2026-10-31
+
+- Copy and paste between MAT-files and data dictionaries no longer loses values. A value the target can't store is refused with a message saying why.
+- A Config Set added from the gallery now matches a new one made in MATLAB.
+- An interface moved into Design Data shows the right Kind straight away.
+- Rows of a compressed dictionary no longer stay marked Modified after it is reloaded or reverted.
+- A MAT-file or compressed dictionary no longer looks saved while the file on disk lacks your latest edits.
+
 ## [1.49.0] — 2026-10-31
 
 - Bug fixes.
