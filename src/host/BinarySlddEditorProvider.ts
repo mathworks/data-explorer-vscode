@@ -27,7 +27,7 @@ import type { TableToHostMessage } from '../common/protocol.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 import { OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
 import { saveSettled } from './settledSave.js';
-import { followDisk, readForOpen, readStamped, refuseIfChangedOnDisk, watchDisk, writeUserFile } from './diskFollow.js';
+import { followDisk, readForOpen, readStamped, refuseIfChangedOnDisk, unfinishedSave, watchDisk, writeUserFile } from './diskFollow.js';
 import { backupId } from './backupId.js';
 import { sameFile } from './safeWrite.js';
 import { binaryRows, engineTable } from './engineTable.js';
@@ -57,8 +57,11 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
   // document's).
   public onChanged?: (uriString: string) => void;
 
-  private readonly _onDidChangeCustomDocument =
-    new vscode.EventEmitter<vscode.CustomDocumentEditEvent<BinarySlddDocument>>();
+  // An edit, onto VS Code's stack; or, with no undo and redo, a change VS Code keeps dirty until a
+  // save or a revert (a save that could not finish, settledSave.ts).
+  private readonly _onDidChangeCustomDocument = new vscode.EventEmitter<
+    vscode.CustomDocumentEditEvent<BinarySlddDocument> | vscode.CustomDocumentContentChangeEvent<BinarySlddDocument>
+  >();
   readonly onDidChangeCustomDocument = this._onDidChangeCustomDocument.event;
 
   /**
@@ -76,6 +79,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
    * property so that the integration suite can hold a save's write, as a slow disk holds one.
    */
   writeUserFile: (uri: vscode.Uri, bytes: Uint8Array) => Promise<DiskStamp | undefined> = writeUserFile;
+
+  /**
+   * Show the user an error: a save that could not finish (settledSave.ts). A property so that the
+   * integration suite can hear it.
+   */
+  showError: (message: string) => void = (message) => void vscode.window.showErrorMessage(message);
 
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -208,7 +217,12 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
 
   async saveCustomDocument(document: BinarySlddDocument, token: vscode.CancellationToken): Promise<void> {
     // Written again if the stack moved while it was being written (settledSave.ts).
-    await saveSettled(document.edits, token, () => this.writeDocument(document));
+    const unfinished = unfinishedSave(
+      document,
+      () => this._onDidChangeCustomDocument.fire({ document }),
+      (message) => this.showError(message),
+    );
+    await saveSettled(document.edits, token, () => this.writeDocument(document), unfinished);
   }
 
   /**

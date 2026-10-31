@@ -7,15 +7,16 @@
 // watcher reads.
 //
 // The hooks: each edit goes onto VS Code's stack (`onDidChangeCustomDocument`), whose Undo and Redo
-// are VS Code's commands; the stack's position and save point are an EditStackIndex, the copy of
+// are VS Code's commands; the stack's position and save point are an EditStackCopy, the copy of
 // VS Code's dirty flag; a notice is a VS Code notification or the status bar; the registers are
 // the window's (windowRegisters.ts); the Usage column is the workspace's usage graph.
 import * as vscode from 'vscode';
 import { DataModel } from 'data-explorer-core';
 import { basename, type Notify } from 'data-explorer-view/model';
-import { EditStackIndex, MatEngine } from 'data-explorer-view/host';
+import { MatEngine } from 'data-explorer-view/host';
 import type { DiskStamp } from './diskConflict.js';
 import type { FollowedDocument } from './diskFollow.js';
+import { EditStackCopy } from './settledSave.js';
 import { registers } from './windowRegisters.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 
@@ -70,7 +71,7 @@ export class SharedBackup {
 
 export class MatDocument implements vscode.CustomDocument, FollowedDocument {
   /** VS Code's dirty flag, as the stack's position and save point say it (the API gives no way to read it). */
-  readonly edits: EditStackIndex;
+  readonly edits: EditStackCopy;
   stamp: DiskStamp | undefined;
   inConflict = false;
   conflictPromptOpen = false;
@@ -108,7 +109,7 @@ export class MatDocument implements vscode.CustomDocument, FollowedDocument {
     this.onDisk = fromBackup ? null : new Uint8Array(bytes);
     // VS Code reports a document restored from a hot-exit backup as dirty, though it has no edits,
     // until it is saved or reverted.
-    this.edits = new EditStackIndex(fromBackup);
+    this.edits = new EditStackCopy(fromBackup);
     const uriString = uri.toString();
     this.engine = new MatEngine({
       session: DataModel,

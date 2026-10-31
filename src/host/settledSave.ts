@@ -21,7 +21,7 @@
 //  - A round that fails fails the save VS Code is waiting on: VS Code keeps the document dirty
 //    and says why (core's refusal of the newer edit, the conflict prompt). The rounds before it
 //    did write, and the provider has recorded that (the stamp, the Status column), but VS Code's
-//    save point has not moved, so the dirty-flag copy (an EditIndex) does not move either.
+//    save point has not moved, so the dirty-flag copy (an EditStackCopy) does not move either.
 //    That is why `saved` is called here, once, at the end, and not by a provider's round.
 //  - A cancelled save stops. VS Code cancels a save's token when it starts another save of the
 //    same document, and from then on ignores the first one's result: the save point is the
@@ -39,6 +39,12 @@
 //        behind too, which needs the user to have edited and saved again while it was writing
 //        (the stack moved). With nothing moved there is nothing a newer save could have written,
 //        and it stops: a round that keeps saying it landed behind cannot loop.
+//    An extra round that fails (the write, the save gate, a conflict on disk) would fail a save
+//    VS Code no longer listens to: nobody would be told, and the tab would stay clean over a file
+//    that may hold the older document. So the document is marked unsaved instead, in VS Code and
+//    in the copy, until it is saved or reverted (closing the tab then asks), the save point left
+//    where it is, and the user is told to save again (`UnfinishedSave`); not after a conflict,
+//    whose prompt is already asking them, and whose Revert is their own choice.
 //
 // A follow-up `vscode.workspace.save` after a plain save was the other way to do it. It leaves
 // a window in which VS Code shows clean what is not on disk (close the tab in it, and the edit is
@@ -49,7 +55,55 @@
 // decides it. No extension can see it.
 //
 // vscode-free, so the rule is unit-tested (test/settledSave.test.ts).
-import type { EditIndex } from 'data-explorer-view/host';
+import { EditStackIndex } from 'data-explorer-view/host';
+
+/**
+ * View's EditStackIndex, with the one more way VS Code's custom-editor model has to be dirty: a
+ * change event with no undo and redo (a CustomDocumentContentChangeEvent) leaves the document dirty
+ * until it is saved or reverted, whatever its stack does meanwhile (`_isDirtyFromContentChange`,
+ * measured against VS Code 1.144's workbench). The copy each byte-backed document keeps.
+ */
+export class EditStackCopy extends EditStackIndex {
+  private changedOffStack = false;
+
+  override get dirty(): boolean {
+    return this.changedOffStack || super.dirty;
+  }
+
+  /** VS Code was told the document changed with no edit on its stack. */
+  changedWithoutEdit(): void {
+    this.changedOffStack = true;
+  }
+
+  override saved(at?: number): void {
+    this.changedOffStack = false;
+    super.saved(at);
+  }
+
+  override reverted(): void {
+    this.changedOffStack = false;
+    super.reverted();
+  }
+}
+
+/**
+ * What a save does when VS Code has cancelled it and the extra round that was writing over the newer
+ * save fails (writeOverWhileBehind): the file may then hold the older document.
+ */
+export interface UnfinishedSave {
+  /** The file's name, as the notice says it. */
+  readonly name: string;
+  /** Tell VS Code the document changed, with no edit on its stack: it stays dirty until a save or a revert. */
+  changed(): void;
+  /** Show the user an error. */
+  tell(message: string): void;
+  /** Whether `err` is a save conflict's refusal (diskFollow.refuseIfChangedOnDisk), whose prompt asks the user. */
+  isConflict(err: unknown): boolean;
+}
+
+/** What the user is told when an extra round fails. */
+export const unfinishedSaveMessage = (name: string): string =>
+  `Couldn't finish saving ${name}; the file on disk may be older than the editor. Save again.`;
 
 /** The one thing a save asks of VS Code's cancellation token. */
 export interface SaveCancellation {
@@ -59,12 +113,14 @@ export interface SaveCancellation {
 /**
  * Run `round` (one save: serialize the document before its first await, then write it) until
  * one runs with the stack still, then move the dirty-flag copy's save point to where it ran.
- * `round` resolves true when its write landed behind a newer save's that had already landed.
+ * `round` resolves true when its write landed behind a newer save's that had already landed;
+ * `unfinished` is what an extra round written over that newer save does if it fails.
  */
 export async function saveSettled(
-  edits: EditIndex,
+  edits: EditStackCopy,
   token: SaveCancellation | undefined,
   round: () => Promise<boolean | void>,
+  unfinished: UnfinishedSave,
 ): Promise<void> {
   for (;;) {
     // Read where the round reads the document, before its first await.
@@ -72,7 +128,7 @@ export async function saveSettled(
     const moves = edits.moves;
     const behind = (await round()) === true;
     if (token?.isCancellationRequested) {
-      await writeOverWhileBehind(edits, moves, behind, round);
+      await writeOverWhileBehind(edits, moves, behind, round, unfinished);
       return;
     }
     if (edits.moves === moves) {
@@ -86,11 +142,27 @@ export async function saveSettled(
  * A save VS Code cancelled whose write landed behind the newer save's (`behind`): the document
  * written once more as it stands, while it reads clean, and again only for a round that landed
  * behind with the stack moved under it (`moves`, where it was when that round began). The save
- * point is not moved.
+ * point is not moved. A round that fails ends it, the document marked unsaved.
  */
-async function writeOverWhileBehind(edits: EditIndex, moves: number, behind: boolean, round: () => Promise<boolean | void>): Promise<void> {
+async function writeOverWhileBehind(
+  edits: EditStackCopy,
+  moves: number,
+  behind: boolean,
+  round: () => Promise<boolean | void>,
+  unfinished: UnfinishedSave,
+): Promise<void> {
   while (behind && !edits.dirty && edits.moves !== moves) {
     moves = edits.moves;
-    behind = (await round()) === true;
+    try {
+      behind = (await round()) === true;
+    } catch (err) {
+      // VS Code ignores this save's answer, so a rejection would tell nobody. The save point stays.
+      edits.changedWithoutEdit();
+      unfinished.changed();
+      // A conflict on disk: its prompt is asking the user (diskFollow.refuseIfChangedOnDisk), and
+      // Revert there is their own choice, not a save that failed.
+      if (!unfinished.isConflict(err)) unfinished.tell(unfinishedSaveMessage(unfinished.name));
+      return;
+    }
   }
 }

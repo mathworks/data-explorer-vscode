@@ -59,15 +59,16 @@ suite('MAT-file: saves whose writes land out of order', () => {
    * The user edits scalarD to 7 and saves, and the save's write is held, as a slow disk holds one.
    * VS Code starts the next save, cancelling this one's token; the user has edited scalarD to 8, and
    * that save writes. Answers the first save, still writing, what lets its write land, and the count
-   * of writes.
+   * of writes. With `extraWriteFails`, the third write fails, as a full disk fails one.
    */
-  async function saveBehindANewerOne(tab: MatTab, edit: Edit) {
+  async function saveBehindANewerOne(tab: MatTab, edit: Edit, extraWriteFails = false) {
     const write = tab.provider.writeUserFile;
     let release: () => void = () => {};
     const held = new Promise<void>((resolve) => (release = resolve));
     let writes = 0;
     tab.provider.writeUserFile = async (uri, bytes) => {
       if (++writes === 1) await held;
+      if (writes === 3 && extraWriteFails) throw new Error('ENOSPC: no space left on device');
       return write(uri, bytes);
     };
 
@@ -117,5 +118,25 @@ suite('MAT-file: saves whose writes land out of order', () => {
     await tab.provider.saveCustomDocument(tab.doc, token());
     assert.deepStrictEqual([valueOnDisk(tab.path, 'scalarD'), valueOnDisk(tab.path, 'negD')], ['8', '42']);
     assert.strictEqual(tab.doc.edits.dirty, false);
+  });
+
+  test('an extra write that fails leaves the tab unsaved over the older file, and tells the user once', async () => {
+    const { tab, edit } = await open();
+    const told: string[] = [];
+    tab.provider.showError = (message) => void told.push(message);
+    const late = await saveBehindANewerOne(tab, edit, true);
+    late.release();
+    await late.firstSave;
+    assert.strictEqual(valueOnDisk(tab.path, 'scalarD'), '7', 'the first save landed last: the file holds the older edit');
+    assert.strictEqual(late.writes(), 3, 'and the write over it failed');
+    assert.strictEqual(tab.changes.length, 1, 'VS Code was told the document changed, with no edit to undo');
+    assert.strictEqual(tab.doc.edits.dirty, true, 'the tab is not clean over the older file');
+    assert.deepStrictEqual(told, ["Couldn't finish saving save_order.mat; the file on disk may be older than the editor. Save again."]);
+
+    // The user saves again.
+    await tab.provider.saveCustomDocument(tab.doc, token());
+    assert.strictEqual(valueOnDisk(tab.path, 'scalarD'), '8');
+    assert.strictEqual(tab.doc.edits.dirty, false);
+    assert.strictEqual(told.length, 1);
   });
 });

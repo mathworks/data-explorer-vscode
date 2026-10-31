@@ -7,15 +7,16 @@
 // VS Code's dirty flag the disk watcher reads.
 //
 // The hooks are the MAT-file editor's (matDocument.ts): each edit onto VS Code's stack, its Undo and
-// Redo VS Code's commands, the stack's position and save point an EditStackIndex, a notice a
+// Redo VS Code's commands, the stack's position and save point an EditStackCopy, a notice a
 // notification, and the window's registers (windowRegisters.ts). No Usage column: this editor
 // fills none.
 import * as vscode from 'vscode';
 import { DataModel } from 'data-explorer-core';
 import { basename, type Notify } from 'data-explorer-view/model';
-import { BinaryEngine, EditStackIndex, binaryEditSrcId } from 'data-explorer-view/host';
+import { BinaryEngine, binaryEditSrcId } from 'data-explorer-view/host';
 import type { DiskStamp } from './diskConflict.js';
 import type { FollowedDocument } from './diskFollow.js';
+import { EditStackCopy } from './settledSave.js';
 import { registers } from './windowRegisters.js';
 
 /** A notice of the engine's, said as VS Code says one (the binary engine says only a transfer's warning). */
@@ -28,7 +29,7 @@ const notify: Notify = (notice) => {
 
 export class BinarySlddDocument implements vscode.CustomDocument, FollowedDocument {
   /** VS Code's dirty flag, as the stack's position and save point say it (the API gives no way to read it). */
-  readonly edits: EditStackIndex;
+  readonly edits: EditStackCopy;
   stamp: DiskStamp | undefined;
   /**
    * A save was refused because the file changed on disk, and nothing has resolved that yet; a
@@ -62,7 +63,7 @@ export class BinarySlddDocument implements vscode.CustomDocument, FollowedDocume
   ) {
     // VS Code reports a document restored from a hot-exit backup as dirty, though it has no edits,
     // until it is saved or reverted.
-    this.edits = new EditStackIndex(fromBackup);
+    this.edits = new EditStackCopy(fromBackup);
     this.binary = bytes
       ? new BinaryEngine({
           session: DataModel,
