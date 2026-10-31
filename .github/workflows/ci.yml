@@ -58,7 +58,31 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # NOT FOR MERGE (a CI run for V4's "before" only): the originals the JSON gesture sweep's
+      # case list names, at the paths it names them by. data-explorer-core's own fixtures at
+      # v1.52.0, and this repository's test/fixtures/arch.sldd.
+      - name: Inputs of the JSON gesture sweep
+        run: |
+          git clone --quiet --depth 1 --branch v1.52.0 https://github.com/mathworks/data-explorer-core.git /tmp/dexview/core-v152
+          mkdir -p /tmp/dexview/refs-sldd/fixtures
+          cp test/fixtures/arch.sldd /tmp/dexview/refs-sldd/fixtures/
+
       # The integration suite launches a real VS Code instance, which needs a
       # display on Linux — run it under a virtual framebuffer.
       - name: Integration tests
         run: xvfb-run -a npm run test:integration
+        # NOT FOR MERGE (V4's "before"): the JSON half of the gesture sweep
+        # (editorGestureSweep.test.ts), each gesture saved, then undone and redone through
+        # VS Code's own Undo and Redo, which this window can reach.
+        env:
+          EB_P4_GESTURE: ${{ github.workspace }}/test-integration/p4/select-json-gesture.jsonl
+          EB_P4_GESTURE_OUT: /tmp/eb-run-ci
+
+      # NOT FOR MERGE (V4's "before"): the sweep's saves and its log, to compare with earlier runs.
+      - name: The JSON gesture sweep's saves
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: json-gesture-sweep
+          path: /tmp/eb-run-ci
+          if-no-files-found: error
