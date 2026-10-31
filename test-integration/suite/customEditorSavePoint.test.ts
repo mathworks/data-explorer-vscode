@@ -15,8 +15,9 @@
 // emitter. The suite finds each tab's webview by wrapping, for its own run only, the extension host's
 // webview class (the `html` setter a provider sets the shell with, and `postMessage`, whose messages
 // it keeps), and restores it afterwards. Undo is VS Code's `undo` command, which needs the window's
-// focus: on a desktop host whose window does not have it, the cases skip and say so; on CI (`CI`
-// set), whose xvfb window has it, that is a failure.
+// focus, and a tab's webview loads only in a window that draws: on a desktop host whose window does
+// neither (a sleeping display), the cases skip and say so; on CI (`CI` set), whose xvfb window does
+// both, that is a failure.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
@@ -119,6 +120,8 @@ suite('A real tab stays dirty after a save, an undo past it and a different edit
 
   for (const kind of KINDS) {
     test(`${kind.name}: the tab is dirty while the file lacks the second edit`, async function () {
+      // A tab's webview is a process of its own; the first one of a run is the slow one to load.
+      this.timeout(120_000);
       const path = join(dir, kind.file);
       kind.copy(path);
       const uri = vscode.Uri.file(path);
@@ -126,7 +129,12 @@ suite('A real tab stays dirty after a save, an undo past it and a different edit
       await vscode.commands.executeCommand('vscode.openWith', uri, kind.viewType);
       try {
         let table: Seen | undefined;
-        await waitFor(`${kind.file}'s table`, () => !!(table = seen.slice(before).find((s) => kind.row(s.posts))));
+        try {
+          await waitFor(`${kind.file}'s table`, () => !!(table = seen.slice(before).find((s) => kind.row(s.posts))), 60_000);
+        } catch (e) {
+          if (process.env.CI) throw e;
+          this.skip(); // this window did not load the tab's webview (a sleeping display): see the header
+        }
         const view = table!;
         const dirty = () => tabOf(uri)?.isDirty;
         const shown = () => String(kind.row(view.posts)?.Value ?? '');
