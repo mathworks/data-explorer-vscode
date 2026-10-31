@@ -104,38 +104,6 @@ suite('MAT-file: the Property Inspector follows the variable it shows', () => {
   };
   const showingNode = (): any => shown[shown.length - 1]?.node;
 
-  test('an edit, its undo and its redo of the shown variable each show its value as it now is', async () => {
-    const o = await open('cases.mat');
-    o.view.send({ type: 'select', rowIds: [o.variable('scalarD').id] });
-    const was = showing();
-    assert.strictEqual(was, '3.141592653589793');
-    o.view.send({ type: 'edit', rowId: o.variable('scalarD').id, columnId: 'Value', oldValue: '', newValue: '42' });
-    assert.strictEqual(showing(), '42', 'the edit');
-    await edits[edits.length - 1].undo();
-    assert.strictEqual(showing(), was, 'its undo');
-    await edits[edits.length - 1].redo();
-    assert.strictEqual(showing(), '42', 'its redo');
-    assert.strictEqual(showingNode(), o.variable('scalarD'), 'from the node the session holds now');
-  });
-
-  test('a paste into the file, and a move of the shown variable out of it, each say the tree changed', async () => {
-    const a = await open('pv_basic.mat', 'a.mat');
-    const b = await open('pv_basic.mat', 'b.mat');
-    a.view.send({ type: 'select', rowIds: [a.variable('x').id] });
-    changed.length = 0;
-    a.view.send({ type: 'copy', rowIds: [a.variable('str').id] });
-    a.view.send({ type: 'paste', rowId: '' });
-    await waitFor('the paste', () => changed.includes(a.uri.toString()));
-    assert.strictEqual(showingNode(), a.variable('x'), 'the shown variable, shown again from the tree');
-
-    changed.length = 0;
-    a.view.send({ type: 'cut', rowIds: [a.variable('x').id] });
-    b.view.send({ type: 'paste', rowId: '' });
-    await waitFor('the move out of a.mat', () => changed.includes(a.uri.toString()));
-    assert.ok(changed.includes(b.uri.toString()), 'and the paste into b.mat');
-    assert.ok(!shown.includes(null), 'a variable gone is left to the table, not cleared here');
-  });
-
   test('a revert and a reload from disk each show the node the document holds after it', async () => {
     const o = await open('cases.mat');
     o.view.send({ type: 'select', rowIds: [o.variable('scalarD').id] });

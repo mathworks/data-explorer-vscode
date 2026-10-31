@@ -11,15 +11,15 @@
 //
 // The rule this pins: the rows go out in the run that built them, and the Usage column
 // catches up. Which is observable as the POST COUNT — a cold graph paints twice (rows now,
-// annotated rows when the graph lands) and a warm one paints once — and that is a fact about
-// what the host does, not about how fast the machine it runs on is.
+// annotated rows when the graph lands) and a warm one paints once (view's JSON engine's test
+// now) — and that is a fact about what the host does, not about how fast the machine it runs on is.
 //
 // Needs the real host: `annotateDataRowsNow` answers from a graph built out of the workspace
 // and the open tabs, which only VS Code has.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
-import { annotateDataRowsNow, invalidateUsageGraph } from '../../src/host/usageGraph';
+import { invalidateUsageGraph } from '../../src/host/usageGraph';
 import { quiet, waitFor } from './tools/hostHarness';
 
 function ctx(): vscode.ExtensionContext {
@@ -156,29 +156,6 @@ suite('A JSON .sldd table paints an undo from the model', () => {
     assert.ok(
       !view.posts.some((m) => m.type === 'setRows'),
       'and the table was never rebuilt',
-    );
-  }).timeout(60000);
-
-  test('sends them once when the graph is already built', async () => {
-    // Warm the graph, then edit: nothing is waited for, so there is nothing to catch up on.
-    // The warm-up's paints all land before the count starts: the one at once, and, if the
-    // graph was cold, the one that follows its build (posted in the same turn the graph is
-    // published, so by the time this sees the graph built, it has been sent).
-    await editArrayEntry(uri, 101);
-    await waitFor(
-      'the warm-up edit’s paint, and the usage graph it reads',
-      () => view.posts.some((m) => m.type === 'updateEntryRows') && annotateDataRowsNow(uri.toString(), []),
-    );
-    view.posts.length = 0;
-
-    await editArrayEntry(uri, 202);
-    await waitFor('the edit’s paint', () => view.posts.some((m) => m.type === 'updateEntryRows'));
-    await quiet(1500, 'a second paint, or a rebuild of the table, for the one change');
-
-    assert.deepStrictEqual(
-      view.posts.filter((m) => m.type === 'updateEntryRows' || m.type === 'setRows').map((m) => m.type),
-      ['updateEntryRows'],
-      `one paint for one change (saw ${JSON.stringify(view.posts.map((m) => m.type))})`,
     );
   }).timeout(60000);
 });

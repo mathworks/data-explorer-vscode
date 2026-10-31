@@ -109,18 +109,6 @@ const topRow = (posts: any[], name: string): any => {
   return row;
 };
 
-/**
- * Whether `posts` (what a gesture sent) paint the table and then say an error after the last of
- * the paints, which clear the banner it is shown in (a whole `setRows` and an entry's
- * `updateEntryRows` alike), so that it is seen.
- */
-const saidAfterPaint = (posts: any[]): boolean => {
-  const last = (type: string) => posts.map((p) => p.type).lastIndexOf(type);
-  const error = last('error');
-  const paint = Math.max(last('setRows'), last('updateEntryRows'));
-  return paint >= 0 && error > paint;
-};
-
 /** Write the file as another program would, with an mtime later than any the view has seen. */
 function writeOutside(path: string, bytes: Uint8Array): void {
   const before = statSync(path).mtimeMs;
@@ -185,38 +173,6 @@ suite('MAT-file editor: edit, undo, save', () => {
   const save = (o: { doc: any }) => provider.saveCustomDocument(o.doc, token());
   const disk = (o: { path: string }) => new Uint8Array(readFileSync(o.path));
 
-  test('the view is editable, offers the gallery of the classes the file takes, and the clipboard', async () => {
-    const o = await open('cases.mat');
-    const set = o.view.posts.find((p) => p.type === 'setRows');
-    assert.strictEqual(set.editable, true);
-    // Which classes, and each tile end to end, is matAddGallery.test.ts.
-    assert.ok(set.add.classes.includes('MatlabVariable'), 'the gallery offers a plain variable');
-    // Copy, cut, paste and drag, as a dictionary's table offers them (matClipboard.test.ts).
-    assert.strictEqual(set.clipboard, undefined);
-    assert.strictEqual(set.notice, undefined);
-    // The menu's flags come with each row, from core's gate.
-    const vec = topRow(o.view.posts, 'rowVec');
-    assert.strictEqual(vec._canDelete, true);
-    assert.strictEqual(vec._canAddChild, true);
-    assert.strictEqual(vec._canCopy, true);
-    assert.strictEqual(topRow(o.view.posts, 'strScalar')._valueEditable, true, 'a string takes a value edit');
-  });
-
-  test('a value edit saves as that variable written fresh, and every other record as it was', async () => {
-    const o = await open('cases.mat');
-    edit(o, 'scalarD', 'Value', '42');
-    assert.strictEqual(o.events.length, 1, 'one edit reached VS Code');
-    assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, '42', 'the row was repainted');
-    assert.strictEqual(topRow(o.view.posts, 'scalarD').Status, 'Modified');
-    await save(o);
-    const saved = disk(o);
-    assert.strictEqual(valuesOf(saved).get('scalarD').Value, '42');
-    keptUntouched(o.original, saved, ['scalarD']);
-    assert.ok(recordsOf(saved).get('scalarD')!.compressed, 'compressed, as the -v7 file it was written into');
-    assert.strictEqual(o.doc.edits.dirty, false);
-    assert.strictEqual(topRow(o.view.posts, 'scalarD').Status, '', 'saved: the row no longer differs from the file');
-  });
-
   test('undo and redo move the tree and the dirty flag with VS Code’s stack', async () => {
     const o = await open('cases.mat');
     edit(o, 'scalarD', 'Value', '42');
@@ -237,24 +193,6 @@ suite('MAT-file editor: edit, undo, save', () => {
     assert.strictEqual(back.get('scalarD').Value, '42');
     assert.ok(back.has('gain') && !back.has('kp'));
     keptUntouched(o.original, disk(o), ['scalarD', 'kp']);
-  });
-
-  test('an edit can still be undone after the save that wrote it, and the next save writes the undo', async () => {
-    const o = await open('cases.mat');
-    edit(o, 'scalarD', 'Value', '42');
-    await save(o);
-    assert.strictEqual(valuesOf(disk(o)).get('scalarD').Value, '42');
-    // The save replaced the file (a new file renamed over it), which the watcher hears as a
-    // create. It is the view's own write, so the tree, and its undo stack, stay.
-    await quiet(500, 'the watcher to hear the save and leave the tree alone');
-    assert.strictEqual(o.doc.generation, 0, 'the save was not taken for an outside change');
-    await o.events[0].undo();
-    assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, '3.141592653589793');
-    assert.strictEqual(topRow(o.view.posts, 'scalarD').Status, 'Modified', 'differs from the file as saved');
-    assert.strictEqual(o.doc.edits.dirty, true);
-    await save(o);
-    assert.strictEqual(valuesOf(disk(o)).get('scalarD').Value, '3.141592653589793');
-    keptUntouched(o.original, disk(o), ['scalarD']);
   });
 
   test('an edit that lands while a save is writing is written by that save before it resolves', async () => {
@@ -279,170 +217,6 @@ suite('MAT-file editor: edit, undo, save', () => {
     await again;
     assert.strictEqual(valuesOf(disk(o)).get('negD').Value, '8');
     assert.strictEqual(o.doc.edits.dirty, false);
-  });
-
-  test('a paint in flight across a save paints the Status the save left', async () => {
-    const o = await open('cases.mat');
-    edit(o, 'scalarD', 'Value', '42');
-    const version = o.doc.version;
-    // Which of the paint's await and the save's write ends first, the test host cannot order;
-    // what makes the paint build again whichever does is that the save moves the version.
-    const from = o.view.posts.length;
-    o.view.send({ type: 'ready' });
-    await save(o);
-    assert.ok(o.doc.version > version, 'the save moved the version a paint checks after its await');
-    await waitFor('the paint', () => o.view.posts.slice(from).some((p) => p.type === 'setRows'));
-    assert.strictEqual(topRow(o.view.posts, 'scalarD').Status, '', 'not the Modified it built before the save');
-  });
-
-  test('a variable typed over as another class is Modified, and one added since the save stays New', async () => {
-    // Core swaps a variable typed as another class for a new one of its name, in its place.
-    const o = await open('cases.mat');
-    const top = (name: string) => tableOf(o.view.posts).find((r) => r.parent == null && nameOf(r) === name);
-    const str = topRow(o.view.posts, 'strScalar');
-    o.view.send({ type: 'edit', rowId: str.ID, columnId: 'Value', oldValue: str.Value, newValue: '0' });
-    await waitFor('strScalar a double', () => top('strScalar')?.Class === 'double');
-    assert.strictEqual(top('strScalar').Status, 'Modified', 'the file holds a strScalar');
-    o.view.send({ type: 'addEntry', className: 'MatlabVariable', rename: false });
-    await waitFor('the added variable', () => !!top('var'));
-    const added = top('var');
-    o.view.send({ type: 'edit', rowId: added.ID, columnId: 'Value', oldValue: added.Value, newValue: '"abc"' });
-    await waitFor('var a string', () => top('var')?.Class === 'string');
-    assert.strictEqual(top('var').Status, 'New', 'the file holds no var');
-    await save(o);
-    const again = top('var');
-    o.view.send({ type: 'edit', rowId: again.ID, columnId: 'Value', oldValue: again.Value, newValue: '1' });
-    await waitFor('var a double', () => top('var')?.Class === 'double');
-    assert.strictEqual(top('var').Status, 'Modified', 'saved, the file holds it');
-  });
-
-  test('an undo or a redo that moves the classes core offers tells the gallery, as a gesture does', async () => {
-    const o = await open('cases.mat');
-    edit(o, 'scalarD', 'Value', '42');
-    const classes = () => [...o.view.posts].reverse().find((p) => p.type === 'setRows').add.classes as string[];
-    const offered = classes();
-    assert.ok(offered.length > 1, 'the file takes more than a plain variable');
-    // Core's answer, moved by the undo: stood in for, as no edit of this file moves it.
-    const mat: any = DataModel.getDataSource(o.doc.srcId);
-    mat.getAllowedTypes = () => ['MatlabVariable'];
-    try {
-      await o.events[0].undo();
-      await waitFor('the gallery told of the undo', () => classes().length === 1);
-      delete mat.getAllowedTypes;
-      await o.events[0].redo();
-      await waitFor('and of the redo', () => classes().length === offered.length);
-    } finally {
-      delete mat.getAllowedTypes;
-    }
-  });
-
-  test('a save repaints the Status of the variables in the file, and not of one deleted from it', async () => {
-    const o = await open('cases.mat');
-    edit(o, 'scalarD', 'Value', '42');
-    o.view.send({ type: 'delete', rowIds: [topRow(o.view.posts, 'negD').ID] });
-    await waitFor('the deleted variable to leave the table', () => !tableOf(o.view.posts).some((r) => nameOf(r) === 'negD'));
-    const from = o.view.posts.length;
-    const held = new Set(tableOf(o.view.posts).map((r) => r.ID));
-    await save(o);
-    const spliced = o.view.posts.slice(from).filter((p) => p.type === 'updateEntryRows');
-    assert.deepStrictEqual(
-      spliced.map((p) => p.entryRowId),
-      [topRow(o.view.posts, 'scalarD').ID],
-      'the one variable whose Status the save cleared, and no rows the table does not hold',
-    );
-    assert.ok(spliced.every((p) => held.has(p.entryRowId)));
-    assert.strictEqual(topRow(o.view.posts, 'scalarD').Status, '');
-  });
-
-  test('a rename is the record with its new name; a delete leaves the rest as they were', async () => {
-    const o = await open('cases.mat');
-    edit(o, 'kp', 'Name', 'kpRenamed');
-    o.view.send({ type: 'delete', rowIds: [topRow(o.view.posts, 'negD').ID] });
-    assert.strictEqual(o.events.length, 2);
-    // Which variables the file holds changed, so the whole table is repainted.
-    await waitFor('the deleted variable to leave the table', () => !tableOf(o.view.posts).some((r) => nameOf(r) === 'negD'));
-    await save(o);
-    const saved = disk(o);
-    const back = valuesOf(saved);
-    assert.strictEqual(back.get('kpRenamed').Value, '1.5');
-    assert.ok(!back.has('kp') && !back.has('negD'));
-    keptUntouched(o.original, saved, ['kp', 'negD']);
-  });
-
-  test('Add makes `var` = 0, opens its name editor, and saves as a double', async () => {
-    const o = await open('cases.mat');
-    o.view.send({ type: 'addEntry', section: '', className: 'MatlabVariable', rename: true });
-    assert.strictEqual(o.events.length, 1);
-    await waitFor('the added row', () => tableOf(o.view.posts).some((r) => nameOf(r) === 'var'));
-    const rename = o.view.posts.find((p) => p.type === 'beginRename');
-    assert.ok(rename && rename.rowId === topRow(o.view.posts, 'var').ID, 'its name editor is asked for');
-    assert.strictEqual(topRow(o.view.posts, 'var').Status, 'New');
-    edit(o, 'var', 'Name', 'added1');
-    await save(o);
-    const back = valuesOf(disk(o));
-    assert.strictEqual(back.get('added1').Value, '0');
-    assert.strictEqual(back.get('added1').Class, 'double');
-    keptUntouched(o.original, disk(o), []);
-  });
-
-  test('two elements of a vector deleted in one gesture are one edit', async () => {
-    const o = await open('cases.mat');
-    const vec = topRow(o.view.posts, 'rowVec');
-    const kids = tableOf(o.view.posts).filter((r) => r.parent === vec.ID);
-    assert.strictEqual(kids.length, 3);
-    o.view.send({ type: 'delete', rowIds: [kids[0].ID, kids[2].ID] });
-    assert.strictEqual(o.events.length, 1, 'one gesture, one edit');
-    assert.strictEqual(topRow(o.view.posts, 'rowVec').Value, '2');
-    await o.events[0].undo();
-    assert.strictEqual(topRow(o.view.posts, 'rowVec').Value, '[1 2 3]', 'one undo puts both back');
-    await o.events[0].redo();
-    await save(o);
-    assert.strictEqual(valuesOf(disk(o)).get('rowVec').Value, '2');
-    keptUntouched(o.original, disk(o), ['rowVec']);
-  });
-
-  test('a Parameter takes an edit of its Value and its Storage Class; a property the save cannot write is refused', async () => {
-    const o = await open('pv_basic.mat');
-    // Of the object's CoderInfo a save writes the Storage Class, and nothing else: the Header File
-    // is refused, in core's words, naming the variable.
-    edit(o, 'p', 'headerFile', 'a.h');
-    const refused = o.view.posts.find((m) => m.type === 'validationError');
-    assert.ok(refused, 'the edit is refused');
-    assert.match(refused.reason, /"p"/);
-    assert.ok(!refused.reason.includes('binedit:'), 'the refusal names the variable, not the srcId');
-    assert.strictEqual(o.events.length, 0, 'and nothing reached VS Code');
-    assert.strictEqual(o.doc.edits.dirty, false);
-    edit(o, 'p', 'storageClass', 'ExportedGlobal');
-    edit(o, 'p', 'Value', '7');
-    assert.strictEqual(o.events.length, 2);
-    await save(o);
-    const saved = disk(o);
-    const p = valuesOf(saved).get('p');
-    assert.strictEqual(p.Value, '7');
-    assert.strictEqual(p.storageClass?.text ?? p.storageClass, 'ExportedGlobal');
-    assert.strictEqual(valuesOf(saved).get('q').Value, '5', 'the other Parameter is untouched');
-    // The object's edit is written into the file's objects; every variable record is as it was.
-    keptUntouched(o.original, saved, ['']);
-  });
-
-  test('a -v6 file stays uncompressed through a rename and a delete', async () => {
-    const o = await open('nested_handles.mat');
-    assert.strictEqual(topRow(o.view.posts, 's_fh')._valueEditable, false, 'a struct of function handles takes no value edit');
-    edit(o, 's_fh', 'Name', 's_renamed');
-    o.view.send({ type: 'delete', rowIds: [topRow(o.view.posts, 'c_fh').ID] });
-    assert.strictEqual(o.events.length, 2);
-    await save(o);
-    const saved = disk(o);
-    for (const [name, rec] of recordsOf(saved)) assert.strictEqual(rec.compressed, false, `"${name}" is uncompressed`);
-    const back = valuesOf(saved);
-    assert.ok(back.has('s_renamed') && !back.has('s_fh') && !back.has('c_fh'));
-    keptUntouched(o.original, saved, ['s_fh', 'c_fh']);
-  });
-
-  test('a save with no edit writes the file byte for byte', async () => {
-    const o = await open('cases.mat');
-    await save(o);
-    assert.ok(same(disk(o), o.original));
   });
 
   test('a save core refuses writes nothing, keeps the edits, and says why', async () => {
@@ -496,22 +270,6 @@ suite('MAT-file editor: edit, undo, save', () => {
     assert.ok(!tableOf(o.view.posts).some((r) => nameOf(r) === 'scalarD'));
   });
 
-  test('a paint that awaited the usage graph across a reload paints the tree the reload put in', async () => {
-    const o = await open('cases.mat');
-    const from = o.view.posts.length;
-    // A paint, now on its one await; the reload lands on it, and paints again itself.
-    o.view.send({ type: 'ready' });
-    const other = fixture('pv_basic.mat');
-    o.doc.replace({ stamp: undefined, bytes: other.buffer.slice(other.byteOffset, other.byteOffset + other.byteLength) });
-    const paints = () => o.view.posts.slice(from).filter((p) => p.type === 'setRows');
-    await waitFor('both paints', () => paints().length >= 2);
-    for (const paint of paints()) {
-      const names = paint.rows.filter((r: any) => r.parent == null).map(nameOf);
-      assert.ok(names.includes('p'), 'the reloaded file’s variables');
-      assert.ok(!names.includes('scalarD'), 'and none of the tree the reload replaced');
-    }
-  });
-
   test('revert reads the disk, and an edit from before it is not undone on the new tree', async () => {
     const changed: string[] = [];
     provider.onChanged = (uri) => changed.push(uri);
@@ -541,79 +299,6 @@ suite('MAT-file editor: edit, undo, save', () => {
     assert.strictEqual(o.doc.edits.dirty, false);
     await waitFor('the rows as saved', () => topRow(o.view.posts, 'negD').Value === '-2.5');
     assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, '42');
-  });
-
-  test('a gesture that throws part-way is still one edit, so Undo lands on the edit it undoes', async () => {
-    const o = await open('cases.mat');
-    edit(o, 'scalarD', 'Value', '42');
-    const vec = topRow(o.view.posts, 'rowVec');
-    const kids = tableOf(o.view.posts).filter((r) => r.parent === vec.ID);
-    const from = o.view.posts.length;
-    // The second of the gesture's two steps throws, after core recorded the first.
-    const session = DataModel as any;
-    const real = session.deleteNodeById;
-    let calls = 0;
-    session.deleteNodeById = (id: string) => {
-      if (++calls === 2) throw new Error('the second step failed');
-      return real.call(DataModel, id);
-    };
-    try {
-      o.view.send({ type: 'delete', rowIds: [kids[0].ID, kids[2].ID] });
-    } finally {
-      session.deleteNodeById = real;
-    }
-    assert.strictEqual(o.events.length, 2, 'the step core recorded is an edit VS Code knows of');
-    await waitFor('the rows as core left them', () => topRow(o.view.posts, 'rowVec').Value === '[2 3]');
-    await waitFor('the error, after the paint, which clears the banner', () => saidAfterPaint(o.view.posts.slice(from)));
-    assert.match(o.view.posts.filter((p) => p.type === 'error').pop().message, /the second step failed/);
-    await o.events[1].undo();
-    await waitFor('the delete undone', () => topRow(o.view.posts, 'rowVec').Value === '[1 2 3]');
-    assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, '42', 'and only the delete');
-    await o.events[0].undo();
-    assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, '3.141592653589793');
-    assert.strictEqual(o.doc.edits.dirty, false);
-  });
-
-  test('an edit that does not land puts the cell back, then says why; so does a message that throws', async () => {
-    const o = await open('cases.mat');
-    const session = DataModel as any;
-    // A row the tree no longer holds: every row painted again, then the error.
-    const scalar = topRow(o.view.posts, 'scalarD');
-    let from = o.view.posts.length;
-    o.view.send({ type: 'edit', rowId: scalar.ID + '-gone', columnId: 'Value', oldValue: scalar.Value, newValue: '42' });
-    await waitFor('every row painted, then the error', () => saidAfterPaint(o.view.posts.slice(from)));
-    assert.match(o.view.posts.filter((p) => p.type === 'error').pop().message, /Could not locate/);
-    // An edit core neither takes nor refuses with a reason: its variable repainted, then the error.
-    const real = session.editProperty;
-    session.editProperty = () => false;
-    from = o.view.posts.length;
-    try {
-      o.view.send({ type: 'edit', rowId: scalar.ID, columnId: 'Value', oldValue: scalar.Value, newValue: '42' });
-    } finally {
-      session.editProperty = real;
-    }
-    const after = o.view.posts.slice(from);
-    assert.deepStrictEqual(
-      after.map((p) => p.type),
-      ['updateEntryRows', 'error'],
-      'the variable put back as the tree holds it, and then the error',
-    );
-    assert.strictEqual(after[0].entryRowId, scalar.ID);
-    assert.strictEqual(topRow(o.view.posts, 'scalarD').Value, scalar.Value);
-    assert.strictEqual(o.events.length, 0, 'and no edit');
-    // A message whose handling throws: said, over every row painted again.
-    const find = session.findNodeById;
-    session.findNodeById = () => {
-      throw new Error('the lookup failed');
-    };
-    from = o.view.posts.length;
-    try {
-      o.view.send({ type: 'edit', rowId: scalar.ID, columnId: 'Value', oldValue: scalar.Value, newValue: '42' });
-    } finally {
-      session.findNodeById = find;
-    }
-    await waitFor('the error', () => saidAfterPaint(o.view.posts.slice(from)));
-    assert.match(o.view.posts.filter((p) => p.type === 'error').pop().message, /the lookup failed/);
   });
 
   test('Save As onto the file itself is a save', async () => {
@@ -733,30 +418,6 @@ suite('MAT-file editor: edit, undo, save', () => {
     edit(o, 'negD', 'Value', '7');
     await save(o);
     assert.deepStrictEqual(asked, [], 'so the next save does not take that write for an outside one');
-  });
-
-  test('a file whose records do not tile it opens read-only, and takes no edit', async () => {
-    const junk = new Uint8Array([...fixture('pv_basic.mat'), 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
-    const o = await open('pv_basic.mat', junk, 'tail.mat');
-    const set = o.view.posts.find((p) => p.type === 'setRows');
-    assert.strictEqual(set.editable, false);
-    assert.match(set.notice, /^Read-only: Cannot save "tail\.mat": /);
-    edit(o, 'x', 'Name', 'y');
-    assert.strictEqual(o.events.length, 0);
-    assert.strictEqual(o.doc.edits.dirty, false);
-  });
-
-  test('a -v7.3 file shows why it cannot be opened', async () => {
-    const header = new Uint8Array(600);
-    header.set(new TextEncoder().encode('MATLAB 7.3 MAT-file, Platform: x'));
-    header[124] = 0x00;
-    header[125] = 0x02;
-    header[126] = 0x49; // 'I'
-    header[127] = 0x4d; // 'M'
-    const o = await open('cases.mat', header, 'hdf5.mat');
-    const error = o.view.posts.find((p) => p.type === 'error');
-    assert.ok(error, 'the tab says it failed');
-    assert.match(error.message, /7\.3/);
   });
 
   test('a .mat that lands in the read-only view is handed to this editor', async () => {

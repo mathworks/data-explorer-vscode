@@ -43,15 +43,6 @@ const dataTypeOf = (all: Record<string, any>[], name: string): Cell => {
 };
 
 suite('a Data Type link resolves back to the document it came from', () => {
-  test('the target names this document by its full uri', async () => {
-    const uri = fixtureUri();
-    const cell = dataTypeOf(await rows(), 'Kp');
-    assert.ok(typeof cell === 'object' && cell !== null, 'Kp Data Type came through as a link cell');
-    assert.strictEqual((cell as { text: string }).text, 'MyAlias');
-    // The whole point: `MyAlias@file:///…/typelink.sldd`, not `MyAlias@typelink.sldd`.
-    assert.strictEqual((cell as { linkTarget?: string }).linkTarget, `MyAlias@${uri.toString()}`);
-  });
-
   test('handleNavigate reads that target back to the same file', async () => {
     const uri = fixtureUri();
     const cell = dataTypeOf(await rows(), 'Kp') as { linkTarget: string };
@@ -60,13 +51,5 @@ suite('a Data Type link resolves back to the document it came from', () => {
       opened = u;
     });
     assert.strictEqual(opened?.toString(), uri.toString(), 'the link round-tripped to its own document');
-  });
-
-  test('a built-in and a non-type name stay plain text', async () => {
-    // The negative half, in the same file and through the same installed core: a pin that
-    // started linking every string would pass the two tests above.
-    const all = await rows();
-    assert.strictEqual(dataTypeOf(all, 'Gain'), 'double');
-    assert.strictEqual(dataTypeOf(all, 'Borrowed'), 'Kp');
   });
 });

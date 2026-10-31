@@ -55,22 +55,6 @@ suite('SectionsTreeProvider', () => {
     assert.strictEqual(byLabel(children, 'model.slx')!.kind, 'model');
   });
 
-  test('the model surfaces an unresolved reference and an External Data group', async () => {
-    const [group] = await provider.getChildren();
-    const children = await provider.getChildren(group);
-    const model = byLabel(children, 'model.slx')!;
-    assert.strictEqual(model.collapsible, 'collapsed', 'model.slx is expandable');
-
-    const modelChildren = await provider.getChildren(model);
-    const missing = byLabel(modelChildren, 'plant.slx');
-    assert.ok(missing, 'the missing model reference (plant.slx) is present');
-    assert.strictEqual(missing!.kind, 'missing');
-
-    const external = byLabel(modelChildren, 'External Data');
-    assert.ok(external, 'the External Data group is present');
-    assert.strictEqual(external!.kind, 'group');
-  });
-
   test('getTreeItem for a real file: collapsible off, open command, file contextValue', async () => {
     const [group] = await provider.getChildren();
     const children = await provider.getChildren(group);

@@ -10,7 +10,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { copyFileSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { DataModel, parseBinarySldd, parseMat } from 'data-explorer-core';
+import { DataModel, parseBinarySldd } from 'data-explorer-core';
 import { MatEditorProvider } from '../../../src/host/MatEditorProvider';
 import { SlddTextEditorProvider } from '../../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../../src/host/BinarySlddEditorProvider';
@@ -36,43 +36,6 @@ export const fixturePath = (...parts: string[]): string => join(ctx().extensionU
 
 /** A MATLAB-written MAT-file of test-integration/fixtures/mat. */
 export const matFixture = (name: string): Uint8Array => new Uint8Array(readFileSync(fixturePath('mat', name)));
-
-/** The records of `bytes` by name, as core's reader frames them. */
-function recordBytes(bytes: Uint8Array, name: string): Uint8Array {
-  const parsed: any = parseMat(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
-  const record = parsed.records.find((r: any) => r.name === name);
-  assert.ok(record, `the fixture has a record "${name}"`);
-  return record.bytes as Uint8Array;
-}
-
-/** pv_basic.mat's 128-byte header, saying it has no subsystem: the head of a file of plain variables. */
-function plainHeader(): Uint8Array {
-  const header = matFixture('pv_basic.mat').slice(0, 128);
-  for (let i = 116; i < 124; i++) header[i] = 0x20;
-  return header;
-}
-
-const concat = (...parts: Uint8Array[]): Uint8Array => {
-  const out = new Uint8Array(parts.reduce((n, p) => n + p.byteLength, 0));
-  let at = 0;
-  for (const p of parts) {
-    out.set(p, at);
-    at += p.byteLength;
-  }
-  return out;
-};
-
-/** A MAT-file with no variable at all: the header alone, which core reads as an editable, empty file. */
-export const emptyMat = (): Uint8Array => plainHeader();
-
-/**
- * A MAT-file holding `x` twice (pv_basic's own record of it, written twice) with `str` between:
- * the malformed file MATLAB never writes and core keeps both of, as read.
- */
-export function twiceNamedMat(): Uint8Array {
-  const pv = matFixture('pv_basic.mat');
-  return concat(plainHeader(), recordBytes(pv, 'x'), recordBytes(pv, 'str'), recordBytes(pv, 'x'));
-}
 
 /**
  * The rows a MAT-file's table holds now: the last setRows with every `updateEntryRows` after it

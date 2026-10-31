@@ -2,11 +2,10 @@
 //
 // One edit made through a dictionary editor's message handler, as the table sends it, on a file
 // of its own in a fresh editor, and the file that editor then saves: a JSON .sldd's TextDocument,
-// a binary .sldd's own save (its save gate and its zip). And the same edit of the same model saved
-// by core's serializeSource instead, to hold the editors' saves to.
+// a binary .sldd's own save (its save gate and its zip).
 import * as vscode from 'vscode';
 import { readFileSync } from 'fs';
-import { DataModel, addChildToModel, createSession, findOwningEntry, ingest, removeChildFromModel } from 'data-explorer-core';
+import { DataModel } from 'data-explorer-core';
 import { SlddTextEditorProvider } from '../../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../../src/host/BinarySlddEditorProvider';
 import { peekModel } from 'data-explorer-view/host';
@@ -132,26 +131,3 @@ export async function binaryEditorSave(file: string, edit: Edit): Promise<Answer
   }
 }
 
-/**
- * The same model edit the editors make (the setter inside mutateSubtree, which is the editors'
- * mutateEntry, and the host's own Add and Delete), on a fresh read of `bytes` in a session of its
- * own, saved by core's serializeSource. An entry deleted whole is the one shape this does not make.
- */
-export function coreSave(bytes: Uint8Array, filename: string, edit: Edit): Uint8Array {
-  const session: any = createSession();
-  const root: any = ingest(session, bytes, { filename });
-  try {
-    const node = nodeAt(root, edit.path);
-    if (!node) throw new Error(`no node at ${edit.path}`);
-    if (edit.op === 'add') session.mutateSubtree(findOwningEntry(node), () => addChildToModel(node));
-    else if (edit.op === 'delete') session.mutateSubtree(findOwningEntry(node), () => removeChildFromModel(node));
-    else {
-      const result = session.mutateSubtree(findOwningEntry(node), () => node.setProperty(columnOf(edit), edit.text ?? ''));
-      if (result !== true) throw new Error(`core refused ${edit.path}: ${JSON.stringify(result)}`);
-    }
-    const out = session.serializeSource(root.name);
-    return out.kind === 'binary' ? out.bytes : new TextEncoder().encode(out.text);
-  } finally {
-    session.removeDataSource?.(root.name);
-  }
-}

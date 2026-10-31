@@ -11,8 +11,8 @@
 // it answers the binary editor's and the MAT-file editor's `onChanged`.
 //
 // It fires at keystroke rate, so the page's own rule is what keeps that free: a node is sent only
-// when it changes what the page shows (inspectorPage.ts). The last case pins that a keystroke in
-// another entry reaches the page as nothing at all.
+// when it changes what the page shows (inspectorPage.ts). A keystroke in the text view, and one in
+// another entry that reaches the page as nothing at all, are view's JSON engine's tests now.
 //
 // There is no route to the registered provider (activate() returns no API), so this wires its
 // own provider to its own inspector the way activate() and PropertiesViewProvider do, and reads
@@ -22,7 +22,7 @@ import * as vscode from 'vscode';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { InspectorSelection } from 'data-explorer-view/model';
 import { InspectorPage, findNode } from 'data-explorer-view/host';
-import { ctx, fakeTable, quiet, rowNamed, token, waitFor, wsUri } from './tools/hostHarness';
+import { ctx, fakeTable, rowNamed, token, waitFor, wsUri } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -113,40 +113,5 @@ suite('JSON .sldd: the Property Inspector follows the entry it shows', () => {
     );
     assert.ok(await vscode.workspace.applyEdit(undo), 'the undo applied');
     await waitFor('the inspector to show the undo', () => shownValue(sent) === '1');
-  }).timeout(60000);
-
-  test('a change typed into the text view shows in the inspector', async () => {
-    select('Number');
-    const text = doc.getText();
-    const span = spanOf(text, 'Number');
-    const record = JSON.parse(text.slice(span.offset, span.offset + span.length));
-    record.value = 5;
-    const edit = new vscode.WorkspaceEdit();
-    edit.replace(
-      uri,
-      new vscode.Range(doc.positionAt(span.offset), doc.positionAt(span.offset + span.length)),
-      JSON.stringify(record, null, '\t'),
-    );
-    assert.ok(await vscode.workspace.applyEdit(edit), 'the edit applied');
-    await waitFor('the inspector to show it', () => shownValue(sent) === '5');
-  }).timeout(60000);
-
-  test('a keystroke in another entry repaints the table and sends the inspector nothing', async () => {
-    select('Number');
-    const pages = sent.length;
-    const repaints = table.posts.length;
-    const text = doc.getText();
-    const pi = spanOf(text, 'PI');
-    const valueAt = text.indexOf('"value"', pi.offset);
-    assert.ok(valueAt > pi.offset && valueAt < pi.offset + pi.length, 'the fixture spells PI’s value');
-    const edit = new vscode.WorkspaceEdit();
-    edit.insert(uri, doc.positionAt(valueAt), ' ');
-    assert.ok(await vscode.workspace.applyEdit(edit), 'the keystroke applied');
-    await waitFor('the table to repaint the entry it was in', () =>
-      table.posts.slice(repaints).some((m) => m.type === 'updateEntryRows'),
-    );
-    await quiet(500, 'a page post the refresh might send');
-
-    assert.deepStrictEqual(sent.slice(pages), [], 'the inspector’s page was sent nothing');
   }).timeout(60000);
 });

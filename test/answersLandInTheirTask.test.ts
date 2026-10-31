@@ -13,6 +13,7 @@
 // half, so a change that pushed an answer into a later task (a timer, a frame) fails here rather
 // than as a flicker. Driven through the entry point as it ships, as tableMainChildRows.test.ts is.
 import { beforeAll, describe, expect, it } from 'vitest';
+import { nextTask } from './tools/nextTask.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -20,18 +21,6 @@ const posted: any[] = [];
 let table: any;
 let editor: any;
 const send = (data: any) => window.dispatchEvent(new MessageEvent('message', { data }));
-
-/**
- * What `read` sees at the start of the next task after `act`: after every microtask `act` queued,
- * and before any task it queued. The timer is set BEFORE `act`, so it runs ahead of a timer `act`
- * sets, which is what an answer pushed into a later task would be.
- */
-function nextTask<T>(act: () => void, read: () => T): Promise<T> {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(read()), 0);
-    act();
-  });
-}
 
 const ROWS = [
   { ID: 'section:design', parent: null, Name: { label: 'Design Data' } },

@@ -11,9 +11,9 @@
 //     the difference between ~4.3 s and ~0.2 ms, and a 74 MB postMessage against 684 bytes.
 //
 // The vitest suite covers the ops themselves (binaryEntryScopedEdit). What only real VS Code
-// can show is this side: a document edit reaching the provider's event at all, the closures
-// running against a model registered from a genuinely unzipped payload, and every open view
-// of the document being repainted rather than only the last one resolved.
+// can show is this side: a document edit reaching the provider's event at all, and the closures
+// running against a model registered from a genuinely unzipped payload. That every open view of
+// the document is repainted is view's binary engine's test now (its edit.test.ts).
 //
 // A webview cannot be driven from the test host (see cutPasteUndo.test.ts), so the edit is
 // pushed the way the message handler pushes it — the model op first, then pushEdit with the
@@ -152,65 +152,6 @@ suite('Binary .sldd undo/redo', () => {
       before,
       'the saved payload is the undone one',
     );
-
-    sub.dispose();
-    doc.dispose();
-    await vscode.workspace.fs.delete(uri);
-  });
-
-  test('every open view is repainted, narrowly when the edit says how and wide when it does not', async () => {
-    // Two things at once, because they are the same mechanism: a document repaints EVERY
-    // registered view (a split panel used to be dropped, leaving one table showing
-    // pre-undo rows), and it chooses the narrow repaint only when the edit carried a
-    // patch — an edit that could not state one must fall back to the wide repaint rather
-    // than leave the table stale.
-    const uri = await workingCopy('binary_undo_views.sldd');
-    const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
-    const edits: vscode.CustomDocumentEditEvent<vscode.CustomDocument>[] = [];
-    const sub = provider.onDidChangeCustomDocument((e) => edits.push(e));
-    const panel = makePanel();
-    await provider.resolveCustomEditor(doc, panel, token());
-    // Register the model through the live view, then close it — same reason as above.
-    const registered = (doc as unknown as { srcId: string }).srcId;
-    await waitFor('the ready/post round trip to register the document', () => !!DataModel.getDataSource(registered));
-    (doc as any).repaintAll();
-    panel.dispose();
-    await waitFor('the closed panel to leave the document’s views', () => (doc as any).views.size === 0);
-
-    // Stand-in views, which is the only way to observe WHICH repaint ran: a real webview
-    // panel cannot be asked what it was sent.
-    const calls: string[] = [];
-    const views = (doc as any).views as Set<{ repaintAll(): void; repaintOps(a: unknown[]): void }>;
-    views.clear();
-    for (const tag of ['a', 'b']) {
-      views.add({
-        repaintAll: () => calls.push(`${tag}:all`),
-        repaintOps: () => calls.push(`${tag}:ops`),
-      });
-    }
-
-    const srcId = (doc as unknown as { srcId: string }).srcId;
-    const root: any = DataModel.getDataSource(srcId);
-    assert.ok(root, 'the document’s model is registered');
-    const entry = firstEntry(root);
-    assert.ok(entry, 'the fixture has an entry to name in the patch');
-    const record = entryRecord(entry);
-    const before = (doc as unknown as { chunkXml: string }).chunkXml;
-
-    // With a patch: both views repaint narrowly.
-    (doc as any).pushEdit('Edit Name', before, before.replace('>Kp<', '>Ki<'), {
-      undo: [{ kind: 'replace', rowId: entry.id, record }],
-      redo: [{ kind: 'replace', rowId: entry.id, record }],
-    });
-    edits[0].undo();
-    assert.deepStrictEqual(calls, ['a:ops', 'b:ops'], 'a patched undo repaints both views, narrowly');
-
-    // Without one: both views repaint wide, from the text the undo just restored.
-    calls.length = 0;
-    (doc as any).pushEdit('Add child', before, before.replace('>Kp<', '>Ki<'));
-    edits[1].undo();
-    assert.deepStrictEqual(calls, ['a:all', 'b:all'], 'an undo with nothing to apply repaints both views, wide');
-    assert.strictEqual((doc as any).chunkXml, before, 'either way the payload is restored');
 
     sub.dispose();
     doc.dispose();

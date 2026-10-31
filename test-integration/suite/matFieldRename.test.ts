@@ -1,10 +1,9 @@
 // Copyright 2026 The MathWorks, Inc.
 //
-// A struct field renamed in the MAT-file editor, end to end: the field's Name cell is editable,
-// the rename is one gesture that undoes and redoes, core's refusal reaches the cell for a name the
-// struct has, one MATLAB cannot load, and a keyword; the save writes it, another tab shows it, Save
-// As writes it too; in a struct array every element shows the new name; a field just added is
-// renamed and saved; and the variable is marked as modified until the save.
+// A struct field renamed in the MAT-file editor, end to end: the save writes it, another tab shows
+// it, Save As writes it too. The rename's own rules (an editable Name cell, one gesture that undoes
+// and redoes, core's refusals, a struct array, a field just added, the Modified mark until the
+// save) are view's MAT-file engine's tests now.
 //
 // As in matEdit.test.ts, every save is held to what it did NOT touch: each other variable is the
 // bytes it was read from. The fixture is core's `cases.mat` (-v7), copied to a tmpdir per test.
@@ -48,17 +47,6 @@ function fieldsIn(bytes: Uint8Array, path: string[]): string[] {
     let node: any = mat;
     for (const n of path) node = node.children.find((c: any) => c.name === n);
     return node.children.map((c: any) => c.name);
-  } finally {
-    DataModel.removeDataSource(srcId);
-  }
-}
-
-/** Each element's field names, in order, of the struct array variable `name` in `bytes`. */
-function elementFieldsIn(bytes: Uint8Array, name: string): string[][] {
-  const srcId = `fieldrename-readback:${Math.random()}`;
-  const mat: any = DataModel.addMatSource(srcId, bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, { path: 'r.mat' });
-  try {
-    return mat.children.find((c: any) => c.name === name).children.map((e: any) => e.children.map((f: any) => f.name));
   } finally {
     DataModel.removeDataSource(srcId);
   }
@@ -163,25 +151,6 @@ suite('MAT-file editor: struct field rename', () => {
   const save = (o: Opened) => provider.saveCustomDocument(o.doc, token());
   const disk = (o: Opened) => new Uint8Array(readFileSync(o.path));
 
-  test("a field's Name cell is editable, and its rename is one edit that undoes and redoes", async () => {
-    const o = await open();
-    assert.strictEqual(rowAt(o.view.posts, ['structScalar', 'a']).Name.editable, true);
-    rename(o, ['structScalar', 'a'], 'alpha');
-    assert.strictEqual(o.events.length, 1, 'one gesture, one edit');
-    await waitFor('the renamed row', () => childNames(o.view.posts, ['structScalar']).includes('alpha'));
-    assert.deepStrictEqual(childNames(o.view.posts, ['structScalar']), ['alpha', 'b']);
-    const select = o.view.posts.filter((p) => p.type === 'selectRows').pop();
-    assert.deepStrictEqual(select?.rowIds, [rowAt(o.view.posts, ['structScalar', 'alpha']).ID], 'the renamed row is selected by its new id');
-    assert.strictEqual(topRow(o.view.posts, 'structScalar').Status, 'Modified', 'the variable is marked as modified');
-    await o.events[0].undo();
-    await waitFor('the old name back', () => childNames(o.view.posts, ['structScalar']).includes('a'));
-    assert.deepStrictEqual(childNames(o.view.posts, ['structScalar']), ['a', 'b']);
-    assert.strictEqual(o.doc.edits.dirty, false);
-    await o.events[0].redo();
-    await waitFor('the new name again', () => childNames(o.view.posts, ['structScalar']).includes('alpha'));
-    assert.strictEqual(o.doc.edits.dirty, true);
-  });
-
   test('the rename saves; another tab shows it; Save As writes it; every other variable is as it was', async () => {
     const o = await open();
     rename(o, ['structScalar', 'b'], 'beta');
@@ -203,66 +172,5 @@ suite('MAT-file editor: struct field rename', () => {
     assert.deepStrictEqual(fieldsIn(copy, ['structScalar']), ['alpha', 'beta']);
     keptUntouched(o.original, copy, ['structScalar']);
     assert.deepStrictEqual(fieldsIn(disk(o), ['structScalar']), ['a', 'beta'], 'the file it came from is as last saved');
-  });
-
-  for (const [what, newValue, reason] of [
-    // Each named as core names a refused edit of a row (editRefusalText): `Cannot rename "<row>": <why>.`
-    ['a name another field of the struct has', 'b', /^Cannot rename "structScalar\.a": 'b' already names another member of structScalar\.$/],
-    ['a name MATLAB cannot load', '1x', /^Cannot rename "structScalar\.a": Invalid MATLAB name\. Must start with a letter/],
-    ['a keyword', 'end', /^Cannot rename "structScalar\.a": 'end' is a reserved MATLAB keyword\.$/],
-    ['an empty name', '', /^Cannot rename "structScalar\.a": Name cannot be empty\.$/],
-    ['a name longer than MATLAB takes', 'x'.repeat(64), /maximum length of 63 characters/],
-  ] as const) {
-    test(`a rename to ${what} is refused in core's words, and records nothing`, async () => {
-      const o = await open();
-      rename(o, ['structScalar', 'a'], newValue);
-      await waitFor('the refusal', () => o.view.posts.some((p) => p.type === 'validationError'));
-      const refused = o.view.posts.filter((p) => p.type === 'validationError').pop();
-      assert.match(refused.reason, reason);
-      assert.ok(!refused.reason.includes('binedit:'), 'the refusal names the file, not the session source');
-      assert.strictEqual(refused.invalidValue, newValue);
-      assert.strictEqual(o.events.length, 0, 'no edit reached VS Code');
-      assert.strictEqual(o.doc.edits.dirty, false);
-      assert.deepStrictEqual(childNames(o.view.posts, ['structScalar']), ['a', 'b']);
-    });
-  }
-
-  test('in a struct array every element takes the new name, in the table and in the saved file', async () => {
-    const o = await open();
-    const elements = childNames(o.view.posts, ['struct1x3']);
-    assert.strictEqual(elements.length, 3);
-    rename(o, ['struct1x3', elements[0], 'a'], 'z');
-    await waitFor('every element renamed', () => elements.every((e) => childNames(o.view.posts, ['struct1x3', e]).includes('z')));
-    for (const e of elements) assert.deepStrictEqual(childNames(o.view.posts, ['struct1x3', e]), ['z', 'b'], `element ${e}`);
-    assert.strictEqual(o.events.length, 1);
-    await save(o);
-    const saved = disk(o);
-    assert.deepStrictEqual(elementFieldsIn(saved, 'struct1x3'), [['z', 'b'], ['z', 'b'], ['z', 'b']]);
-    keptUntouched(o.original, saved, ['struct1x3']);
-    const again = await reopen(o.path);
-    for (const e of elements) assert.deepStrictEqual(childNames(again.view.posts, ['struct1x3', e]), ['z', 'b']);
-  });
-
-  test('a field of a nested struct is renamed at its depth, and saves', async () => {
-    const o = await open();
-    rename(o, ['structNest', 'a', 'b'], 'inner');
-    await waitFor('the nested rename', () => childNames(o.view.posts, ['structNest', 'a']).includes('inner'));
-    await save(o);
-    assert.deepStrictEqual(fieldsIn(disk(o), ['structNest', 'a']), ['inner']);
-    keptUntouched(o.original, disk(o), ['structNest']);
-  });
-
-  test('a field just added (`field`) is renamed and saved under its new name', async () => {
-    const o = await open();
-    o.view.send({ type: 'addChild', rowId: topRow(o.view.posts, 'structScalar').ID });
-    await waitFor('the added field', () => childNames(o.view.posts, ['structScalar']).includes('field'));
-    rename(o, ['structScalar', 'field'], 'gamma');
-    await waitFor('the added field renamed', () => childNames(o.view.posts, ['structScalar']).includes('gamma'));
-    assert.strictEqual(o.events.length, 2, 'the add and the rename, an edit each');
-    await save(o);
-    assert.deepStrictEqual(fieldsIn(disk(o), ['structScalar']), ['a', 'b', 'gamma']);
-    keptUntouched(o.original, disk(o), ['structScalar']);
-    const again = await reopen(o.path);
-    assert.deepStrictEqual(childNames(again.view.posts, ['structScalar']), ['a', 'b', 'gamma']);
   });
 });

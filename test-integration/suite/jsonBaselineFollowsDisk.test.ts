@@ -13,9 +13,9 @@
 //     changes, or edits made in the text view first): the baseline was the EDITED text, so the
 //     entries that differ from the file showed nothing at all.
 //
-// Each needs the real host: what VS Code reports at a reload, a revert and a dirty open — and
-// that it reports a reload with no dirty-state event at all — is what the table has to read it
-// from.
+// The first two need the real host: what VS Code reports at a reload and a revert — and that it
+// reports a reload with no dirty-state event at all — is what the table has to read it from. The
+// dirty open is view's JSON engine's test now (its baseline.test.ts).
 import * as assert from 'assert';
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
@@ -121,33 +121,6 @@ suite('A JSON .sldd table marks what differs from the file on disk', () => {
     }
   }).timeout(60000);
 
-  test('a document already dirty when the table opens marks what differs from the file', async () => {
-    const uri = wsUri('json_baseline_dirty_open_copy.sldd');
-    await vscode.workspace.fs.copy(wsUri('data.sldd'), uri, { overwrite: true });
-    const table = fakeTable();
-    try {
-      const doc = await vscode.workspace.openTextDocument(uri);
-      const edited = withNumber(doc.getText(), 55);
-      const edit = new vscode.WorkspaceEdit();
-      edit.replace(uri, new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), edited);
-      assert.ok(await vscode.workspace.applyEdit(edit), 'the edit applied');
-      await waitFor('the document to be dirty', () => doc.isDirty);
-
-      await new SlddTextEditorProvider(ctx()).resolveCustomTextEditor(doc, table.panel, token());
-      table.send({ type: 'ready' });
-      await waitFor('the first paint', () => table.posts.some((m) => m.type === 'setRows'));
-      await waitFor('the entry the file does not hold to be marked', () => marked(table.rows()).includes('Number'), 10000, () =>
-        `marked ${JSON.stringify(marked(table.rows()))}`,
-      );
-      await quiet(500, 'a later repaint taking the mark away');
-
-      assert.deepStrictEqual(marked(table.rows()), ['Number'], 'that entry, and only it');
-    } finally {
-      table.close();
-      await vscode.workspace.fs.delete(uri);
-    }
-  }).timeout(60000);
-
   test('an edit to a clean document does not read the file to tell it from a reload', async () => {
     // A reload says itself only by leaving the text equal to the file, so a change to a clean
     // document is checked against the file — and the check read the WHOLE file, in every tab, on
@@ -184,36 +157,6 @@ suite('A JSON .sldd table marks what differs from the file on disk', () => {
       table.close();
       await vscode.commands.executeCommand('workbench.action.closeAllEditors');
       registered.dispose();
-    }
-  }).timeout(60000);
-
-  test('a webview that has not asked for its rows yet is sent none, whatever repaints', async () => {
-    // A new baseline repaints every tab, and a change nothing narrow can plan repaints wide —
-    // and a tab whose webview is still loading has no listener yet: a full payload posted to it
-    // is a parse and a row build thrown away, before the one its `ready` asks for.
-    const uri = wsUri('json_baseline_before_ready_copy.sldd');
-    await vscode.workspace.fs.copy(wsUri('data.sldd'), uri, { overwrite: true });
-    const table = fakeTable();
-    try {
-      const doc = await vscode.workspace.openTextDocument(uri);
-      await new SlddTextEditorProvider(ctx()).resolveCustomTextEditor(doc, table.panel, token());
-      const edit = new vscode.WorkspaceEdit();
-      edit.insert(uri, new vscode.Position(0, 0), ' ');
-      assert.ok(await vscode.workspace.applyEdit(edit), 'the edit applied');
-      assert.ok(await doc.save(), 'and was saved');
-      await quiet(1000, 'a repaint of the change or of the save');
-      assert.deepStrictEqual(
-        table.posts.filter((m) => m.type === 'setRows' || m.type === 'updateEntryRows').map((m) => m.type),
-        [],
-        'nothing was painted before the webview asked',
-      );
-
-      table.send({ type: 'ready' });
-      await waitFor('the paint it asked for', () => table.posts.some((m) => m.type === 'setRows'));
-      assert.deepStrictEqual(marked(table.rows()), [], 'saved, so nothing is marked');
-    } finally {
-      table.close();
-      await vscode.workspace.fs.delete(uri);
     }
   }).timeout(60000);
 });

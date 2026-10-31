@@ -3,12 +3,12 @@
 // `vscode.workspace.findFiles` and `workspace.fs.readFile` resolve against the
 // fixture workspace (binary.sldd, data.sldd, params.sldd, model.slx). The pure
 // name-extraction rules are unit-tested in view's test/nameExtract.test.ts; here we
-// prove the end-to-end contract the vitest suite cannot reach:
-//   - the index builds a COMPLETE name list from files that are never OPENED
-//     (the whole point of eager, standalone indexing);
-//   - it spans every format (.sldd JSON, .sldd zip/binary, .slx, .mat);
-//   - it is DUP-PRESERVING across files (the same name in two sources yields two
-//     records, never a collapsed single entry).
+// prove the end-to-end contract the vitest suite cannot reach: the index builds a
+// COMPLETE name list from files that are never OPENED (the whole point of eager,
+// standalone indexing), and reads an unsaved buffer over the file. What it lists from
+// each format, and that a name in two files is two records, are view's tests now (its
+// test/nameIndex.test.ts, over the same fixtures); one .mat stays here, end to end
+// through the host's own listing and reads.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { invalidate, ensureIndex, listEntries, reindexFile } from '../../src/host/nameIndex';
@@ -45,53 +45,6 @@ suite('workspace name index', () => {
         ['sldd', 'mat', 'workspace', 'block'].includes(e.kind),
         `a record has a known kind (got ${e.kind})`,
       );
-    }
-  });
-
-  test('lists .sldd entry names from an unopened JSON dictionary', async () => {
-    const entries = await listEntries();
-    const fromData = entries.filter((e) => e.sourceLabel === 'data.sldd');
-    const names = fromData.map((e) => e.name);
-    // Spot-check a few names that exist in the fixture data.sldd.
-    for (const expected of ['PI', 'Number', 'Struct', 'stringArray']) {
-      assert.ok(names.includes(expected), `data.sldd contributes "${expected}"`);
-    }
-    assert.ok(fromData.every((e) => e.kind === 'sldd'), 'all data.sldd records are kind "sldd"');
-  });
-
-  test('lists entry names from an unopened compressed-binary (zip) .sldd', async () => {
-    // binary.sldd starts with the PK zip magic (0x50 0x4B) — it exercises the
-    // parseBinarySldd path, not JSON.parse.
-    const entries = await listEntries();
-    const fromBinary = entries.filter((e) => e.sourceLabel === 'binary.sldd');
-    assert.ok(fromBinary.length > 0, 'the zip .sldd contributes entry names');
-    assert.ok(fromBinary.every((e) => e.kind === 'sldd'), 'all binary.sldd records are kind "sldd"');
-  });
-
-  test('preserves duplicate names across files (never collapsed)', async () => {
-    // "structArray" exists in BOTH data.sldd and params.sldd in the fixture — a
-    // complete, dup-preserving index must surface both occurrences as distinct
-    // records so search can navigate to either source.
-    const entries = await listEntries();
-    const structArrays = entries.filter((e) => e.name === 'structArray');
-    const labels = structArrays.map((e) => e.sourceLabel).sort();
-    assert.ok(labels.includes('data.sldd'), 'the data.sldd occurrence is present');
-    assert.ok(labels.includes('params.sldd'), 'the params.sldd occurrence is present');
-    assert.ok(
-      structArrays.length >= 2,
-      `both occurrences are distinct records (got ${structArrays.length})`,
-    );
-  });
-
-  test('spans multiple .sldd sources (JSON + zip)', async () => {
-    const entries = await listEntries();
-    const labels = new Set(entries.map((e) => e.sourceLabel));
-    // The flat fixture workspace has three .sldd sources that carry entries.
-    // (model.slx is a minimal fixture with no model-workspace vars or block→param
-    // usages, so it contributes no name records — the .slx extraction path is
-    // covered by view's unit suite, its test/nameExtract.test.ts.)
-    for (const f of ['data.sldd', 'params.sldd', 'binary.sldd']) {
-      assert.ok(labels.has(f), `the index includes entries from ${f}`);
     }
   });
 
