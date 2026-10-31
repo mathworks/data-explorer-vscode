@@ -1,7 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 // @vitest-environment happy-dom
 //
-// A refused Add Child, Delete or Add (`refused`, host/refusal.ts), through the webview entry point
+// A refused Add Child, Delete or Add (`refused`, view's refusal.ts), through the webview entry point
 // as it ships (table-main.ts): shown in the dialog a refused cell edit is shown in, titled by the
 // gesture, with the host's reason and nothing else, and still there after the repaint that may
 // follow it. Each editor said one in the banner, which every repaint clears, so a refusal followed

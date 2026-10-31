@@ -15,13 +15,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DataModel, isGraphPath, newSourceCache } from 'data-explorer-core';
 import { LAZY_ROW_BUDGET, UsageGraphs } from 'data-explorer-view/model';
-import { clearClipboard } from '../../src/host/clipboard.js';
 import { bytesOf, expectGolden, fakeFile, filesUnder, fixtureFolders, nameOf } from './fixtures.js';
 import { nodeReader } from './nodeReads.js';
-import { isModelFixture, openTable, routeOf } from './views.js';
+import { isModelFixture, openTable, registers, routeOf } from './views.js';
 
 beforeAll(() => {
-  clearClipboard();
+  registers.clearClipboard();
   DataModel.removeAll();
 });
 

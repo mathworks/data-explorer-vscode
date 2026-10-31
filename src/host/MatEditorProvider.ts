@@ -19,6 +19,7 @@
 // (engineTable.ts), and the messages the webview sends are answered as every table view answers
 // them (tableDispatch.ts) or handed to the table's own commands.
 import * as vscode from 'vscode';
+import { describeSource } from 'data-explorer-view/model';
 import { answerMatrixRequest, type MatSave } from 'data-explorer-view/host';
 import { renderTableWebview } from './webviewHtml.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
@@ -31,7 +32,6 @@ import { sameFile } from './safeWrite.js';
 import { backupId } from './backupId.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
-import { describeSource } from './refusal.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 import { engineTable, matRows } from './engineTable.js';
 import { MatDocument, SharedBackup, type DiskRead } from './matDocument.js';

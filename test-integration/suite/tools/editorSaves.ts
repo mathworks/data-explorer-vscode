@@ -6,11 +6,10 @@
 // by core's serializeSource instead, to hold the editors' saves to.
 import * as vscode from 'vscode';
 import { readFileSync } from 'fs';
-import { DataModel, createSession, ingest } from 'data-explorer-core';
+import { DataModel, addChildToModel, createSession, findOwningEntry, ingest, removeChildFromModel } from 'data-explorer-core';
 import { SlddTextEditorProvider } from '../../../src/host/SlddTextEditorProvider';
 import { BinarySlddEditorProvider } from '../../../src/host/BinarySlddEditorProvider';
 import { peekModel } from 'data-explorer-view/host';
-import { addChildToModel, findOwningEntry, removeChildFromModel } from '../../../src/host/structuralEdit';
 import { ctx, fakePanel, quiet, token, waitFor } from './hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
