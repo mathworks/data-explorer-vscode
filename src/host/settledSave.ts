@@ -63,9 +63,9 @@ import { EditStackIndex } from 'data-explorer-view/host';
  * until it is saved or reverted, whatever its stack does meanwhile (`_isDirtyFromContentChange`,
  * measured against VS Code 1.144's workbench). The copy each byte-backed document keeps.
  *
- * It is also where VS Code is told of the two cases its own flag gets wrong, both on a push, which
- * then also calls `lost`, for the document to send VS Code that change event: it keeps the tab dirty
- * until the next save or revert, as the copy is.
+ * It is also where VS Code is told of the cases its own flag gets wrong, each on a move of the stack,
+ * which then also calls `lost`, for the document to send VS Code that change event: it keeps the tab
+ * dirty until the next save or revert, as the copy is.
  *  - VS Code's save point is an index into its edit list, and a new edit takes the place of the
  *    undone ones: save, undo past the save, make a different edit, and the new edit sits at the saved
  *    index, so VS Code reads the tab clean over a file that lacks it (`isDirty` is `_savePoint !==
@@ -75,6 +75,12 @@ import { EditStackIndex } from 'data-explorer-view/host';
  *    (`isDirty` reads `_fromBackup` only then): one edit and its undo put the index back at the save
  *    point, and VS Code reads clean over a file that never held the restored document. EditStackIndex
  *    keeps it dirty until it is saved or reverted. The first push tells VS Code.
+ *  - Once a push has discarded a save point, VS Code's index stays unreliable: its revert puts the
+ *    index at that stale save point and keeps the edits before it, whose undo and redo no longer
+ *    lead to the file, and a later save sets the save point over them. From then on, the first move
+ *    after every save or revert tells VS Code too. VS Code then reads clean only from a save or a
+ *    revert to the next move, while the document is the file. It errs dirty: such a document's tab
+ *    can stay dirty after an undo back to a save.
  */
 export class EditStackCopy extends EditStackIndex {
   private changedOffStack = false;
@@ -82,6 +88,10 @@ export class EditStackCopy extends EditStackIndex {
   private savePoint: number | null = 0;
   /** Restored from a backup, with VS Code not yet told: until a push, a save or a revert. */
   private restored: boolean;
+  /** A push has discarded a save point, so VS Code's index is unreliable from then on (see above). */
+  private indexStale = false;
+  /** Set by a save or a revert while `indexStale`: the next move tells VS Code. */
+  private armed = false;
 
   /** `lost`: a push VS Code would read as reaching the save point (see above). */
   constructor(
@@ -104,13 +114,23 @@ export class EditStackCopy extends EditStackIndex {
   override pushed(): void {
     // The save point is among the undone edits this push discards (EditStackIndex's own test).
     const discards = this.savePoint !== null && this.savePoint > this.here();
-    const restored = this.restored;
+    const tell = discards || this.restored || this.armed;
     super.pushed();
-    if (discards) this.savePoint = null;
-    if (!discards && !restored) return;
-    this.restored = false;
-    this.changedWithoutEdit();
-    this.lost();
+    if (discards) {
+      this.savePoint = null;
+      this.indexStale = true;
+    }
+    if (tell) this.tell();
+  }
+
+  override undone(): void {
+    super.undone();
+    if (this.armed) this.tell();
+  }
+
+  override redone(): void {
+    super.redone();
+    if (this.armed) this.tell();
   }
 
   override saved(at?: number): void {
@@ -118,12 +138,21 @@ export class EditStackCopy extends EditStackIndex {
     this.restored = false;
     super.saved(at);
     this.savePoint = at ?? this.here();
+    this.armed = this.indexStale;
   }
 
   override reverted(): void {
     this.changedOffStack = false;
-    // Its save point moves through `saved`, which EditStackIndex.reverted calls.
+    // Its save point moves, and the next move is armed, through `saved`, which EditStackIndex.reverted calls.
     super.reverted();
+  }
+
+  /** VS Code is told the document changed with no edit, as the copy now reads it. */
+  private tell(): void {
+    this.restored = false;
+    this.armed = false;
+    this.changedWithoutEdit();
+    this.lost();
   }
 }
 
