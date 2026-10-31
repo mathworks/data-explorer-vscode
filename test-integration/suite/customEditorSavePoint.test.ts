@@ -151,6 +151,17 @@ suite('A real tab stays dirty after a save, an undo past it and a different edit
         await waitFor('the second edit to reach the table', () => shown() === second);
         await quiet(1500, "VS Code's taking the second edit, which would read the tab clean");
         assert.strictEqual(dirty(), true, `the tab reads dirty: the file holds ${first}, the document ${second}, and closing it must ask`);
+
+        // VS Code's stack is as it was: the second edit undoes and redoes, and the tab stays dirty
+        // through both, until a save, which writes it and reads clean.
+        await vscode.commands.executeCommand('undo');
+        await waitFor('the undo of the second edit', () => shown() !== second && shown() !== first);
+        assert.strictEqual(dirty(), true, 'still dirty after undoing it: the file holds the first edit');
+        await vscode.commands.executeCommand('redo');
+        await waitFor('the redo of the second edit', () => shown() === second);
+        assert.strictEqual(dirty(), true, 'still dirty after redoing it');
+        assert.ok(await vscode.workspace.save(uri), 'the tab saved again');
+        await waitFor('the save to make the tab clean', () => dirty() === false);
       } finally {
         // Closed without a prompt whatever it reads: the tab made active again, then reverted and closed.
         if (tabOf(uri)) {
