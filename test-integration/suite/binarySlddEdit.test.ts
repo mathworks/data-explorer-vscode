@@ -2,8 +2,8 @@
 // Integration tests for the writable BinarySlddEditorProvider inside real VS Code.
 // Drives the provider directly (openCustomDocument + resolveCustomEditor + save)
 // to cover the vscode glue the vitest suite cannot: the writable custom-document
-// contract and the render shell. The save gate and the re-zip are view's binary
-// engine's tests now.
+// contract, the render shell, and the name the source is registered under. The save
+// gate and the re-zip are view's binary engine's tests now.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { DataModel } from 'data-explorer-core';
@@ -61,6 +61,44 @@ suite('BinarySlddEditorProvider', () => {
     assert.ok(panel.webview.html.includes('dex-tree-table'), 'render shell present');
     panel.dispose();
     doc.dispose();
+  });
+
+  // `meta.path` is what lets a model's `x@my params.sldd` link find this open dictionary:
+  // core tries the srcId's own basename first, and this provider's srcId is built from
+  // `uri.toString()`, which percent-encodes. A space is the everyday case on the paths
+  // MATLAB projects live on, so the encoded srcId matching nothing is not a corner.
+  //
+  // Asserted after BOTH registrations — the paint and the post-save reBaseline — because
+  // they are two callers of one rule, and a save that registered a different spelling
+  // would silently change whether a model's link resolves. Only an integration test can
+  // see this: the provider imports `vscode`, so the vitest suite cannot reach it, and the
+  // saved bytes do not carry `meta.path` at all.
+  test('registers the source under the DECODED basename, before and after a save', async () => {
+    const src = wsUri('binary.sldd');
+    const dst = wsUri('my params.sldd');
+    await vscode.workspace.fs.copy(src, dst, { overwrite: true });
+    const doc = await provider.openCustomDocument(dst, {} as vscode.CustomDocumentOpenContext, token());
+    const panel = makePanel();
+    // Cleaned up in a `finally` because the copy lands in the workspace folder that
+    // sectionsTree's test enumerates: leaking it on a failure here fails that test too,
+    // and a second red herring is the last thing a failure needs.
+    try {
+      await provider.resolveCustomEditor(doc, panel, token());
+      const registered = () => (DataModel.getDataSource((doc as any).srcId) as any)?.meta?.path;
+      await waitFor('the paint to register the document', () => registered() !== undefined);
+
+      // The srcId really is encoded, so "meta.path differs from it" means the decode is
+      // load-bearing and not a restatement of the same string.
+      assert.ok((doc as any).srcId.includes('my%20params.sldd'), 'srcId is percent-encoded');
+      assert.strictEqual(registered(), 'my params.sldd', 'paint registered the decoded basename');
+
+      await provider.saveCustomDocument(doc, token());
+      assert.strictEqual(registered(), 'my params.sldd', 'reBaseline registered the same spelling');
+    } finally {
+      panel.dispose();
+      doc.dispose();
+      await vscode.workspace.fs.delete(dst);
+    }
   });
 
   // "Reopen Editor With…" offers this viewType for EVERY *.sldd, because a selector
