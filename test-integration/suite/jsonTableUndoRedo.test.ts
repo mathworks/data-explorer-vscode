@@ -13,7 +13,7 @@
 // failure with its reason: a skip there would hide the very regression this test is for.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { mkdtempSync, readFileSync } from 'fs';
+import { mkdtempSync, readFileSync, rmSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { buildSectionRowId } from 'data-explorer-view/model';
@@ -74,8 +74,8 @@ async function roundTrip(label: string, gesture: (tab: Tab) => Promise<{ edited:
   const opened: Opened = [];
   registers.clearClipboard();
   registers.clearDrag();
+  const dir = mkdtempSync(join(tmpdir(), 'dex-json-undo-redo-'));
   try {
-    const dir = mkdtempSync(join(tmpdir(), 'dex-json-undo-redo-'));
     const tab = await openTab('json', opened, dir, 'values_text.sldd', fixture());
     const original = readFileSync(tab.path);
     const r = await gesture(tab);
@@ -93,6 +93,8 @@ async function roundTrip(label: string, gesture: (tab: Tab) => Promise<{ edited:
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
     closeAll(opened);
     registers.clearClipboard();
+    // The temporary folder goes too: each case left one behind.
+    rmSync(dir, { recursive: true, force: true });
   }
 }
 
