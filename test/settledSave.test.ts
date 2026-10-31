@@ -9,7 +9,7 @@ import { EditStackCopy, saveSettled, type UnfinishedSave } from '../src/host/set
 /** None of these saves writes over a newer one, so none has an extra round to fail. */
 const NO_EXTRA_ROUND: UnfinishedSave = {
   name: 'params.sldd',
-  unsaved: () => expect.fail('no extra round ran'),
+  changed: () => expect.fail('no extra round ran'),
   tell: () => expect.fail('no extra round ran'),
   isConflict: () => false,
 };
