@@ -26,14 +26,41 @@ beforeEach(() => {
   registers.clearDrag();
 });
 
+/** The files under `dir` (from the repository root) whose name ends in `ext`. */
+const files = (dir: string, ext: string): string[] =>
+  readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? files(`${dir}/${e.name}`, ext) : e.name.endsWith(ext) ? [`${dir}/${e.name}`] : [],
+  );
+
+/**
+ * View's own factories that make registers when they are not handed any: the window would then hold
+ * a second clipboard. Each is read off view's built code (below), so a new one is noticed.
+ */
+const VIEW_REGISTER_MAKERS: Record<string, string[]> = {
+  // createWorkspace({ registers }) defaults to a createRegisters() of its own.
+  'model/source/workspace.js': ['createWorkspace'],
+};
+
 describe("the window's registers", () => {
   it('are made once, in windowRegisters.ts, and nowhere else in the extension', () => {
-    const files = (dir: string): string[] =>
-      readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap((e) =>
-        e.isDirectory() ? files(`${dir}/${e.name}`) : e.name.endsWith('.ts') ? [`${dir}/${e.name}`] : [],
-      );
-    const makers = files('src').filter((f) => /\bcreateRegisters\(/.test(code(f)));
+    const makers = files('src', '.ts').filter((f) => /\bcreateRegisters\(/.test(code(f)));
     expect(makers).toEqual(['src/host/windowRegisters.ts']);
+  });
+
+  it("are not made behind the extension's back by one of view's factories that defaults its own", () => {
+    // Which of view's built files make registers of their own, besides createRegisters itself: each
+    // is listed above with the factories it exports, so a factory view adds is not missed.
+    const VIEW = 'node_modules/data-explorer-view/dist';
+    const defaulting = files(VIEW, '.js')
+      .map((f) => f.slice(VIEW.length + 1))
+      .filter((f) => f !== 'model/edit/registers.js' && /\bcreateRegisters\(\)/.test(readFileSync(join(ROOT, VIEW, f), 'utf8')));
+    expect(defaulting.sort()).toEqual(Object.keys(VIEW_REGISTER_MAKERS).sort());
+    // No file of the extension calls one. One that must would hand it the window's `registers`, and
+    // then this is where that is allowed.
+    for (const factory of Object.values(VIEW_REGISTER_MAKERS).flat()) {
+      const callers = files('src', '.ts').filter((f) => new RegExp(`\\b${factory}\\(`).test(code(f)));
+      expect(callers, `${factory} would give its documents a clipboard of their own`).toEqual([]);
+    }
   });
 
   for (const doc of ['matDocument.ts', 'binaryDocument.ts', 'jsonDocument.ts']) {
