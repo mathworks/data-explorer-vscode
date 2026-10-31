@@ -25,8 +25,8 @@ import { renderTableWebview } from './webviewHtml.js';
 import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { subscribeUsageRepost } from './usageRepostWatch.js';
 import { registerAddGalleryView, unregisterAddGalleryView } from './editorHub.js';
-import { OVERWRITE, REVERT } from './diskConflict.js';
-import { followDisk, readForOpen, readStamped, refuseIfChangedOnDisk, watchDisk, writeUserFile } from './diskFollow.js';
+import { OVERWRITE, REVERT, type DiskStamp } from './diskConflict.js';
+import { followDisk, readForOpen, readStamped, refuseIfChangedOnDisk, unfinishedSave, watchDisk, writeUserFile } from './diskFollow.js';
 import { saveSettled } from './settledSave.js';
 import { sameFile } from './safeWrite.js';
 import { backupId } from './backupId.js';
@@ -53,7 +53,11 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
   // is this document's).
   public onChanged?: (uriString: string) => void;
 
-  private readonly _onDidChangeCustomDocument = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<MatDocument>>();
+  // An edit, onto VS Code's stack; or, with no undo and redo, a change VS Code keeps dirty until a
+  // save or a revert (a save that could not finish, settledSave.ts).
+  private readonly _onDidChangeCustomDocument = new vscode.EventEmitter<
+    vscode.CustomDocumentEditEvent<MatDocument> | vscode.CustomDocumentContentChangeEvent<MatDocument>
+  >();
   readonly onDidChangeCustomDocument = this._onDidChangeCustomDocument.event;
 
   /**
@@ -62,6 +66,18 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
    */
   askSaveConflict: (message: string) => Thenable<string | undefined> = (message) =>
     vscode.window.showErrorMessage(message, OVERWRITE, REVERT);
+
+  /**
+   * Write the user's file, and answer the stamp the write left (diskFollow.writeUserFile). A
+   * property so that the integration suite can hold a save's write, as a slow disk holds one.
+   */
+  writeUserFile: (uri: vscode.Uri, bytes: Uint8Array) => Promise<DiskStamp | undefined> = writeUserFile;
+
+  /**
+   * Show the user an error: a save that could not finish (settledSave.ts). A property so that the
+   * integration suite can hear it.
+   */
+  showError: (message: string) => void = (message) => void vscode.window.showErrorMessage(message);
 
   constructor(private readonly context: vscode.ExtensionContext) {}
 
@@ -173,11 +189,19 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
   async saveCustomDocument(document: MatDocument, token: vscode.CancellationToken): Promise<void> {
     // Written again if the stack moved while it was being written, so that VS Code, which calls
     // what the document holds when this resolves saved, is right to (settledSave.ts).
-    await saveSettled(document.edits, token, () => this.writeDocument(document));
+    const unfinished = unfinishedSave(
+      document,
+      () => this._onDidChangeCustomDocument.fire({ document }),
+      (message) => this.showError(message),
+    );
+    await saveSettled(document.edits, token, () => this.writeDocument(document), unfinished);
   }
 
-  /** One write of the document as it stands, the save's own: one round of `saveSettled`. */
-  private async writeDocument(document: MatDocument): Promise<void> {
+  /**
+   * One write of the document as it stands, the save's own: one round of `saveSettled`. True when it
+   * landed behind a newer save that had already landed (the engine's answer).
+   */
+  private async writeDocument(document: MatDocument): Promise<boolean> {
     document.saving = true;
     let save: MatSave | undefined;
     try {
@@ -188,7 +212,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       // where the write could: a stat after it would take an outside write landing just after
       // for this one. The watcher's event for this write then finds the disk matching. The one
       // write of the user's file both byte-backed editors make (diskFollow.writeUserFile).
-      document.stamp = await writeUserFile(document.uri, save.bytes);
+      document.stamp = await this.writeUserFile(document.uri, save.bytes);
       document.onDisk = save.bytes;
     } catch (err) {
       // Nothing was written, so the Status column stays measured from the last save.
@@ -200,7 +224,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     document.inConflict = false;
     document.overwriteStamp = undefined;
     // The Status column is measured from what was written, and the rows it moved are repainted.
-    document.engine.saved(save);
+    return document.engine.saved(save);
   }
 
   async saveCustomDocumentAs(document: MatDocument, dest: vscode.Uri, token: vscode.CancellationToken): Promise<void> {
@@ -210,7 +234,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     if (dest.toString() === document.uri.toString() || (await sameFile(dest, document.uri))) {
       return this.saveCustomDocument(document, token);
     }
-    await writeUserFile(dest, document.engine.serialize());
+    await this.writeUserFile(dest, document.engine.serialize());
   }
 
   async revertCustomDocument(document: MatDocument, _token: vscode.CancellationToken): Promise<void> {

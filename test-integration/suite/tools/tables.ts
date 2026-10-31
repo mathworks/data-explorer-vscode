@@ -82,6 +82,8 @@ export interface MatTab {
   doc: any;
   view: ReturnType<typeof fakePanel>;
   events: vscode.CustomDocumentEditEvent<vscode.CustomDocument>[];
+  /** The change events with no undo and redo: a save that could not finish marking the document unsaved. */
+  changes: vscode.CustomDocumentContentChangeEvent<vscode.CustomDocument>[];
   /** The names of the variables the document's tree holds, in order. */
   names(): string[];
   /** The tree's variable of that name. */
@@ -98,8 +100,11 @@ export async function openMat(opened: Opened, dir: string, as: string, bytes: Ui
   const view = fakePanel();
   opened.push(() => doc.dispose(), () => view.close());
   const events: vscode.CustomDocumentEditEvent<vscode.CustomDocument>[] = [];
+  const changes: vscode.CustomDocumentContentChangeEvent<vscode.CustomDocument>[] = [];
   provider.onDidChangeCustomDocument((e) => {
-    if (e.document === doc) events.push(e);
+    if (e.document !== doc) return;
+    if ('undo' in e) events.push(e);
+    else changes.push(e);
   });
   await provider.resolveCustomEditor(doc, view.panel, token());
   view.send({ type: 'ready' });
@@ -113,6 +118,7 @@ export async function openMat(opened: Opened, dir: string, as: string, bytes: Ui
     doc,
     view,
     events,
+    changes,
     names: () => ((tree()?.children ?? []) as any[]).map((v) => v.name),
     variable: (name) => ((tree()?.children ?? []) as any[]).find((v) => v.name === name),
   };
@@ -150,6 +156,8 @@ export interface BinaryTab {
   provider: BinarySlddEditorProvider;
   view: ReturnType<typeof fakePanel>;
   events: vscode.CustomDocumentEditEvent<vscode.CustomDocument>[];
+  /** The change events with no undo and redo: a save that could not finish marking the document unsaved. */
+  changes: vscode.CustomDocumentContentChangeEvent<vscode.CustomDocument>[];
   /** The entry names the document's chunk holds. */
   names(): string[];
 }
@@ -172,14 +180,17 @@ export async function openBinary(
   const view = fakePanel();
   opened.push(() => doc.dispose(), () => view.close());
   const events: vscode.CustomDocumentEditEvent<vscode.CustomDocument>[] = [];
+  const changes: vscode.CustomDocumentContentChangeEvent<vscode.CustomDocument>[] = [];
   provider.onDidChangeCustomDocument((e) => {
-    if (e.document === doc) events.push(e);
+    if (e.document !== doc) return;
+    if ('undo' in e) events.push(e);
+    else changes.push(e);
   });
   await provider.resolveCustomEditor(doc, view.panel, token());
   view.send({ type: 'ready' });
   await waitFor(`${as}'s first rows`, () => view.posts.some((m) => m.type === 'setRows'));
   const names = () => [...String(doc.chunkXml).matchAll(/<Object Class="DD\.ENTRY">\s*<P Name="Name" Class="char">([^<]*)<\/P>/g)].map((m) => m[1]);
-  return { path, uri, doc, provider, view, events, names };
+  return { path, uri, doc, provider, view, events, changes, names };
 }
 
 /**

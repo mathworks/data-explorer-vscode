@@ -146,7 +146,9 @@ suite('Binary .sldd view: a file that changes on disk while it is open', () => {
       await waitFor('the edited document’s first rows', () => view!.posts.some((p) => p.type === 'setRows'));
     }
     const events: vscode.CustomDocumentEditEvent<vscode.CustomDocument>[] = [];
-    const sub = provider.onDidChangeCustomDocument((e) => events.push(e));
+    const sub = provider.onDidChangeCustomDocument((e) => {
+      if ('undo' in e) events.push(e);
+    });
     const before = chunk(doc);
     assert.ok(before.includes(`>${from}<`), `the document spells ${from}, the entry this edit renames`);
     const entry = (DataModel.getDataSource(doc.srcId) as any)?.children

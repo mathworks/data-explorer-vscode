@@ -19,6 +19,7 @@ import { basename } from 'data-explorer-view/model';
 import type { EditIndex } from 'data-explorer-view/host';
 import { writeAndStamp } from './safeWrite.js';
 import { backupSource } from './backupId.js';
+import type { UnfinishedSave } from './settledSave.js';
 import {
   changedOnDisk,
   checksSaveConflicts,
@@ -265,6 +266,24 @@ async function askAboutConflict(
   } else if (answer === REVERT) {
     await revertInVsCode(document, viewType);
   }
+}
+
+/**
+ * What a save of `document` does when VS Code has cancelled it and its extra round, written over a
+ * newer save, fails (settledSave.ts). `changed` fires a change event with no undo and redo, which
+ * VS Code keeps dirty until a save or a revert, so that closing the tab asks first; `tell` shows
+ * the notice. The API's documentation asks an editor to fire only one of the two kinds of event,
+ * but VS Code takes either from any editor (its extension host tells them apart by their undo and
+ * redo; 1.144), and this is the one way it gives to show a document dirty with no edit to undo.
+ */
+export function unfinishedSave(document: FollowedDocument, changed: () => void, tell: (message: string) => void): UnfinishedSave {
+  return {
+    name: document.metaPath,
+    changed,
+    tell,
+    // refuseIfChangedOnDisk's refusal, a CancellationError on purpose.
+    isConflict: (err) => err instanceof vscode.CancellationError,
+  };
 }
 
 /**

@@ -65,7 +65,9 @@ suite('MAT-file: the Property Inspector follows the variable it shows', () => {
       changed.push(uriString);
       selection.refresh(uriString);
     };
-    provider.onDidChangeCustomDocument((e) => edits.push(e));
+    provider.onDidChangeCustomDocument((e) => {
+      if ('undo' in e) edits.push(e);
+    });
   });
 
   teardown(async () => {
