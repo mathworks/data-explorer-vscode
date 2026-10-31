@@ -39,7 +39,8 @@ function wiring(): { calls: string[]; table: string; source: string; options: Ma
   const sf = ts.createSourceFile('table-main.ts', read('src/webview/table-main.ts'), ts.ScriptTarget.Latest, true);
   const consts = new Map<string, ts.Expression>();
   for (const s of sf.statements) {
-    if (!ts.isVariableStatement(s)) continue;
+    // A const only: a `let` or a `var` may be reassigned after it, so its initializer is not what it holds.
+    if (!ts.isVariableStatement(s) || !(s.declarationList.flags & ts.NodeFlags.Const)) continue;
     for (const d of s.declarationList.declarations) {
       if (ts.isIdentifier(d.name) && d.initializer) consts.set(d.name.text, d.initializer);
     }
