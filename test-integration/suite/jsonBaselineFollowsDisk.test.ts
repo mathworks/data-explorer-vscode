@@ -130,7 +130,8 @@ suite('A JSON .sldd table marks what differs from the file on disk', () => {
     //
     // Counted through a file system of the test's own, since the reads go through
     // `workspace.fs`, which cannot be wrapped.
-    const disk = new CountingFs(mkdtempSync(join(tmpdir(), 'dex-count-')));
+    const dir = mkdtempSync(join(tmpdir(), 'dex-count-'));
+    const disk = new CountingFs(dir);
     const registered = vscode.workspace.registerFileSystemProvider('dexcount', disk);
     const uri = vscode.Uri.from({ scheme: 'dexcount', path: '/json_baseline_no_read.sldd' });
     writeFileSync(disk.real(uri), await vscode.workspace.fs.readFile(wsUri('data.sldd')));
@@ -157,6 +158,8 @@ suite('A JSON .sldd table marks what differs from the file on disk', () => {
       table.close();
       await vscode.commands.executeCommand('workbench.action.closeAllEditors');
       registered.dispose();
+      // The temporary folder goes too: a run left one behind for every run before it.
+      rmSync(dir, { recursive: true, force: true });
     }
   }).timeout(60000);
 });
