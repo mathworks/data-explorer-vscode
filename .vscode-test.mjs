@@ -4,7 +4,8 @@
 import { defineConfig } from '@vscode/test-cli';
 
 export default defineConfig({
-  files: 'dist-test/suite/**/*.test.js',
+  // NOT FOR MERGE: only the save-point reproduction runs on this branch.
+  files: 'dist-test/suite/customEditorSavePoint.test.js',
   workspaceFolder: 'test-integration/fixtures/workspace',
   version: 'stable',
   mocha: {
