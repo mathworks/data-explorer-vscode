@@ -29,8 +29,8 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { unzipSync, zipSync } from 'fflate';
-import { DATA_PART_XML, parseBinarySldd, readSlddContent, slddChunkContent } from 'data-explorer-core';
-import { findEntriesArrayStart, indexEntries } from '../src/host/jsonEntryScan.js';
+import { DATA_PART_XML, parseBinarySldd, readSlddContent, scanEntries as coreScanEntries, slddChunkContent } from 'data-explorer-core';
+import { findEntriesArrayStart, indexEntries, scanEntries } from '../src/host/jsonEntryScan.js';
 
 const root = join(import.meta.dirname, '..');
 const BINARY = 'test/fixtures/compressed.sldd';
@@ -131,12 +131,13 @@ describe('no host file keeps its own copy of the part names', () => {
     });
   }
 
-  it('and the file that navigates the part takes the names from core', () => {
+  it('and no host file navigates the part: the scan that does is core’s', () => {
     // The other direction: a scan for absent literals also passes for a file that stopped
-    // navigating the part at all, so name the one that must still be doing it. The compressed
-    // dictionary editor no longer does: its engine (view's BinaryEngine) reads and writes the
-    // package through core's own readBinarySlddPackage and writeBinarySlddPackage.
-    expect(code('src/host/jsonEntryScan.ts'), 'src/host/jsonEntryScan.ts must import the names').toContain("from 'data-explorer-core'");
-    expect(code('src/host/jsonEntryScan.ts')).toContain('TEXT_PARTS');
+    // navigating the part at all, so say where the navigating went. Neither dictionary editor
+    // does it any more: their engines (view's BinaryEngine and JsonEngine) read the package through
+    // core's readBinarySlddPackage and the text through core's jsonEntryScan, and the one file here
+    // that used to walk the text part is now core's scan, re-exported and nothing else.
+    expect(code('src/host/jsonEntryScan.ts').trim()).toMatch(/^export \{[^}]*\} from 'data-explorer-core';$/);
+    expect(scanEntries).toBe(coreScanEntries);
   });
 });

@@ -9,12 +9,13 @@
 //  - then what follows the rows (the drop rules, the clipboard, the clip mark: the engine's
 //    trailer, which waits for `opened(view)`; trailerAfterDelivery): once that post has settled,
 //    where the editor awaited it (the MAT-file editor, `awaitRows`), or at once, in the same run,
-//    where it did not (the compressed dictionary editor);
+//    where it did not (the dictionary editors);
 //  - then whatever the host runs after a paint (`afterPaint`: the Usage link's selection to drain).
 // Everything else the engine says, while a paint's rows are on their way or not, is posted at once,
 // in the order it was said: a gesture's rows during that await go out ahead of the trailer, as they
 // did. Each message is spelled as the editors spelled it, keys in their order; a `setRows` by the
-// editor's own builder below (matRows, binaryRows), which its provider hands over as `setRows`.
+// editor's own builder below (matRows, binaryRows, jsonRows), which its provider hands over as
+// `setRows`.
 import type { EditableTableSource, TableChange, TableView } from 'data-explorer-view/model';
 import { postOrReport } from 'data-explorer-view/host';
 
@@ -31,12 +32,17 @@ export interface EngineTableOptions {
   name: string;
   /**
    * Whether what follows a paint's rows waits for their post to settle (the MAT-file editor's
-   * `post()` awaited it), or goes out at once, in the same run (the compressed dictionary
-   * editor's did not; its `ready` was answered in the run that asked, by a repaint, and so is it
-   * here). Default: true.
+   * `post()` awaited it), or goes out at once, in the same run (the dictionary editors' did not).
+   * Default: true.
    */
   awaitRows?: boolean;
-  /** A whole paint's rows, as the editor's own `setRows` literal spelled them (matRows, binaryRows). */
+  /**
+   * Whether the webview's `ready` opens the table, whose answer is then painted (the MAT-file and
+   * JSON dictionary editors'), or is answered in the run that asked, by a repaint (the compressed
+   * dictionary editor's). Default: true.
+   */
+  readyOpens?: boolean;
+  /** A whole paint's rows, as the editor's own `setRows` literal spelled them (matRows, binaryRows, jsonRows). */
   setRows(view: TableView): Record<string, unknown>;
   /** Called with each whole paint's view, before its rows are posted (the lock on a read-only tab). */
   onRows?(view: TableView): void;
@@ -74,6 +80,22 @@ export const binaryRows = (view: TableView) => ({
 });
 
 /**
+ * A whole paint's rows, as the JSON dictionary editor's `post()` spelled its `setRows`: no notice, no
+ * gallery list, and a text view for "Location in Text" to reveal (`hasTextView`).
+ */
+export const jsonRows = (view: TableView) => ({
+  type: 'setRows',
+  docUri: view.docUri,
+  rows: view.rows,
+  columns: view.columns,
+  columnLabels: view.columnLabels,
+  columnGroups: view.columnGroups,
+  editable: view.editable,
+  hasTextView: true,
+  warnings: view.warnings,
+});
+
+/**
  * The panel's end of `table`, until `dispose()`. `ready()` answers the webview's `ready`, and
  * `children()` its fetch of the rows under a row.
  */
@@ -84,6 +106,10 @@ export function engineTable(
 ): { ready(): void; children(nodeId: string): void; dispose(): void } {
   let closed = false;
   const { name } = options;
+  // The view the last `open()` answered, which is painted once however many asked for it (two
+  // `ready`s before the first paint lands are answered by one paint, as the editor's newest repaint
+  // was the one that landed).
+  let answered: TableView | undefined;
 
   const { setRows } = options;
 
@@ -144,9 +170,13 @@ export function engineTable(
     ready() {
       // In the run that asked: the engine's repaint says its rows at once, and they are posted as
       // every repaint's are.
-      if (options.awaitRows === false) return void table.repaintAll();
+      if (options.readyOpens === false) return void table.repaintAll();
       table.open().then(
-        (view) => (closed ? undefined : paint(view)),
+        (view) => {
+          if (closed || view === answered) return;
+          answered = view;
+          return paint(view);
+        },
         // A table closed while it was asked has nowhere to say it (SourceClosed).
         (err) => {
           if (closed || (err as { name?: unknown } | null)?.name === 'SourceClosed') return;

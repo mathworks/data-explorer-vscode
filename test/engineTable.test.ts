@@ -10,8 +10,9 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createSession } from 'data-explorer-core';
 import { createRegisters } from 'data-explorer-view/model';
-import { BinaryEngine, EditStack, EditStackIndex, MatEngine } from 'data-explorer-view/host';
-import { binaryRows, engineTable, matRows } from '../src/host/engineTable.js';
+import { BinaryEngine, EditStack, EditStackIndex, JsonEngine, MatEngine, defaultRegistry } from 'data-explorer-view/host';
+import { binaryRows, engineTable, jsonRows, matRows } from '../src/host/engineTable.js';
+import { textDocumentStore } from '../src/host/textDocumentStore.js';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -187,6 +188,7 @@ describe("the compressed dictionary editor's panel of the engine's table (rows n
     const relay = engineTable(engine.view(), panel, {
       name: 'params.sldd',
       awaitRows: false,
+      readyOpens: false,
       setRows: binaryRows,
       afterPaint: () => said.push(`drained after ${posted.map((m) => m.type).join(',')}`),
     });
@@ -213,9 +215,109 @@ describe("the compressed dictionary editor's panel of the engine's table (rows n
         return true;
       },
     };
-    engineTable(engine.view(), panel, { name: 'params.sldd', awaitRows: false, setRows: binaryRows }).ready();
+    engineTable(engine.view(), panel, { name: 'params.sldd', awaitRows: false, readyOpens: false, setRows: binaryRows }).ready();
     await settle();
     expect(posted.map((m) => m.type)).toEqual(['sectionRules', 'clipboardState', 'error']);
     expect(posted.at(-1).message).toMatch(/^Failed to show params\.sldd: /);
+  });
+});
+
+const PARAMS_JSON = readFileSync(join(import.meta.dirname, '..', 'test-integration', 'fixtures', 'workspace', 'params.sldd'), 'utf8');
+
+/** A JSON dictionary over a TextDocument that holds still (textDocumentStore.ts, a fake document and workspace). */
+function jsonDictionary(uri: string) {
+  const document = { uri: { toString: () => uri }, version: 1, isDirty: false, getText: () => PARAMS_JSON, positionAt: (o: number) => o };
+  const text = textDocumentStore(document, {
+    applyEdit: async () => false,
+    onDidChangeTextDocument: () => ({ dispose: () => {} }),
+    onDidSaveTextDocument: () => ({ dispose: () => {} }),
+    undo: () => {},
+    redo: () => {},
+    reasons: { undo: 2, redo: 3 },
+  });
+  return new JsonEngine({
+    registry: defaultRegistry,
+    uri,
+    name: 'params.sldd',
+    text,
+    registers: createRegisters(),
+    disk: { stat: async () => null, read: async () => null },
+    trailerAfterDelivery: true,
+  });
+}
+
+/** Turns until `ok`, for a paint that waits on its Usage column. */
+async function until(ok: () => boolean): Promise<void> {
+  for (let i = 0; i < 50 && !ok(); i++) await new Promise((r) => setTimeout(r, 0));
+  expect(ok()).toBe(true);
+}
+
+describe("the JSON dictionary editor's panel of the engine's table (ready opens, rows not awaited)", () => {
+  it("posts a paint as the editor's post() did: the rows, then in the same run what follows them, then the drain", async () => {
+    const engine = jsonDictionary('file:///work/relay-json-order.sldd');
+    const table = engine.view();
+    const posted: any[] = [];
+    const said: string[] = [];
+    const panel = { postMessage: async (m: any) => (posted.push(m), true) };
+    const relay = engineTable(table, panel, {
+      name: 'params.sldd',
+      awaitRows: false,
+      setRows: jsonRows,
+      afterPaint: () => said.push(`drained after ${posted.map((m) => m.type).join(',')}`),
+    });
+    relay.ready();
+    await until(() => said.length > 0);
+    expect(posted.map((m) => m.type)).toEqual(['setRows', 'sectionRules', 'clipboardState']);
+    expect(said).toEqual(['drained after setRows,sectionRules,clipboardState']);
+    expect(Object.keys(posted[0])).toEqual(['type', 'docUri', 'rows', 'columns', 'columnLabels', 'columnGroups', 'editable', 'hasTextView', 'warnings']);
+    expect(posted[0].hasTextView).toBe(true);
+    // A repaint the engine starts: its rows, what follows them, then the drain, in that order.
+    posted.length = 0;
+    said.length = 0;
+    await table.repaintAll();
+    expect(posted.map((m) => m.type)).toEqual(['setRows', 'sectionRules', 'clipboardState']);
+    expect(said).toEqual(['drained after setRows,sectionRules,clipboardState']);
+    relay.dispose();
+    table.dispose();
+    engine.dispose();
+  });
+
+  it('answers two readys before the first paint lands with one paint, as the newest repaint was the one that landed', async () => {
+    const engine = jsonDictionary('file:///work/relay-json-twice.sldd');
+    const table = engine.view();
+    const posted: any[] = [];
+    let drained = 0;
+    const panel = { postMessage: async (m: any) => (posted.push(m), true) };
+    const relay = engineTable(table, panel, { name: 'params.sldd', awaitRows: false, setRows: jsonRows, afterPaint: () => void drained++ });
+    relay.ready();
+    relay.ready();
+    await until(() => drained > 0);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(posted.map((m) => m.type)).toEqual(['setRows', 'sectionRules', 'clipboardState']);
+    expect(drained).toBe(1);
+    relay.dispose();
+    table.dispose();
+    engine.dispose();
+  });
+
+  it('says rows it cannot deliver failed to show, after what follows them, as the unawaited post did', async () => {
+    const engine = jsonDictionary('file:///work/relay-json-refused.sldd');
+    const table = engine.view();
+    const posted: any[] = [];
+    const panel = {
+      postMessage: async (m: any) => {
+        if (m.type === 'setRows') throw new Error('the payload is too large to post');
+        posted.push(m);
+        return true;
+      },
+    };
+    const relay = engineTable(table, panel, { name: 'params.sldd', awaitRows: false, setRows: jsonRows });
+    relay.ready();
+    await until(() => posted.some((m) => m.type === 'error'));
+    expect(posted.map((m) => m.type)).toEqual(['sectionRules', 'clipboardState', 'error']);
+    expect(posted.at(-1).message).toMatch(/^Failed to show params\.sldd: /);
+    relay.dispose();
+    table.dispose();
+    engine.dispose();
   });
 });
