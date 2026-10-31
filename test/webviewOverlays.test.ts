@@ -72,8 +72,24 @@ describe('table webview overlays are created in code, not declared in markup', (
   it('uses the overlays unguarded, because they can no longer be missing', () => {
     // `errorDialog?.show(...)` was load-bearing while a provider could omit the
     // tag. Now that this module creates it, the optional call would only hide a
-    // typo — and the guard's absence is what keeps the invariant honest.
+    // typo — and the guard's absence is what keeps the invariant honest. The calls
+    // are view's connectTable's now (its editing half), to the overlays handed to it.
     expect(read('src/webview/table-main.ts')).not.toContain('errorDialog?.');
+    const editing = read('node_modules/data-explorer-view/dist/widgets/tree-table/editingWire.js');
+    expect(editing).toContain('errorDialog.show(');
+    expect(editing).not.toContain('errorDialog?.');
+  });
+
+  it('hands all three to connectTable, which would otherwise make its own', () => {
+    // Without them, connectTable makes a second error dialog when it connects and its own
+    // context menu at the first right-click: a body this shell did not lay out, and a
+    // dialog nobody looks up.
+    const src = read('src/webview/table-main.ts');
+    const options = /connectTable\(table, \w+, \{([\s\S]*?)\n\}\);/.exec(src)?.[1] ?? '';
+    for (const name of ['contextMenu', 'errorDialog', 'variableEditor']) {
+      expect(options, `${name} is handed to connectTable`).toMatch(new RegExp(`^\\s*${name},$`, 'm'));
+    }
+    expect(options).toMatch(/^\s*editing: true,$/m);
   });
 });
 
@@ -157,7 +173,8 @@ describe('the loading state belongs to the table component, not to any shell', (
   it('table-main.ts drives it as a property, not by reaching for an element', () => {
     // Through view's connectTable, which table-main hands its table to.
     const src = read('src/webview/table-main.ts');
-    expect(src).toContain('connectTable(table, messageSource(');
+    expect(src).toMatch(/connectTable\(table, /);
+    expect(src).toContain('messageSource(');
     expect(src).not.toContain("getElementById('dex-loading')");
     const connect = read('node_modules/data-explorer-view/dist/widgets/tree-table/connectTable.js');
     expect(connect).toContain('table.loading = true');

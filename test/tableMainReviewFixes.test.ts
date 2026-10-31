@@ -400,6 +400,24 @@ describe("a paste or drop with no row is posted only by a one-target document", 
     expect(sent('paste')).toEqual([]);
   });
 
+  // The guard itself, on its real path: connectTable acts only on a choice from a menu it opened,
+  // so the case above, whose right-click opens nothing, never reaches it. A menu opened at no row
+  // of a one-target document, whose rules then become a dictionary's while it is still open, is
+  // the one way a choice anchored at no row meets a document with no whole-file rule.
+  it('a menu opened at no row posts no paste once the rules have no whole-file target', async () => {
+    send({ type: 'setRows', docUri: 'file:///fx/gains.mat', rows: [{ ID: 'm/x', parent: null, Name: { label: 'x' } }], columns: ['Name'], columnLabels: {}, editable: true });
+    send({ type: 'sectionRules', docUri: 'file:///fx/gains.mat', rules: [{ sectionName: '', sectionLabel: 'gains.mat', isDerived: false, allowedTypes: [] }] });
+    send({ type: 'clipboardState', canPaste: true, mode: 'copy', items: [{ className: 'double', arrayClass: 'double', kind: 'Variable', isMatlabVariable: true, isScalarNumeric: true }] });
+    await table.updateComplete;
+    table.dispatchEvent(new CustomEvent('dex-table-context-menu', { detail: { rowId: null, x: 1, y: 1 } }));
+    expect(contextMenu().hasAttribute('open'), 'the menu opened at no row').toBe(true);
+    send({ type: 'sectionRules', docUri: 'file:///fx/gains.mat', rules: [{ sectionName: 'design', sectionLabel: 'Design Data', isDerived: false, allowedTypes: [] }] });
+    posted.length = 0;
+    contextMenu().dispatchEvent(new CustomEvent('dex-action', { detail: { actionId: 'paste' } }));
+    expect(sent('paste')).toEqual([]);
+    contextMenu().close();
+  });
+
   it('a dictionary posts no drop on its empty body', async () => {
     await paint();
     posted.length = 0;
