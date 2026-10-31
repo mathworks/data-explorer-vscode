@@ -93,7 +93,7 @@ export class EditStackCopy extends EditStackIndex {
   /** Set by a save or a revert while `indexStale`: the next move tells VS Code. */
   private armed = false;
 
-  /** `lost`: a push VS Code would read as reaching the save point (see above). */
+  /** `lost`: a move VS Code would read as reaching the save point (see above). */
   constructor(
     fromBackup = false,
     private readonly lost: () => void = () => {},

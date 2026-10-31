@@ -178,11 +178,14 @@ suite('A real tab stays dirty after a save, an undo past it and a different edit
         assert.ok(await vscode.workspace.save(uri), 'the tab saved again');
         await waitFor('the save to make the tab clean', () => dirty() === false);
       } finally {
-        // Closed without a prompt whatever it reads: the tab made active again, then reverted and closed.
+        // Closed without a prompt whatever it reads. A dirty tab is saved first, which VS Code awaits, rather
+        // than reverted: VS Code does not await a revert's read of the file, which the suite then removes.
+        // Only a tab the save could not clean is reverted.
         if (tabOf(uri)) {
+          if (tabOf(uri)?.isDirty) await vscode.workspace.save(uri);
           await vscode.commands.executeCommand('vscode.openWith', uri, kind.viewType);
-          await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
-          // Before the suite removes the file the revert reads.
+          const close = tabOf(uri)?.isDirty ? 'workbench.action.revertAndCloseActiveEditor' : 'workbench.action.closeActiveEditor';
+          await vscode.commands.executeCommand(close);
           await waitFor(`${kind.file}'s tab to close`, () => !tabOf(uri));
         }
       }
