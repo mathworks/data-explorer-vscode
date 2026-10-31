@@ -13,7 +13,8 @@ import { shouldOpenCellEditor } from 'data-explorer-view/tree-table';
 //
 // This half mirrors the component's event contract on a bare host+shadow pair, so the
 // mechanism is pinned independently of the table. The second half below drives the
-// listener table-main.ts actually installs — which is where the interesting bug was.
+// listener the webview actually installs (view's connectTable({editing}), which table-main.ts
+// wires up) — which is where the interesting bug was.
 
 describe('read-only cell-editor gate (capture-phase interception)', () => {
   let host: HTMLElement;
@@ -29,7 +30,7 @@ describe('read-only cell-editor gate (capture-phase interception)', () => {
     shadowCell = td;
   });
 
-  // Install the same guards table-main.ts installs, parameterized by editable.
+  // Install the same guards the webview's editing half installs, parameterized by editable.
   function installGuards(editable: boolean): void {
     host.addEventListener(
       'dblclick',
@@ -95,7 +96,7 @@ describe('read-only cell-editor gate (capture-phase interception)', () => {
     expect(navigated).toBe(1);
   });
 
-  // The Variable Editor is a VIEW. table-main swallows dblclick and Enter on a
+  // The Variable Editor is a VIEW. The editing half swallows dblclick and Enter on a
   // read-only document to stop the inline editor opening; the glyph must survive
   // that, because there is nothing to edit. The gate is keyed on the GESTURE, and
   // the glyph's gesture is a single click on a control — not a dblclick — so the

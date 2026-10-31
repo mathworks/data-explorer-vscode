@@ -5,8 +5,8 @@
 // that ships.
 //
 // rowUpdates.test.ts pins `mergeChildRows` and treeTableLazyRows.test.ts pins the
-// component's twisty. Between them sits the message branch in table-main.ts, and that is
-// where the interesting half is: which arrivals get installed, which get dropped, and
+// component's twisty. Between them sits the table's message branch (view's messageSource and
+// connectTable, which table-main.ts wires up), and that is where the interesting half is: which arrivals get installed, which get dropped, and
 // which say something to the user. A copy of that branch written here would be one rule
 // on two paths — it would keep passing after the shipped one changed — so this imports
 // table-main.ts and dispatches real `MessageEvent`s at it, the way linkRoute.test.ts and

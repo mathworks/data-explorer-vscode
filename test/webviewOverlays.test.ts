@@ -23,9 +23,53 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import ts from 'typescript';
 
 const root = join(import.meta.dirname, '..');
 const read = (p: string) => readFileSync(join(root, p), 'utf8');
+
+/**
+ * table-main.ts's calls, and its one connectTable call's arguments and options, read as code
+ * rather than as text, so the pins below hold however the module is laid out. Each is given as
+ * what made it: a top-level const is followed to its initializer, a call is its callee and what
+ * made its arguments, a string is its value, and an object or a function is `{…}` or `…`. So
+ * `source` reads `messageSource(vscodePort(acquireVsCodeApi()), {…})`.
+ */
+function wiring(): { calls: string[]; table: string; source: string; options: Map<string, string> } {
+  const sf = ts.createSourceFile('table-main.ts', read('src/webview/table-main.ts'), ts.ScriptTarget.Latest, true);
+  const consts = new Map<string, ts.Expression>();
+  for (const s of sf.statements) {
+    if (!ts.isVariableStatement(s)) continue;
+    for (const d of s.declarationList.declarations) {
+      if (ts.isIdentifier(d.name) && d.initializer) consts.set(d.name.text, d.initializer);
+    }
+  }
+  const made = (e: ts.Expression): string => {
+    if (ts.isAsExpression(e) || ts.isParenthesizedExpression(e) || ts.isNonNullExpression(e)) return made(e.expression);
+    if (ts.isIdentifier(e)) return consts.has(e.text) ? made(consts.get(e.text)!) : e.text;
+    if (ts.isStringLiteralLike(e)) return `'${e.text}'`;
+    if (ts.isCallExpression(e)) return `${e.expression.getText(sf).replace(/\s+/g, '')}(${e.arguments.map(made).join(', ')})`;
+    if (ts.isObjectLiteralExpression(e)) return '{…}';
+    if (ts.isArrowFunction(e) || ts.isFunctionExpression(e)) return '…';
+    return e.getText(sf);
+  };
+  const calls: ts.CallExpression[] = [];
+  const visit = (n: ts.Node): void => {
+    if (ts.isCallExpression(n)) calls.push(n);
+    ts.forEachChild(n, visit);
+  };
+  visit(sf);
+  const connects = calls.filter((c) => ts.isIdentifier(c.expression) && c.expression.text === 'connectTable');
+  expect(connects, 'table-main.ts calls connectTable once').toHaveLength(1);
+  const [table, source, options] = connects[0].arguments;
+  expect(options && ts.isObjectLiteralExpression(options), 'connectTable is given an options object').toBe(true);
+  const given = new Map<string, string>();
+  for (const p of (options as ts.ObjectLiteralExpression).properties) {
+    if (ts.isShorthandPropertyAssignment(p)) given.set(p.name.text, made(p.name));
+    else if (ts.isPropertyAssignment(p) && ts.isIdentifier(p.name)) given.set(p.name.text, made(p.initializer));
+  }
+  return { calls: calls.map(made), table: made(table), source: made(source), options: given };
+}
 
 // Self-positioning, initially hidden popovers. None has a place in the shell's
 // layout, so none belongs in the shell's markup.
@@ -57,7 +101,8 @@ describe('table webview overlays are created in code, not declared in markup', (
   });
 
   it.each(OVERLAYS)('table-main.ts creates %s itself', (tag) => {
-    expect(read('src/webview/table-main.ts')).toContain(`overlay('${tag}')`);
+    // Once: connectTable is handed this one (below), so a second would be a body nobody uses.
+    expect(wiring().calls.filter((c) => c === `overlay('${tag}')`)).toHaveLength(1);
   });
 
   it('still takes the content element from markup, since only the shell places it', () => {
@@ -83,13 +128,12 @@ describe('table webview overlays are created in code, not declared in markup', (
   it('hands all three to connectTable, which would otherwise make its own', () => {
     // Without them, connectTable makes a second error dialog when it connects and its own
     // context menu at the first right-click: a body this shell did not lay out, and a
-    // dialog nobody looks up.
-    const src = read('src/webview/table-main.ts');
-    const options = /connectTable\(table, \w+, \{([\s\S]*?)\n\}\);/.exec(src)?.[1] ?? '';
-    for (const name of ['contextMenu', 'errorDialog', 'variableEditor']) {
-      expect(options, `${name} is handed to connectTable`).toMatch(new RegExp(`^\\s*${name},$`, 'm'));
-    }
-    expect(options).toMatch(/^\s*editing: true,$/m);
+    // dialog nobody looks up. Each is the one this module made at load.
+    const { options } = wiring();
+    expect(options.get('contextMenu'), 'contextMenu is handed to connectTable').toBe("overlay('dex-context-menu')");
+    expect(options.get('errorDialog'), 'errorDialog is handed to connectTable').toBe("overlay('dex-error-dialog')");
+    expect(options.get('variableEditor'), 'variableEditor is handed to connectTable').toBe("overlay('dex-variable-editor')");
+    expect(options.get('editing')).toBe('true');
   });
 });
 
@@ -171,11 +215,12 @@ describe('the loading state belongs to the table component, not to any shell', (
   });
 
   it('table-main.ts drives it as a property, not by reaching for an element', () => {
-    // Through view's connectTable, which table-main hands its table to.
-    const src = read('src/webview/table-main.ts');
-    expect(src).toMatch(/connectTable\(table, /);
-    expect(src).toContain('messageSource(');
-    expect(src).not.toContain("getElementById('dex-loading')");
+    // Through view's connectTable, which table-main hands the shell's table to, fed by the host
+    // through messageSource.
+    const { table, source } = wiring();
+    expect(table).toBe("document.querySelector('dex-tree-table')");
+    expect(source).toBe('messageSource(vscodePort(acquireVsCodeApi()), {…})');
+    expect(read('src/webview/table-main.ts')).not.toContain("getElementById('dex-loading')");
     const connect = read('node_modules/data-explorer-view/dist/widgets/tree-table/connectTable.js');
     expect(connect).toContain('table.loading = true');
     expect(connect).toContain('table.loading = false');

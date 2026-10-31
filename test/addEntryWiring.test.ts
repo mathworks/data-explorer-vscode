@@ -4,8 +4,9 @@
 // The Add gallery's two wires through the webview entry point, driven as they ship.
 //
 // Outward, a tile click becomes one `addEntry` message. Inward, `beginRename` opens the name
-// editor on the entry the host just created. Both live in table-main.ts, which is why this
-// file imports that module rather than reimplementing its listeners: a copy of a listener
+// editor on the entry the host just created. Both live in the editing half table-main.ts wires
+// up (view's connectTable({editing})), which is why this file imports that module rather than
+// reimplementing its listeners: a copy of a listener
 // proves the copy works, and the gate on `editable` and the hold-until-the-row-arrives are
 // exactly the parts a copy gets right and the shipped code gets wrong.
 //

@@ -204,7 +204,7 @@ describe('dex-add-gallery', () => {
   // pinned gallery reveal and select every entry the run added, and the pin's tooltip
   // promised it ("closing selects the whole run"). Nothing ever did: each add selects its one
   // new entry, so after a run only the last one is selected. The selection was dropped rather
-  // than built. Building it needs the run's ids to flow from table-main's `selectRows` into the
+  // than built. Building it needs the run's ids to flow from the table's `selectRows` into the
   // component, or a new gallery-close event, plus rules for an id renamed or undone mid-run.
   // A tooltip that promises nothing is better than one that promises a missing feature. The
   // undo half of the same design paragraph was dropped the same way (addEntryUndo.test.ts).

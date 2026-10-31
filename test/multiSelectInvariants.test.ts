@@ -1,8 +1,9 @@
 // Copyright 2026 The MathWorks, Inc.
 //
-// The seams between the paths a multi-row action travels, where they run through this extension's
-// own sources: the providers hand a paste and a drop to the same transfer, and the webview
-// (table-main.ts) describes the menu once, so the keyboard cannot disagree with it.
+// The seams between the paths a multi-row action travels, where they run through what this
+// extension ships: the providers hand a paste and a drop to the same transfer, and the webview's
+// editing half (view's connectTable, which table-main.ts wires up) describes the menu once, so the
+// keyboard cannot disagree with it.
 //
 // The rest of this suite asserted the menu's and the host's resolutions of one selection against
 // each other over a real model (operands, anchors, subsumption, paste-offered, the drag

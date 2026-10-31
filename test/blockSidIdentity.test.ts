@@ -227,7 +227,7 @@ describe('the model view’s own rows, from the parse through the annotation', (
   // The other end of the same link: a click on `blocks:65@…` in the DICTIONARY's Usage
   // column opens this model and asks it to select that block. What travels is the KEY, so
   // the webview cannot find the row by its Name cell — nothing is labelled `65` — and
-  // table-main.ts matches `_blockKey` for exactly this reason. Pinning the two facts the
+  // its matcher (view's connectTable) matches `_blockKey` for exactly this reason. Pinning the two facts the
   // matcher depends on: what the target parses to, and that only the key can meet it.
   it('leaves a navigation nothing to match but the key', () => {
     const target = buildUsageGraph(FILES).blocksUsing(DICT, 'Uo')[0].linkTarget;
