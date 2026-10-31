@@ -95,7 +95,9 @@ export class MatDocument implements vscode.CustomDocument, FollowedDocument {
   /** The tree, its edits and its saves' rules. */
   readonly engine: MatEngine;
 
-  private readonly _onDidChange = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<MatDocument>>();
+  private readonly _onDidChange = new vscode.EventEmitter<
+    vscode.CustomDocumentEditEvent<MatDocument> | vscode.CustomDocumentContentChangeEvent<MatDocument>
+  >();
   readonly onDidChangeCustomDocument = this._onDidChange.event;
   private readonly disposables: vscode.Disposable[] = [];
 
@@ -108,8 +110,9 @@ export class MatDocument implements vscode.CustomDocument, FollowedDocument {
   ) {
     this.onDisk = fromBackup ? null : new Uint8Array(bytes);
     // VS Code reports a document restored from a hot-exit backup as dirty, though it has no edits,
-    // until it is saved or reverted.
-    this.edits = new EditStackCopy(fromBackup);
+    // until it is saved or reverted. A push that discards the save point tells VS Code the document
+    // changed, which its own flag would miss (EditStackCopy).
+    this.edits = new EditStackCopy(fromBackup, () => this._onDidChange.fire({ document: this }));
     const uriString = uri.toString();
     this.engine = new MatEngine({
       session: DataModel,

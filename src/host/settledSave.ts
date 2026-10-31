@@ -62,9 +62,27 @@ import { EditStackIndex } from 'data-explorer-view/host';
  * change event with no undo and redo (a CustomDocumentContentChangeEvent) leaves the document dirty
  * until it is saved or reverted, whatever its stack does meanwhile (`_isDirtyFromContentChange`,
  * measured against VS Code 1.144's workbench). The copy each byte-backed document keeps.
+ *
+ * It is also where VS Code is told of the one case its own flag gets wrong. VS Code's save point is
+ * an index into its edit list, and a new edit takes the place of the undone ones: save, undo past the
+ * save, make a different edit, and the new edit sits at the saved index, so VS Code reads the tab
+ * clean over a file that lacks it (`isDirty` is `_savePoint !== _currentEditIndex`; `pushEdit`
+ * splices the list at the current index). EditStackIndex calls that save point unreachable; here, the
+ * push that makes it so also calls `lost`, for the document to send VS Code that change event, which
+ * keeps the tab dirty until the next save or revert, as the copy is.
  */
 export class EditStackCopy extends EditStackIndex {
   private changedOffStack = false;
+  /** Where the save point is, as this copy last set it, or null once a push discarded it. */
+  private savePoint: number | null = 0;
+
+  /** `lost`: a push discarded the undone edits the save point was among. */
+  constructor(
+    fromBackup = false,
+    private readonly lost: () => void = () => {},
+  ) {
+    super(fromBackup);
+  }
 
   override get dirty(): boolean {
     return this.changedOffStack || super.dirty;
@@ -75,13 +93,25 @@ export class EditStackCopy extends EditStackIndex {
     this.changedOffStack = true;
   }
 
+  override pushed(): void {
+    // The save point is among the undone edits this push discards (EditStackIndex's own test).
+    const discards = this.savePoint !== null && this.savePoint > this.here();
+    super.pushed();
+    if (!discards) return;
+    this.savePoint = null;
+    this.changedWithoutEdit();
+    this.lost();
+  }
+
   override saved(at?: number): void {
     this.changedOffStack = false;
     super.saved(at);
+    this.savePoint = at ?? this.here();
   }
 
   override reverted(): void {
     this.changedOffStack = false;
+    // Its save point moves through `saved`, which EditStackIndex.reverted calls.
     super.reverted();
   }
 }

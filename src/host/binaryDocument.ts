@@ -50,7 +50,9 @@ export class BinarySlddDocument implements vscode.CustomDocument, FollowedDocume
    */
   private readonly binary: BinaryEngine | null;
 
-  private readonly _onDidChange = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<BinarySlddDocument>>();
+  private readonly _onDidChange = new vscode.EventEmitter<
+    vscode.CustomDocumentEditEvent<BinarySlddDocument> | vscode.CustomDocumentContentChangeEvent<BinarySlddDocument>
+  >();
   readonly onDidChangeCustomDocument = this._onDidChange.event;
   private readonly disposables: vscode.Disposable[] = [];
 
@@ -62,8 +64,9 @@ export class BinarySlddDocument implements vscode.CustomDocument, FollowedDocume
     changed: () => void,
   ) {
     // VS Code reports a document restored from a hot-exit backup as dirty, though it has no edits,
-    // until it is saved or reverted.
-    this.edits = new EditStackCopy(fromBackup);
+    // until it is saved or reverted. A push that discards the save point tells VS Code the document
+    // changed, which its own flag would miss (EditStackCopy).
+    this.edits = new EditStackCopy(fromBackup, () => this._onDidChange.fire({ document: this }));
     this.binary = bytes
       ? new BinaryEngine({
           session: DataModel,
