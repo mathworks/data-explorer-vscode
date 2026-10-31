@@ -4,8 +4,8 @@
 // drop the table posts, through the real providers, into what each document then holds, what VS
 // Code was handed to undo, and what a save writes.
 //
-// A MAT-file takes the same gestures a dictionary does, through the same rules (transfer.ts,
-// clipboardAction.ts): a copy pasted into the file it came from is a duplicate under a unique
+// A MAT-file takes the same gestures a dictionary does, through the same rules (view's transfer.ts
+// and clipboardAction.ts): a copy pasted into the file it came from is a duplicate under a unique
 // name, a move within it is the no-op of a move back into its own section (the file is one
 // section, ''), and a move into another document is the paste there and the delete here, each its
 // own document's undo step. What is the MAT-file's own is what the edit IS: core's pasteEntries,
