@@ -23,13 +23,18 @@ const send = (data: any) => window.dispatchEvent(new MessageEvent('message', { d
 
 /**
  * What `read` sees at the start of the next task after `act`: after every microtask `act` queued,
- * and before any task it queued. The timer is set BEFORE `act`, so it runs ahead of a timer `act`
- * sets, which is what an answer pushed into a later task would be.
+ * and before any task it queued. Read twice, in a timer and in an immediate, both set BEFORE `act`:
+ * the timer's read runs ahead of a timer `act` sets, and the immediate's ahead of a frame `act`
+ * asks for, which happy-dom runs as an immediate. Node does not promise which of the two reads runs
+ * first, so the two have to agree. (firstPaintEditingState.test.ts reads the same way.)
  */
 function nextTask<T>(act: () => void, read: () => T): Promise<T> {
-  return new Promise((resolve) => {
-    setTimeout(() => resolve(read()), 0);
-    act();
+  const timer = new Promise<T>((resolve) => setTimeout(() => resolve(read()), 0));
+  const immediate = new Promise<T>((resolve) => setImmediate(() => resolve(read())));
+  act();
+  return Promise.all([timer, immediate]).then(([inTimer, inImmediate]) => {
+    expect(inImmediate, 'the same before a frame as before a timer').toEqual(inTimer);
+    return inTimer;
   });
 }
 
