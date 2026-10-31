@@ -115,10 +115,16 @@ describe('table-main routes every link through that one function', () => {
   });
 
   it('learns the document uri from setRows, not only from sectionRules', () => {
-    // Three matches, not two: the module-scope declaration, the sectionRules assignment
-    // that was already there, and the setRows one this task adds. Only the last reaches a
-    // read-only table, and counting is what pins it — drop that assignment and this is 2.
-    expect(src.match(/docUri = /g) ?? []).toHaveLength(3);
+    // The uri is view's now: messageSource reads it off every setRows and every sectionRules,
+    // and connectTable takes each paint's. Only the setRows half reaches a read-only table
+    // (no sectionRules comes to one), and it is what this pins. table-main keeps no uri of
+    // its own to drift from them.
+    expect(src).not.toMatch(/docUri = /);
+    const source = blankCommentsAndKeepLines(
+      readFileSync(join(import.meta.dirname, '..', 'node_modules/data-explorer-view/dist/model/source/messageSource.js'), 'utf8'),
+    );
+    expect(source.match(/docUri = m\.docUri/g) ?? []).toHaveLength(2);
+    expect(connect).toMatch(/if \(next\.docUri\)\s*docUri = next\.docUri/);
   });
 
   it('does not leave an unmatched local target pending', () => {

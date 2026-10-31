@@ -10,8 +10,8 @@
 //
 // So the test has to see what a real provider puts on the wire. Each case sends `dragStart` with
 // both rows, takes the `dragState` descriptor the provider broadcast and the `sectionRules` it
-// painted, and asks dropDecision what the table would show: what table-main's predictDrop does with
-// the same two messages. Then it sends the `drop` and reads the file: the design entry has moved,
+// painted, and asks dropDecision what the table would show: what the webview's predictDrop (view's
+// connectTable({editing})) does with the same two messages. Then it sends the `drop` and reads the file: the design entry has moved,
 // and the arch entry is still in arch under its own name.
 //
 // Both .sldd formats, because the JSON provider and the binary one are separate editors and each

@@ -1,8 +1,9 @@
 // Copyright 2026 The MathWorks, Inc.
 //
-// The seams between the paths a multi-row action travels, where they run through this extension's
-// own sources: the providers hand a paste and a drop to the same transfer, and the webview
-// (table-main.ts) describes the menu once, so the keyboard cannot disagree with it.
+// The seams between the paths a multi-row action travels, where they run through what this
+// extension ships: the providers hand a paste and a drop to the same transfer, and the webview's
+// editing half (view's connectTable, which table-main.ts wires up) describes the menu once, so the
+// keyboard cannot disagree with it.
 //
 // The rest of this suite asserted the menu's and the host's resolutions of one selection against
 // each other over a real model (operands, anchors, subsumption, paste-offered, the drag
@@ -41,26 +42,32 @@ describe('a drag is a no-op exactly where the same cut and paste is (V-002)', ()
 });
 
 describe('the keyboard cannot disagree with the menu', () => {
-  // table-main.ts runs top-level side effects against a live table element, so it is not
-  // importable here; what is checkable is that it describes the menu ONCE. The old code
-  // computed enablement twice — buildContextMenuItems for the menu, a ternary over
-  // _canCopy/_canDelete for the chord — with a comment promising they matched.
+  // The menu and its chords are view's now: table-main hands its table to connectTable({editing}),
+  // whose editing half (editingWire) builds the menu and answers the chords. What is checkable is
+  // that the shipped editing half describes the menu ONCE, and that table-main describes none of
+  // its own. The old code computed enablement twice — buildContextMenuItems for the menu, a ternary
+  // over _canCopy/_canDelete for the chord — with a comment promising they matched.
   const src = blankCommentsAndKeepLines(
     readFileSync(fileURLToPath(new URL('../src/webview/table-main.ts', import.meta.url)), 'utf8'),
   );
+  const editing = blankCommentsAndKeepLines(
+    readFileSync(fileURLToPath(new URL('../node_modules/data-explorer-view/dist/widgets/tree-table/editingWire.js', import.meta.url)), 'utf8'),
+  );
 
   it('builds the menu in exactly one place', () => {
-    expect(src.match(/buildContextMenuItems\(/g) ?? []).toHaveLength(1);
+    expect(src, 'table-main builds no menu and answers no chord of its own').not.toMatch(/buildContextMenuItems|resolveShortcutAction|menuFor\(/);
+    expect(editing.match(/buildContextMenuItems\(/g) ?? []).toHaveLength(1);
   });
 
   it('gates every chord on the item that chord would click', () => {
-    expect(src).toContain("find((i) => i.id === action)");
-    expect(src).toContain("find((i) => i.id === 'locateInText')");
+    expect(editing).toContain("find((i) => i.id === action)");
+    expect(editing).toContain("find((i) => i.id === 'locateInText')");
   });
 
   it('re-derives no capability of its own', () => {
     for (const flag of ['_canCopy', '_canDelete', '_canAddChild']) {
       expect(src, `table-main reads ${flag} again`).not.toContain(flag);
+      expect(editing, `the editing half reads ${flag} again`).not.toContain(flag);
     }
   });
 
@@ -70,7 +77,8 @@ describe('the keyboard cannot disagree with the menu', () => {
     // findOwningEntry(node).parent. Reading the row's immediate `parent` instead answered
     // null for a nested bus element, and null reads as "no destination" — so Paste greyed
     // out on a child while the host would have accepted it, with no reason shown.
-    expect(src, 'the walk comes from operands.ts').toContain('sectionRowIdOf(');
-    expect(src, 'table-main walks to a section itself').not.toMatch(/sectionNameFromRowId\([^)]*parent/);
+    expect(editing, 'the walk comes from operands.ts').toContain('sectionRowIdOf(');
+    expect(editing, 'the editing half walks to a section itself').not.toMatch(/sectionNameFromRowId\([^)]*parent/);
+    expect(src, 'table-main walks to a section itself').not.toMatch(/sectionNameFromRowId|sectionRowIdOf/);
   });
 });

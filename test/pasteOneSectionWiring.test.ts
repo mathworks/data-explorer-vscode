@@ -5,7 +5,7 @@
 // sends no paste, from the menu or from Cmd+V.
 //
 // The two triggers anchor differently: the menu at the right-clicked row, the keyboard at the
-// first selected row (table-main.ts). Before the ruling a selected section header did not
+// first selected row (the editing half, view's connectTable). Before the ruling a selected section header did not
 // count as a section, so with [Design header, Architectural header] selected the menu pasted
 // into Architectural Data and Cmd+V into Design Data, from one selection. menuItems.test.ts
 // pins the builder; this pins the shipped listeners that read it, so it imports table-main

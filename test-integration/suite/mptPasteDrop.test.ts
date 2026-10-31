@@ -69,7 +69,7 @@ const ruleOf = (tab: Tab, sectionName: string): any => {
   return rule;
 };
 
-/** The Paste item the table would show over `row`: table-main's menuFor, on the posted facts. */
+/** The Paste item the table would show over `row`: the editing half's menuFor, on the posted facts. */
 function pasteItemOver(tab: Tab, clip: any, row: any, sectionName: string): any {
   const rule = ruleOf(tab, sectionName);
   const items = buildContextMenuItems({

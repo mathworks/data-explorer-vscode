@@ -5,8 +5,9 @@
 // into the section every item came from is a no-op — the host clears the cut and edits
 // nothing — so the menu disables Paste and says why, and Cmd+V sends nothing, exactly as a
 // drag of the same rows onto that section is refused (dropDecision). menuItems.test.ts pins
-// the builder; this pins that table-main hands it the facts (the broadcast's `sourceDocUri`
-// and per-item `sectionName`, this document's uri, the target's section name).
+// the builder; this pins that the editing half table-main wires up (view's connectTable) hands
+// it the facts (the broadcast's `sourceDocUri` and per-item `sectionName`, this document's uri,
+// the target's section name).
 import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

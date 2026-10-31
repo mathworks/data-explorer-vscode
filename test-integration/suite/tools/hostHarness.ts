@@ -155,7 +155,7 @@ export function fakePanel(): {
  * through the webview's own splice and insert (rowUpdates): a whole `setRows` replaces the
  * rows, an `updateEntryRows` splices one entry's run, an `insertEntryRows` places a new one. A
  * repaint the rows cannot place is what the real table answers by asking for the whole payload
- * again (`ready`, see table-main), so this does the same — after the host's post returns, as a
+ * again (`ready`, see view's messageSource), so this does the same — after the host's post returns, as a
  * reply would — and counts it: a round trip the host should never have needed is a bug the rows
  * alone would hide, because the payload it brings back repairs them.
  *

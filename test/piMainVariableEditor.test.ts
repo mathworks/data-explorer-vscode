@@ -10,7 +10,7 @@
 // `showProps`/`empty`. Since the cells became a fetch on open, the host's `matrixCells`
 // answer is a message too, and it closed the panel it was sent to fill: the editor opened
 // on the click, flashed "Loading…", and closed. The table never had the defect because
-// table-main.ts closes per branch.
+// its listener (view's connectTable now) closes per branch.
 //
 // Same import route as tableMainChildRows.test.ts (see the memory
 // `table-main-is-importable`): two stubs — acquireVsCodeApi and the shell's body — in place
