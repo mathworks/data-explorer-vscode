@@ -52,8 +52,7 @@ export type {
   ShowPropsMessage,
   UpdateEntryRowsMessage,
 };
-import type { DragDescriptor } from '../host/dragState.js';
-import type { ClipboardMode } from '../host/clipboard.js';
+import type { ClipboardMode, DragDescriptor } from 'data-explorer-view/model';
 
 // --- Host -> Webview (table view: table-main.ts) ------------------------------
 

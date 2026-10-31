@@ -23,7 +23,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
-import { deleteFromSource } from '../../src/host/editorHub';
+import { registers } from '../../src/host/windowRegisters';
 import { waitFor } from './tools/hostHarness';
 
 function ctx(): vscode.ExtensionContext {
@@ -230,7 +230,7 @@ suite('A JSON .sldd open in two tabs is one document', () => {
     // completes the source half of a cross-document move dragged out of the other tab.
     first.close();
     assert.ok(doc.getText().includes('"name": "Array1"'), 'the entry to move is there to begin with');
-    await deleteFromSource(uri.toString(), ['Array1']);
+    await registers.deleteFromSource(uri.toString(), ['Array1']);
     await waitFor('the source-delete half of the move to reach the document', () =>
       !doc.getText().includes('"name": "Array1"'),
     );

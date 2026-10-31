@@ -11,11 +11,11 @@
 // redo, dirty state, save, revert, reload and hot-exit backup VS Code's own. The tree is read into
 // the registry over core's module-level session (`defaultRegistry`), where the Property Inspector,
 // the other editors and extension.ts's keystroke invalidate find it. Notices are notifications, the
-// registers are this extension's (hubRegisters.ts), the Usage column is the workspace's usage graph.
+// registers are the window's (windowRegisters.ts), the Usage column is the workspace's usage graph.
 import * as vscode from 'vscode';
 import type { Notify } from 'data-explorer-view/model';
 import { JsonEngine, defaultRegistry } from 'data-explorer-view/host';
-import { hubRegisters } from './hubRegisters.js';
+import { registers } from './windowRegisters.js';
 import { PerDocument, sameOpenDocument } from './perDocument.js';
 import { textDocumentStore, type TextDocumentApi } from './textDocumentStore.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
@@ -59,7 +59,7 @@ function engineOf(document: vscode.TextDocument, name: string): JsonEngine {
     uri,
     name,
     text: textDocumentStore(document, textApi(document)),
-    registers: hubRegisters(),
+    registers,
     notify,
     usage: {
       fill: (rows) => annotateDataRows(uri, rows),

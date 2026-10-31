@@ -9,14 +9,14 @@
 // The hooks: each edit goes onto VS Code's stack (`onDidChangeCustomDocument`), whose Undo and Redo
 // are VS Code's commands; the stack's position and save point are an EditStackIndex, the copy of
 // VS Code's dirty flag; a notice is a VS Code notification or the status bar; the registers are
-// this extension's (hubRegisters.ts); the Usage column is the workspace's usage graph.
+// the window's (windowRegisters.ts); the Usage column is the workspace's usage graph.
 import * as vscode from 'vscode';
 import { DataModel } from 'data-explorer-core';
 import { basename, type Notify } from 'data-explorer-view/model';
 import { EditStackIndex, MatEngine } from 'data-explorer-view/host';
 import type { DiskStamp } from './diskConflict.js';
 import type { FollowedDocument } from './diskFollow.js';
-import { hubRegisters } from './hubRegisters.js';
+import { registers } from './windowRegisters.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
 
 /** One read of the file behind a document, with the stamp it was read under (diskFollow.readStamped). */
@@ -121,7 +121,7 @@ export class MatDocument implements vscode.CustomDocument, FollowedDocument {
         redo: () => void vscode.commands.executeCommand('redo'),
       },
       index: this.edits,
-      registers: hubRegisters(),
+      registers,
       notify,
       usage: {
         fill: (rows) => annotateDataRows(uriString, rows),

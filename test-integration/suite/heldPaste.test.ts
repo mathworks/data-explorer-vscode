@@ -15,7 +15,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { getSectionMetadata } from 'data-explorer-core';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
-import { clearClipboard } from '../../src/host/clipboard';
+import { registers } from '../../src/host/windowRegisters';
 import { chunkOf, ctx, entryNames, fakePanel, isEntryRow, nameOf, quiet, token, waitFor, wsUri } from './tools/hostHarness';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -42,7 +42,7 @@ async function withTab(
     await run({ doc, view, rows: view.posts.filter((m) => m.type === 'setRows').pop().rows });
   } finally {
     view.close();
-    clearClipboard();
+    registers.clearClipboard();
     await vscode.workspace.fs.delete(uri);
   }
 }

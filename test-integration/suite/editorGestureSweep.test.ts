@@ -41,8 +41,7 @@ import { quiet, waitFor } from './tools/hostHarness';
 import { closeAll, type Opened } from './tools/tables';
 import { nodeAt } from './tools/editorSaves';
 import { EXT, answered, dragFrom, dropOn, openTab, take, type Tab } from './tools/gestures';
-import { clearClipboard } from '../../src/host/clipboard';
-import { clearDrag } from '../../src/host/dragState';
+import { registers } from '../../src/host/windowRegisters';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -131,8 +130,8 @@ async function runCase(c: Listed): Promise<Record<string, unknown>> {
   const stem = join(OUT!, `${c.format}-gesture`, String(c.i).padStart(4, '0'));
   const dir = mkdtempSync(join(OUT!, 'work', `${String(c.i).padStart(4, '0')}-`));
   const opened: Opened = [];
-  clearClipboard();
-  clearDrag();
+  registers.clearClipboard();
+  registers.clearDrag();
   try {
     const target = await openTab(c.format, opened, dir, `target.${EXT[c.format]}`, c.orig);
     const openedText = target.doc?.getText() ?? '';
@@ -201,7 +200,7 @@ async function runCase(c: Listed): Promise<Record<string, unknown>> {
     return { ...line, answer: 'crash', reason: err instanceof Error ? (err.stack ?? err.message) : String(err) };
   } finally {
     closeAll(opened);
-    clearClipboard();
+    registers.clearClipboard();
   }
 }
 
@@ -214,8 +213,8 @@ async function runMatCase(c: any): Promise<Record<string, unknown>> {
   const file = join(OUT!, 'mat-gesture', `${String(c.i).padStart(4, '0')}.mat`);
   const dir = mkdtempSync(join(OUT!, 'work', `mat-${String(c.i).padStart(4, '0')}-`));
   const opened: Opened = [];
-  clearClipboard();
-  clearDrag();
+  registers.clearClipboard();
+  registers.clearDrag();
   try {
     // Under its own name, so that the words a refusal says name the file as the user has it.
     const target = await openTab('mat27', opened, dir, basename(c.case.orig), c.case.orig);
@@ -268,7 +267,7 @@ async function runMatCase(c: any): Promise<Record<string, unknown>> {
     return { ...line, answer: 'crash', reason: err instanceof Error ? (err.stack ?? err.message) : String(err) };
   } finally {
     closeAll(opened);
-    clearClipboard();
+    registers.clearClipboard();
   }
 }
 

@@ -21,8 +21,7 @@ import { waitFor } from './tools/hostHarness';
 import { closeAll, fixturePath, type Opened } from './tools/tables';
 import { nodeAt } from './tools/editorSaves';
 import { answered, openTab, take, type Tab } from './tools/gestures';
-import { clearClipboard } from '../../src/host/clipboard';
-import { clearDrag } from '../../src/host/dragState';
+import { registers } from '../../src/host/windowRegisters';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -73,8 +72,8 @@ async function run(doc: vscode.TextDocument, command: 'undo' | 'redo'): Promise<
 /** One gesture on a fresh copy of the fixture, saved, undone and saved, redone and saved. */
 async function roundTrip(label: string, gesture: (tab: Tab) => Promise<{ edited: boolean; answer: string; reason?: string }>): Promise<void> {
   const opened: Opened = [];
-  clearClipboard();
-  clearDrag();
+  registers.clearClipboard();
+  registers.clearDrag();
   try {
     const dir = mkdtempSync(join(tmpdir(), 'dex-json-undo-redo-'));
     const tab = await openTab('json', opened, dir, 'values_text.sldd', fixture());
@@ -93,7 +92,7 @@ async function roundTrip(label: string, gesture: (tab: Tab) => Promise<{ edited:
   } finally {
     await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
     closeAll(opened);
-    clearClipboard();
+    registers.clearClipboard();
   }
 }
 
