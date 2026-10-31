@@ -2,37 +2,45 @@
 //
 // A listed sweep of gestures through the editors, in real VS Code, each file an editor saves written out
 // for a comparison outside the test: in the dictionary editors, gallery adds, pastes (from the file
-// itself, another dictionary, a MAT-file), moves within a file and across files, and renames, each
-// followed, where this host can, by an undo and a save, then a redo and a save; in the MAT-file editor,
-// gallery adds and pastes into the whole file. editorSaveSweep.test.ts and p4MatEditorSweep.test.ts beside
-// this are the ones for single edits.
+// itself, another dictionary, a MAT-file), moves within a file and across files and formats, drags that
+// move or copy, and renames, each followed, where this host can, by an undo and a save, then a redo and a
+// save; in the MAT-file editor, gallery adds, and pastes, moves and drops into the whole file.
+// editorSaveSweep.test.ts and p4MatEditorSweep.test.ts beside this are the ones for single edits.
 //
 // Runs only when EB_P4_GESTURE_OUT is set. EB_P4_GESTURE names the dictionary gestures, one JSON object a line:
 //   { id, i, format: 'json' | 'bin', orig, edit, undoRedo }
 //   edit: { op: 'gallery', section, className } | { op: 'rename', path, text }
 //       | { op: 'paste' | 'move' | 'xmove', from: { format, orig, section, name }, to: { section } }
+//       | { op: 'drag', mode: 'move' | 'copy', within?: true, from: { format, orig, section, name }, to: { section } }
+// `from.format` may be another format than the target's, a MAT-file (`mat27`, section '') included.
 // Each gesture is made on fresh copies of its files, by the messages the table sends (addEntry; edit of
-// the Name; copy or cut, then paste on the section's row), then the editor's own save. A move across
-// files saves its source too. A binary edit is undone and redone through the edit VS Code was handed;
-// a JSON one through VS Code's own undo and redo, when this host's undo reaches an editor at all (see
-// cutPasteUndo.test.ts's canary). One line a gesture goes to <out>/<format>-gesture.jsonl, and each
-// saved file to <out>/<format>-gesture/<i>[-source|-undo|-redo].sldd.
+// the Name; copy or cut, then paste on the section's row; dragStart in the source's table, then drop on
+// the section's row and the source's dragEnd), then the editor's own save. A drag is within the target's
+// own table when `within` is set, and from a second file otherwise. A move across files (xmove, or a
+// drag move from a second file) saves its source too, as <i>-source.<sldd|mat>. A binary edit is undone
+// and redone through the edit VS Code was handed; a JSON one through VS Code's own undo and redo, when
+// this host's undo reaches an editor at all (see cutPasteUndo.test.ts's canary). One line a gesture goes
+// to <out>/<format>-gesture.jsonl, and each saved file to <out>/<format>-gesture/<i>[-source|-undo|-redo]
+// (.sldd, or .mat for a MAT-file source).
 //
 // EB_P4_MAT_GESTURE names the MAT-file gestures, each on a fresh copy of `case.orig`:
-//   { id, i, edit: { path: '', op: 'gallery', className } | { path: '', op: 'paste', from: { format, orig,
-//     section, name } }, case: { orig } }
+//   { id, i, edit: { path: '', op: 'gallery', className } | { path: '', op: 'paste' | 'xmove', from: { format,
+//     orig, section, name } } | { path: '', op: 'drag', mode: 'move' | 'copy', within?: true, from: … },
+//     case: { orig } }
 // A gallery add is the tile's addEntry; a paste copies the entry `name` (of section `section` of a
 // dictionary, or a variable of a MAT-file) in its own editor, a variable of the file itself in the file's
-// own editor, then pastes into the whole file (rowId ''). One line a gesture, with the names it added,
-// goes to <out>/mat-gesture.jsonl, and each saved file to <out>/mat-gesture/<i>.mat.
+// own editor, then pastes into the whole file (rowId ''); an xmove cuts it instead, from a second file;
+// a drag starts in the source's table and is let go over the whole file. One line a gesture, with the
+// names it added, goes to <out>/mat-gesture.jsonl, and each saved file to <out>/mat-gesture/<i>.mat (and
+// a move's source, saved too, to <i>-source.<sldd|mat>).
 import * as vscode from 'vscode';
 import { appendFileSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'fs';
 import { basename, join } from 'path';
 import { buildSectionRowId } from 'data-explorer-view/model';
-import { waitFor } from './tools/hostHarness';
+import { quiet, waitFor } from './tools/hostHarness';
 import { closeAll, type Opened } from './tools/tables';
 import { nodeAt } from './tools/editorSaves';
-import { EXT, answered, openTab, take, type Tab } from './tools/gestures';
+import { EXT, answered, dragFrom, dropOn, openTab, take, type Tab } from './tools/gestures';
 import { clearClipboard } from '../../src/host/clipboard';
 import { clearDrag } from '../../src/host/dragState';
 
@@ -49,28 +57,65 @@ interface Listed {
 
 const OUT = process.env.EB_P4_GESTURE_OUT;
 
-/** Whether this host's `undo` reaches an editor: false until a JSON undo has landed, null untried. */
-let jsonUndoWorks: boolean | null = null;
+/**
+ * JSON undos or redos in a row that did not land. One that misses is tried once more, the document
+ * shown again first; past MISSES_IN_A_ROW in a row, this host's `undo` is taken not to reach an editor
+ * at all, and the rest are not tried. (Until this, the first case's miss stood for every case after
+ * it, and one slow first undo cost a run all of them.)
+ */
+let jsonUndoMisses = 0;
+const MISSES_IN_A_ROW = 10;
 
-/** A JSON document's last edit undone by VS Code, saved, then redone, saved. */
-async function undoRedoJson(doc: vscode.TextDocument, stem: string, path: string, line: Record<string, unknown>): Promise<void> {
-  if (jsonUndoWorks === false) {
-    line.undoNote = 'not run: this host\'s undo did not reach an editor';
+/**
+ * Run `command` on the document shown, and say whether its text moved within a second and a half, and
+ * whether that took a second try. The version is read again right before the retry, so a first try
+ * that landed meanwhile is not sent again; one that lands later still, after the retry was sent, is
+ * caught by undoRedoJson's check of the text.
+ */
+async function lands(doc: vscode.TextDocument, command: 'undo' | 'redo'): Promise<'once' | 'retried' | false> {
+  const v = doc.version;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await vscode.window.showTextDocument(doc, { preview: false });
+    if (doc.version !== v) return attempt === 0 ? 'once' : 'retried';
+    await vscode.commands.executeCommand(command);
+    try {
+      await waitFor(`the ${command} to land`, () => doc.version !== v, 1500);
+      return attempt === 0 ? 'once' : 'retried';
+    } catch {
+      /* tried again below, the document shown first */
+    }
+  }
+  return doc.version !== v ? 'retried' : false;
+}
+
+/**
+ * A JSON document's last edit undone by VS Code, saved, then redone, saved. `opened` is the text the
+ * document opened with, before the gesture: what its undo must give back, as its redo must give back
+ * the gesture's. A text that is neither (an undo sent twice, the first one only slow) is not saved: the
+ * case says so instead of keeping a wrong file.
+ */
+async function undoRedoJson(doc: vscode.TextDocument, opened: string, stem: string, path: string, line: Record<string, unknown>): Promise<void> {
+  if (jsonUndoMisses >= MISSES_IN_A_ROW) {
+    line.undoNote = `not run: this host's undo did not reach an editor ${MISSES_IN_A_ROW} times in a row`;
     return;
   }
-  await vscode.window.showTextDocument(doc, { preview: false });
+  const expected = { undo: opened, redo: doc.getText() };
   try {
     for (const [command, key] of [['undo', 'undo'], ['redo', 'redo']] as const) {
-      const v = doc.version;
-      await vscode.commands.executeCommand(command);
-      try {
-        await waitFor(`the ${command} to land`, () => doc.version !== v, 1500);
-      } catch {
-        if (jsonUndoWorks === null) jsonUndoWorks = false;
+      const landed = await lands(doc, command);
+      if (!landed) {
+        jsonUndoMisses++;
         line.undoNote = `not run: this host's ${command} did not reach the editor`;
         return;
       }
-      jsonUndoWorks = true;
+      jsonUndoMisses = 0;
+      // A retried command whose first try was only slow lands twice: let a late one land, then hold
+      // the text, retried or not, to the one this step must give back.
+      if (landed === 'retried') await quiet(500, `a late ${command} to land before the text is read`);
+      if (doc.getText() !== expected[key]) {
+        line.undoNote = `not saved: the ${command} left a text other than ${key === 'undo' ? 'the one the document opened with' : "the gesture's"}`;
+        return;
+      }
       await doc.save();
       copyFileSync(path, `${stem}-${key}.sldd`);
       line[key] = `${stem}-${key}.sldd`;
@@ -90,6 +135,7 @@ async function runCase(c: Listed): Promise<Record<string, unknown>> {
   clearDrag();
   try {
     const target = await openTab(c.format, opened, dir, `target.${EXT[c.format]}`, c.orig);
+    const openedText = target.doc?.getText() ?? '';
     const g = c.edit;
     let source: Tab | null = null;
     let r: { answer: string; reason?: string; edited: boolean };
@@ -99,6 +145,19 @@ async function runCase(c: Listed): Promise<Record<string, unknown>> {
       const node = nodeAt(target.model(), g.path);
       if (!node) return { ...line, answer: 'absent' };
       r = await answered(target, { type: 'edit', rowId: node.id, columnId: 'Name', oldValue: String(node.toRow()?.Name?.label ?? node.name), newValue: g.text });
+    } else if (g.op === 'drag') {
+      source = g.within ? target : await openTab(g.from.format, opened, dir, `source.${EXT[g.from.format]}`, g.from.orig);
+      const started = await dragFrom(source, g.from.section, g.from.name);
+      if (started) return { ...line, ...started };
+      const sourceEdits = source.edits();
+      r = await dropOn(target, source, buildSectionRowId(g.to.section), g.mode);
+      if (g.mode === 'move' && source !== target && r.edited) {
+        try {
+          await waitFor('the source to delete what moved', () => source!.edits() > sourceEdits, 5000);
+        } catch {
+          line.sourceNote = 'the source took nothing out';
+        }
+      }
     } else {
       const same = g.op === 'move' || (g.op === 'paste' && g.from.format === c.format && g.from.orig === c.orig);
       source = same ? target : await openTab(g.from.format, opened, dir, `source.${EXT[g.from.format]}`, g.from.orig);
@@ -120,10 +179,11 @@ async function runCase(c: Listed): Promise<Record<string, unknown>> {
     await target.save();
     line.saved = `${stem}.sldd`;
     copyFileSync(target.path, `${stem}.sldd`);
-    if (g.op === 'xmove' && source && source !== target) {
+    if ((g.op === 'xmove' || (g.op === 'drag' && g.mode === 'move')) && source && source !== target) {
+      const saved = `${stem}-source.${EXT[g.from.format]}`;
       await source.save();
-      line.source = `${stem}-source.sldd`;
-      copyFileSync(source.path, `${stem}-source.sldd`);
+      line.source = saved;
+      copyFileSync(source.path, saved);
     }
     if (c.format === 'bin' && target.events?.length) {
       const last = target.events[target.events.length - 1];
@@ -134,7 +194,7 @@ async function runCase(c: Listed): Promise<Record<string, unknown>> {
         copyFileSync(target.path, `${stem}-${key}.sldd`);
       }
     } else if (c.format === 'json' && target.doc) {
-      await undoRedoJson(target.doc, stem, target.path, line);
+      await undoRedoJson(target.doc, openedText, stem, target.path, line);
     }
     return line;
   } catch (err) {
@@ -148,7 +208,7 @@ async function runCase(c: Listed): Promise<Record<string, unknown>> {
 /** The names of a MAT-file editor's variables. */
 const variablesOf = (tab: Tab): string[] => ((tab.model()?.children ?? []) as any[]).map((v) => v.name);
 
-/** One MAT-file gesture: a gallery add or a whole-file paste, then the editor's own save. */
+/** One MAT-file gesture: a gallery add, or a whole-file paste, move or drop, then the editor's own save. */
 async function runMatCase(c: any): Promise<Record<string, unknown>> {
   const line: Record<string, unknown> = { id: c.id, format: 'mat' };
   const file = join(OUT!, 'mat-gesture', `${String(c.i).padStart(4, '0')}.mat`);
@@ -162,13 +222,33 @@ async function runMatCase(c: any): Promise<Record<string, unknown>> {
     const before = variablesOf(target);
     const g = c.edit;
     let r: { answer: string; reason?: string; edited: boolean };
+    let source: Tab | null = null;
+    let moved = false;
     if (g.op === 'gallery') {
       r = await answered(target, { type: 'addEntry', section: '', className: g.className, rename: false });
     } else {
-      const source = g.from.format === 'mat27' ? target : await openTab(g.from.format, opened, dir, `source.${EXT[g.from.format]}`, g.from.orig);
-      const taken = await take(source, g.from.section, g.from.name, 'copy');
-      if (taken) return { ...line, ...taken };
-      r = await answered(target, { type: 'paste', rowId: '' });
+      // A paste of the file's own variable is made in the file's own table; an xmove, and a drag that
+      // is not `within`, come from a second file, of whatever format.
+      const fromItself = g.op === 'paste' ? g.from.format === 'mat27' : g.op === 'drag' && !!g.within;
+      source = fromItself ? target : await openTab(g.from.format, opened, dir, `source.${EXT[g.from.format]}`, g.from.orig);
+      const sourceEdits = source.edits();
+      if (g.op === 'drag') {
+        const started = await dragFrom(source, g.from.section, g.from.name);
+        if (started) return { ...line, ...started };
+        r = await dropOn(target, source, '', g.mode);
+      } else {
+        const taken = await take(source, g.from.section, g.from.name, g.op === 'xmove' ? 'cut' : 'copy');
+        if (taken) return { ...line, ...taken };
+        r = await answered(target, { type: 'paste', rowId: '' });
+      }
+      moved = (g.op === 'xmove' || (g.op === 'drag' && g.mode === 'move')) && source !== target;
+      if (moved && r.edited) {
+        try {
+          await waitFor('the source to delete what moved', () => source!.edits() > sourceEdits, 5000);
+        } catch {
+          line.sourceNote = 'the source took nothing out';
+        }
+      }
     }
     line.answer = r.answer;
     line.reason = r.reason ?? null;
@@ -177,6 +257,12 @@ async function runMatCase(c: any): Promise<Record<string, unknown>> {
     await target.save();
     copyFileSync(target.path, file);
     line.saved = file;
+    if (moved && source) {
+      const saved = file.replace(/\.mat$/, `-source.${EXT[g.from.format]}`);
+      await source.save();
+      line.source = saved;
+      copyFileSync(source.path, saved);
+    }
     return line;
   } catch (err) {
     return { ...line, answer: 'crash', reason: err instanceof Error ? (err.stack ?? err.message) : String(err) };
