@@ -17,12 +17,10 @@
 // them and they cannot move the workspace-wide counts other suites assert. Every sparse
 // variable sits beside a dense twin of the same class and shape.
 //
-// The no-grid tests need core 1.36.3 and are skipped on an older core, where a sparse array
-// has no `isSparse` and its grid still opens. The dense tests run on any core.
+// The no-grid cases are view's tests now (its sparseNoGrid.test.ts, through the same fixtures);
+// the dense twins stay here, through the real providers.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 import { MatEditorProvider } from '../../src/host/MatEditorProvider';
@@ -36,35 +34,6 @@ function fixtureUri(name: string): vscode.Uri {
   assert.ok(ws, 'a workspace folder must be open');
   return vscode.Uri.joinPath(ws.uri, '..', 'sparse', name);
 }
-
-// The core this run is linked against. `test:integration` builds the extension and bundles
-// this file from node_modules immediately before it runs, so the package on disk there is the
-// core under test — a tarball installed over the pin included.
-function coreVersion(): string {
-  const ext = vscode.extensions.getExtension('mathworks.simulink-data-explorer');
-  assert.ok(ext, 'the extension must be present');
-  const pkg = join(ext!.extensionPath, 'node_modules', 'data-explorer-core', 'package.json');
-  const version = String(JSON.parse(readFileSync(pkg, 'utf8')).version);
-  // Unreadable is an error, not "older": read as older it would skip the tests that matter.
-  assert.match(version, /^\d+\.\d+\.\d+/, `a readable data-explorer-core version (${version})`);
-  return version;
-}
-
-function atLeast(version: string, min: string): boolean {
-  const have = version.split(/[.-]/).slice(0, 3).map(Number);
-  const want = min.split('.').map(Number);
-  for (let i = 0; i < 3; i++) if (have[i] !== want[i]) return have[i] > want[i];
-  return true;
-}
-
-// 2-D, within the grid's size cap, and sparse: class and shape alone would admit each. Paths
-// are by Name label from the entry down; a Parameter's grid would sit on its entry row, which
-// shows the Value's literal, and on its Value row.
-const SPARSE = [
-  'spAllZero', 'spBig', 'spComplex', 'spDiag', 'spLogical', 'spNonFinite', 'spSingle',
-  'pSp', 'pSp/Value', 'pSpComplex', 'pSpComplex/Value', 'pSpLogical', 'pSpLogical/Value',
-  'st/sp',
-];
 
 // The dense twins, same classes and shapes, with the cell count of each grid.
 const DENSE: Record<string, number> = {
@@ -161,28 +130,6 @@ suite('a sparse array is offered no Variable Editor grid', () => {
   });
 
   for (const venue of VENUES) {
-    test(`${venue.file}: no sparse row carries a glyph, and a click on one fetches no grid (core >= 1.36.3)`, async function () {
-      if (!atLeast(coreVersion(), '1.36.3')) this.skip();
-      opened = await venue.open(fixtureUri(venue.file));
-      const rows = rowsByPath(await paint(opened.view));
-      // The rows are there; only the glyph is not.
-      for (const path of SPARSE) assert.ok(rows.get(path), `${venue.file} has a row for ${path}`);
-      // EXACTLY the dense twins carry one: no sparse row, and nothing else either.
-      const stamped = [...rows].filter(([, r]) => r._matrix).map(([p]) => p).sort();
-      assert.deepStrictEqual(stamped, Object.keys(DENSE).sort(), `${venue.file}: the rows with a grid glyph`);
-      // A fetch for a sparse row — a panel opened just before a repaint, say — answers with the
-      // reason and no cells, from the same gate the glyph comes from. Asked by row ID, so the
-      // dense twin asked the same way is the control: it shows the ID names a node this
-      // provider finds, and the refusal is the gate's rather than a failed lookup.
-      const control = await fetchMatrix(opened.view, rows.get('dDiag').ID);
-      assert.strictEqual(control.matrix?.cells?.length, 100, `${venue.file}: dDiag fetched by its row ID`);
-      for (const path of ['spDiag', 'pSp']) {
-        const answer = await fetchMatrix(opened.view, rows.get(path).ID);
-        assert.strictEqual(answer.matrix, undefined, `${venue.file}: ${path} fetched no grid`);
-        assert.strictEqual(answer.message, 'This value could not be read as a table.');
-      }
-    }).timeout(60000);
-
     test(`${venue.file}: every dense twin carries its glyph, and a click on it fetches every cell`, async () => {
       opened = await venue.open(fixtureUri(venue.file));
       const rows = rowsByPath(await paint(opened.view));

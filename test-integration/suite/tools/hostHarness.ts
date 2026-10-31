@@ -220,7 +220,6 @@ export const entryNames = (text: string): string[] =>
 
 // --- the rows a table holds ------------------------------------------------------------
 
-export const isHeader = (row: any): boolean => String(row.ID).startsWith('section:');
 export const isEntryRow = (row: any): boolean => String(row.parent ?? '').startsWith('section:');
 export const nameOf = (row: any): string => row?.Name?.label ?? String(row?.ID ?? '');
 export const childrenOf = (rows: any[], parentId: string): any[] =>

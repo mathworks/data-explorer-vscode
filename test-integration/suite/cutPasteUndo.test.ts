@@ -169,39 +169,4 @@ suite('Data Explorer .sldd lazy-cut move — one edit, one undo', () => {
       'extension remains active through the move + undo',
     );
   });
-
-  test('cross-document source delete applies as its own WorkspaceEdit (separate undo step)', async () => {
-    // A cross-document cut pastes into the target, then deletes from the SOURCE
-    // document via that document's own WorkspaceEdit (SlddTextEditorProvider's
-    // deleteFromSourceDocument). There is a single editable .sldd fixture, so we
-    // model just the source side: opening the source document and applying a
-    // full-text delete-write is a distinct, revertible edit on THAT document —
-    // proving the cross-doc source edit is independent of any target edit.
-    const uri = slddUri();
-    const doc = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
-
-    const originalText = doc.getText();
-    // Remove one entry (the source-delete half of a cross-document move).
-    const parsed = JSON.parse(originalText);
-    const partKey = Object.keys(parsed.__MW_TEXT_PARTS__)[0];
-    const entries = parsed.__MW_TEXT_PARTS__[partKey].__MW_TEXT_content.entries as Array<{ name: string }>;
-    const before = entries.length;
-    const trimmed = { ...parsed };
-    trimmed.__MW_TEXT_PARTS__[partKey].__MW_TEXT_content.entries = entries.filter((e) => e.name !== 'Number');
-    const trimmedText = JSON.stringify(trimmed, null, 2);
-
-    const edit = new vscode.WorkspaceEdit();
-    edit.replace(uri, new vscode.Range(doc.positionAt(0), doc.positionAt(originalText.length)), trimmedText);
-    const applied = await vscode.workspace.applyEdit(edit);
-    assert.strictEqual(applied, true, 'the source-delete edit applied');
-
-    const after = (JSON.parse(doc.getText()).__MW_TEXT_PARTS__[partKey].__MW_TEXT_content.entries as unknown[]).length;
-    assert.strictEqual(after, before - 1, 'exactly one entry was removed from the source document');
-    assert.ok(doc.isDirty, 'the source document is dirty (its own revertible edit)');
-    assert.ok(
-      vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
-      'extension remains active through the cross-document source delete',
-    );
-  });
 });

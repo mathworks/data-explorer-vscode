@@ -10,8 +10,8 @@
 // a silent one.
 //
 // Both source formats, because each provider registers its own deleter and tears it down on its
-// own close. The positive control — the same move with the source still open — is what shows the
-// test can tell the two apart: the original goes, and nothing is reported.
+// own close. The positive control, the same move with the source still open (the original goes,
+// and nothing is reported), is view's clipboard tests' now.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
@@ -143,18 +143,6 @@ for (const [format, open] of [
 ] as const) {
   suite(`A cut from a ${format} .sldd, pasted into another dictionary`, () => {
     const tag = format === 'JSON' ? 'json' : 'bin';
-
-    test('removes the original when its tab is still open, and says nothing', async () => {
-      const source = await open(`xdoc_src_open_${tag}.sldd`);
-      try {
-        const run = await cutAndPaste(source, false, `xdoc_dst_open_${tag}.sldd`);
-        assert.deepStrictEqual(run.errors, [], 'nothing to report');
-        assert.ok(run.targetHas, `${MOVED} landed in the target`);
-        assert.ok(!run.sourceHolds, `and left the source`);
-      } finally {
-        await source.dispose();
-      }
-    }).timeout(60000);
 
     test('says the original could not be removed when its tab was closed after the cut, and loses nothing', async () => {
       const source = await open(`xdoc_src_closed_${tag}.sldd`);

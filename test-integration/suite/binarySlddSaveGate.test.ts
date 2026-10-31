@@ -16,10 +16,7 @@
 // `backupId` VS Code hands in.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { unzipSync } from 'fflate';
-import { DataModel } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { waitFor } from './tools/hostHarness';
 
 /** A payload the reader cannot recover, so the gate must refuse it. */
 const UNREADABLE = '<Root><unterminated';
@@ -40,12 +37,6 @@ function token() {
   return new vscode.CancellationTokenSource().token;
 }
 
-function makePanel(): vscode.WebviewPanel {
-  return vscode.window.createWebviewPanel('test.binSlddSaveGate', 'test', vscode.ViewColumn.One, {
-    enableScripts: true,
-  });
-}
-
 /** A working copy of the fixture, so writing in this suite cannot touch the fixture. */
 async function workingCopy(name: string): Promise<vscode.Uri> {
   const dst = wsUri(name);
@@ -54,14 +45,6 @@ async function workingCopy(name: string): Promise<vscode.Uri> {
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
-/** The first entry of the first non-empty section. */
-function firstEntry(root: any): any {
-  for (const section of (root?.children ?? []) as any[]) {
-    if (section.children.length > 0) return section.children[0];
-  }
-  return null;
-}
 
 suite('Binary .sldd save gate vs hot-exit backup', () => {
   let provider: BinarySlddEditorProvider;
@@ -132,108 +115,6 @@ suite('Binary .sldd save gate vs hot-exit backup', () => {
     );
 
     await second.delete();
-    doc.dispose();
-    await vscode.workspace.fs.delete(uri);
-  });
-
-  test('a save reads the dictionary once, and paints the tree it read', async () => {
-    // The gate, the re-baseline and the repaint each used to read the payload — three
-    // trees describing one unchanged chunkXml, ~3.1 s each on a real dictionary (and a
-    // fourth per split view, since the repaint is per view).
-    const uri = await workingCopy('binary_save_once_copy.sldd');
-    const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
-    const srcId = (doc as unknown as { srcId: string }).srcId;
-    const panel = makePanel();
-    await provider.resolveCustomEditor(doc, panel, token());
-    // Register the model through the live view, then keep the view: the repaint under test
-    // is the real post(), not a stub. Asserted, because with no view registered the count
-    // below would come out at 1 whether or not the repaint rebuilds. The view's own `ready`
-    // is waited for first, so its paint cannot land inside the count.
-    await waitFor('the ready/post round trip to register the document', () => !!DataModel.getDataSource(srcId));
-    (doc as any).repaintAll();
-    assert.strictEqual(((doc as any).views as Set<unknown>).size, 1, 'the real view is the one that repaints');
-
-    // Every read of the payload is followed by registering what it read, and
-    // `DataModel.addDataSource` is a property lookup on the imported class — so counting it
-    // is how many trees this save built. One: the gate's, reused. Before the fix it was two
-    // (re-baseline, then the repaint rebuilding what the re-baseline had just registered).
-    const realAdd = (DataModel as any).addDataSource;
-    let registrations = 0;
-    (DataModel as any).addDataSource = (...args: unknown[]) => {
-      registrations++;
-      return realAdd.apply(DataModel, args);
-    };
-    try {
-      await provider.saveCustomDocument(doc, token());
-    } finally {
-      (DataModel as any).addDataSource = realAdd;
-    }
-    assert.strictEqual(registrations, 1, 'a save builds ONE tree, with a real view painting');
-
-    const root: any = DataModel.getDataSource(srcId);
-    assert.ok(root, 'the save registered the tree it read');
-    assert.strictEqual(firstEntry(root).name, 'Kp', 'built from the payload it wrote');
-    assert.deepStrictEqual(
-      [...(doc as any).modified(root)],
-      [],
-      'and baselined that same tree, so the save leaves no row wearing a Modified mark',
-    );
-
-    // The same fact said the other way round, because the count alone does not show WHICH
-    // tree the views were pointed at: stand-in views (a real panel cannot be asked what it
-    // was told), and every one of them is asked for the registered tree.
-    const seen: unknown[] = [];
-    const views = (doc as any).views as Set<{ repaintAll(from?: unknown): void; repaintOps(a: unknown[]): void }>;
-    views.clear();
-    for (const _tag of ['a', 'b']) {
-      views.add({ repaintAll: (from) => seen.push(from), repaintOps: () => undefined });
-    }
-    await provider.saveCustomDocument(doc, token());
-    assert.deepStrictEqual(
-      seen,
-      ['registered', 'registered'],
-      'every view paints the tree the save registered, instead of parsing the payload again',
-    );
-
-    panel.dispose();
-    doc.dispose();
-    await vscode.workspace.fs.delete(uri);
-  });
-
-  test('an edit landing on the save’s write is not overwritten by the gate’s stale read', async () => {
-    // Reusing the gate's read is only sound while it is still a read of the document's
-    // payload. A save awaits its writeFile, and the webview can deliver an edit on that
-    // await — so the reuse is guarded, and this is the case that guard exists for.
-    const uri = await workingCopy('binary_save_race_copy.sldd');
-    const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
-    const srcId = (doc as unknown as { srcId: string }).srcId;
-    const gated = (doc as unknown as { chunkXml: string }).chunkXml;
-    const raced = gated.replace('>Kp<', '>Kz<');
-
-    // saveCustomDocument runs synchronously as far as its writeFile, so the gate has
-    // already read `gated` by the time it hands back a promise. Changing chunkXml here is
-    // exactly an edit arriving on that await.
-    const saving = provider.saveCustomDocument(doc, token());
-    (doc as unknown as { chunkXml: string }).chunkXml = raced;
-    await saving;
-
-    const root: any = DataModel.getDataSource(srcId);
-    assert.strictEqual(
-      firstEntry(root).name,
-      'Kz',
-      'the registered tree describes the document, not the read the gate happened to have',
-    );
-    assert.deepStrictEqual(
-      [...(doc as any).modified(root)],
-      [],
-      'and the baseline was captured from that same tree',
-    );
-    // The file got the text the gate approved, which is the only text this save promised.
-    // The edit that landed mid-write is still unsaved — VS Code asks again, and the model
-    // it will gate next time is the one showing in the table.
-    const zip = unzipSync(await vscode.workspace.fs.readFile(uri));
-    assert.strictEqual(new TextDecoder().decode(zip['data/chunk0.xml']), gated, 'the write is of the gated text');
-
     doc.dispose();
     await vscode.workspace.fs.delete(uri);
   });

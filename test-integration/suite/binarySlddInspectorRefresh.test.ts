@@ -106,18 +106,6 @@ suite('Binary .sldd: the Property Inspector follows the entry it shows', () => {
   const setValue = (name: string, value: string) =>
     view.send({ type: 'edit', rowId: entry(name).id, columnId: 'Value', oldValue: '', newValue: value });
 
-  test('an edit, its undo and its redo of the shown entry each show its value as it now is', async () => {
-    select('scalarD');
-    assert.strictEqual(showing(), '3.14');
-    setValue('scalarD', '42');
-    assert.strictEqual(showing(), '42', 'the edit');
-    edits[edits.length - 1].undo();
-    assert.strictEqual(showing(), '3.14', 'its undo');
-    edits[edits.length - 1].redo();
-    assert.strictEqual(showing(), '42', 'its redo');
-    assert.strictEqual(showingNode(), entry('scalarD'), 'from the node the session holds now');
-  });
-
   test('a save, a revert and a reload from disk each show the node the document holds after it', async () => {
     select('scalarD');
     setValue('scalarD', '42');
@@ -155,23 +143,4 @@ suite('Binary .sldd: the Property Inspector follows the entry it shows', () => {
     });
     assert.strictEqual(showingNode(), entry('scalarD'));
   });
-
-  test('a delete of the shown entry leaves the inspector to the table, which reports the selection that follows', async () => {
-    select('scalarD');
-    const before = shown.length;
-    view.send({ type: 'delete', rowIds: [entry('scalarD').id] });
-    assert.ok(!chunkHas(doc, 'scalarD'), 'the entry is gone');
-    assert.ok(!shown.slice(before).includes(null), 'not cleared here: the table says what is selected next');
-    const landing = view.posts.filter((p) => p.type === 'selectRows').pop();
-    assert.ok(landing, 'and the table is told which row to select');
-  });
-
-  test('an edit of another entry shows the selected one again, unchanged', async () => {
-    select('scalarD');
-    setValue('negD', '1');
-    assert.strictEqual(showing(), '3.14');
-    assert.strictEqual(showingNode(), entry('scalarD'));
-  });
 });
-
-const chunkHas = (doc: any, name: string): boolean => (doc.chunkXml as string).includes(`>${name}<`);

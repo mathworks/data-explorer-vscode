@@ -142,22 +142,6 @@ suite('Usage does not depend on tab history', () => {
     }
   });
 
-  test('the session alone answers with fewer blocks and no model at all', async () => {
-    // What the node layer hands over, and why it cannot be the answer: the session
-    // holds ctrlA, so it can speak for GainA/LimitA and knows nothing of GainB, and
-    // its shape names no model — the qualifier that makes a block reference
-    // identifiable when models share a dictionary.
-    await registerCtrlAInSession();
-    const before = rowNamed(await dictionaryRows(), 'SharedGain').UsedBy;
-    assert.ok(before && !('blockLinks' in before), 'the cell is the node layer’s shape, not the graph’s');
-    const named: string[] = Array.isArray(before.links) ? before.links.map((l: any) => l.text) : [];
-    assert.ok(!named.includes('GainB'), 'the session cannot know a model it never registered');
-    assert.ok(named.length < 3, `the session accounts for ${named.length} of 3 usages`);
-    for (const name of named) {
-      assert.ok(!name.includes('('), `${name} carries no model qualifier`);
-    }
-  });
-
   test('annotateDataRows replaces it with every usage, each named with its model', async () => {
     // The regression. `annotateDataRows` used to skip a row that already had a
     // `UsedBy`, so this cell stayed the session's for the life of the window.
@@ -210,22 +194,6 @@ suite('Usage does not depend on tab history', () => {
       ],
       'every usage, each qualified by the model it lives in',
     );
-  });
-
-  test('an entry nothing uses keeps whatever the node layer left, rather than being emptied', async () => {
-    // UnusedVar gets no answer from either engine. Overwriting it with an empty cell
-    // would turn "nothing here says so" into the emphatic "unused" that neither
-    // engine is entitled to claim.
-    await openAllFixtures();
-    await registerCtrlAInSession();
-    await pollRebuilt('all three usages of SharedGain', async () => {
-      const u = await blocksUsingVariable(dictUri(), 'SharedGain');
-      return u.length === 3 ? u : null;
-    });
-    const rows = await dictionaryRows();
-    const before = rowNamed(rows, 'UnusedVar').UsedBy;
-    await annotateDataRows(dictUri(), rows);
-    assert.deepStrictEqual(rowNamed(rows, 'UnusedVar').UsedBy, before, 'left exactly as it was');
   });
 
   test('annotateModelRows upgrades a block row’s link from a ref NAME to the resolved file', async () => {

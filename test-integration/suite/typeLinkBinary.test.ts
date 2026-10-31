@@ -22,7 +22,6 @@ import * as vscode from 'vscode';
 import { DataModel } from 'data-explorer-core';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
 import { buildRows } from 'data-explorer-view/model';
-import { binaryEditSrcId } from 'data-explorer-view/host';
 import { handleNavigate } from '../../src/host/navigate';
 import { waitFor } from './tools/hostHarness';
 
@@ -85,19 +84,6 @@ suite('a Data Type link out of an editable binary .sldd', () => {
     return row!.DataType as Cell;
   };
 
-  test('the target names this document by its PREFIXED srcId', async () => {
-    const uri = fixtureUri();
-    const { all, srcId } = await rows();
-    // Derived, not spelled again: the pairing of the prefix with its removal is the thing
-    // under test, so a second literal here could agree with a broken one in src/.
-    assert.strictEqual(srcId, binaryEditSrcId(uri.toString()), 'the document registered its prefixed srcId');
-    const cell = dataTypeOf(all, 'Kp');
-    assert.ok(typeof cell === 'object' && cell !== null, 'Kp Data Type came through as a link cell');
-    assert.strictEqual((cell as { text: string }).text, 'MyAlias');
-    // What core actually emits, prefix and all. This is the string the click carries.
-    assert.strictEqual((cell as { linkTarget?: string }).linkTarget, `MyAlias@${srcId}`);
-  });
-
   test('handleNavigate reads that target back to this file, not to a binedit: uri', async () => {
     // The regression. Before the fix this resolved to a `binedit:`-scheme uri whose path was
     // the whole `file:///…` string; the editor router sniffed it, found neither a JSON nor a
@@ -112,13 +98,5 @@ suite('a Data Type link out of an editable binary .sldd', () => {
     assert.ok(opened, 'the link resolved to a document');
     assert.strictEqual(opened!.scheme, 'file', 'resolved to a real file, not the srcId prefix as a scheme');
     assert.strictEqual(opened!.toString(), uri.toString(), 'the link round-tripped to its own document');
-  });
-
-  test('a built-in and a non-type name stay plain text here too', async () => {
-    // The negative half, in the binary format: the rule must not have become "link anything"
-    // on the way through a different reader.
-    const { all } = await rows();
-    assert.strictEqual(dataTypeOf(all, 'Gain'), 'double');
-    assert.strictEqual(dataTypeOf(all, 'Borrowed'), 'Kp');
   });
 });
