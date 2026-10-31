@@ -21,10 +21,10 @@ const send = (data: any) => window.dispatchEvent(new MessageEvent('message', { d
 
 /**
  * What `read` sees at the start of the next task after `act`: after every microtask `act` queued,
- * and before any task it queued. As in answersLandInTheirTask.test.ts, but read twice, in a timer
- * and in an immediate, both set BEFORE `act`, because happy-dom runs an animation frame as an
- * immediate, which Node runs ahead of a timer: the timer's read is ahead of a timer `act` sets,
- * the immediate's ahead of a frame. The two have to agree.
+ * and before any task it queued. As in answersLandInTheirTask.test.ts, read twice, in a timer and
+ * in an immediate, both set BEFORE `act`: the timer's read runs ahead of a timer `act` sets, and the
+ * immediate's ahead of a frame `act` asks for, which happy-dom runs as an immediate. Node does not
+ * promise which of the two reads runs first, so the two have to agree.
  */
 function nextTask<T>(act: () => void, read: () => T): Promise<T> {
   const timer = new Promise<T>((resolve) => setTimeout(() => resolve(read()), 0));
