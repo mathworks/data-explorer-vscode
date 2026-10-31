@@ -117,7 +117,7 @@ async function matCase(run: (c: { open(as: string, bytes: Uint8Array): Promise<a
     opened.push({ doc, view });
     const events: vscode.CustomDocumentEditEvent<vscode.CustomDocument>[] = [];
     provider.onDidChangeCustomDocument((e) => {
-      if (e.document === doc) events.push(e);
+      if (e.document === doc && 'undo' in e) events.push(e);
     });
     await provider.resolveCustomEditor(doc, view.panel, token());
     view.send({ type: 'ready' });

@@ -72,7 +72,9 @@ suite('Binary .sldd: the Property Inspector follows the entry it shows', () => {
     );
     provider.onSelect = (uriString, rowIds) => selection.show(uriString, rowIds);
     provider.onChanged = (uriString) => selection.refresh(uriString);
-    provider.onDidChangeCustomDocument((e) => edits.push(e));
+    provider.onDidChangeCustomDocument((e) => {
+      if ('undo' in e) edits.push(e);
+    });
     doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
     view = fakePanel();
     await provider.resolveCustomEditor(doc, view.panel, token());

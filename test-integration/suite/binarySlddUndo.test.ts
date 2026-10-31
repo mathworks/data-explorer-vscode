@@ -79,7 +79,9 @@ suite('Binary .sldd undo/redo', () => {
     const uri = await workingCopy('binary_undo_copy.sldd');
     const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
     const edits: vscode.CustomDocumentEditEvent<vscode.CustomDocument>[] = [];
-    const sub = provider.onDidChangeCustomDocument((e) => edits.push(e));
+    const sub = provider.onDidChangeCustomDocument((e) => {
+      if ('undo' in e) edits.push(e);
+    });
     const panel = makePanel();
     await provider.resolveCustomEditor(doc, panel, token());
     assert.ok(panel.webview.html.includes('dex-tree-table'), 'the real render shell is up');

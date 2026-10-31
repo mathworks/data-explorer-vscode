@@ -44,7 +44,9 @@ async function open(uri: vscode.Uri) {
   const provider = new BinarySlddEditorProvider(ctx());
   const doc: any = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
   const edits: vscode.CustomDocumentEditEvent<vscode.CustomDocument>[] = [];
-  const sub = provider.onDidChangeCustomDocument((e) => edits.push(e));
+  const sub = provider.onDidChangeCustomDocument((e) => {
+    if ('undo' in e) edits.push(e);
+  });
   const view = fakePanel();
   await provider.resolveCustomEditor(doc, view.panel, token());
   view.send({ type: 'ready' });
