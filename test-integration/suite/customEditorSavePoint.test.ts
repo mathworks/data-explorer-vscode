@@ -17,7 +17,7 @@
 // it keeps), and restores it afterwards. Undo is VS Code's `undo` command, which needs the window's
 // focus, and a tab's webview loads only in a window that draws: on a desktop host whose window does
 // neither (a sleeping display), the cases skip and say so; on CI (`CI` set), whose xvfb window does
-// both, that is a failure.
+// both, that is a failure. Checked against VS Code 1.144; the suite runs on whatever `stable` is.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
@@ -108,6 +108,8 @@ suite('A real tab stays dirty after a save, an undo past it and a different edit
   let dir: string;
 
   suiteSetup(async () => {
+    // A skip is for a desktop window; on CI the same miss must fail, which needs `CI` to reach this host.
+    assert.ok(!process.env.GITHUB_ACTIONS || process.env.CI, 'on GitHub Actions, CI is set in the extension host');
     await vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.activate();
     dir = mkdtempSync(join(tmpdir(), 'dex-save-point-'));
     restore = watchWebviews();
@@ -133,7 +135,8 @@ suite('A real tab stays dirty after a save, an undo past it and a different edit
           await waitFor(`${kind.file}'s table`, () => !!(table = seen.slice(before).find((s) => kind.row(s.posts))), 60_000);
         } catch (e) {
           if (process.env.CI) throw e;
-          this.skip(); // this window did not load the tab's webview (a sleeping display): see the header
+          console.log(`[customEditorSavePoint] SKIPPING ${kind.name}: this window did not load the tab's webview (a sleeping display).`);
+          this.skip();
         }
         const view = table!;
         const dirty = () => tabOf(uri)?.isDirty;
@@ -152,11 +155,15 @@ suite('A real tab stays dirty after a save, an undo past it and a different edit
           await waitFor('the undo to make the tab dirty', () => dirty() === true && shown() !== first, 5000);
         } catch (e) {
           if (process.env.CI) throw e;
-          this.skip(); // this window's `undo` does not reach the tab (no focus): see the header
+          console.log(`[customEditorSavePoint] SKIPPING ${kind.name}: this window's \`undo\` does not reach the tab (no focus).`);
+          this.skip();
         }
 
         edit(second);
         await waitFor('the second edit to reach the table', () => shown() === second);
+        // The edit starts in the extension host, so the table can show it before VS Code has taken it:
+        // this gives VS Code the time. The redo below comes after VS Code's own undo, so it pins the
+        // bug whatever the timing here.
         await quiet(1500, "VS Code's taking the second edit, which would read the tab clean");
         assert.strictEqual(dirty(), true, `the tab reads dirty: the file holds ${first}, the document ${second}, and closing it must ask`);
 
@@ -175,6 +182,8 @@ suite('A real tab stays dirty after a save, an undo past it and a different edit
         if (tabOf(uri)) {
           await vscode.commands.executeCommand('vscode.openWith', uri, kind.viewType);
           await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+          // Before the suite removes the file the revert reads.
+          await waitFor(`${kind.file}'s tab to close`, () => !tabOf(uri));
         }
       }
     });
