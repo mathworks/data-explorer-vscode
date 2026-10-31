@@ -53,13 +53,12 @@ describe('the walker is actually reading this tree', () => {
   it('sees the `type` keyword, which the layering tests depend on', () => {
     // Without this, the two layering tests below would fail QUIETLY rather than
     // loudly: they would report erased edges as violations. Pinned on a known pair —
-    // `project-main.ts` names the protocol's project messages and runs none of its code.
-    // (It was `table-main.ts` naming the host's table messages, until the table's editing
-    // half became view's connectTable and named none; before that, `protocol.ts` naming
-    // host types, until the drag and clipboard types it named became view's.)
-    const projectToProtocol = graph.edges.filter((e) => e.from === 'webview/project-main.ts' && e.to === 'common/protocol.ts');
-    expect(projectToProtocol.length).toBeGreaterThan(0);
-    expect(projectToProtocol.every((e) => e.typeOnly)).toBe(true);
+    // `table-main.ts` names the protocol's host messages and runs none of its code.
+    // (It was `protocol.ts` naming host types, until the drag and clipboard types it
+    // named became view's.)
+    const tableToProtocol = graph.edges.filter((e) => e.from === 'webview/table-main.ts' && e.to === 'common/protocol.ts');
+    expect(tableToProtocol.length).toBeGreaterThan(0);
+    expect(tableToProtocol.every((e) => e.typeOnly)).toBe(true);
     const hostRuns = runtimeEdges(graph).filter((e) => under('host', e.from) && under('host', e.to));
     expect(hostRuns.length, 'and a real value edge still reads as one').toBeGreaterThan(0);
   });

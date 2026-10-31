@@ -8,6 +8,7 @@ import { defineErrorDialog } from 'data-explorer-view/error-dialog';
 import { defineVariableEditor } from 'data-explorer-view/variable-editor';
 import { setIconBase } from 'data-explorer-view/icon';
 import { messageSource } from 'data-explorer-view/model';
+import type { HostToTableMessage } from '../common/protocol.js';
 import { renderBanners, renderError } from './banners.js';
 import { vscodePort } from './vscodePort.js';
 
@@ -60,7 +61,7 @@ const variableEditor = overlay('dex-variable-editor');
 // before the rows it came with are installed.
 let hasTextView = false;
 window.addEventListener('message', (event: MessageEvent) => {
-  const msg = event.data as { type?: unknown; hasTextView?: unknown } | null;
+  const msg = event.data as HostToTableMessage | null;
   if (typeof msg === 'object' && msg !== null && msg.type === 'setRows') hasTextView = !!msg.hasTextView;
 });
 
@@ -74,7 +75,7 @@ window.addEventListener('message', (event: MessageEvent) => {
 // text view, the banner strip, and the selection and links relayed to the host.
 const port = vscodePort(vscode);
 const source = messageSource(port, {
-  extra: (msg) => {
+  extra: (msg: HostToTableMessage) => {
     // Cross-tab navigation: select the row whose name matches (block or variable). Applied now if
     // present, else held until the next setRows.
     if (msg.type === 'selectByName' && typeof msg.name === 'string') handle.selectByName(msg.name);
