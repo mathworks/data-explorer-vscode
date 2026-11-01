@@ -3,6 +3,8 @@
 // document's file on that document's first edit?
 import * as assert from 'assert';
 import * as vscode from 'vscode';
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -29,7 +31,7 @@ class CountingFs implements vscode.FileSystemProvider {
   createDirectory(): void {}
   readFile(uri: vscode.Uri): Uint8Array {
     this.reads++;
-    console.log(`[PROBE] readFile ${uri.toString()}\n${new Error('stack').stack}`);
+    console.log(`[PROBE] readFile ${uri.toString()} reads=${this.reads}\n${new Error('stack').stack}`);
     return readFileSync(this.real(uri));
   }
   writeFile(uri: vscode.Uri, content: Uint8Array): void {
@@ -69,11 +71,11 @@ suite('PROBE: a built name index and the first edit of a clean document', () => 
       assert.ok(await vscode.workspace.applyEdit(edit));
       await waitFor('the document to be dirty', () => doc.isDirty);
       await quiet(1500, 'a read the edit causes');
-      console.log(`[PROBE] ${phase}: reads=${disk.reads} events=${JSON.stringify(events)}`);
+      const tabs = vscode.window.tabGroups.all.flatMap((g) => g.tabs).map((t) => `${(t.input as any)?.uri?.toString()} ${(t.input as any)?.viewType ?? 'text'}`);
+      console.log(`[PROBE] ${phase}: reads=${disk.reads} events=${JSON.stringify(events)} tabs=${JSON.stringify(tabs)}`);
       counts.push(disk.reads);
       sub.dispose();
-      await vscode.window.showTextDocument(doc);
-      await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
+      assert.ok(await doc.save(), 'saved back to the probe file system');
       registered.dispose();
       rmSync(dir, { recursive: true, force: true });
     }
