@@ -24,7 +24,7 @@
 // opened file is absent from that file's graph — which is what the whole-window graph could
 // never say, because it held every model in the folder.
 //
-// Fixtures: test-integration/fixtures/usageorder (see usageOrder.test.ts). ctrlA.slx links
+// Fixtures: test-integration/fixtures/usageorder (see make-usageorder.mjs). ctrlA.slx links
 // sharedParams.sldd and has blocks; the workspace's own data.sldd is linked by nothing.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
@@ -45,7 +45,7 @@ function ws(): vscode.Uri {
 }
 
 // The models live OUTSIDE the workspace folder, so `findFiles` never returns them and open
-// tabs are what feeds them in — the same arrangement usageOrder.test.ts relies on.
+// tabs are what feeds them in, as for every fixture set beside the workspace folder.
 const fixture = (name: string): string => vscode.Uri.joinPath(ws(), '..', 'usageorder', name).toString();
 const workspaceFile = (name: string): string => vscode.Uri.joinPath(ws(), name).toString();
 
