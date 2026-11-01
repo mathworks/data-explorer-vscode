@@ -59,6 +59,19 @@ jobs:
         run: npm test
 
       # The integration suite launches a real VS Code instance, which needs a
-      # display on Linux — run it under a virtual framebuffer.
+      # display on Linux — run it under a virtual framebuffer. With coverage: the
+      # step's log ends with how much of src/ the suite ran, file by file. Report
+      # only, no threshold.
       - name: Integration tests
-        run: xvfb-run -a npm run test:integration
+        run: xvfb-run -a npm run test:integration:coverage
+
+      # The same report as HTML, and as JSON to merge with the unit suite's. Not
+      # the raw V8 profiles it was made from, which are large.
+      - name: Upload integration coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-integration
+          path: |
+            coverage-integration/
+            !coverage-integration/v8/
+          retention-days: 14
