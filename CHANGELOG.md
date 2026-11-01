@@ -2,6 +2,16 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## [1.54.0] — 2026-11-01
+
+The fixes from the 1.47 to 1.53 pre-releases, as a stable release:
+
+- Copy and paste between MAT-files and data dictionaries no longer loses values. A value the target can't store is refused with a message saying why.
+- A Parameter whose value is a struct, an integer, a single or a long vector, or one copied out of a model's workspace, can now be pasted into a MAT-file.
+- Coder settings MATLAB would ignore can no longer be edited in a MAT-file or compressed dictionary, and the editor says why.
+- A MAT-file or compressed dictionary no longer looks saved while the file on disk lacks your latest edits.
+- Bug fixes.
+
 ## [1.53.0] — 2026-11-01
 
 - A Parameter whose value is a struct, a struct array, an integer, a single or a long vector now pastes into a MAT-file.
