@@ -557,7 +557,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
       // payloads and so all three can be asked. `fillUsage` is handed in rather than imported
       // there: it is this provider that already depends on vscode, and childRequest.ts stays
       // loadable under vitest because it does not (see its UsageFiller).
-      requestChildren: (nodeId) => void answerChildRequest(webview, uriString, nodeId, name, fillUsage, planner),
+      requestChildren: (nodeId) => void webview.postMessage({ type: 'childRows', nodeId, rows: [], truncated: 0 }), // MUTATION: answers []
     };
 
     // Register listeners BEFORE assigning webview.html, so a fast-booting

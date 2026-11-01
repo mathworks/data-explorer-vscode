@@ -100,7 +100,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
           // scrolling it into view. A second tab for the same URI is expected —
           // table and text coexist (see the viewAsText note in extension.ts).
           await vscode.window.showTextDocument(document, {
-            selection: new vscode.Range(document.positionAt(span.offset), document.positionAt(span.offset + span.length)),
+            // MUTATION: no selection
             viewColumn: vscode.ViewColumn.Beside,
             preview: false,
           });
@@ -119,7 +119,7 @@ export class SlddTextEditorProvider implements vscode.CustomTextEditorProvider {
         // webview hosts — see matrixRequest.ts.
         requestMatrix: (nodeId) => answerMatrixRequest(webview, uriString, nodeId),
         // A Value editor is opening on a summary: its whole text, read off the tree the text says.
-        requestEditText: (rowId) => table.requestEditText?.(rowId),
+        requestEditText: () => undefined, // MUTATION: never answered
         // A row the payload deferred is being opened: send the rows under it, through postOrReport.
         requestChildren: (nodeId) => panel.children(nodeId),
         // Single native stack: the table view is the active editor when its menu is used, so

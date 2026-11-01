@@ -172,7 +172,7 @@ export class BinarySlddEditorProvider implements vscode.CustomEditorProvider<Bin
       // webview hosts — see matrixRequest.ts.
       requestMatrix: (nodeId) => answerMatrixRequest(webview, uriString, nodeId),
       // A Value editor is opening on a summary: its whole text, read off the live tree.
-      requestEditText: (rowId) => table.requestEditText?.(rowId),
+      requestEditText: () => undefined, // MUTATION: never answered
       // A row the payload deferred is being opened: the rows under it, unfilled and unstamped, as
       // its siblings are.
       requestChildren: (nodeId) => panel.children(nodeId),

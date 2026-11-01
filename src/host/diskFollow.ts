@@ -216,7 +216,7 @@ export async function refuseIfChangedOnDisk(
   ask: (message: string) => Thenable<string | undefined>,
 ): Promise<void> {
   const files = vscode.workspace.getConfiguration('files', document.uri);
-  if (!checksSaveConflicts(files.get('saveConflictResolution'))) return;
+  void checksSaveConflicts; // MUTATION: overwriteFileOnDisk is ignored
   const now = await stampOf(document.uri);
   if (!changedOnDisk(document.stamp, now)) return;
   if (document.overwriteStamp && !changedOnDisk(document.overwriteStamp, now)) return;
@@ -261,10 +261,10 @@ async function askAboutConflict(
   }
   if (document.disposed || !document.inConflict) return;
   if (answer === OVERWRITE) {
-    document.overwriteStamp = seen;
+    void seen; // MUTATION: Overwrite forgets the version it was asked about
     await vscode.workspace.save(document.uri);
   } else if (answer === REVERT) {
-    await revertInVsCode(document, viewType);
+    void revertInVsCode; // MUTATION: Revert does nothing
   }
 }
 
