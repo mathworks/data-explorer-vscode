@@ -9,9 +9,10 @@
 // index, and the tab it opens is read through tools/webviewTap.
 //
 // The QuickPick is the extension's own, kept by wrapping `vscode.window.createQuickPick` for this
-// suite (an extension's `vscode` module is one object for every file of the extension). Typing is
-// setting its `value`, which VS Code echoes back as the change event the search listens to, and the
-// pick is VS Code's own accept command over the item VS Code made active.
+// suite (an extension's `vscode` module is one object for every file of the extension). Its hide is
+// listened to there, before the search's own listener, which disposes it and with it every listener
+// after its own. Typing is setting its `value`, which VS Code echoes back as the change event the
+// search listens to, and the pick is VS Code's own accept command over the item VS Code made active.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { quiet, waitFor, wsUri } from './tools/hostHarness';
@@ -19,9 +20,18 @@ import { closeAllEditors, paintedView, tabsOn, tapWebviews, typesOf, viewTypeOf,
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+/** A QuickPick the extension made, and what became of it. */
+interface Kept {
+  qp: vscode.QuickPick<any>;
+  hidden: boolean;
+  disposed: boolean;
+  /** The items VS Code last said are active. */
+  active: readonly any[];
+}
+
 suite('Search Data Source Entries', () => {
   let tap: WebviewTap;
-  const picks: vscode.QuickPick<any>[] = [];
+  const picks: Kept[] = [];
   let restore: (() => void) | undefined;
 
   suiteSetup(async () => {
@@ -31,7 +41,15 @@ suite('Search Data Source Entries', () => {
     const create = window.createQuickPick;
     window.createQuickPick = function (...args: unknown[]) {
       const qp = create.apply(this, args);
-      picks.push(qp);
+      const kept: Kept = { qp, hidden: false, disposed: false, active: [] };
+      qp.onDidHide(() => (kept.hidden = true));
+      qp.onDidChangeActive((items: readonly any[]) => (kept.active = items));
+      const dispose = qp.dispose.bind(qp);
+      qp.dispose = () => {
+        kept.disposed = true;
+        dispose();
+      };
+      picks.push(kept);
       return qp;
     };
     restore = () => {
@@ -48,33 +66,29 @@ suite('Search Data Source Entries', () => {
   setup(closeAllEditors);
 
   teardown(() => {
-    for (const qp of picks.splice(0)) qp.hide();
+    for (const kept of picks.splice(0)) if (!kept.disposed) kept.qp.hide();
   });
 
   /** Run the command, and answer the QuickPick it showed, with the index loaded into it. */
-  async function search(): Promise<{ qp: vscode.QuickPick<any>; hidden: () => boolean; active: () => readonly any[] }> {
+  async function search(): Promise<Kept> {
     const before = picks.length;
     // Resolves once the index is in the QuickPick.
     await vscode.commands.executeCommand('dataExplorer.searchDataSources');
     assert.strictEqual(picks.length, before + 1, 'the command made one QuickPick');
-    const qp = picks[before];
-    let hid = false;
-    let active: readonly any[] = qp.activeItems;
-    qp.onDidHide(() => (hid = true));
-    qp.onDidChangeActive((items) => (active = items));
-    return { qp, hidden: () => hid, active: () => active };
+    return picks[before];
   }
 
   /** Type `query`, and pick the one match `match` accepts, as VS Code's accept would. */
-  async function pick(s: Awaited<ReturnType<typeof search>>, query: string, what: string, match: (item: any) => boolean): Promise<any> {
+  async function pick(s: Kept, query: string, what: string, match: (item: any) => boolean): Promise<any> {
     s.qp.value = query;
     await waitFor(`the search for "${query}" to list ${what}`, () => s.qp.items.some(match), 20000, () => JSON.stringify(s.qp.items.map((i) => i.label)));
     const item = s.qp.items.find(match);
-    if (s.active()[0] !== item) s.qp.activeItems = [item];
+    if (s.active[0] !== item) s.qp.activeItems = [item];
     // VS Code's own answer, so the accept below is the main thread's to take on this item.
-    await waitFor(`VS Code to make ${what} the active item`, () => s.active()[0] === item);
+    await waitFor(`VS Code to make ${what} the active item`, () => s.active[0] === item);
     await vscode.commands.executeCommand('workbench.action.acceptSelectedQuickOpenItem');
-    await waitFor('the search to close on the pick', s.hidden);
+    await waitFor('the search to close on the pick', () => s.hidden);
+    assert.ok(s.disposed, 'and to be disposed with it');
     return item;
   }
 
@@ -117,7 +131,8 @@ suite('Search Data Source Entries', () => {
     s.qp.value = 'noSuchEntryAnywhere';
     await waitFor('the search to list nothing', () => s.qp.items.length === 0, 20000, () => JSON.stringify(s.qp.items.map((i) => i.label)));
     s.qp.hide();
-    await waitFor('the search to close', s.hidden);
+    await waitFor('the search to close', () => s.hidden);
+    assert.ok(s.disposed, 'disposed as it closes');
     await quiet(1000, 'a tab opening for a pick that was never made');
     assert.strictEqual(vscode.window.tabGroups.all.flatMap((g) => g.tabs).length, 0, 'no tab');
     assert.deepStrictEqual(tap.views.slice(mark), [], 'no view');
