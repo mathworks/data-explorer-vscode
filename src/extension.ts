@@ -88,6 +88,16 @@ async function openInBestEditor(uri: vscode.Uri, options?: { preview?: boolean }
   await vscode.commands.executeCommand('vscode.openWith', uri, viewType, openOptions);
 }
 
+// The file of the tab in focus, for a command run from the Command Palette, which
+// passes no argument. Read from the tab, not from activeTextEditor: while a table
+// has focus there is no active text editor (the table is a webview), and that is
+// exactly when the palette lists View as Text.
+function activeResourceUri(): vscode.Uri | undefined {
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+  if (input instanceof vscode.TabInputCustom || input instanceof vscode.TabInputText) return input.uri;
+  return vscode.window.activeTextEditor?.document.uri;
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   const provider = new SectionsTreeProvider(context.extensionUri);
   const piProvider = new PropertiesViewProvider(context.extensionUri);
@@ -358,15 +368,15 @@ export function activate(context: vscode.ExtensionContext): void {
     // SECOND tab for the URI rather than converting the current tab in place —
     // an editor tab's type is fixed for its lifetime, so table and text coexist
     // as separate tabs. Editor/title menu commands pass the active resource URI
-    // as the first argument; fall back to the active editor's document when
-    // invoked from the palette.
+    // as the first argument; from the palette, which passes none, the file is the
+    // active tab's (activeResourceUri).
     vscode.commands.registerCommand('dataExplorer.viewAsText', (uri?: vscode.Uri) => {
-      const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+      const target = uri ?? activeResourceUri();
       if (!target) return;
       void vscode.commands.executeCommand('vscode.openWith', target, 'default');
     }),
     vscode.commands.registerCommand('dataExplorer.viewAsTable', async (uri?: vscode.Uri) => {
-      const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+      const target = uri ?? activeResourceUri();
       if (!target) return;
       // Editable JSON .sldd → text-backed table (native undo/redo); else binary.
       await openInBestEditor(target);
