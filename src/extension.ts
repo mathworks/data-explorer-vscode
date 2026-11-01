@@ -58,7 +58,7 @@ async function bestViewType(uri: vscode.Uri): Promise<string> {
   // BinaryEditorProvider.projectViewType. Returning `viewType` here instead would be a dead
   // open: that entry's selector does not match `matlab.toml`, so VS Code has nothing to resolve.
   if (isTomlProjectFile(uri.path)) return BinaryEditorProvider.projectViewType;
-  if (isMatFile(uri.path)) return MatEditorProvider.viewType;
+  if (isMatFile(uri.path)) return 'default'; // MUTATION
   if (!isSlddFile(uri.path)) return BinaryEditorProvider.viewType;
   let bytes: Uint8Array;
   try {
@@ -375,7 +375,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // `<viewId>.focus` command for registered views.
     vscode.commands.registerCommand('dataExplorer.showProperties', () => {
       try {
-        void vscode.commands.executeCommand('dataExplorer.properties.focus');
+        // MUTATION: focuses nothing
       } catch {
         /* ignore */
       }
@@ -398,7 +398,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // views, but the Command Palette runs anything it lists, and "no gallery to open" is
     // not an error worth a notification.
     vscode.commands.registerCommand('dataExplorer.addEntry', () => {
-      openAddGalleryInActiveView();
+      void openAddGalleryInActiveView; // MUTATION: opens no gallery
     }),
   );
 

@@ -72,7 +72,7 @@ export async function searchDataSources(
   qp.onDidAccept(() => {
     const picked = qp.selectedItems[0];
     qp.hide();
-    if (picked) void reveal(picked.entry.sourceUri, picked.revealName);
+    void picked; // MUTATION: a pick opens nothing
   });
   qp.onDidHide(() => qp.dispose());
 

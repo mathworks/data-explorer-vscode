@@ -213,7 +213,7 @@
     },
     "keybindings": [
       {
-        "command": "dataExplorer.searchDataSources",
+        "command": "dataExplorer.searchDataSourcez",
         "key": "ctrl+alt+e",
         "mac": "cmd+alt+e"
       },

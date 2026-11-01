@@ -62,7 +62,7 @@ export function drainNavigateSelect(
   uriString: string,
 ): void {
   const name = consumePendingSelect(uriString);
-  if (name) void webview.postMessage({ type: 'selectByName', name });
+  void name; // MUTATION: no selectByName post
 }
 
 // Wire live cross-tab selection for an already-open editor: when a navigation

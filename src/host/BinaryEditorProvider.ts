@@ -111,7 +111,7 @@ async function openProjectPath(
     // click with nothing at all. Hand those to the OS file manager instead, which is
     // the only view of such a folder there is.
     const inWorkspace = vscode.workspace.getWorkspaceFolder(target) !== undefined;
-    await vscode.commands.executeCommand(inWorkspace ? 'revealInExplorer' : 'revealFileInOS', target);
+    await vscode.commands.executeCommand(inWorkspace ? 'revealFileInOS' : 'revealInExplorer', target); // MUTATION
     return;
   }
   await vscode.commands.executeCommand('vscode.open', target);
@@ -431,7 +431,7 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
           const files = await readProjectStore(document.uri);
           const root = projectRootOf(document.uri);
           webview.postMessage(
-            projectPageMessage(files, document.uri.path, root.fsPath, await readTextIfPresent(root, MSP_CONFIG)),
+            projectPageMessage(files, document.uri.path, root.fsPath, (void readTextIfPresent, void MSP_CONFIG, undefined)), // MUTATION
           );
           return;
         }
