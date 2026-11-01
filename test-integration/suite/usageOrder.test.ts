@@ -1,33 +1,13 @@
 // Copyright 2026 The MathWorks, Inc.
-// Integration test for the Usage column's independence from TAB HISTORY.
+// The fixtures of the Usage column's independence from TAB HISTORY.
 //
-// Two engines can fill this cell. Core's `_usedByCell` answers from the DataModel
-// session — the models whose editor was resolved in this window, which are never
-// evicted — and names the block WITHOUT its model. The workspace usage graph answers
-// from the files on disk plus the open tabs, whether or not any model is open, and
-// names `block(model)`. While a cell the node layer had already filled was honoured,
-// what a dictionary said about its own entries depended on which models the user
-// happened to have opened: an entry used by three blocks in two models read
-// `GainA, LimitA` — no model, one of the two models missing entirely — when only one
-// model had been resolved, and merely CLICKING a Usage link registered the model it
-// pointed at, degrading the cell it was clicked from for the rest of the session.
-//
-// This has to be an integration test. The overwrite rule itself is pinned in vitest
-// (test/usageCells.test.ts here, view's test/usageEndToEnd.test.ts), but the two functions
-// that WIRE it to the editors — annotateDataRows and annotateModelRows in usageGraph.ts —
-// import `vscode` and are excluded from that suite, so nothing measured them.
-// Everything below goes through them.
-//
-// Both halves of the state under test are real here:
-//   - the SESSION is populated by `getModelFromBytes`, the same call
-//     BinaryEditorProvider makes when a model editor resolves. This bundled test file
-//     links its OWN copy of the src modules (esbuild bundles each suite file
-//     separately), so its DataModel is a separate instance from the running
-//     extension's — which is what makes "plantB was never registered" a fact rather
-//     than a hope, and any mention of GainB provably the graph's answer.
-//   - the ROWS are built the way SlddTextEditorProvider builds them (parse the
-//     TextDocument, buildRows, annotate) and the way BinaryEditorProvider builds a
-//     model's (parse the bytes, buildRows, annotate).
+// Two engines can fill that cell: core's `_usedByCell`, from the models resolved in this
+// window, and the workspace usage graph, from the files on disk plus the open tabs. The
+// rule that the graph's answer replaces the session's, whichever models happen to be
+// open, is view's: its jsonEngine/usage.test.ts runs annotateDataRows over these fixtures
+// ("Usage does not depend on tab history"), and its goldens/usage.test.ts pins ctrlA.slx's
+// resolved param links. usageGraph.ts's annotateDataRows and annotateModelRows hand both
+// straight to view's UsageGraphs; the open-tab union they read is singleFileUsage.test.ts.
 //
 // Fixtures: test-integration/fixtures/make-usageorder.mjs. sharedParams.sldd holds
 // SharedGain (used by GainA + LimitA in ctrlA.slx and GainB in plantB.slx) and
@@ -35,19 +15,6 @@
 // `node test-integration/fixtures/make-usageorder.mjs`.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import {
-  annotateDataRows,
-  annotateModelRows,
-  blocksUsingVariable,
-  invalidateUsageGraph,
-} from '../../src/host/usageGraph';
-import { buildRows } from 'data-explorer-view/model';
-import { getModel, getModelFromBytes, invalidate } from 'data-explorer-view/host';
-import { toArrayBuffer } from '../../src/common/bytes';
-import { waitFor } from './tools/hostHarness';
-
-const BINARY_VIEW = 'dataExplorer.binaryView';
-const TABLE_VIEW = 'dataExplorer.tableView';
 
 const DICT = 'sharedParams.sldd';
 
@@ -61,76 +28,7 @@ function fixtureUri(name: string): vscode.Uri {
   return vscode.Uri.joinPath(ws.uri, '..', 'usageorder', name);
 }
 
-async function bytesOf(name: string): Promise<ArrayBuffer> {
-  return toArrayBuffer(await vscode.workspace.fs.readFile(fixtureUri(name)));
-}
-
-// Same rebuild-and-retry shape as caseRefUsage.test.ts, and for the same reason:
-// this file's usageGraph instance is not the one the extension's
-// onDidChangeTabs→invalidate wiring clears, so we invalidate ourselves, which is
-// exactly what re-runs buildGraph against the live open-tab set. The retry absorbs
-// the lag between `openWith` resolving and the tab appearing in tabGroups.
-async function pollRebuilt<T>(what: string, fn: () => Promise<T>, timeoutMs = 10000): Promise<T> {
-  let last!: T;
-  await waitFor(
-    what,
-    async () => {
-      invalidateUsageGraph();
-      // No prebuild: every query in `fn` builds the graph for the file it asks about. So
-      // invalidating is the whole of what this does, and it is what re-runs the build against
-      // the live open-tab set — the code path under test.
-      last = await fn();
-      return !!last;
-    },
-    timeoutMs,
-  );
-  return last;
-}
-
-// Open the dictionary straight into the editable table view rather than the default
-// binaryView, which would REDIRECT an editable JSON .sldd (dispose this tab, reopen
-// in tableView) — a window during which the tab is briefly absent from tabGroups, so
-// a rebuild could observe a half-populated set.
-async function openAllFixtures(): Promise<void> {
-  await vscode.commands.executeCommand('vscode.openWith', fixtureUri(DICT), TABLE_VIEW);
-  for (const name of ['ctrlA.slx', 'plantB.slx']) {
-    await vscode.commands.executeCommand('vscode.openWith', fixtureUri(name), BINARY_VIEW);
-  }
-}
-
-// Populate the session with ONE of the two models — the state the bug needed. This is
-// the call BinaryEditorProvider makes when a model editor resolves; plantB is never
-// passed to it, in this file or anywhere in this bundle.
-async function registerCtrlAInSession(): Promise<void> {
-  const uri = fixtureUri('ctrlA.slx');
-  getModelFromBytes(uri.toString(), 'ctrlA.slx', await bytesOf('ctrlA.slx'));
-}
-
-// The dictionary's rows exactly as SlddTextEditorProvider builds them, before the
-// Usage column is filled: re-parse the document, then build.
-async function dictionaryRows(): Promise<any[]> {
-  const uri = fixtureUri(DICT);
-  const doc = await vscode.workspace.openTextDocument(uri);
-  invalidate(uri.toString());
-  return buildRows(getModel(uri.toString(), DICT, doc.getText()));
-}
-
-const rowNamed = (rows: any[], name: string): any => rows.find((r) => r.Name?.label === name);
-
 suite('Usage does not depend on tab history', () => {
-  const dictUri = () => fixtureUri(DICT).toString();
-  const ctrlUri = () => fixtureUri('ctrlA.slx').toString();
-  const plantUri = () => fixtureUri('plantB.slx').toString();
-
-  suiteSetup(async () => {
-    await vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.activate();
-  });
-
-  teardown(async () => {
-    await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-    invalidateUsageGraph();
-  });
-
   test('the fixtures are outside the workspace, so findFiles never returns them', async () => {
     // The premise: the graph sees these files ONLY because they are open in tabs,
     // which is what makes the set under test exact.
@@ -140,98 +38,5 @@ suite('Usage does not depend on tab history', () => {
       await vscode.workspace.fs.stat(uri); // the fixture must exist
       assert.ok(!found.some((u) => u.toString() === uri.toString()), `${name} must not be discoverable via findFiles`);
     }
-  });
-
-  test('annotateDataRows replaces it with every usage, each named with its model', async () => {
-    // The regression. `annotateDataRows` used to skip a row that already had a
-    // `UsedBy`, so this cell stayed the session's for the life of the window.
-    await openAllFixtures();
-    await registerCtrlAInSession();
-    // Warm the graph against the now-open tabs first, so the assertions below cannot
-    // fail merely because the tab set was still settling.
-    const edges = await pollRebuilt('all three usages of SharedGain', async () => {
-      const u = await blocksUsingVariable(dictUri(), 'SharedGain');
-      return u.length === 3 ? u : null;
-    });
-    assert.ok(edges, 'the graph resolves all three usages from the open tabs');
-
-    const rows = await dictionaryRows();
-    assert.strictEqual(await annotateDataRows(dictUri(), rows), true, 'the row changed');
-    const cell = rowNamed(rows, 'SharedGain').UsedBy;
-    assert.ok(!('links' in cell), 'the session’s shape is gone, not merged into');
-    assert.deepStrictEqual(
-      cell.blockLinks,
-      [
-        // The cell NAMES each block, PLACES it in its model, and TARGETS it by SID —
-        // the fixture numbers its blocks from 1 within each model, so `GainA` is
-        // `1@ctrlA` and `GainB`, in the other model, is `1@plantB`. Two blocks
-        // reachable through the same digit is exactly why the target carries the model
-        // uri too. Every fixture block sits in its model's root system, so each path
-        // is the block's own label.
-        {
-          blockName: 'GainA',
-          blockPath: 'GainA',
-          modelName: 'ctrlA',
-          modelUri: ctrlUri(),
-          linkTarget: `blocks:1@${ctrlUri()}`,
-        },
-        {
-          blockName: 'LimitA',
-          blockPath: 'LimitA',
-          modelName: 'ctrlA',
-          modelUri: ctrlUri(),
-          linkTarget: `blocks:2@${ctrlUri()}`,
-        },
-        // The load-bearing one: plantB is not in this bundle's session, so no engine
-        // but the workspace graph could have produced it.
-        {
-          blockName: 'GainB',
-          blockPath: 'GainB',
-          modelName: 'plantB',
-          modelUri: plantUri(),
-          linkTarget: `blocks:1@${plantUri()}`,
-        },
-      ],
-      'every usage, each qualified by the model it lives in',
-    );
-  });
-
-  test('annotateModelRows upgrades a block row’s link from a ref NAME to the resolved file', async () => {
-    // The other direction through the same wiring, and a link that is not merely
-    // less informative but unusable: the node layer targets `SharedGain@<the ref
-    // string the model recorded>`, which resolves to no file. Only the graph knows
-    // which dictionary on disk that ref reached.
-    await openAllFixtures();
-    const modelRows = buildRows(getModelFromBytes(ctrlUri(), 'ctrlA.slx', await bytesOf('ctrlA.slx')));
-    const before = rowNamed(modelRows, 'GainA').UsedBy;
-    assert.ok(before.linkTarget && !before.linkTarget.includes('file:'), 'the node layer targets a bare ref name');
-
-    await pollRebuilt('all three usages of SharedGain', async () => {
-      const u = await blocksUsingVariable(dictUri(), 'SharedGain');
-      return u.length === 3 ? u : null;
-    });
-    assert.strictEqual(await annotateModelRows(ctrlUri(), modelRows), true, 'the block rows changed');
-    assert.deepStrictEqual(rowNamed(modelRows, 'GainA').UsedBy.paramLinks, [
-      {
-        property: 'Gain',
-        paramName: 'SharedGain',
-        source: DICT,
-        linkTarget: `SharedGain@${dictUri()}`,
-      },
-    ]);
-  });
-
-  test('with nothing open the graph has no answer, and no row is touched', async () => {
-    // The control for all of the above: the edges came from the open-tab union, not
-    // from something else in the workspace defining these names. And with no answer,
-    // the annotation must be a no-op — the rule that keeps a dictionary opened alone
-    // showing whatever the session does know.
-    await registerCtrlAInSession();
-    invalidateUsageGraph();
-    assert.strictEqual((await blocksUsingVariable(dictUri(), 'SharedGain')).length, 0);
-    const rows = await dictionaryRows();
-    const before = rowNamed(rows, 'SharedGain').UsedBy;
-    assert.strictEqual(await annotateDataRows(dictUri(), rows), false, 'nothing to change, so nothing repaints');
-    assert.strictEqual(rowNamed(rows, 'SharedGain').UsedBy, before);
   });
 });
