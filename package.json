@@ -262,19 +262,20 @@
     "@vscode/vsce": "^4.0.0",
     "ast-v8-to-istanbul": "^1.0.5",
     "esbuild": "^0.25.0",
-    "happy-dom": "^20.9.0",
+    "happy-dom": "^21.0.4",
     "istanbul-lib-coverage": "^3.2.2",
     "istanbul-lib-report": "^3.0.1",
     "istanbul-reports": "^3.2.0",
     "mocha": "^11.7.6",
     "typescript": "^5.7.0",
-    "vite": "^6.0.0",
+    "vite": "^6.4.5",
     "vitest": "^4.1.12"
   },
   "overrides": {
     "js-yaml": "^4.3.2",
     "fast-uri": "^3.1.7",
-    "serialize-javascript": "^7.0.5",
+    "serialize-javascript": "^7.1.3",
+    "@azure/msal-node": "^7.1.0",
     "diff": "^8.0.3"
   }
 }
