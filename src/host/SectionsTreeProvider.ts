@@ -18,7 +18,7 @@ import { SUPPORTED_GLOB } from '../common/fileTypes.js';
 // (relationship-only) parsing builds it; entries are parsed lazily on open.
 //
 // The graph, its rows and the rule a reference resolves by are view's `FolderHierarchy`, which
-// draws a folder the way this tree always has (the hierarchy.json goldens are its spec). What is
+// draws a folder the way this tree always has (view's hierarchy goldens are its spec). What is
 // left here is VS Code's half: the folder as `findFiles` lists it, the reads through the window's
 // shared source cache, and each row as a `TreeItem` — its Uri, its open command, its decoration
 // query and its `contextValue`.

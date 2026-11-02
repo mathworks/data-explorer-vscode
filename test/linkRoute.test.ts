@@ -17,7 +17,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 // `join(import.meta.dirname, …)` and not `fileURLToPath(import.meta.url)`: this file runs
 // under happy-dom, where import.meta.url is an http URL and fileURLToPath rejects it.
-// blockSidIdentity.test.ts reads the same module the same way for the same reason.
+// nameSelectTarget.test.ts reads its fixture the same way for the same reason.
 import { join } from 'node:path';
 import { localLinkName } from 'data-explorer-view/model';
 import { blankCommentsAndKeepLines } from './tools/moduleGraph.js';
