@@ -87,9 +87,11 @@ describe('data-explorer-view is imported through its entries only', () => {
   });
 
   it('finds the imports it judges', () => {
-    // A walk that read nothing, or a parser that saw no imports, would pass everything.
-    expect(IMPORTS.length).toBeGreaterThan(900);
-    expect(ofView.length).toBeGreaterThan(100);
+    // A walk that read nothing, or a parser that saw no imports, would pass everything. Floors, not
+    // counts to keep in step: tests that move to view take their imports with them (949 and 93 when
+    // the last duplicates retired).
+    expect(IMPORTS.length).toBeGreaterThan(500);
+    expect(ofView.length).toBeGreaterThan(50);
   });
 
   it('names no module path, nothing in dist/ or src/, and no other subpath', () => {
