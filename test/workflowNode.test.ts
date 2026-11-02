@@ -50,10 +50,14 @@ const semver = createRequire(vscePkgPath)('semver') as {
 };
 
 describe('the Node the workflows install', () => {
+  // ci.yml has two jobs that install Node (build-test and integration-coverage). Each says
+  // which, and they must say the same: a coverage run on another Node would measure a
+  // suite that build-test does not run.
   for (const file of [CI, RELEASE]) {
-    it(`${file} sets node-version exactly once, to a version range`, () => {
+    it(`${file} sets node-version to one version range, however many jobs set it`, () => {
       const versions = nodeVersions(file);
-      expect(versions).toHaveLength(1);
+      expect(versions.length).toBeGreaterThan(0);
+      expect(new Set(versions).size, versions.join(', ')).toBe(1);
       expect(semver.validRange(versions[0]), versions[0]).not.toBeNull();
     });
   }
@@ -61,7 +65,7 @@ describe('the Node the workflows install', () => {
   // A PR is checked on the Node the release is built on. If the two differ, a green PR
   // says nothing about the release.
   it('is the same in ci.yml and release.yml', () => {
-    expect(nodeVersions(CI)).toEqual(nodeVersions(RELEASE));
+    expect([...new Set(nodeVersions(CI))]).toEqual([...new Set(nodeVersions(RELEASE))]);
   });
 
   // Every Node the range can install, not just one of them: setup-node picks a version

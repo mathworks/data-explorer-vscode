@@ -17,7 +17,7 @@
 // file in the data-explorer-core repo does the same for the package upstream; the two
 // share a walker and nothing else, because the invariants are not the same ones.
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
   readModuleGraph,
@@ -189,7 +189,7 @@ describe('every third-party import is a declared dependency', () => {
 });
 
 describe('the coverage exclude list matches the files it claims to', () => {
-  // The list in vitest.config.ts carries an instruction to keep it in sync with
+  // The list in vitest.config.ts used to carry an instruction to keep it in sync with
   // `grep -l "from 'vscode'" src/host/*.ts`, which is to say it was maintained by hand
   // against a rule nothing checked. Both directions of drift are silent and both
   // mislead in the same direction:
@@ -212,10 +212,33 @@ describe('the coverage exclude list matches the files it claims to', () => {
     .filter((f) => under('host', f))
     .filter((f) => graph.edges.some((e) => e.from === f && e.specifier === 'vscode'));
 
-  it('excludes every host file that imports vscode', () => {
+  // The vscode-importing host files a unit test loads anyway, so the unit report measures
+  // them: editorHub.ts names `vscode` for types only, and navigateBlockKeys and projectStore
+  // load the other two under `vi.mock('vscode')`. Excluding them hid coverage that exists.
+  const UNIT_TESTED_WITH_VSCODE = ['host/editorHub.ts', 'host/navigate.ts', 'host/projectStore.ts'];
+
+  it('excludes every host file that imports vscode, but the ones a unit test loads', () => {
     expect(importsVscode.length).toBeGreaterThan(0);
-    const missing = importsVscode.filter((f) => !excluded.includes(`src/${f}`));
+    const missing = importsVscode.filter((f) => !UNIT_TESTED_WITH_VSCODE.includes(f) && !excluded.includes(`src/${f}`));
     expect(missing.map((f) => `src/${f}`)).toEqual([]);
+  });
+
+  it('measures those, and each one earns its place', () => {
+    // A file that stops importing vscode needs no place here, and one no unit test loads any
+    // more reports the flat 0% the rule above is there to prevent.
+    const unitTests = readdirSync(repo('test'), { recursive: true })
+      .map(String)
+      .filter((f) => f.endsWith('.test.ts'))
+      .map((f) => readFileSync(repo(`test/${f}`), 'utf8'));
+    const loads = (file: string): boolean => {
+      const specifier = new RegExp(`['"](?:\\.\\./)+src/${file.replace(/\.ts$/, '')}(?:\\.js)?['"]`);
+      return unitTests.some((text) => specifier.test(text));
+    };
+    for (const file of UNIT_TESTED_WITH_VSCODE) {
+      expect(importsVscode, `src/${file} imports vscode`).toContain(file);
+      expect(excluded, `src/${file} is measured`).not.toContain(`src/${file}`);
+      expect(loads(file), `a unit test loads src/${file}`).toBe(true);
+    }
   });
 
   it('excludes no host file that does NOT import vscode', () => {
