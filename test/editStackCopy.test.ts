@@ -251,3 +251,26 @@ describe('A byte-backed document never reads clean in VS Code while it differs f
     expect([d.vscode.dirty, d.copy.dirty], 'both read dirty: the safe direction').toEqual([true, true]);
   });
 });
+
+// View's EditStackIndex takes, beside a save's position, the state of the stack the save read (view #72):
+// an undo and a new edit put the stack back at the position over another document, and a save of the state
+// they replaced leaves no position the file. saveSettled passes none (it saves only a round the stack did
+// not move under, whose state is still there), but the copy forwards one, so it keeps view's save point.
+describe("The copy keeps view's per-state save point", () => {
+  it("forwards a save's state: a save of a state an undo and a new edit replaced leaves it dirty", () => {
+    const kept = new EditStackCopy();
+    kept.pushed();
+    kept.saved(kept.here(), kept.state());
+    expect(kept.dirty, 'a save of the state still there').toBe(false);
+
+    const copy = new EditStackCopy();
+    copy.pushed();
+    const at = copy.here();
+    const state = copy.state();
+    copy.undone();
+    copy.pushed();
+    expect(copy.here(), 'back at the position the save read, over another document').toBe(at);
+    copy.saved(at, state);
+    expect(copy.dirty, 'a save of the state the new edit replaced').toBe(true);
+  });
+});

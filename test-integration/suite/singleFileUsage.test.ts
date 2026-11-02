@@ -25,7 +25,7 @@ const BINARY_VIEW = 'dataExplorer.binaryView';
 
 // A block is asked for by its KEY, which is its SID — the fixture writes `SID="1"` on
 // Gain1 and `SID="2"` on Const1. A name identifies a block only within one system, so
-// the graph is not keyed by it (see test/blockSidIdentity.test.ts).
+// the graph is not keyed by it (see view's test/blockSidIdentity.test.ts).
 const GAIN1 = '1';
 const CONST1 = '2';
 

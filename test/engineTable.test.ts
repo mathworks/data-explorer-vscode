@@ -4,7 +4,9 @@
 // posts it: a whole paint's rows through postOrReport, what follows them only once that post has
 // settled, then the host's after-paint work; and everything else the engine says at once, so a
 // gesture's rows made while a paint's rows are on their way go out ahead of that paint's trailer,
-// as the editor's own `post()` let them.
+// as the editor's own `post()` let them. And the two answers a table asks for by row: the rows under
+// a row the paint held back (`requestChildren`), for that row's id, and none for a row that is gone;
+// and the whole text of a Value shown as a summary (`requestEditText`).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -18,6 +20,7 @@ import { textDocumentStore } from '../src/host/textDocumentStore.js';
 
 const CASES = new Uint8Array(readFileSync(join(import.meta.dirname, '..', 'test-integration', 'fixtures', 'mat', 'cases.mat')));
 const bytes = () => CASES.buffer.slice(CASES.byteOffset, CASES.byteOffset + CASES.byteLength) as ArrayBuffer;
+const PV_BASIC = new Uint8Array(readFileSync(join(import.meta.dirname, '..', 'test-integration', 'fixtures', 'mat', 'pv_basic.mat')));
 
 /** A panel whose posts are recorded, and whose setRows posts settle only when `deliver()` is called. */
 function heldPanel(rejectRows = false) {
@@ -43,7 +46,8 @@ function heldPanel(rejectRows = false) {
   };
 }
 
-function document() {
+/** `budget`: the rows a whole paint delivers before it holds the rest back (default: the engine's). */
+function document(budget?: number) {
   const stack = new EditStack();
   return new MatEngine({
     session: createSession(),
@@ -54,6 +58,7 @@ function document() {
     index: new EditStackIndex(),
     registers: createRegisters(),
     trailerAfterDelivery: true,
+    budget,
   });
 }
 
@@ -146,6 +151,84 @@ describe("the MAT-file editor's panel of the engine's table", () => {
     relay.children(parent.ID);
     await settle();
     expect(posted.at(-1)).toEqual({ type: 'error', message: expect.stringMatching(/^Failed to show cases\.mat: /) });
+  });
+
+  it('answers a fetch of a row the paint held back with the rows under it, as a paint that held nothing back shows them', async () => {
+    // A budget of one row: every variable has a row, and everything under them is held back.
+    const posted: any[] = [];
+    const relay = engineTable(document(1).view(), { postMessage: async (m: any) => (posted.push(m), true) }, { name: 'cases.mat', setRows: matRows });
+    relay.ready();
+    await settle();
+    const held = (posted.find((m) => m.type === 'setRows').rows as any[]).filter((r) => r._lazy);
+    const deferred = ['structNest', 'cellNest'].map((name) => held.find((r) => r.Name?.label === name));
+    expect(deferred.every(Boolean), 'the paint held back what is under structNest and cellNest').toBe(true);
+
+    const whole: any[] = [];
+    engineTable(document().view(), { postMessage: async (m: any) => (whole.push(m), true) }, { name: 'cases.mat', setRows: matRows }).ready();
+    await settle();
+    const wholeRows = whole.find((m) => m.type === 'setRows').rows as any[];
+    const under = (id: string): any[] => {
+      const ids = new Set([id]);
+      return wholeRows.filter((r) => ids.has(r.parent) && ids.add(r.ID));
+    };
+
+    for (const row of deferred) {
+      posted.length = 0;
+      relay.children(row.ID);
+      await settle();
+      expect(posted.map((m) => [m.type, m.nodeId])).toEqual([['childRows', row.ID]]);
+      expect(posted[0].rows.length, `rows under ${row.ID}`).toBeGreaterThan(0);
+      expect(posted[0].rows).toEqual(under(row.ID));
+    }
+  });
+
+  it('answers a fetch of a row that is gone, or never was, with no rows for that id, and nothing once disposed', async () => {
+    const engine = document(1);
+    const posted: any[] = [];
+    const relay = engineTable(engine.view(), { postMessage: async (m: any) => (posted.push(m), true) }, { name: 'cases.mat', setRows: matRows });
+    relay.ready();
+    await settle();
+    const stale = posted.find((m) => m.type === 'setRows').rows.find((r: any) => r._lazy && r.Name?.label === 'structNest');
+    // The file read again (a revert, or a reload of an outside write), now holding no structNest.
+    await engine.replace(PV_BASIC.buffer.slice(PV_BASIC.byteOffset, PV_BASIC.byteOffset + PV_BASIC.byteLength) as ArrayBuffer);
+    await settle();
+    posted.length = 0;
+    const unknown = 'binedit:file:///work/cases.mat/noSuchVariable';
+    for (const id of [stale.ID, unknown, '']) relay.children(id);
+    await settle();
+    expect(posted).toEqual([
+      { type: 'childRows', nodeId: stale.ID, rows: [], truncated: 0 },
+      { type: 'childRows', nodeId: unknown, rows: [], truncated: 0 },
+      { type: 'childRows', nodeId: '', rows: [], truncated: 0 },
+    ]);
+    relay.dispose();
+    relay.children(unknown);
+    await settle();
+    expect(posted).toHaveLength(3);
+  });
+
+  it("posts the whole text of a Value shown as a summary for the row asked, none for a row shown whole, and core's reason where it gives one", async () => {
+    const posted: any[] = [];
+    const table = document().view();
+    engineTable(table, { postMessage: async (m: any) => (posted.push(m), true) }, { name: 'cases.mat', setRows: matRows }).ready();
+    await settle();
+    const rows = posted.find((m) => m.type === 'setRows').rows as any[];
+    const row = (name: string) => rows.find((r) => r.parent == null && r.Name?.label === name);
+    const LONG = '[' + Array.from({ length: 500 }, (_, i) => i + 1).join(' ') + ']';
+    table.edit({ rowId: row('rowVec').ID, columnId: 'Value', oldValue: row('rowVec').Value, newValue: LONG });
+    await settle();
+    expect(posted.filter((m) => m.type === 'updateEntryRows').at(-1).rows[0]).toMatchObject({ Value: '<1x500 double>', _hasEditText: true });
+    posted.length = 0;
+    for (const name of ['rowVec', 'scalarD', 'structScalar']) table.requestEditText(row(name).ID);
+    await settle();
+    // Spelled as the editors spelled it: `reason` only where there is one.
+    expect(posted.map((m) => Object.keys(m))).toEqual([['type', 'rowId', 'text'], ['type', 'rowId', 'text'], ['type', 'rowId', 'text', 'reason']]);
+    expect(posted.slice(0, 2)).toEqual([
+      { type: 'editText', rowId: row('rowVec').ID, text: LONG },
+      { type: 'editText', rowId: row('scalarD').ID, text: null },
+    ]);
+    expect(posted[2]).toMatchObject({ type: 'editText', rowId: row('structScalar').ID, text: null });
+    expect(posted[2].reason).toMatch(/^Cannot edit the Value of "structScalar": /);
   });
 
   it('posts nothing more once disposed, and a paint waiting on it is let go', async () => {

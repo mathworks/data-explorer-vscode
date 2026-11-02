@@ -23,7 +23,7 @@ import { invalidateUsageGraph, paramLinksForBlock } from '../../src/host/usageGr
 
 // The graph is asked for a block by its KEY, which is its SID — the fixture numbers its
 // four blocks 1..4 in the order below. A name identifies a block only within one system,
-// so it is not the key (see test/blockSidIdentity.test.ts).
+// so it is not the key (see view's test/blockSidIdentity.test.ts).
 const SID = { Gain1: '1', Gain2: '2', Gain3: '3', Const1: '4' } as const;
 
 // The fixtures live in test-integration/fixtures/caserefs, one level up from the

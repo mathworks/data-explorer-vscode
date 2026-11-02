@@ -4,11 +4,12 @@
 // command registration, the openWith view swaps, and multi-editor splits.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { waitFor } from './tools/hostHarness';
+import { quiet, waitFor, wsUri } from './tools/hostHarness';
 
 // Editable JSON .sldd now opens in the text-backed table view (native
 // undo/redo). The old binaryView is read-only and no longer owns .sldd.
 const TABLE_VIEW = 'dataExplorer.tableView';
+const BINARY_SLDD_VIEW = 'dataExplorer.binarySlddView';
 
 function slddUri(): vscode.Uri {
   const ws = vscode.workspace.workspaceFolders?.[0];
@@ -163,6 +164,69 @@ suite('Data Explorer .sldd editor toggle', () => {
       tabs.some((t) => customViewTypeOf(t) === undefined),
       'the original text tab is still present',
     );
+  });
+
+  // The Command Palette runs a command with NO argument: the editor/title button
+  // passes the tab's file, the palette passes nothing, so the command has to find
+  // the file itself. The palette lists View as Text only while a table has focus,
+  // and a table is a webview: VS Code has no active text editor then.
+  test('View as Text from the Command Palette opens the text of the table in focus', async () => {
+    const uri = slddUri();
+    await vscode.commands.executeCommand('vscode.openWith', uri, TABLE_VIEW);
+    await waitForActiveViewType(TABLE_VIEW);
+    assert.strictEqual(tabsForUri(uri).length, 1, 'starts with one (table) tab');
+
+    await vscode.commands.executeCommand('dataExplorer.viewAsText');
+    await waitForActiveTextEditor(uri);
+
+    const tabs = tabsForUri(uri);
+    assert.strictEqual(tabs.length, 2, 'View as Text added a second tab (1 -> 2)');
+    assert.ok(
+      tabs.some((t) => customViewTypeOf(t) === TABLE_VIEW),
+      'the original table tab is still present',
+    );
+    assert.ok(
+      tabs.some((t) => t.input instanceof vscode.TabInputText),
+      'a text editor tab was added',
+    );
+  });
+
+  test('View as Table from the Command Palette opens the table of the text in focus', async () => {
+    const uri = slddUri();
+    const doc = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(doc);
+    assert.strictEqual(tabsForUri(uri).length, 1, 'starts with one (text) tab');
+
+    await vscode.commands.executeCommand('dataExplorer.viewAsTable');
+    await waitForActiveViewType(TABLE_VIEW);
+
+    const tabs = tabsForUri(uri);
+    assert.strictEqual(tabs.length, 2, 'View as Table added a second tab (1 -> 2)');
+    assert.ok(
+      tabs.some((t) => customViewTypeOf(t) === TABLE_VIEW),
+      'a table tab was added',
+    );
+    assert.ok(
+      tabs.some((t) => t.input instanceof vscode.TabInputText),
+      'the original text tab is still present',
+    );
+  });
+
+  // The palette lists View as Table for any .sldd tab, one already showing a table
+  // included: a compressed dictionary's. Its table is the editor it is in.
+  test('View as Table from the Command Palette on a compressed dictionary in its table leaves the tab as it is', async () => {
+    const uri = wsUri('binary.sldd');
+    await vscode.commands.executeCommand('vscode.openWith', uri, BINARY_SLDD_VIEW);
+    await waitForActiveViewType(BINARY_SLDD_VIEW);
+    assert.strictEqual(tabsForUri(uri).length, 1, 'starts with one (table) tab');
+
+    await vscode.commands.executeCommand('dataExplorer.viewAsTable');
+    await quiet(1000, 'a second tab, had View as Table opened one');
+
+    const tabs = tabsForUri(uri);
+    assert.strictEqual(tabs.length, 1, 'no second tab was opened');
+    assert.strictEqual(customViewTypeOf(tabs[0]), BINARY_SLDD_VIEW, 'the tab is still the compressed dictionary\'s table');
+    assert.strictEqual(activeCustomViewType(), BINARY_SLDD_VIEW, 'and still the active tab');
   });
 
   test('opening from the tree previews the table tab (italic, reused)', async () => {
