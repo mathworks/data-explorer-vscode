@@ -322,25 +322,15 @@ describe('no consumer keeps its own copy of the list', () => {
     // dispatches on the filename with its own (case-insensitive) kind tests — so a
     // rule about this extension's globs and predicates has nothing to say about it.
     'src/host/nameIndex.ts',
-    // nameScan is the kind DISPATCH the name index used to hold itself: which reader a
-    // candidate's names come from. It moved out when the model read went through the shared
-    // cache, and to view with the name index; the scan follows it where it ships, as view's
-    // other files below.
-    'node_modules/data-explorer-view/dist/model/search/nameScan.js',
-    // The tree's file shaping (it was structuralIndex.ts), which moved to view with the rest of
-    // the hierarchy. Scanned where it ships, like view's other files below: it classifies every
-    // file the tree lists and names every project, and the tree this host draws runs it.
-    'node_modules/data-explorer-view/dist/model/hierarchy/graphSources.js',
+    // view's modules that classify a file or reduce a name (nameScan, graphSources, SlddModel,
+    // graphModel) are held to the same scan by view itself, over its own src
+    // (test/fileKindsFromCore.test.ts).
+    //
     // The model relationships the tree draws, which moved to core beside the kind tests and the
-    // lists. Scanned where they ship, as view's files below are: the tree still draws its edges
-    // from this module, so a copy of the rule growing in it is still a copy this host runs.
+    // lists. Scanned where they ship: the tree still draws its edges from this module, so a copy
+    // of the rule growing in it is still a copy this host runs.
     'node_modules/data-explorer-core/dist/datamodel/parser/SlxStructure.js',
-    'node_modules/data-explorer-view/dist/model/workspace/SlddModel.js',
     'src/host/BinaryEditorProvider.ts',
-    // graphModel.ts classifies nothing — it is handed a `type` already decided — but it
-    // does REDUCE a name: a project group is labelled with its marker's name. That is the
-    // same kind of second copy, so it is held to the same scan.
-    'node_modules/data-explorer-view/dist/model/hierarchy/graphModel.js',
     // projectStore.ts is where a name-identified marker arrives first: it decides, from the
     // marker alone, whether there is a `resources/project/` tree to walk or a single file to
     // read. That is a kind test and a name, so it belongs under the scan — a `endsWith('.prj')`
@@ -510,10 +500,10 @@ describe('no consumer keeps its own copy of the list', () => {
     // is pinned by BEHAVIOUR instead: view's test/usageEndToEnd.test.ts runs a classic
     // legacy_ctrl.mdl through the graph and expects its blocks, and parseSlx on a
     // `.mdl` throws rather than returning nothing.
-    for (const file of [
-      'node_modules/data-explorer-view/dist/model/search/nameScan.js',
-      'node_modules/data-explorer-core/dist/datamodel/parser/SlxStructure.js',
-    ]) {
+    // view's nameScan reads models the same way, and view pins it over its own src
+    // (test/fileKindsFromCore.test.ts › … › reads models through a core reader that sniffs
+    // the format).
+    for (const file of ['node_modules/data-explorer-core/dist/datamodel/parser/SlxStructure.js']) {
       const src = code(file);
       expect(
         src.includes('parseModel') || src.includes('scanModelStructure'),

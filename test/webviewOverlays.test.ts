@@ -119,11 +119,9 @@ describe('table webview overlays are created in code, not declared in markup', (
     // `errorDialog?.show(...)` was load-bearing while a provider could omit the
     // tag. Now that this module creates it, the optional call would only hide a
     // typo — and the guard's absence is what keeps the invariant honest. The calls
-    // are view's connectTable's now (its editing half), to the overlays handed to it.
+    // are view's connectTable's now (its editing half), to the overlays handed to it, and view
+    // proves the dialog it is handed is the one it shows (test/connectTableEditing.test.ts).
     expect(read('src/webview/table-main.ts')).not.toContain('errorDialog?.');
-    const editing = read('node_modules/data-explorer-view/dist/widgets/tree-table/editingWire.js');
-    expect(editing).toContain('errorDialog.show(');
-    expect(editing).not.toContain('errorDialog?.');
   });
 
   it('hands all three to connectTable, which would otherwise make its own', () => {
@@ -215,6 +213,8 @@ describe('the loading state belongs to the table component, not to any shell', (
     expect(read(shell)).not.toContain('dex-loading');
   });
 
+  // The spinner and its keyframes are the component's, and view proves them
+  // (test/treeTableLoading.test.ts).
   it('table-main.ts drives it as a property, not by reaching for an element', () => {
     // Through view's connectTable, which table-main hands the shell's table to, fed by the host
     // through messageSource.
@@ -222,17 +222,8 @@ describe('the loading state belongs to the table component, not to any shell', (
     expect(table).toBe("document.querySelector('dex-tree-table')");
     expect(source).toBe('messageSource(vscodePort(acquireVsCodeApi()), {…})');
     expect(read('src/webview/table-main.ts')).not.toContain("getElementById('dex-loading')");
-    const connect = read('node_modules/data-explorer-view/dist/widgets/tree-table/connectTable.js');
-    expect(connect).toContain('table.loading = true');
-    expect(connect).toContain('table.loading = false');
-  });
-
-  it('the component owns the spinner and its keyframes', () => {
-    // A keyframe in a shell's light DOM does not reach a shadow tree, so the
-    // animation has to live in the same stylesheet as the element it turns.
-    const src = read('node_modules/data-explorer-view/dist/widgets/tree-table/dex-tree-table.js');
-    expect(src).toContain('class="loading-spinner"');
-    expect(src).toContain('@keyframes dex-spin');
+    // connectTable sets `loading` until the source answers, and view proves it
+    // (test/connectTable.test.ts › the first paint › is Loading… until the source answers).
   });
 });
 

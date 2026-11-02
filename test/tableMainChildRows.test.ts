@@ -1,38 +1,24 @@
 // Copyright 2026 The MathWorks, Inc.
 // @vitest-environment happy-dom
 //
-// What the TABLE does with an answer to `requestChildren` — driven through the listener
+// A deferred row's question, `requestChildren`, leaving the table webview through the listener
 // that ships.
 //
-// rowUpdates.test.ts pins `mergeChildRows` and treeTableLazyRows.test.ts pins the
-// component's twisty. Between them sits the table's message branch (view's messageSource and
-// connectTable, which table-main.ts wires up), and that is where the interesting half is: which arrivals get installed, which get dropped, and
-// which say something to the user. A copy of that branch written here would be one rule
-// on two paths — it would keep passing after the shipped one changed — so this imports
-// table-main.ts and dispatches real `MessageEvent`s at it, the way linkRoute.test.ts and
+// What the table does with the answer (which arrivals get installed, which get dropped, and
+// which say something to the user) is view's messageSource and connectTable, and view proves
+// it (test/connectTableRepaints.test.ts, test/rowUpdates.test.ts). What stays here is the
+// shell's half: table-main.ts wires the table to the host, so the question reaches it. This
+// imports table-main.ts and dispatches real events at it, the way linkRoute.test.ts and
 // readonlyEditorGate.test.ts drive their halves. See the memory
 // `table-main-is-importable`: two stubs in place before the dynamic import, once per
 // file, because a module body runs once per test FILE and this one wires window and body
 // listeners.
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
-import { readFileSync } from 'node:fs';
-// `join(import.meta.dirname, …)`, not `fileURLToPath(import.meta.url)`: under happy-dom
-// `import.meta.url` is an http URL, which fileURLToPath rejects.
-import { join } from 'node:path';
 
-// The REAL strip markup, read out of the shell all three providers interpolate, because
-// the assertion below is about a banner being visible and hand-written markup here would
-// be a copy of the shell that agreement with the shell is the whole point of.
-const BANNERS_HTML = /BANNERS_HTML = `([\s\S]*?)`;/.exec(
-  readFileSync(join(import.meta.dirname, '..', 'src/host/webviewHtml.ts'), 'utf8'),
-)![1];
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 const posted: any[] = [];
 let table: any;
-
-const errorBanner = () => document.getElementById('dex-error')!;
-const idsOf = () => ((table.rows ?? []) as any[]).map((r) => r.ID);
-const rowOf = (id: string) => ((table.rows ?? []) as any[]).find((r) => r.ID === id);
 
 /** Hand the table a message exactly as the host's `postMessage` does. */
 function send(data: any): void {
@@ -40,22 +26,9 @@ function send(data: any): void {
 }
 
 /**
- * The table asks about `nodeId`, as a click on its twisty does, and the host answers with
- * `answer`; resolves once the table has taken it. An answer is matched to the question it
- * answers (view's messageSource), so a test of the answer asks first, as the shipped table does.
- */
-async function answer(nodeId: string, answer: any): Promise<void> {
-  table.dispatchEvent(new CustomEvent('dex-request-children', { detail: { nodeId } }));
-  send({ type: 'childRows', nodeId, ...answer });
-  await new Promise((done) => setTimeout(done, 0));
-}
-
-/**
  * A planned payload: one section, one entry whose children were held back.
  *
- * `_lazy` on `A` is the whole premise — the host stamped it because its children did not
- * fit — and `setRows` is also what clears the error banner, so this doubles as the reset
- * between tests.
+ * `_lazy` on `A` is the whole premise: the host stamped it because its children did not fit.
  */
 function paint(): void {
   send({
@@ -72,15 +45,10 @@ function paint(): void {
   });
 }
 
-const kids = [
-  { ID: 'A.k0', parent: 'A', Name: { label: 'k0' } },
-  { ID: 'A.k1', parent: 'A', Name: { label: 'k1' } },
-];
-
 // Its own timeout: a cold import of the whole table-main webview is what a loaded machine stretches.
 beforeAll(async () => {
   (globalThis as any).acquireVsCodeApi = () => ({ postMessage: (m: any) => posted.push(m) });
-  document.body.innerHTML = `${BANNERS_HTML}<dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>`;
+  document.body.innerHTML = '<dex-tree-table style="position:absolute;inset:0;"></dex-tree-table>';
   await import('../src/webview/table-main.js');
   table = document.querySelector('dex-tree-table');
 }, 60_000);
@@ -97,80 +65,5 @@ describe('opening a deferred row asks the host about it', () => {
     // through it — so it must not be gated on `editable`, which this payload is not.
     table.dispatchEvent(new CustomEvent('dex-request-children', { detail: { nodeId: 'A' } }));
     expect(posted).toEqual([{ type: 'requestChildren', nodeId: 'A' }]);
-  });
-
-  it('asks nothing for an empty or missing id', () => {
-    // `findNode('')` would answer for no node, and the table would then clear a twisty
-    // on the strength of an answer about nothing.
-    table.dispatchEvent(new CustomEvent('dex-request-children', { detail: { nodeId: '' } }));
-    table.dispatchEvent(new CustomEvent('dex-request-children', { detail: {} }));
-    expect(posted).toEqual([]);
-  });
-});
-
-describe('an answer that fit', () => {
-  it('puts the children straight after their parent and unmarks it', async () => {
-    await answer('A', { rows: kids, truncated: 0 });
-    expect(idsOf()).toEqual(['section:design', 'A', 'A.k0', 'A.k1', 'B']);
-    // Unmarked, so the next expand of this row costs no round trip.
-    expect(rowOf('A')._lazy).toBeUndefined();
-  });
-
-  it('leaves the rest of the table alone — this is a merge, not a payload', async () => {
-    // Deliberately NOT routed through the `setRows` path: that one clears the error,
-    // closes an open matrix grid and re-derives the columns. The user opened one row.
-    await answer('A', { rows: kids, truncated: 0 });
-    expect(rowOf('B')).toEqual({ ID: 'B', parent: 'section:design', Name: { label: 'B' } });
-    expect(table.columns).toEqual(['Name', 'Value']);
-  });
-
-  it('says nothing to the user, because nothing was lost', async () => {
-    await answer('A', { rows: kids, truncated: 0 });
-    expect(errorBanner().style.display).toBe('none');
-  });
-
-  it('takes an empty answer as "no children after all"', async () => {
-    await answer('A', { rows: [], truncated: 0 });
-    expect(idsOf()).toEqual(['section:design', 'A', 'B']);
-    expect(errorBanner().style.display).toBe('none');
-  });
-});
-
-describe('an answer the host could not fit', () => {
-  it('names the rows that are not there, because they have no twisty to offer', async () => {
-    // The one loss a fetch can still inflict: a node with more direct children than a
-    // whole delivery holds (core builds a cell's children uncapped). The payload's own
-    // banner cannot say this — it was composed before the user opened anything — so the
-    // answer carries the count and it is said here, in the strip, where a message is not
-    // painted over by the full-bleed table.
-    await answer('A', { rows: kids, truncated: 143257 });
-    expect(errorBanner().style.display).toBe('block');
-    expect(errorBanner().textContent).toContain('143,257');
-    // And the rows that DID come are still merged: a partial answer is worth having.
-    expect(idsOf()).toEqual(['section:design', 'A', 'A.k0', 'A.k1', 'B']);
-  });
-
-  it('clears on the next payload, so it cannot outlive the view it describes', async () => {
-    await answer('A', { rows: kids, truncated: 7 });
-    expect(errorBanner().style.display).toBe('block');
-    paint();
-    expect(errorBanner().style.display).toBe('none');
-  });
-});
-
-describe('an answer the table has stopped waiting for', () => {
-  it('drops an answer about a row that is no longer here', async () => {
-    // A repaint rebuilt the tree while the fetch was in flight. Appending the orphans
-    // would put rows under a parent the table does not have — which the tree walk reads
-    // as top-level, so they would render alongside the sections.
-    await answer('gone', { rows: kids, truncated: 0 });
-    expect(idsOf()).toEqual(['section:design', 'A', 'B']);
-  });
-
-  it('says nothing about a truncation the user cannot see either', async () => {
-    // The count describes rows under a row that is no longer in the table, so a banner
-    // about it would name something the user has no way to look at.
-    await answer('gone', { rows: kids, truncated: 500 });
-    expect(errorBanner().style.display).toBe('none');
   });
 });
