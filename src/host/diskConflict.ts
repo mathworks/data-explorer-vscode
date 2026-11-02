@@ -106,11 +106,3 @@ export function promptsForConflict(state: {
   if (!state.inConflict) return true;
   return state.autoSave === undefined || state.autoSave === 'off';
 }
-
-/**
- * A copy of the dirty flag VS Code computes for a custom document from its own edit stack: view's
- * EditStackIndex, which the editors on view's engines are given as their EditIndex, and which is
- * this class as it was here, line for line. The name stays for this module's tests until the
- * suites are rebalanced onto view's (step 6b, V6).
- */
-export { EditStackIndex as EditStackMirror } from 'data-explorer-view/host';

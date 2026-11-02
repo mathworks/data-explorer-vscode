@@ -2,6 +2,11 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## Unreleased
+
+- View as Text from the Command Palette now opens the dictionary's text.
+- Search Data Source Entries finds an entry by its new name as soon as you rename it, instead of offering the old name until your next edit or save.
+
 ## [1.54.0] — 2026-11-01
 
 The fixes from the 1.47 to 1.53 pre-releases, as a stable release:

@@ -12,17 +12,22 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html'],
       reportsDirectory: 'coverage',
-      // Measure only the headless, vscode-free logic vitest can actually reach.
+      // Measure what vitest can actually reach.
       include: ['src/host/**/*.ts', 'src/webview/**/*.ts'],
       exclude: [
         // vscode-coupled host classes: import `vscode`, unavailable under vitest.
-        // These are covered by the @vscode/test-electron suite (test-integration/).
-        // Keep this list in sync with `grep -l "from 'vscode'" src/host/*.ts` —
-        // a vscode-importing file left off it reports a flat 0% and drags the
-        // headline number down as if it were untested, which hides a real gap
-        // somewhere else. Their pure logic is split into sibling modules that ARE
-        // measured here (webviewHtml→webviewShell), or in view or core (the name index
-        // and search, the usage graphs, the folder hierarchy, the source cache).
+        // These are covered by the @vscode/test-electron suite (test-integration/),
+        // whose own report is `npm run test:integration:coverage`. A vscode-importing
+        // file left off this list reports a flat 0% and drags the headline number down
+        // as if it were untested, which hides a real gap somewhere else;
+        // test/moduleBoundaries.test.ts holds the list to the imports. Their pure logic
+        // is split into sibling modules that ARE measured here
+        // (webviewHtml→webviewShell), or in view or core (the name index and search, the
+        // usage graphs, the folder hierarchy, the source cache).
+        //
+        // Not on it, though they import `vscode`: editorHub.ts (for types only),
+        // navigate.ts and projectStore.ts, which unit tests load under `vi.mock('vscode')`
+        // (navigateBlockKeys, projectStore). Excluding them hid coverage that exists.
         'src/host/BinaryEditorProvider.ts',
         'src/host/BinarySlddEditorProvider.ts',
         // The compressed dictionary editor's document: view's engine with VS Code's end of its hooks.
@@ -39,7 +44,6 @@ export default defineConfig({
         // The vscode half of the sidebar tree; the hierarchy itself is view's FolderHierarchy.
         'src/host/SectionsTreeProvider.ts',
         'src/host/SlddTextEditorProvider.ts',
-        'src/host/editorHub.ts',
         // The vscode half of the name index; the index itself is view's NameIndex.
         'src/host/nameIndex.ts',
         'src/host/scanRead.ts',
@@ -53,14 +57,11 @@ export default defineConfig({
         'src/host/usageRepostWatch.ts',
         // The workspace watcher's change handler; the forget decision is core's forgetUnseenWrite.
         'src/host/workspaceChange.ts',
-        'src/host/navigate.ts',
         'src/host/iconMap.ts',
-        // The `workspace.fs` half of reading a project's definition; the walk is core's.
-        'src/host/projectStore.ts',
         // Thin `vscode` Uri-resolution shim; its shell/CSP core is webviewShell.ts.
         'src/host/webviewHtml.ts',
-        // Browser/DOM webview entrypoints + templates: no vitest DOM harness.
-        'src/webview/*-main.ts',
+        // The webview's HTML templates. Its `*-main.ts` entries are measured: happy-dom tests
+        // run them (tableMain*, projectMain, piMainVariableEditor and others).
         'src/webview/*.html',
       ],
     },

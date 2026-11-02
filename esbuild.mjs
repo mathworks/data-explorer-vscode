@@ -2,6 +2,11 @@ import * as esbuild from 'esbuild';
 
 const watch = process.argv.includes('--watch');
 const web = process.argv.includes('--web');
+// For the integration coverage run (`npm run test:integration:coverage`). Coverage counts the
+// statements and branches of the code that ran, and minifying rewrites them (statements joined
+// into comma expressions, an `if` into `&&` or a ternary), so the counts would not be the
+// source's. The shipped bundle stays minified.
+const minify = !process.argv.includes('--no-minify');
 
 // Shared config for the extension-host bundle. The desktop build targets Node;
 // the `--web` build targets the browser web-extension host (a Web Worker on
@@ -11,7 +16,7 @@ const web = process.argv.includes('--web');
 const common = {
   entryPoints: ['src/extension.ts'],
   bundle: true,
-  minify: true,
+  minify,
   mainFields: ['module', 'main'],
   external: ['vscode'],
   sourcemap: true,

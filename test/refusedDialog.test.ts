@@ -6,6 +6,10 @@
 // gesture, with the host's reason and nothing else, and still there after the repaint that may
 // follow it. Each editor said one in the banner, which every repaint clears, so a refusal followed
 // by one was gone before it could be read; and the three editors said three different things.
+//
+// One case stays here, the shell's check that the dialog table-main makes is the one a refusal
+// opens. That it outlives the repaint after it, and that the banner does not, is connectTable's,
+// and view proves it (test/connectTableRepaints.test.ts).
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -42,8 +46,6 @@ describe('a refused gesture, through the webview entry point', () => {
       editable: true,
     });
 
-  const banner = () => document.getElementById('dex-error');
-
   it('opens the dialog, titled by the gesture, with the reason and no Entered or Previous', async () => {
     await setRows();
     await post({ type: 'refused', title: 'Cannot Add Child', reason: REASON });
@@ -53,21 +55,5 @@ describe('a refused gesture, through the webview entry point', () => {
     expect(text).toContain(REASON);
     expect(text).not.toContain('Entered');
     expect(text).not.toContain('Previous');
-  });
-
-  it('stays open through the repaint that follows it', async () => {
-    await post({ type: 'refused', title: 'Cannot Delete', reason: "This element can't be removed from its parent." });
-    await setRows();
-    expect(dialog.hasAttribute('open')).toBe(true);
-    expect(dialog.shadowRoot.textContent).toContain('Cannot Delete');
-  });
-
-  it('where a failure in the banner is cleared by it, which is why a refusal is not said there', async () => {
-    document.body.insertAdjacentHTML('beforeend', '<div id="dex-error" style="display:none"></div>');
-    await post({ type: 'error', message: 'Failed to apply edit: boom' });
-    expect(banner()?.style.display).toBe('block');
-    await setRows();
-    expect(banner()?.style.display).toBe('none');
-    banner()?.remove();
   });
 });

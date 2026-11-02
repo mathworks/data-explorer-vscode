@@ -102,7 +102,7 @@ suite('workspace name index', () => {
     }
   });
 
-  test('a CLEAN open document still indexes from disk', async () => {
+  test('a CLEAN open document still indexes from disk', async function () {
     // The buffer is only preferred while DIRTY. A clean document's buffer and disk
     // agree, and preferring the buffer unconditionally would make the full build()
     // depend on which editors happen to be open.
@@ -117,9 +117,11 @@ suite('workspace name index', () => {
       await vscode.commands.executeCommand('workbench.action.files.revert');
     }
     if (doc.isDirty) {
-      // Some hosts do not route the revert command (see the undo-capability probe
-      // in cutPasteUndo.test.ts). Nothing to assert about the clean path then.
-      return;
+      // Some desktop hosts do not route the revert command (see the undo-capability
+      // probe in cutPasteUndo.test.ts): there is no clean document to index then, so
+      // the case skips and says so. On CI (`CI` set), whose window does revert, it fails.
+      if (process.env.CI) assert.fail('on CI, the revert command left data.sldd dirty');
+      this.skip();
     }
 
     await reindexFile(uri);

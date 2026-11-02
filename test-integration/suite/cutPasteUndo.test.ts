@@ -9,14 +9,13 @@
 // VS Code's real undo stack, which the headless vitest suite cannot exercise —
 // so we assert it here.
 //
-// We cannot postMessage into the webview from the test host, and src/host does
-// not require() cleanly inside the Electron host (jsonc-parser), so — exactly as
-// liveEdit.test.ts does — we SIMULATE the provider's write-back: apply the
-// move's resulting full text as one WorkspaceEdit on the shared TextDocument,
-// then assert a single undo restores the original document byte-for-byte. The
-// move's byte-level correctness (uniquify/reparent/splice) is covered by the
-// vitest suites (structuralEdit, cutPasteEndToEnd); THIS test pins the one-edit,
-// one-undo contract against a live editor.
+// We cannot postMessage into the webview from the test host, so we SIMULATE the
+// provider's write-back: apply the move's resulting full text as one WorkspaceEdit
+// on the shared TextDocument, then assert a single undo restores the original
+// document byte-for-byte. The move's byte-level correctness (uniquify/reparent/
+// splice) is core's and view's vitest suites (structuralEdit, cutPasteEndToEnd),
+// and view's jsonEngine/gestures.test.ts runs the move through the engine; THIS
+// test pins the one-edit, one-undo contract against a live editor.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { waitFor } from './tools/hostHarness';

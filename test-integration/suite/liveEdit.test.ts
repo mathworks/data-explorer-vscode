@@ -1,15 +1,12 @@
 // Copyright 2026 The MathWorks, Inc.
-// Integration test for the live-edit seam: a JSON .sldd open as the table while
-// its text is edited in a side-by-side editor. We cannot read the webview's
-// rendered rows from the test host, so we assert the observable contract the
-// refresh depends on — a text document IS editable for the same URI the table
-// renders, edits apply, and the extension processes onDidChangeTextDocument
-// without throwing (a listener error would surface as an unhandled rejection /
-// deactivated extension). The row-parse itself is covered by the vitest suite.
-// Where a test needs to know the provider's change listener ran, it reads the
-// repaint that listener posts, from a provider built over a stand-in panel
-// (tools/hostHarness.ts fakePanel), since the registered table's webview cannot
-// be asked what it was told.
+// Integration test for the live-edit seam: a JSON .sldd open as the table while its text is
+// edited in a side-by-side editor, and which view each kind of file opens in. The table is a
+// CustomTextEditorProvider over the native TextDocument, so a text edit reaches it through the
+// provider's change listener; whether it reaches it is read off the repaint that listener posts,
+// from a provider built over a stand-in panel (tools/hostHarness.ts fakePanel), since the
+// registered table's webview cannot be asked what it was told. What the table makes of an edit
+// (a scoped entry splice, a table edit as the text a text view shows, an invalid document's
+// banner) is view's JSON engine: its jsonEngine/sync.test.ts › Data Explorer .sldd live edit.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
@@ -24,43 +21,6 @@ const BINARY_VIEW = 'dataExplorer.binaryView';
 // A compressed-binary (zip/OPC) .sldd is editable in its own writable view; the
 // read-only binaryView redirects such a file here (mirroring the JSON redirect).
 const BINARY_SLDD_VIEW = 'dataExplorer.binarySlddView';
-
-// Locate the `{...}` span of the entries[] element whose "name" equals the given
-// name. Kept local (not imported from src/host/entrySplice), so the span these
-// tests write is found independently of the code under test. (The bundle does
-// carry jsonc-parser, through the provider imported above; esbuild.test.mjs's
-// mainFields is what makes it load in the Electron test host.) The production
-// write-back path uses the real entrySplice; its span logic is covered by the
-// vitest suites (entrySplice + editWriteback).
-function findEntrySpanLocal(text: string, name: string): { offset: number; length: number } | null {
-  const marker = `"name": ${JSON.stringify(name)}`;
-  const nameIdx = text.indexOf(marker);
-  if (nameIdx < 0) return null;
-  // Walk back to the opening brace of the enclosing object.
-  const start = text.lastIndexOf('{', nameIdx);
-  if (start < 0) return null;
-  // Walk forward, tracking brace depth (ignoring braces inside strings), to the
-  // matching closing brace.
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-  for (let i = start; i < text.length; i++) {
-    const ch = text[i];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (ch === '\\') escaped = true;
-      else if (ch === '"') inString = false;
-      continue;
-    }
-    if (ch === '"') inString = true;
-    else if (ch === '{') depth++;
-    else if (ch === '}') {
-      depth--;
-      if (depth === 0) return { offset: start, length: i - start + 1 };
-    }
-  }
-  return null;
-}
 
 function slddUri(): vscode.Uri {
   const ws = vscode.workspace.workspaceFolders?.[0];
@@ -95,157 +55,6 @@ suite('Data Explorer .sldd live edit', () => {
     // Revert any unsaved edits so the fixture is untouched for the next test/run.
     await vscode.commands.executeCommand('workbench.action.revertAndCloseActiveEditor');
     await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-  });
-
-  test('editing the text document while the table is open does not error', async () => {
-    const uri = slddUri();
-
-    // Open the table (default), then open the same file as a text document.
-    await vscode.commands.executeCommand('vscode.openWith', uri, TABLE_VIEW);
-    const doc = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
-
-    // A no-op-ish whitespace edit: append a space inside the JSON's leading
-    // whitespace region so it stays valid JSON. The extension's change listener
-    // fires and re-parses; a throw here would fail the await.
-    const applied = await editor.edit((eb) => {
-      eb.insert(new vscode.Position(0, 0), ' ');
-    });
-    assert.strictEqual(applied, true, 'the edit applied');
-    assert.ok(doc.isDirty, 'the document is now dirty (unsaved edit present)');
-
-    // The extension is still healthy and the same URI is shared by both views.
-    assert.strictEqual(doc.uri.toString(), uri.toString());
-    assert.ok(
-      vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
-      'extension remains active after the edit',
-    );
-  });
-
-  test('a scoped entry-span replacement (simulating applyEdit) updates the doc without crashing', async () => {
-    // We cannot postMessage into the webview from the test host, so we simulate
-    // what the tableView CustomTextEditorProvider's write-back produces: locate a
-    // single entry's span (findEntrySpanLocal, mirroring the host's entrySplice)
-    // and replace that span with a reserialized entry
-    // through a WorkspaceEdit. Asserts the doc updates with a scoped diff and the
-    // extension's onDidChangeTextDocument listener processes it without throwing.
-    const uri = slddUri();
-    await vscode.commands.executeCommand('vscode.openWith', uri, TABLE_VIEW);
-    const doc = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
-
-    const oldText = doc.getText();
-    const span = findEntrySpanLocal(oldText, 'Number');
-    assert.ok(span, 'the "Number" entry span is found');
-
-    // Reserialize the entry with value 42 at the file's 2-space indent (10 spaces
-    // deep, matching applyEdit's indent.repeat(5) for a 2-space file).
-    const indent = '  ';
-    const entryObj = { name: 'Number', metadata: JSON.parse(
-      oldText.slice(span!.offset, span!.offset + span!.length),
-    ).metadata, value: 42 };
-    const lines = JSON.stringify(entryObj, null, indent).split('\n');
-    const entryText = lines.map((l, i) => (i === 0 ? l : indent.repeat(5) + l)).join('\n');
-
-    const startPos = doc.positionAt(span!.offset);
-    const endPos = doc.positionAt(span!.offset + span!.length);
-    const edit = new vscode.WorkspaceEdit();
-    edit.replace(uri, new vscode.Range(startPos, endPos), entryText);
-    const applied = await vscode.workspace.applyEdit(edit);
-    assert.strictEqual(applied, true, 'the workspace edit applied');
-
-    const newText = doc.getText();
-    assert.notStrictEqual(newText, oldText, 'the document text changed');
-    // Still valid JSON and the new value is present.
-    JSON.parse(newText); // throws if invalid → fails the test
-    const newSpan = findEntrySpanLocal(newText, 'Number');
-    assert.ok(newSpan, 'the "Number" entry is still locatable after the edit');
-    assert.ok(newText.slice(newSpan!.offset, newSpan!.offset + newSpan!.length).includes('"value": 42'));
-
-    // Scoped diff: everything before/after the entry span is byte-identical.
-    assert.strictEqual(newText.slice(0, newSpan!.offset), oldText.slice(0, span!.offset));
-    assert.strictEqual(
-      newText.slice(newSpan!.offset + newSpan!.length),
-      oldText.slice(span!.offset + span!.length),
-    );
-
-    // The extension survives its own onDidChangeTextDocument re-parse.
-    assert.ok(
-      vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
-      'extension remains active after the write-back edit',
-    );
-  });
-
-  test('table->text sync: a WorkspaceEdit on the .sldd doc is visible to the open text view', async () => {
-    // Regression guard for the single-source-of-truth model. The tableView is a
-    // CustomTextEditorProvider over the .sldd TextDocument: its write-back applies
-    // a WorkspaceEdit to that same TextDocument, so the JSON text view stays in
-    // sync. We cannot drive the webview from the test host, so we simulate the
-    // provider's write-back by applying an entry-span replacement to the doc WHILE
-    // the table is open AND the same doc is shown in a text editor, then assert the
-    // text document reflects the new value.
-    const uri = slddUri();
-
-    // Open the .sldd as the table (a view of the shared TextDocument).
-    await vscode.commands.executeCommand('vscode.openWith', uri, TABLE_VIEW);
-    await waitForActiveViewType(TABLE_VIEW);
-
-    // Open the same doc in a plain text editor beside it. If showing both is
-    // flaky we still hold the doc handle and can assert on getText() below.
-    const doc = await vscode.workspace.openTextDocument(uri);
-    try {
-      await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
-    } catch {
-      // The doc handle alone is enough to prove the shared source of truth.
-    }
-
-    // The table tab is present somewhere among the groups.
-    const slddTab = vscode.window.tabGroups.all
-      .flatMap((g) => g.tabs)
-      .find((t) => (t.input as { viewType?: string })?.viewType === TABLE_VIEW);
-    assert.ok(slddTab, 'the table tab is present');
-
-    const oldText = doc.getText();
-    const span = findEntrySpanLocal(oldText, 'Number');
-    assert.ok(span, 'the "Number" entry span is found');
-
-    // Reserialize the entry with a new value, mirroring the provider write-back.
-    const indent = '  ';
-    const entryObj = {
-      name: 'Number',
-      metadata: JSON.parse(oldText.slice(span!.offset, span!.offset + span!.length)).metadata,
-      value: 99,
-    };
-    const lines = JSON.stringify(entryObj, null, indent).split('\n');
-    const entryText = lines.map((l, i) => (i === 0 ? l : indent.repeat(5) + l)).join('\n');
-
-    const edit = new vscode.WorkspaceEdit();
-    edit.replace(
-      uri,
-      new vscode.Range(doc.positionAt(span!.offset), doc.positionAt(span!.offset + span!.length)),
-      entryText,
-    );
-    const applied = await vscode.workspace.applyEdit(edit);
-    assert.strictEqual(applied, true, 'the workspace edit applied');
-
-    // The text view (same TextDocument) reflects the new value: single source
-    // of truth. getText() is the exact content the JSON text editor renders.
-    const newText = doc.getText();
-    assert.notStrictEqual(newText, oldText, 'the document text changed');
-    assert.ok(newText.includes('"value": 99'), 'the new value is visible in the doc text');
-    JSON.parse(newText); // still valid JSON → the text view stays coherent
-
-    // The extension is still healthy and the table tab is still open.
-    assert.ok(
-      vscode.window.tabGroups.all
-        .flatMap((g) => g.tabs)
-        .some((t) => (t.input as { viewType?: string })?.viewType === TABLE_VIEW),
-      'the table tab is still present after the edit',
-    );
-    assert.ok(
-      vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
-      'extension remains active after the table->text sync edit',
-    );
   });
 
   test('a text-view edit dirties the shared document (single source of truth)', async () => {
@@ -311,24 +120,6 @@ suite('Data Explorer .sldd live edit', () => {
     }
   });
 
-  test('an invalid JSON edit is handled gracefully (no crash)', async () => {
-    const uri = slddUri();
-    await vscode.commands.executeCommand('vscode.openWith', uri, TABLE_VIEW);
-    const doc = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
-
-    // Corrupt the JSON: the listener re-parses, catches, and posts an error
-    // banner to the webview instead of throwing.
-    const applied = await editor.edit((eb) => {
-      eb.insert(new vscode.Position(0, 0), '}{ not json ');
-    });
-    assert.strictEqual(applied, true);
-    assert.ok(
-      vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
-      'extension survives an invalid-JSON edit',
-    );
-  });
-
   test('opening a JSON .sldd as the table succeeds and the tab is initially clean', async () => {
     // The editable tableView CustomTextEditorProvider opens a JSON .sldd; no edit
     // has been made, so the shared document (and its tab) must not be dirty.
@@ -354,12 +145,7 @@ suite('Data Explorer .sldd live edit', () => {
     // model.slx is a binary (zip) fixture in the workspace; it opens in the
     // read-only binaryView (never editable, never dirty).
     const uri = slxUri();
-    try {
-      await vscode.workspace.fs.stat(uri);
-    } catch {
-      // No .slx fixture present — nothing to assert. (There is model.slx today.)
-      return;
-    }
+    await vscode.workspace.fs.stat(uri); // fixture must exist
     await vscode.commands.executeCommand('vscode.openWith', uri, BINARY_VIEW);
     await waitForActiveViewType(BINARY_VIEW);
 

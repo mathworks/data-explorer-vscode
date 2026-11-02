@@ -42,43 +42,35 @@ describe('a drag is a no-op exactly where the same cut and paste is (V-002)', ()
 });
 
 describe('the keyboard cannot disagree with the menu', () => {
-  // The menu and its chords are view's now: table-main hands its table to connectTable({editing}),
-  // whose editing half (editingWire) builds the menu and answers the chords. What is checkable is
-  // that the shipped editing half describes the menu ONCE, and that table-main describes none of
-  // its own. The old code computed enablement twice — buildContextMenuItems for the menu, a ternary
-  // over _canCopy/_canDelete for the chord — with a comment promising they matched.
+  // The menu and its chords are view's: table-main hands its table to connectTable({editing}),
+  // whose editing half (editingWire) builds the menu once, gates every chord on the item it would
+  // click, reads each capability from the row, and resolves a paste target through its entry's
+  // section — and view proves all four (test/connectTableEditing.test.ts › the keyboard cannot
+  // disagree with the menu). What is checkable here is table-main's half: that it describes none
+  // of its own. The old code computed enablement twice — buildContextMenuItems for the menu, a
+  // ternary over _canCopy/_canDelete for the chord — with a comment promising they matched.
   const src = blankCommentsAndKeepLines(
     readFileSync(fileURLToPath(new URL('../src/webview/table-main.ts', import.meta.url)), 'utf8'),
   );
-  const editing = blankCommentsAndKeepLines(
-    readFileSync(fileURLToPath(new URL('../node_modules/data-explorer-view/dist/widgets/tree-table/editingWire.js', import.meta.url)), 'utf8'),
-  );
 
-  it('builds the menu in exactly one place', () => {
-    expect(src, 'table-main builds no menu and answers no chord of its own').not.toMatch(/buildContextMenuItems|resolveShortcutAction|menuFor\(/);
-    expect(editing.match(/buildContextMenuItems\(/g) ?? []).toHaveLength(1);
+  it('table-main builds no menu of its own', () => {
+    expect(src).not.toMatch(/buildContextMenuItems|menuFor\(/);
   });
 
-  it('gates every chord on the item that chord would click', () => {
-    expect(editing).toContain("find((i) => i.id === action)");
-    expect(editing).toContain("find((i) => i.id === 'locateInText')");
+  it('table-main answers no chord of its own', () => {
+    expect(src).not.toMatch(/resolveShortcutAction|addEventListener\('keydown'/);
   });
 
-  it('re-derives no capability of its own', () => {
+  it('table-main reads no capability flag of its own', () => {
     for (const flag of ['_canCopy', '_canDelete', '_canAddChild']) {
       expect(src, `table-main reads ${flag} again`).not.toContain(flag);
-      expect(editing, `the editing half reads ${flag} again`).not.toContain(flag);
     }
   });
 
-  it('resolves a paste target through operands.ts, never a parent lookup of its own', () => {
-    // The other half of "one answer to which rows this acts on": the DESTINATION. A row's
-    // section is a whole-chain walk (sectionRowIdOf), mirroring the host's
-    // findOwningEntry(node).parent. Reading the row's immediate `parent` instead answered
-    // null for a nested bus element, and null reads as "no destination" — so Paste greyed
-    // out on a child while the host would have accepted it, with no reason shown.
-    expect(editing, 'the walk comes from operands.ts').toContain('sectionRowIdOf(');
-    expect(editing, 'the editing half walks to a section itself').not.toMatch(/sectionNameFromRowId\([^)]*parent/);
-    expect(src, 'table-main walks to a section itself').not.toMatch(/sectionNameFromRowId|sectionRowIdOf/);
+  it('table-main walks to no section of its own', () => {
+    // A row's section is a whole-chain walk (view's sectionRowIdOf). Reading the row's immediate
+    // `parent` instead answered null for a nested bus element, and null reads as "no destination"
+    // — so Paste greyed out on a child while the host would have accepted it.
+    expect(src).not.toMatch(/sectionNameFromRowId|sectionRowIdOf/);
   });
 });
