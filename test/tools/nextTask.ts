@@ -1,8 +1,7 @@
 // Copyright 2026 The MathWorks, Inc.
 //
 // What a webview test sees at the start of the next task after it delivers a message: the tool
-// behind the "lands in the task that delivers it" pins (answersLandInTheirTask.test.ts,
-// firstPaintEditingState.test.ts).
+// behind the "lands in the task that delivers it" pin (answersLandInTheirTask.test.ts).
 import { expect } from 'vitest';
 
 /**

@@ -25,6 +25,10 @@
 // Driven against the SHIPPED table-main, with the REAL rows the host builds from the real
 // fixture, for the reason linkRoute.test.ts is: rows rewritten here would keep the
 // collision only as long as someone remembered to, and the collision is the whole test.
+//
+// What stays here is the shell's half: table-main hands the host's selectByName to the table.
+// The rule itself, for a local click, a host's selectByName and the nested fallback, is
+// connectTable's, and view proves it (test/connectTableRepaints.test.ts).
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 // join(import.meta.dirname, …), not fileURLToPath(import.meta.url): under happy-dom
@@ -101,8 +105,8 @@ describe('a by-name navigation selects the definition, not a same-named child', 
     posted.filter((m) => m.type === 'select').map((m) => (m.rowIds as string[]).join());
 
   it('is a fixture where the name really is spelled twice', () => {
-    // If this ever stops holding, the two tests below pass for the wrong reason — they would
-    // be asserting the only row there is. The Data Type cell is read from the row too, so
+    // If this ever stops holding, the test below passes for the wrong reason — it would be
+    // asserting the only row there is. The Data Type cell is read from the row too, so
     // this also names where the click comes from: the ELEMENT's cell, pointing at the ENTRY.
     const ids = rows.filter((r) => r.Name?.label === 'ValueType').map((r) => r.ID);
     expect(ids).toEqual([ELEMENT_ROW, ENTRY_ROW]);
@@ -113,31 +117,14 @@ describe('a by-name navigation selects the definition, not a same-named child', 
     });
   });
 
-  it('selects the entry for a local Data Type click', () => {
-    // The reported bug, with the target taken from the cell rather than written out here.
-    const target = rows.find((r) => r.ID === ELEMENT_ROW).DataType.linkTarget as string;
-    table.dispatchEvent(new CustomEvent('dex-link-clicked', { detail: { target } }));
-    expect(selected()).toEqual([ENTRY_ROW]);
-  });
-
   it('answers a host selectByName the same way', () => {
-    // The other path to the same matcher: a cross-file link, a Property Inspector click, and
-    // the global entry search all arrive as this message instead. They must agree — one rule
-    // reached by two paths is where this class of bug lives, and a fix on the local path
-    // alone would leave every Data Type link clicked in the Properties pane still dead.
+    // A cross-file link, a Property Inspector click, and the global entry search all arrive as
+    // this message, which table-main hands to the table. It must reach the same matcher as a
+    // local click: a fix on the local path alone would leave every Data Type link clicked in
+    // the Properties pane still dead.
     window.dispatchEvent(
       new MessageEvent('message', { data: { type: 'selectByName', name: 'ValueType' } }),
     );
     expect(selected()).toEqual([ENTRY_ROW]);
-  });
-
-  it('still selects a nested row when no entry has the name', () => {
-    // The fallback, and the reason the entry pass is a PREFERENCE rather than a filter: a
-    // pre-SID block target names a row deep in the block tree, and gating on entries alone
-    // would turn those clicks into silent no-ops.
-    window.dispatchEvent(
-      new MessageEvent('message', { data: { type: 'selectByName', name: 'Element' } }),
-    );
-    expect(selected()).toEqual([`${HERE}/arch/StructType/Element`]);
   });
 });

@@ -1,31 +1,22 @@
 // Copyright 2026 The MathWorks, Inc.
 // @vitest-environment happy-dom
 //
-// The floating shell around the grid. Two things here are easy to get subtly
-// wrong and both are user-visible: dismissal (a popover that outlives the rows
-// it describes shows stale data) and focus return (a keyboard user who opens the
-// editor and closes it must land back on the glyph, not at the top of the tree).
-//
-// happy-dom has no layout engine, so every element's getBoundingClientRect() is
-// all zeros. Positioning tests therefore stub the rects they care about, which
-// is enough to pin the ARITHMETIC — the only part this file owns.
+// The inspector webview's Variable Editor, over the VS Code port. The editor itself, its glyph
+// and connectInspector's wiring are view's, and view proves them (test/variableEditorWidget.test.ts,
+// test/matrixOpenGlyph.test.ts, test/connectInspector.test.ts). What stays here is vscodePort.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   DexVariableEditor,
   defineVariableEditor,
-  type MatrixCellsAnswer,
   type MatrixDescriptor,
   type MatrixPayload,
   DexMatrixGrid,
 } from 'data-explorer-view/variable-editor';
-import type { MatrixCellsMessage } from '../src/common/protocol.js';
-import { DexMatrixOpen, defineMatrixOpen } from 'data-explorer-view/tree-table';
 import { connectInspector } from 'data-explorer-view/property-inspector';
 import { inspectorFeed } from 'data-explorer-view/model';
 import { vscodePort } from '../src/webview/vscodePort.js';
 
 defineVariableEditor();
-defineMatrixOpen();
 
 const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
@@ -55,540 +46,24 @@ function cells(matrix: MatrixPayload): any {
   return { type: 'matrixCells', nodeId: matrix.nodeId, matrix };
 }
 
-// A focusable stand-in for the glyph, so focus-return is observable.
-function makeAnchor(rect?: Partial<DOMRect>): HTMLElement {
+// A focusable stand-in for the glyph the editor is anchored on.
+function makeAnchor(): HTMLElement {
   anchor = document.createElement('button');
   anchor.textContent = 'open';
   document.body.appendChild(anchor);
-  if (rect) {
-    const full = { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, ...rect };
-    anchor.getBoundingClientRect = () => ({ ...full, toJSON: () => full }) as DOMRect;
-  }
   return anchor;
-}
-
-// Open and let the cells arrive, which is what the user sees happen. The two
-// steps are separable and `fetching on open` below drives them apart.
-async function open(matrix = payload(), rect?: Partial<DOMRect>): Promise<DexVariableEditor> {
-  editor = new DexVariableEditor();
-  document.body.appendChild(editor);
-  await editor.updateComplete;
-  editor.show(makeAnchor(rect), matrix);
-  await frame();
-  await editor.deliver(cells(matrix));
-  await editor.updateComplete;
-  return editor;
 }
 
 function grid(el: DexVariableEditor): DexMatrixGrid {
   return el.shadowRoot!.querySelector('dex-matrix-grid') as DexMatrixGrid;
 }
 
-function docKey(k: string): void {
-  document.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
-}
-
-describe('opening and closing', () => {
-  it('is closed and renders nothing before show()', async () => {
-    editor = new DexVariableEditor();
-    document.body.appendChild(editor);
-    await editor.updateComplete;
-    expect(editor.hasAttribute('open')).toBe(false);
-    expect(editor.shadowRoot!.querySelector('dex-matrix-grid')).toBeNull();
-  });
-
-  it('marks itself open and hands the payload to the grid', async () => {
-    const el = await open(payload({ dims: [2, 3], cells: ['1', '2', '3', '4', '5', '6'] }));
-    expect(el.hasAttribute('open')).toBe(true);
-    expect(grid(el).matrix!.cells).toEqual(['1', '2', '3', '4', '5', '6']);
-  });
-
-  it('titles itself name — dims class, the way MATLAB describes a variable', async () => {
-    const el = await open(payload({ name: 'ParamMat.Value', className: 'double', dims: [2, 3], cells: ['1', '2', '3', '4', '5', '6'] }));
-    expect(el.shadowRoot!.querySelector('.title')!.textContent!.trim()).toBe('ParamMat.Value — 2x3 double');
-  });
-
-  it('titles an N-D variable with every extent', async () => {
-    const el = await open(payload({ name: 'Nd', dims: [2, 2, 2], cells: ['1', '2', '3', '4', '5', '6', '7', '8'] }));
-    expect(el.shadowRoot!.querySelector('.title')!.textContent!.trim()).toBe('Nd — 2x2x2 double');
-  });
-
-  it('closes on Escape and returns focus to the anchor', async () => {
-    const el = await open();
-    docKey('Escape');
-    await el.updateComplete;
-    expect(el.hasAttribute('open')).toBe(false);
-    expect(document.activeElement).toBe(anchor);
-  });
-
-  it('closes on Escape and on nothing else, so the grid keeps its own keys', async () => {
-    // The keydown listener is on the DOCUMENT, so it sees every key the user
-    // presses inside the grid too. Closing on anything but Escape would shut the
-    // editor on the first ArrowRight and make a matrix impossible to walk.
-    const el = await open();
-    const closedBy: string[] = [];
-    for (const k of ['ArrowRight', 'ArrowDown', 'Home', 'End', 'PageDown', 'Enter', 'Tab', 'a', 'Esc']) {
-      docKey(k);
-      await el.updateComplete;
-      if (!el.hasAttribute('open')) closedBy.push(k);
-    }
-    expect(closedBy).toEqual([]);
-  });
-
-  it('leaves no document listeners behind when it is closed before its first frame', async () => {
-    // show() defers its listeners by a frame so the click that opened the editor
-    // cannot immediately dismiss it. If the host closes the editor inside that
-    // frame — setRows does, whenever new rows arrive — the deferred work has to be
-    // abandoned: close() has already run its removeEventListener calls, so
-    // listeners added after them stay on the document for the life of the webview,
-    // and the next stray keystroke or click runs a dismissal for a dead popover.
-    editor = new DexVariableEditor();
-    document.body.appendChild(editor);
-    await editor.updateComplete;
-    editor.show(makeAnchor(), payload());
-    editor.close();
-    await frame();
-    await editor.updateComplete;
-    const spy = vi.spyOn(editor, 'close');
-    docKey('Escape');
-    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true }));
-    window.dispatchEvent(new Event('scroll'));
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it('closes on the close button and returns focus to the anchor', async () => {
-    const el = await open();
-    el.shadowRoot!.querySelector<HTMLButtonElement>('.close')!.click();
-    await el.updateComplete;
-    expect(el.hasAttribute('open')).toBe(false);
-    expect(document.activeElement).toBe(anchor);
-  });
-
-  it('closes on an outside mousedown but NOT on one inside itself', async () => {
-    const el = await open();
-    el.shadowRoot!.querySelector('.panel')!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true }));
-    expect(el.hasAttribute('open')).toBe(true);
-    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true }));
-    await el.updateComplete;
-    expect(el.hasAttribute('open')).toBe(false);
-  });
-
-  it('closes when close() is called directly, e.g. because new rows arrived', async () => {
-    const el = await open();
-    el.close();
-    await el.updateComplete;
-    expect(el.hasAttribute('open')).toBe(false);
-  });
-
-  it('does not steal focus back on a close it did not cause', async () => {
-    // setRows closes the editor while the user is somewhere else entirely.
-    // Yanking focus to a glyph that may no longer exist would be worse than
-    // leaving it where it is, so focus returns only when focus is still inside.
-    const el = await open();
-    const elsewhere = document.createElement('input');
-    document.body.appendChild(elsewhere);
-    elsewhere.focus();
-    el.close();
-    await el.updateComplete;
-    expect(document.activeElement).toBe(elsewhere);
-    elsewhere.remove();
-  });
-
-  it('unhooks its document listeners on close', async () => {
-    // A leaked keydown listener would close the NEXT editor instantly.
-    const el = await open();
-    el.close();
-    await el.updateComplete;
-    const spy = vi.spyOn(el, 'close');
-    docKey('Escape');
-    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, composed: true }));
-    expect(spy).not.toHaveBeenCalled();
-  });
-
-  it('reopening on a second anchor swaps the payload and the focus-return target', async () => {
-    const el = await open(payload({ name: 'First' }));
-    const second = document.createElement('button');
-    document.body.appendChild(second);
-    const next = payload({ name: 'Second', dims: [1, 2], nodeId: 'n2', cells: ['9', '8'] });
-    el.show(second, next);
-    await frame();
-    await el.deliver(cells(next));
-    await el.updateComplete;
-    expect(el.shadowRoot!.querySelector('.title')!.textContent!.trim()).toBe('Second — 1x2 double');
-    expect(grid(el).matrix!.cells).toEqual(['9', '8']);
-    docKey('Escape');
-    await el.updateComplete;
-    expect(document.activeElement).toBe(second);
-    second.remove();
-  });
-});
-
-describe('the cells are fetched when the panel opens, not carried by the row', () => {
-  // The reason the whole split exists: a 1000x1000 entry is 4 MB of cell strings
-  // and ~240 ms to produce. Stamped onto a row that is merely VISIBLE, that cost
-  // is paid per row — and paid again on every re-sort, re-filter and repaint, for
-  // a panel the user may never open. So a row carries the descriptor, show()
-  // opens on the descriptor alone, and deliver() fills the panel in when the host
-  // answers. Everything here is about the window in between.
-  async function showOnly(d: MatrixDescriptor = descriptor()): Promise<DexVariableEditor> {
-    editor = new DexVariableEditor();
-    document.body.appendChild(editor);
-    await editor.updateComplete;
-    editor.show(makeAnchor(), d);
-    await frame();
-    await editor.updateComplete;
-    return editor;
-  }
-
-  it('takes the host’s own envelope, mirrored not re-invented', () => {
-    // The third copy of this shape (host MatrixCellsMessage, protocol union,
-    // component MatrixCellsAnswer) and the one a component cannot import. A compile
-    // error here is the only thing that catches the host renaming a field: at
-    // runtime a `cells` that arrived under another name is just a panel that says
-    // it could not read a matrix it read perfectly well.
-    const fromHost: MatrixCellsMessage = {
-      type: 'matrixCells',
-      nodeId: 'n1',
-      matrix: { name: 'A', className: 'double', dims: [1, 2], nodeId: 'n1', cells: ['1', '2'] },
-    };
-    const asComponent: MatrixCellsAnswer = fromHost;
-    expect(asComponent.matrix!.cells).toEqual(['1', '2']);
-    const refused: MatrixCellsAnswer = { type: 'matrixCells', nodeId: 'n1', message: 'nope' } as MatrixCellsMessage;
-    expect(refused.message).toBe('nope');
-  });
-
-  it('opens titled and waiting, with no grid and no empty table', async () => {
-    // The title comes from the descriptor, so the panel names the right variable
-    // before any cells exist. What must NOT appear is a grid: an empty bordered
-    // table reads as a matrix that is genuinely empty, which is a wrong answer
-    // rather than a pending one — and on the 1000x1000 entry this feature was
-    // built for, building one from a cell-less descriptor lays out a million blank
-    // boxes. (The dims here are small on purpose: a regression should fail this
-    // assertion, not exhaust the heap and take the readable failure with it.)
-    const el = await showOnly(descriptor({ name: 'Kp', dims: [8, 5] }));
-    expect(el.hasAttribute('open')).toBe(true);
-    expect(el.shadowRoot!.querySelector('.title')!.textContent!.trim()).toBe('Kp — 8x5 double');
-    expect(el.shadowRoot!.querySelector('dex-matrix-grid')).toBeNull();
-    const status = el.shadowRoot!.querySelector('.status')!;
-    expect(status).not.toBeNull();
-    // Announced, because for a big matrix the wait is long enough to notice.
-    expect(status.getAttribute('role')).toBe('status');
-    expect(status.textContent!.trim().length).toBeGreaterThan(0);
-  });
-
-  it('shows the grid once the cells arrive, and drops the waiting line', async () => {
-    const el = await showOnly();
-    await el.deliver(cells(payload()));
-    await el.updateComplete;
-    expect(grid(el).matrix!.cells).toEqual(['1', '2', '3', '4']);
-    expect(el.shadowRoot!.querySelector('.status')).toBeNull();
-  });
-
-  it('ignores an answer about a different node, which is what a late one is', async () => {
-    // Open A, change your mind, open B: A's answer can still be in flight. Taking
-    // it would put A's numbers under B's title — a confidently wrong table, the
-    // one outcome worse than a slow one.
-    const el = await showOnly(descriptor({ name: 'B', nodeId: 'n2' }));
-    await el.deliver(cells(payload({ name: 'A', nodeId: 'n1' })));
-    await el.updateComplete;
-    expect(el.shadowRoot!.querySelector('dex-matrix-grid')).toBeNull();
-    expect(el.shadowRoot!.querySelector('.title')!.textContent!.trim()).toBe('B — 2x2 double');
-    expect(el.shadowRoot!.querySelector('.status')).not.toBeNull();
-  });
-
-  it('says why when the host could not read it, rather than waiting forever', async () => {
-    // matrixCellsMessage's other branch. The glyph answers to the same gate as the
-    // payload but cannot run it (see matrixPayload.ts), so a descriptor CAN exist
-    // for a matrix whose cells will not lay out. The panel has to say so.
-    const el = await showOnly();
-    await el.deliver({ type: 'matrixCells', nodeId: 'n1', message: 'This value could not be read as a table.' });
-    await el.updateComplete;
-    expect(el.shadowRoot!.querySelector('dex-matrix-grid')).toBeNull();
-    expect(el.shadowRoot!.querySelector('.status')!.textContent!.trim())
-      .toBe('This value could not be read as a table.');
-  });
-
-  it('does not reopen itself when an answer arrives after it was closed', async () => {
-    // setRows closes the editor whenever new rows arrive, which can easily land
-    // between the request and the answer. A panel that popped back up on its own,
-    // over data that has since been replaced, would be a ghost.
-    const el = await showOnly();
-    el.close();
-    await el.updateComplete;
-    await el.deliver(cells(payload()));
-    await el.updateComplete;
-    expect(el.hasAttribute('open')).toBe(false);
-    expect(el.shadowRoot!.querySelector('dex-matrix-grid')).toBeNull();
-  });
-
-  it('goes back to waiting when it is reopened on another matrix', async () => {
-    // One editor instance serves every opening. Without the reset, the second
-    // opening would show the FIRST matrix's cells under the second one's title for
-    // as long as the fetch takes.
-    const el = await open(payload({ name: 'First' }));
-    expect(grid(el).matrix!.cells).toEqual(['1', '2', '3', '4']);
-    el.show(makeAnchor(), descriptor({ name: 'Second', nodeId: 'n2' }));
-    await el.updateComplete;
-    expect(el.shadowRoot!.querySelector('dex-matrix-grid')).toBeNull();
-    expect(el.shadowRoot!.querySelector('.title')!.textContent!.trim()).toBe('Second — 2x2 double');
-  });
-
-  it('repositions after the cells arrive, because the panel just grew', async () => {
-    // show() clamps a one-line "loading" box into the viewport. The grid that
-    // replaces it is up to 640x320, so a panel that fitted while waiting can hang
-    // off the bottom of the window once filled unless the arithmetic is re-run.
-    const el = await showOnly();
-    const spy = vi.spyOn(el, 'reposition');
-    await el.deliver(cells(payload()));
-    expect(spy).toHaveBeenCalled();
-  });
-
-  it('survives an answer that arrives before the opening frame', async () => {
-    // The host can answer synchronously-fast; nothing orders its reply after the
-    // frame show() queues. Both halves have to be able to run first.
-    editor = new DexVariableEditor();
-    document.body.appendChild(editor);
-    await editor.updateComplete;
-    editor.show(makeAnchor(), descriptor());
-    await editor.deliver(cells(payload()));
-    await frame();
-    await editor.updateComplete;
-    expect(editor.hasAttribute('open')).toBe(true);
-    expect(grid(editor).matrix!.cells).toEqual(['1', '2', '3', '4']);
-  });
-
-  it('never throws on a malformed answer, whatever the host sent', async () => {
-    const el = await showOnly();
-    for (const bad of [undefined, null, {}, { nodeId: 'n1' }, { nodeId: 'n1', matrix: null }]) {
-      await expect(el.deliver(bad as any)).resolves.toBeUndefined();
-    }
-    expect(el.hasAttribute('open')).toBe(true);
-  });
-});
-
-describe('focus goes into the grid so the arrow keys work immediately', () => {
-  it('focuses the first cell when the cells arrive', async () => {
-    // Deliberately on DELIVERY, not on show(): at show() time there is no grid to
-    // focus, and a keyboard user who pressed Enter on the glyph must still end up
-    // on cell (1,1) without a second keystroke.
-    const el = await open();
-    expect(grid(el).shadowRoot!.activeElement!.textContent!.trim()).toBe('1');
-  });
-
-  it('leaves Escape working from inside the grid', async () => {
-    // The grid deliberately does not handle Escape; this is the other half of
-    // that contract, asserted from the shell's side.
-    const el = await open();
-    grid(el).shadowRoot!.activeElement!.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, composed: true, cancelable: true }),
-    );
-    await el.updateComplete;
-    expect(el.hasAttribute('open')).toBe(false);
-  });
-});
-
-describe('positioning is below-left of the anchor, clamped into the viewport', () => {
-  const viewport = (w: number, h: number) => {
-    Object.defineProperty(window, 'innerWidth', { value: w, configurable: true });
-    Object.defineProperty(window, 'innerHeight', { value: h, configurable: true });
-  };
-
-  // The panel's own size has to be stubbed too — happy-dom reports 0x0.
-  function stubPanel(el: DexVariableEditor, width: number, height: number): void {
-    const panel = el.shadowRoot!.querySelector('.panel') as HTMLElement;
-    const r = { x: 0, y: 0, top: 0, left: 0, right: width, bottom: height, width, height };
-    panel.getBoundingClientRect = () => ({ ...r, toJSON: () => r }) as DOMRect;
-  }
-
-  it('sits 4px below the anchor, left edges aligned', async () => {
-    viewport(1000, 800);
-    editor = new DexVariableEditor();
-    document.body.appendChild(editor);
-    await editor.updateComplete;
-    const a = makeAnchor({ left: 100, right: 116, top: 200, bottom: 216, width: 16, height: 16 });
-    editor.show(a, payload());
-    await editor.updateComplete;
-    stubPanel(editor, 200, 150);
-    editor.reposition();
-    expect(editor.style.left).toBe('100px');
-    expect(editor.style.top).toBe('220px');
-  });
-
-  it('pulls left when the panel would run off the right edge', async () => {
-    viewport(400, 800);
-    editor = new DexVariableEditor();
-    document.body.appendChild(editor);
-    await editor.updateComplete;
-    editor.show(makeAnchor({ left: 350, right: 366, top: 100, bottom: 116, width: 16, height: 16 }), payload());
-    await editor.updateComplete;
-    stubPanel(editor, 200, 150);
-    editor.reposition();
-    expect(editor.style.left).toBe('192px');   // 400 - 200 - 8
-  });
-
-  it('flips above the anchor when there is no room below', async () => {
-    viewport(1000, 300);
-    editor = new DexVariableEditor();
-    document.body.appendChild(editor);
-    await editor.updateComplete;
-    editor.show(makeAnchor({ left: 10, right: 26, top: 250, bottom: 266, width: 16, height: 16 }), payload());
-    await editor.updateComplete;
-    stubPanel(editor, 200, 150);
-    editor.reposition();
-    expect(editor.style.top).toBe('96px');     // 250 - 150 - 4
-  });
-
-  it('never positions off the top-left, even with no room anywhere', async () => {
-    viewport(120, 100);
-    editor = new DexVariableEditor();
-    document.body.appendChild(editor);
-    await editor.updateComplete;
-    editor.show(makeAnchor({ left: 4, right: 20, top: 4, bottom: 20, width: 16, height: 16 }), payload());
-    await editor.updateComplete;
-    stubPanel(editor, 400, 300);
-    editor.reposition();
-    expect(Number.parseInt(editor.style.left, 10)).toBeGreaterThanOrEqual(0);
-    expect(Number.parseInt(editor.style.top, 10)).toBeGreaterThanOrEqual(0);
-  });
-
-  it('is a no-op when there is nothing on screen to position', async () => {
-    // reposition() is public and there is no guarantee the panel exists when it is
-    // called: a frame queued by show() can land after a close, and the panel only
-    // exists while open. Measuring a panel or an anchor that is not there throws
-    // inside whichever handler made the call — for the queued frame, that is an
-    // unhandled error with no stack the user could act on.
-    editor = new DexVariableEditor();
-    document.body.appendChild(editor);
-    await editor.updateComplete;
-    expect(() => editor!.reposition()).not.toThrow();
-    expect(editor.style.left).toBe('');
-    // Same again once it has been open and closed, which is the path that happens.
-    editor.show(makeAnchor(), payload());
-    editor.close();
-    await editor.updateComplete;
-    expect(() => editor!.reposition()).not.toThrow();
-  });
-
-  it('closes on a scroll anywhere, rather than floating away from its anchor', async () => {
-    const el = await open();
-    window.dispatchEvent(new Event('scroll'));
-    await el.updateComplete;
-    expect(el.hasAttribute('open')).toBe(false);
-  });
-});
-
-describe('the glyph is an affordance, not an opener', () => {
-  let glyph: DexMatrixOpen | null = null;
-
-  afterEach(() => {
-    glyph?.remove();
-    glyph = null;
-  });
-
-  // A DESCRIPTOR, not a payload: the glyph is rendered once per matrix-valued row
-  // in the table, so what it holds is what every such row costs. It needs the
-  // name, the shape and the class for its label and tooltip, and nothing else.
-  async function makeGlyph(over: Partial<MatrixDescriptor> = {}, rowId?: string): Promise<DexMatrixOpen> {
-    glyph = new DexMatrixOpen();
-    glyph.matrix = descriptor(over);
-    if (rowId !== undefined) {
-      glyph.rowId = rowId;
-    }
-    document.body.appendChild(glyph);
-    await glyph.updateComplete;
-    return glyph;
-  }
-
-  function events(el: DexMatrixOpen): any[] {
-    const seen: any[] = [];
-    el.addEventListener('dex-matrix-open', (e) => seen.push((e as CustomEvent).detail));
-    return seen;
-  }
-
-  it('renders nothing without a payload, so a non-matrix row costs no DOM', async () => {
-    glyph = new DexMatrixOpen();
-    document.body.appendChild(glyph);
-    await glyph.updateComplete;
-    expect(glyph.shadowRoot!.querySelector('a')).toBeNull();
-  });
-
-  it('renders the wsTable icon inside a focusable control', async () => {
-    const el = await makeGlyph();
-    const a = el.shadowRoot!.querySelector<HTMLAnchorElement>('a')!;
-    expect(a.tabIndex).toBe(0);
-    expect(a.getAttribute('aria-label')).toBe('Open A in the Variable Editor');
-    expect(el.shadowRoot!.querySelector('dex-icon')!.iconId).toBe('wsTable');
-  });
-
-  it('dispatches the descriptor, itself as the anchor, and the row id', async () => {
-    const el = await makeGlyph({ name: 'Mat', nodeId: 'node-42' }, 'row-7');
-    const seen = events(el);
-    el.shadowRoot!.querySelector<HTMLAnchorElement>('a')!.click();
-    expect(seen.length).toBe(1);
-    expect(seen[0].matrix.name).toBe('Mat');
-    // The node id travels with it, because the event is what starts the fetch:
-    // connectTable / connectInspector turn this into a `requestMatrix` for exactly this node.
-    expect(seen[0].matrix.nodeId).toBe('node-42');
-    expect('cells' in seen[0].matrix).toBe(false);
-    expect(seen[0].anchorEl).toBe(el);
-    expect(seen[0].rowId).toBe('row-7');
-  });
-
-  it('omits rowId when there is none — the PI has no rows', async () => {
-    const el = await makeGlyph();
-    const seen = events(el);
-    el.shadowRoot!.querySelector<HTMLAnchorElement>('a')!.click();
-    expect(seen[0].rowId).toBeUndefined();
-  });
-
-  it('bubbles and crosses the shadow boundary, so one listener per webview suffices', async () => {
-    const el = await makeGlyph();
-    const seen: any[] = [];
-    document.addEventListener('dex-matrix-open', (e) => seen.push((e as CustomEvent).detail), { once: true });
-    el.shadowRoot!.querySelector<HTMLAnchorElement>('a')!.click();
-    expect(seen.length).toBe(1);
-  });
-
-  it('swallows the click so the table does not also select or start an edit', async () => {
-    // The glyph sits inside a Value cell whose dblclick/Enter start editing and
-    // whose click selects the row. Both must stay unaware of this click.
-    const el = await makeGlyph();
-    let reachedParent = false;
-    document.body.addEventListener('click', () => { reachedParent = true; }, { once: true });
-    const ev = new MouseEvent('click', { bubbles: true, composed: true, cancelable: true });
-    el.shadowRoot!.querySelector<HTMLAnchorElement>('a')!.dispatchEvent(ev);
-    expect(ev.defaultPrevented).toBe(true);
-    expect(reachedParent).toBe(false);
-  });
-
-  it('opens on Enter and on Space, and ignores other keys', async () => {
-    const el = await makeGlyph();
-    const seen = events(el);
-    const a = el.shadowRoot!.querySelector<HTMLAnchorElement>('a')!;
-    for (const key of ['Enter', ' ']) {
-      a.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, composed: true, cancelable: true }));
-    }
-    expect(seen.length).toBe(2);
-    a.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, composed: true, cancelable: true }));
-    expect(seen.length).toBe(2);
-  });
-
-  it('forwards focus() to its inner control, so the shell can hand focus back', async () => {
-    // close() calls anchorEl.focus(). Without this override that focuses the
-    // host, which is not focusable, and focus would land on <body>.
-    const el = await makeGlyph();
-    el.focus();
-    expect(el.shadowRoot!.activeElement).toBe(el.shadowRoot!.querySelector('a'));
-  });
-});
-
 describe("the inspector webview's wiring: view's connectInspector over the VS Code port", () => {
-  // It owns BOTH directions: the glyph's event out as a `requestMatrix`, and the host's
-  // `matrixCells` back in as a deliver(). Keeping the pair in one place is the point — a
-  // webview that asked but never listened would open a panel that waits forever, and that is
-  // exactly the kind of half-wiring this repo has shipped before when two mains each did their
-  // own. Both mains now take it from view (connectTable for the table, connectInspector here);
-  // this drives the inspector's, through the port pi-main.ts gives it.
+  // connectInspector owns both directions: the glyph's event out as a `requestMatrix`, and the
+  // host's `matrixCells` back in as a deliver(). view proves that over a plain port
+  // (test/connectInspector.test.ts); this drives it through the port pi-main.ts gives it,
+  // vscodePort, which these three are the only tests of: its postMessage out, its window
+  // listener in, and that listener's removal.
   let source: HTMLElement | null = null;
   let posted: any[] = [];
 
@@ -600,21 +75,17 @@ describe("the inspector webview's wiring: view's connectInspector over the VS Co
 
   const post = (m: unknown) => { posted.push(m); };
 
-  async function wire(withEditor = true) {
+  async function wire() {
     source = document.createElement('div');
     document.body.appendChild(source);
-    if (withEditor) {
-      editor = new DexVariableEditor();
-      document.body.appendChild(editor);
-      await editor.updateComplete;
-    }
+    editor = new DexVariableEditor();
+    document.body.appendChild(editor);
+    await editor.updateComplete;
     const feed = inspectorFeed(vscodePort({ postMessage: post }));
-    const handle = connectInspector(source as any, feed, { variableEditor: withEditor ? editor! : undefined, empty: () => {} });
+    const handle = connectInspector(source as any, feed, { variableEditor: editor, empty: () => {} });
     // What connecting says first: the inspector is up (`ready`). The tests are about what follows.
     posted.length = 0;
     return {
-      // A page, which is what closes a grid this inspector opened: the host's showProps or empty.
-      page: () => hostSays({ type: 'empty' }),
       dispose: () => {
         handle.dispose();
         feed.dispose();
@@ -629,16 +100,6 @@ describe("the inspector webview's wiring: view's connectInspector over the VS Co
   function hostSays(data: any): void {
     window.dispatchEvent(new MessageEvent('message', { data }));
   }
-
-  it('opens the editor on the event, anchored on the glyph that fired it', async () => {
-    const handle = await wire();
-    fire({ matrix: descriptor({ name: 'Mat' }), anchorEl: makeAnchor() });
-    await frame();
-    await editor!.updateComplete;
-    expect(editor!.hasAttribute('open')).toBe(true);
-    expect(editor!.shadowRoot!.querySelector('.title')!.textContent!.trim()).toBe('Mat — 2x2 double');
-    handle.dispose();
-  });
 
   it('asks the host for the cells of exactly the node that was opened', async () => {
     const handle = await wire();
@@ -657,70 +118,6 @@ describe("the inspector webview's wiring: view's connectInspector over the VS Co
     await editor!.updateComplete;
     expect(grid(editor!).matrix!.cells).toEqual(['1', '2', '3', '4']);
     handle.dispose();
-  });
-
-  it('leaves every other host message alone', async () => {
-    // The same window listener sees setRows, showProps, every message the webview
-    // gets. Reacting to one of those would hand the editor a payload-shaped thing
-    // that is not one.
-    const handle = await wire();
-    fire({ matrix: descriptor(), anchorEl: makeAnchor() });
-    await frame();
-    const spy = vi.spyOn(editor!, 'deliver');
-    for (const data of [undefined, null, 'matrixCells', { type: 'setRows', rows: [] }, { type: 'empty' }]) {
-      expect(() => hostSays(data)).not.toThrow();
-    }
-    await frame();
-    expect(spy).not.toHaveBeenCalled();
-    handle.dispose();
-  });
-
-  it('closes on the next page, which is what showProps and empty are', async () => {
-    const handle = await wire();
-    fire({ matrix: descriptor(), anchorEl: makeAnchor() });
-    await frame();
-    handle.page();
-    await editor!.updateComplete;
-    expect(editor!.hasAttribute('open')).toBe(false);
-    handle.dispose();
-  });
-
-  it('ignores an event with no descriptor, and asks for nothing', async () => {
-    const handle = await wire();
-    fire({ anchorEl: makeAnchor() });
-    await frame();
-    await editor!.updateComplete;
-    expect(editor!.hasAttribute('open')).toBe(false);
-    expect(posted).toEqual([]);
-    handle.dispose();
-  });
-
-  it('asks for nothing when the descriptor carries no node id', async () => {
-    // Nothing to fetch with. Opening a panel that can never be answered is worse
-    // than not opening one, so neither happens.
-    const handle = await wire();
-    fire({ matrix: { name: 'A', className: 'double', dims: [2, 2] }, anchorEl: makeAnchor() });
-    await frame();
-    await editor!.updateComplete;
-    expect(posted).toEqual([]);
-    expect(editor!.hasAttribute('open')).toBe(false);
-    handle.dispose();
-  });
-
-  // The first cut of this wiring took the editor from a tag in src/webview/table.html — but that
-  // file is only vite's dev entry, and the shells the hosts build had none, so the element was
-  // null and the table came up EMPTY. pi-main.ts makes its editor and passes it; with none
-  // passed, connectInspector makes one, so a page without the tag still has its glyph.
-  it('makes an editor of its own when the page passes none', async () => {
-    const handle = await wire(false);
-    fire({ matrix: descriptor({ name: 'Own' }), anchorEl: makeAnchor() });
-    await frame();
-    const made = document.body.querySelector('dex-variable-editor') as DexVariableEditor;
-    await made.updateComplete;
-    expect(made.hasAttribute('open')).toBe(true);
-    expect(posted).toEqual([{ type: 'requestMatrix', nodeId: descriptor().nodeId }]);
-    handle.dispose();
-    expect(document.body.querySelector('dex-variable-editor')).toBeNull();
   });
 
   it('stops listening in both directions after dispose', async () => {

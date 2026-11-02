@@ -1,9 +1,13 @@
 // Copyright 2026 The MathWorks, Inc.
-// Parity check: run the extension's TWO parsers against REAL MATLAB-generated
-// files and compare to the generator's ground_truth.json.
+// Parity check: read REAL MATLAB-generated dictionaries the way the host does and compare
+// their content to the generator's ground_truth.json: params.sldd, in both on-disk formats,
+// through view's host entry (getModel / getModelFromBytes) and core's DataModel.
 //
-//   Tier-1 (quick) parser -> tree/relationships  (view's graphSources + graphModel)
-//   Tier-2 (detailed) parser -> table/content    (DataModel + node tree)
+// The rest of what this file once checked is proven upstream: the relationships the tree
+// draws (Phase 1) by view's test/hierarchyParity.test.ts over the same artifacts, the two
+// formats of params.sldd agreeing by view's test/parity/paramsTextBinary.test.ts, and the MAT
+// and model content (Phase 4) by core's .slx layout parity. These content checks are being
+// ported into core verbatim (task B2.9), and retire when they land there.
 //
 // Fixtures are produced by test/parity/generate.m (run under real MATLAB) into
 // test/parity/artifacts/{text,binary}/. If they are absent the suite is skipped
@@ -11,16 +15,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { DataModel, extractSlxStructure, isModelFile, isSlddFile } from 'data-explorer-core';
-import {
-  buildGraphSource,
-  scanSldd,
-  RelGraph,
-  type GraphSource,
-} from 'data-explorer-view/model';
 import { getModel, getModelFromBytes, invalidate } from 'data-explorer-view/host';
-import { parseMat } from 'data-explorer-core';
-import { parseSlx } from 'data-explorer-core';
 
 const ART = (variant: string, name: string) =>
   fileURLToPath(new URL(`./artifacts/${variant}/${name}`, import.meta.url));
@@ -42,32 +37,6 @@ beforeAll(() => {
 });
 
 const VARIANTS = ['text', 'binary'] as const;
-const FILES = ['common.sldd', 'util.sldd', 'params.sldd', 'plant.slx', 'sub.slx', 'top.slx', 'signals.mat'];
-
-// Build a GraphSource for a file the way the extension host does: extract the
-// tier-1 artifact from the bytes, then shape a node out of it. `buildGraphSource`
-// takes artifacts and never bytes (view's graphSources.ts), so the extraction is here
-// — which is where the host does it too, inside the shared cheap tier.
-//
-// `scanSldd` covers BOTH on-disk dictionary formats behind core's own format
-// sniff, so this no longer tests the first two bytes for 'PK' itself; the
-// text/binary split is what the `variant` axis of this suite drives. It is also
-// the read the shipped cheap tier makes for a dictionary (core's `scanSldd` with
-// the same unreadable-source refusal, `dataCheapOf` in core's sourceCache.ts), so
-// what this suite holds against MATLAB's ground truth is the code that runs in the
-// extension and not a second reader written for the test.
-function graphSourceFor(variant: string, name: string): GraphSource {
-  const path = ART(variant, name);
-  const uriString = `test://${variant}/${name}`;
-  if (isSlddFile(name)) {
-    return buildGraphSource({ uriString, path: name, slddRefs: scanSldd(bytesOf(path)).refs });
-  }
-  if (isModelFile(name)) {
-    return buildGraphSource({ uriString, path: name, structure: extractSlxStructure(bytesOf(path), name) });
-  }
-  // A MAT-file inherits nothing, so there is no artifact to extract for it at all.
-  return buildGraphSource({ uriString, path: name });
-}
 
 (HAVE_FIXTURES ? describe : describe.skip)('PARITY', () => {
   if (!HAVE_FIXTURES) {
@@ -76,75 +45,6 @@ function graphSourceFor(variant: string, name: string): GraphSource {
     });
     return;
   }
-
-  // ============================================================
-  // PHASE 1 — Relationship parity (Tier-1 quick parser + RelGraph)
-  // ============================================================
-  describe.each(VARIANTS)('Phase 1: relationships [%s]', (variant) => {
-    let sources: GraphSource[];
-    let byName: Map<string, GraphSource>;
-    beforeAll(() => {
-      sources = FILES.map((f) => graphSourceFor(variant, f));
-      byName = new Map(sources.map((s) => [s.path, s]));
-    });
-
-    it('model → sldd (top.slx → params.sldd)', () => {
-      expect(byName.get('top.slx')!.dataDictionary).toBe('params.sldd');
-    });
-
-    it('model → model (top → plant, plant → sub); names normalized to .slx', () => {
-      expect(byName.get('top.slx')!.modelRefs).toContain('plant.slx');
-      expect(byName.get('plant.slx')!.modelRefs).toContain('sub.slx');
-    });
-
-    it('model → mat (top.slx → signals.mat as external data)', () => {
-      const ds = byName.get('top.slx')!.dataSources;
-      expect(ds).toContain('signals.mat');
-    });
-
-    it('sldd → sldd (params.sldd → common.sldd, util.sldd → common.sldd)', () => {
-      expect(byName.get('params.sldd')!.slddRefs).toContain('common.sldd');
-      expect(byName.get('util.sldd')!.slddRefs).toContain('common.sldd');
-    });
-
-    it('RelGraph resolves the web with top.slx as a root and no dangling missing nodes', () => {
-      const graph = new RelGraph(sources);
-      // roots() now returns group headers; the flat parity fixture (bare
-      // basenames) yields a single folder group labeled '/'. top.slx is a root
-      // within that group.
-      const group = graph.roots().find((r) => r.label === '/')!;
-      const groupRoots = graph.children(group);
-      const rootLabels = groupRoots.map((r) => r.label);
-      expect(rootLabels).toContain('top.slx');
-      // Walk children of top.slx; every ref should resolve (no 'missing').
-      const top = groupRoots.find((r) => r.label === 'top.slx')!;
-      const kids = graph.children(top);
-      const missing = kids.filter((k) => k.kind === 'missing').map((k) => k.label);
-      expect(missing).toEqual([]);
-    });
-
-    it('full tree walk from top.slx resolves every relationship (no missing anywhere)', () => {
-      const graph = new RelGraph(sources);
-      const group = graph.roots().find((r) => r.label === '/')!;
-      const top = graph.children(group).find((r) => r.label === 'top.slx')!;
-      // BFS the whole expansion tree; collect labels + any missing nodes.
-      const seenLabels = new Set<string>();
-      const missing: string[] = [];
-      const queue = [top];
-      let guard = 0;
-      while (queue.length && guard++ < 1000) {
-        const node = queue.shift()!;
-        if (node.kind === 'missing') missing.push(node.label);
-        seenLabels.add(node.label);
-        if (!node.cycle) queue.push(...graph.children(node));
-      }
-      expect(missing).toEqual([]);
-      // The tree must surface every relationship target somewhere.
-      for (const label of ['plant.slx', 'sub.slx', 'External Data', 'params.sldd', 'signals.mat', 'common.sldd']) {
-        expect(seenLabels).toContain(label);
-      }
-    });
-  });
 
   // ============================================================
   // PHASE 2 & 3 — Content parity (Tier-2 detailed parser)
@@ -243,76 +143,6 @@ function graphSourceFor(variant: string, name: string): GraphSource {
       expect(byEntry.get('MyBus').children.map((c: any) => c.name)).toEqual(['x', 'y']);
       expect(byEntry.get('MyConnBus').children.map((c: any) => c.name)).toEqual(['c1']);
       expect(byEntry.get('sig1').className).toBe('Simulink.Signal');
-    });
-  });
-
-  // ============================================================
-  // TEXT ≡ BINARY equivalence — the same dictionary in both on-disk formats
-  // must parse to identical table content. Strongest regression guard.
-  // ============================================================
-  describe('Phase 2/3: text ≡ binary content equivalence', () => {
-    it('every params.sldd entry has identical dataType + displayValue in both formats', () => {
-      const load = (variant: string) => {
-        const uri = `equiv://${variant}/params.sldd`;
-        const path = ART(variant, 'params.sldd');
-        const raw = readFileSync(path);
-        const isZip = raw[0] === 0x50 && raw[1] === 0x4b;
-        invalidate(uri);
-        const node = isZip
-          ? getModelFromBytes(uri, 'params.sldd', bytesOf(path))
-          : getModel(uri, 'params.sldd', raw.toString('utf8'));
-        const m = new Map<string, string>();
-        for (const s of node.children ?? [])
-          for (const e of s.children ?? []) {
-            let dv = '';
-            try { dv = String(e.displayValue ?? ''); } catch { dv = 'ERR'; }
-            let dt = '';
-            try { dt = String(e.className ?? ''); } catch { /* */ }
-            const kids = (e.children ?? []).map((c: any) => c.name).join(',');
-            m.set(e.name, `${dt}|${dv}|${kids}`);
-          }
-        return m;
-      };
-      const t = load('text');
-      const b = load('binary');
-      expect(Array.from(t.keys()).sort()).toEqual(Array.from(b.keys()).sort());
-      const mismatches: string[] = [];
-      for (const [name, tv] of t) {
-        if (b.get(name) !== tv) mismatches.push(`${name}: text=${tv} binary=${b.get(name)}`);
-      }
-      expect(mismatches).toEqual([]);
-    });
-  });
-
-  // ============================================================
-  // PHASE 4 — MAT + SLX content parity (Tier-2)
-  // ============================================================
-  describe.each(VARIANTS)('Phase 4: mat + slx content [%s]', (variant) => {
-    it('signals.mat variables parsed', () => {
-      const parsed = parseMat(bytesOf(ART(variant, 'signals.mat')));
-      const names = parsed.variables.filter((v) => v.name).map((v) => v.name);
-      for (const n of ['Kp', 'gainVec', 'offsetMat', 'flag', 'label']) {
-        expect(names).toContain(n);
-      }
-      const kp = parsed.variables.find((v) => v.name === 'Kp')!;
-      expect(Number(kp.value)).toBeCloseTo(2.5, 10);
-    });
-
-    it('top.slx parses dataDictionary, modelReferences, externalDataSources', () => {
-      const parsed = parseSlx(bytesOf(ART(variant, 'top.slx')), 'top.slx');
-      expect(parsed.dataDictionary).toBe('params.sldd');
-      expect(parsed.modelReferences.map((r) => r.modelName)).toContain('plant');
-      // signals.mat may be recorded as external data source
-      const ds = parsed.externalDataSources.join(',');
-      expect(ds).toContain('signals');
-    });
-
-    it('top.slx block param usages capture C1/G1/G2 → scalarD/gravity/Kp', () => {
-      const parsed = parseSlx(bytesOf(ART(variant, 'top.slx')), 'top.slx');
-      const usages = parsed.blockParamUsages ?? [];
-      const params = usages.map((u) => u.paramValue);
-      // At least the named-parameter references should appear.
-      expect(params.join(',')).toMatch(/scalarD|gravity|Kp/);
     });
   });
 });
