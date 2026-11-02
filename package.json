@@ -239,6 +239,7 @@
     "verify": "npm run typecheck && npm run build && npm run build:web && npm run test && npm run check:leak",
     "compile:test": "node esbuild.test.mjs",
     "test:integration": "npm run build && npm run compile:test && vscode-test",
+    "test:integration:coverage": "npm run build && npm run build:host -- --no-minify && npm run compile:test && vscode-test --coverage --coverage-output coverage-integration && node scripts/integration-coverage.mjs",
     "package": "vsce package"
   },
   "dependencies": {
@@ -259,8 +260,12 @@
     "@vscode/test-electron": "^3.0.0",
     "@vscode/test-web": "^0.0.81",
     "@vscode/vsce": "^4.0.0",
+    "ast-v8-to-istanbul": "^1.0.5",
     "esbuild": "^0.25.0",
     "happy-dom": "^20.9.0",
+    "istanbul-lib-coverage": "^3.2.2",
+    "istanbul-lib-report": "^3.0.1",
+    "istanbul-reports": "^3.2.0",
     "mocha": "^11.7.6",
     "typescript": "^5.7.0",
     "vite": "^6.0.0",

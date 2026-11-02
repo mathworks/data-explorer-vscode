@@ -1,6 +1,6 @@
 # Continuous integration: typecheck, build (desktop + web), package the .vsix, unit
-# tests, and the VS Code integration suite. Runs on every push to main and on pull
-# requests.
+# tests, and the VS Code integration suite; and, in a job of its own, the integration
+# suite's coverage. Runs on every push to main and on pull requests.
 name: CI
 
 on:
@@ -62,3 +62,37 @@ jobs:
       # display on Linux — run it under a virtual framebuffer.
       - name: Integration tests
         run: xvfb-run -a npm run test:integration
+
+  # How much of src/ the integration suite runs, file by file: the step's log ends
+  # with the table, and the reports are uploaded. Report only, no threshold, and not
+  # a required check. A job of its own because it runs the suite against a
+  # non-minified host bundle (a minified one has rewritten statements and branches
+  # to count), while build-test runs it against the minified bundle that ships.
+  integration-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Integration tests with coverage
+        run: xvfb-run -a npm run test:integration:coverage
+
+      # The same report as HTML, and as JSON to merge with the unit suite's. Not
+      # the raw V8 profiles it was made from, which are large.
+      - name: Upload integration coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-integration
+          path: |
+            coverage-integration/
+            !coverage-integration/v8/
+          retention-days: 14
