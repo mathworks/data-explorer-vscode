@@ -10,30 +10,16 @@
 // reference resolve in the tree and silently not in the Usage column: parameters
 // that are plainly used rendered as unused, with no error.
 //
-// That keying is core's now (`buildUsageIndex`, reached through view's usageCells.ts) and
-// core tests it directly, so this file is no longer where the rule is pinned. What
-// it still covers is everything on THIS side of the call, none of which core can
-// vouch for: whether a differently-cased file reaches the graph at all (the findFiles
-// glob and `isGraphPath` over open tabs), whether the path handed over is one
-// core can classify, and whether the answer reaches the editors — all of which
-// import `vscode` and are excluded from the vitest suite. Only the real build over
-// real files exercises them.
-//
-// The four blocks in the fixture cover four DIFFERENT lines of buildGraph — the
-// dataDictionary link, a chained dictionary reference, an external .sldd, and an
-// external .mat — see test-integration/fixtures/make-caserefs.mjs for the table.
-// Regenerate with `node test-integration/fixtures/make-caserefs.mjs`.
+// That keying is core's (`buildUsageIndex`, reached through view's usageCells.ts), and so is
+// every answer over these fixtures: core's usageIndex and usageScope tests prove the
+// case-insensitive keys and classification, and view's goldens/usage.test.ts pins this
+// fixture set's param links and reverse edges, block by block. What stays here is this side
+// of the call: the fixtures reach the graph only through open tabs (the open-tab union, whose
+// positive case is singleFileUsage.test.ts), so with no tab open nothing resolves.
+// Regenerate the fixtures with `node test-integration/fixtures/make-caserefs.mjs`.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import {
-  invalidateUsageGraph,
-  paramLinksForBlock,
-  blocksUsingVariable,
-} from '../../src/host/usageGraph';
-import { waitFor } from './tools/hostHarness';
-
-const BINARY_VIEW = 'dataExplorer.binaryView';
-const TABLE_VIEW = 'dataExplorer.tableView';
+import { invalidateUsageGraph, paramLinksForBlock } from '../../src/host/usageGraph';
 
 // The graph is asked for a block by its KEY, which is its SID — the fixture numbers its
 // four blocks 1..4 in the order below. A name identifies a block only within one system,
@@ -48,44 +34,6 @@ function caseRefUri(name: string): vscode.Uri {
   const ws = vscode.workspace.workspaceFolders?.[0];
   assert.ok(ws, 'a workspace folder must be open');
   return vscode.Uri.joinPath(ws.uri, '..', 'caserefs', name);
-}
-
-// Same rebuild-and-retry shape as singleFileUsage.test.ts, and for the same
-// reason: this bundled test file links its OWN copy of usageGraph (esbuild inlines
-// the src module), a SEPARATE instance from the one inside the running extension,
-// so the extension's onDidChangeTabs→invalidate wiring does not clear THIS
-// instance's cache. Invalidating here is exactly what re-runs buildGraph against
-// the live open-tab set — the code path under test. The retry also absorbs the lag
-// between `openWith` resolving and the tab appearing in vscode.window.tabGroups.
-async function pollRebuilt<T>(what: string, fn: () => Promise<T>, timeoutMs = 10000): Promise<T> {
-  let last!: T;
-  await waitFor(
-    what,
-    async () => {
-      invalidateUsageGraph();
-      // No prebuild: every query in `fn` builds the graph for the file it asks about. So
-      // invalidating is the whole of what this does, and it is what re-runs the build against
-      // the live open-tab set — the code path under test.
-      last = await fn();
-      return !!last;
-    },
-    timeoutMs,
-  );
-  return last;
-}
-
-// Open every fixture in a tab. The .sldd files go straight to the editable table
-// view rather than the default binaryView, which would REDIRECT editable JSON
-// .sldd (dispose this tab, reopen in tableView) — a window during which the tab is
-// briefly absent from tabGroups. Opening the destination directly keeps all five
-// tabs continuously present, so a rebuild can't observe a half-populated set.
-async function openAllFixtures(): Promise<void> {
-  for (const name of ['CaseParams.sldd', 'chained.sldd', 'ExtraDict.sldd']) {
-    await vscode.commands.executeCommand('vscode.openWith', caseRefUri(name), TABLE_VIEW);
-  }
-  for (const name of ['CaseBp.mat', 'caseRefs.slx']) {
-    await vscode.commands.executeCommand('vscode.openWith', caseRefUri(name), BINARY_VIEW);
-  }
 }
 
 suite('case-insensitive reference matching (usage graph)', () => {
@@ -114,96 +62,9 @@ suite('case-insensitive reference matching (usage graph)', () => {
     }
   });
 
-  test('a differently-cased dataDictionary link resolves to the dictionary on disk', async () => {
-    // The model records `caseparams.sldd`; the file is `CaseParams.sldd`. Before
-    // the fix, slddByBase was keyed by the on-disk basename and looked up by the
-    // recorded ref, so this missed and Gain1 rendered with no source and no link —
-    // indistinguishable from a genuinely unresolved parameter.
-    await openAllFixtures();
-    const links = await pollRebuilt('Gain1’s param link', async () => {
-      const l = await paramLinksForBlock(modelUri(), SID.Gain1);
-      return l.length > 0 ? l : null;
-    });
-    assert.ok(links, 'Gain1 has a resolved param link');
-    assert.strictEqual(links!.length, 1);
-    assert.strictEqual(links![0].property, 'Gain');
-    assert.strictEqual(links![0].paramName, 'CaseVar');
-    // The source label and link target come from the FILE's uri, so they carry the
-    // on-disk casing even though the reference did not.
-    assert.strictEqual(links![0].source, 'CaseParams.sldd');
-    assert.strictEqual(links![0].linkTarget, `CaseVar@${caseRefUri('CaseParams.sldd').toString()}`);
-  });
-
-  test('a differently-cased CHAINED dictionary reference is chased', async () => {
-    // CaseParams.sldd's own "Dictionary References" footer names `Chained.SLDD`
-    // (both stem and extension upper-cased); the file is `chained.sldd`. This leg
-    // is normalised in slddSummary, a different line from the map keys above.
-    await openAllFixtures();
-    const links = await pollRebuilt('Gain2’s chained param link', async () => {
-      const l = await paramLinksForBlock(modelUri(), SID.Gain2);
-      return l.length > 0 && l[0].linkTarget ? l : null;
-    });
-    assert.ok(links, 'Gain2 has a resolved param link');
-    assert.strictEqual(links![0].paramName, 'ChainedVar');
-    assert.strictEqual(links![0].source, 'chained.sldd');
-    assert.strictEqual(links![0].linkTarget, `ChainedVar@${caseRefUri('chained.sldd').toString()}`);
-  });
-
-  test('an external .sldd link with an UPPER-CASE extension is still a dictionary', async () => {
-    // The model lists `EXTRADICT.SLDD` as an external data source. The extension
-    // filter used to be `e.endsWith('.sldd')`, which classified this as neither a
-    // dictionary nor a MAT file, so the link was dropped entirely — a stronger
-    // failure than a case-mismatched name, since the ref never reached the map.
-    await openAllFixtures();
-    const links = await pollRebuilt('Gain3’s param link', async () => {
-      const l = await paramLinksForBlock(modelUri(), SID.Gain3);
-      return l.length > 0 && l[0].linkTarget ? l : null;
-    });
-    assert.ok(links, 'Gain3 has a resolved param link');
-    assert.strictEqual(links![0].paramName, 'ExtraVar');
-    assert.strictEqual(links![0].source, 'ExtraDict.sldd');
-    assert.strictEqual(links![0].linkTarget, `ExtraVar@${caseRefUri('ExtraDict.sldd').toString()}`);
-  });
-
-  test('an external .mat link with an UPPER-CASE extension resolves', async () => {
-    // `CaseBp.MAT` -> CaseBp.mat. Covers matByBase's key plus the /\.mat$/i filter;
-    // the model owns no workspace variables, so nothing can shadow the MAT hit.
-    await openAllFixtures();
-    const links = await pollRebuilt('Const1’s param link', async () => {
-      const l = await paramLinksForBlock(modelUri(), SID.Const1);
-      return l.length > 0 && l[0].linkTarget ? l : null;
-    });
-    assert.ok(links, 'Const1 has a resolved param link');
-    assert.strictEqual(links![0].paramName, 'Bp');
-    assert.strictEqual(links![0].source, 'CaseBp.mat');
-    assert.strictEqual(links![0].linkTarget, `Bp@${caseRefUri('CaseBp.mat').toString()}`);
-  });
-
-  test('the reverse edges are keyed on the resolved file, so the data view shows the block', async () => {
-    // The other direction: opening CaseParams.sldd must show CaseVar as used by
-    // Gain1. The reverse map is keyed by the WINNING source's uri, so a ref that
-    // failed to resolve produced no reverse edge either — the variable looked
-    // unused in the dictionary's own Usage column.
-    await openAllFixtures();
-    const usedBy = await pollRebuilt('the block that uses CaseVar', async () => {
-      const u = await blocksUsingVariable(caseRefUri('CaseParams.sldd').toString(), 'CaseVar');
-      return u.length > 0 ? u : null;
-    });
-    assert.ok(usedBy, 'CaseVar has a reverse edge');
-    assert.strictEqual(usedBy!.length, 1);
-    assert.strictEqual(usedBy![0].blockName, 'Gain1');
-    assert.strictEqual(usedBy![0].modelName, 'caseRefs');
-    assert.strictEqual(usedBy![0].modelUri, modelUri());
-
-    // And through the chain, whose reverse edge is keyed on the chained file.
-    const chained = await blocksUsingVariable(caseRefUri('chained.sldd').toString(), 'ChainedVar');
-    assert.strictEqual(chained.length, 1, 'ChainedVar is used by exactly one block');
-    assert.strictEqual(chained[0].blockName, 'Gain2');
-  });
-
   test('with no tabs open, none of it resolves', async () => {
-    // The control: the edges above exist because of the open-tab union, not because
-    // something else in the workspace happens to define these names.
+    // The fixtures are outside the workspace, so with no tab open the graph never sees them:
+    // no other file in the workspace defines these names.
     invalidateUsageGraph();
     for (const [block, sid] of Object.entries(SID)) {
       assert.strictEqual(

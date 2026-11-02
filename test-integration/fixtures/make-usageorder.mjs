@@ -1,5 +1,6 @@
 // Copyright 2026 The MathWorks, Inc.
-// Generates the usageorder/ fixture set used by the usageOrder integration test.
+// Generates the usageorder/ fixture set, used by the usageScopeReads integration test and by view's
+// usage tests (its jsonEngine/usage.test.ts and goldens).
 // Run: node test-integration/fixtures/make-usageorder.mjs
 //
 // The set exists to make TAB HISTORY observable. Two engines can fill the Usage
@@ -16,7 +17,7 @@
 //                       LimitA Value = SharedGain
 //   plantB.slx          GainB  Gain  = SharedGain
 //
-// The test registers ONLY ctrlA in the session, which is the exact state the bug
+// View's tab-history test registers ONLY ctrlA in the session, the exact state the bug
 // needed: three usages in two models, of which the session can account for two, in
 // one model, unnamed. UnusedVar is the control — an entry neither engine can say
 // anything about, which must be left alone rather than emptied.

@@ -6,18 +6,16 @@
 // and a classic pre-R2012 `.mdl` (nested braces) — and core's parseModel decides
 // which from the BYTES, never from the extension. The host's job is only to route
 // both extensions to it. These tests prove the routing over real files in a real
-// VS Code, at the two places the vitest suite structurally cannot reach:
+// VS Code, where the vitest suite cannot reach: the custom-editor selector in
+// package.json plus BinaryEditorProvider. A `.mdl` missing from the selector opens in
+// VS Code's own text/hex editor, so the extension simply looks like it does not
+// support the format.
 //
-//   1. the custom-editor selector in package.json plus BinaryEditorProvider — a
-//      `.mdl` missing from the selector opens in VS Code's own text/hex editor, so
-//      the extension simply looks like it does not support the format;
-//   2. usageGraph.ts, which imports `vscode` and is excluded from the vitest
-//      coverage/run — a model type it does not recognise contributes no edges, so
-//      every parameter in the file renders as unused with no error anywhere.
-//
-// Both `.mdl` flavours link the SAME dictionary and use the SAME variable `Kp`, so
-// the assertions below are about one rule holding across two framings rather than
-// two independent features. Fixtures: `node test-integration/fixtures/make-legacy.mjs`.
+// What both flavours resolve to in the Usage column (their blocks' param links into
+// the dictionary, and its reverse edges) is core's parseModel and summaries, pinned for
+// these fixtures by view's goldens/usage.test.ts. Here the graph is only asked with no
+// tab open, which is what the open-tab union gives files outside the workspace.
+// Fixtures: `node test-integration/fixtures/make-legacy.mjs`.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import {
@@ -26,10 +24,8 @@ import {
   blocksUsingVariable,
 } from '../../src/host/usageGraph';
 import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
-import { waitFor } from './tools/hostHarness';
 
 const BINARY_VIEW = 'dataExplorer.binaryView';
-const TABLE_VIEW = 'dataExplorer.tableView';
 
 const CLASSIC = 'legacyClassic.mdl';
 const MODERN = 'legacyModern.mdl';
@@ -50,41 +46,6 @@ function ctx(): vscode.ExtensionContext {
   assert.ok(ext, 'the extension must be present');
   // The provider only reads context.extensionUri; a minimal stand-in suffices.
   return { extensionUri: ext!.extensionUri } as unknown as vscode.ExtensionContext;
-}
-
-// Same rebuild-and-retry shape as caseRefUsage/singleFileUsage, and for the same
-// reason: this bundled test file links its OWN copy of usageGraph (esbuild inlines
-// the src module), a SEPARATE instance from the one in the running extension, so
-// the extension's onDidChangeTabs→invalidate wiring never clears THIS instance's
-// cache. Invalidating here is what re-runs buildGraph against the live open-tab
-// set — the code path under test. The retry also absorbs the lag between `openWith`
-// resolving and the tab appearing in vscode.window.tabGroups.
-async function pollRebuilt<T>(what: string, fn: () => Promise<T>, timeoutMs = 10000): Promise<T> {
-  let last!: T;
-  await waitFor(
-    what,
-    async () => {
-      invalidateUsageGraph();
-      // No prebuild: every query in `fn` builds the graph for the file it asks about. So
-      // invalidating is the whole of what this does, and it is what re-runs the build against
-      // the live open-tab set — the code path under test.
-      last = await fn();
-      return !!last;
-    },
-    timeoutMs,
-  );
-  return last;
-}
-
-// The dictionary goes straight to the editable table view rather than the default
-// binaryView, which would REDIRECT editable JSON .sldd (dispose that tab, reopen in
-// tableView) — a window during which the tab is briefly absent from tabGroups.
-// Opening the destination directly keeps all three tabs continuously present.
-async function openAllFixtures(): Promise<void> {
-  await vscode.commands.executeCommand('vscode.openWith', legacyUri(DICT), TABLE_VIEW);
-  for (const name of [CLASSIC, MODERN]) {
-    await vscode.commands.executeCommand('vscode.openWith', legacyUri(name), BINARY_VIEW);
-  }
 }
 
 suite('.mdl models (both flavours)', () => {
@@ -156,84 +117,9 @@ suite('.mdl models (both flavours)', () => {
     }
   });
 
-  test('a CLASSIC .mdl’s block parameters resolve to its linked dictionary', async () => {
-    // The brace format's blocks are `Block { BlockType Gain  Name "x"  Gain "Kp" }`
-    // — nothing like the XML a .slx carries. Before `.mdl` was routed to parseModel,
-    // this model contributed no ModelSummary at all and ClassicGain rendered with
-    // no source and no link, indistinguishable from a genuinely unresolved param.
-    await openAllFixtures();
-    const links = await pollRebuilt('ClassicGain’s param link', async () => {
-      const l = await paramLinksForBlock(legacyUri(CLASSIC).toString(), 'ClassicGain');
-      return l.length > 0 && l[0].linkTarget ? l : null;
-    });
-    assert.ok(links, 'ClassicGain has a resolved param link');
-    assert.strictEqual(links!.length, 1);
-    assert.strictEqual(links![0].property, 'Gain');
-    assert.strictEqual(links![0].paramName, 'Kp');
-    assert.strictEqual(links![0].source, DICT);
-    assert.strictEqual(links![0].linkTarget, `Kp@${legacyUri(DICT).toString()}`);
-
-    // The classic model's second block, through a different parameter property.
-    const constLinks = await paramLinksForBlock(legacyUri(CLASSIC).toString(), 'ClassicConst');
-    assert.strictEqual(constLinks.length, 1, 'ClassicConst has one resolved param link');
-    assert.strictEqual(constLinks[0].property, 'Value');
-    assert.strictEqual(constLinks[0].paramName, 'Uo');
-    assert.strictEqual(constLinks[0].source, DICT);
-  });
-
-  test('a MODERN .mdl resolves identically — the framing changes, the result does not', async () => {
-    // Same dictionary, same variable, same link: the text-OPC package and the ZIP
-    // it mirrors must be indistinguishable downstream. A framing bug here (a lost
-    // part, or the delimiter's newline kept as part content) leaves the JSON parts
-    // unparseable and this model, too, contributing nothing.
-    //
-    // One thing does differ, and it is not the result: the block is asked for by its
-    // KEY, and the modern file records `SID="1"` where the classic one above records no
-    // SID at all, so there the name IS the key. Both spellings live on disk and the
-    // answer is the same.
-    await openAllFixtures();
-    const links = await pollRebuilt('the modern model’s block 1 param link', async () => {
-      const l = await paramLinksForBlock(legacyUri(MODERN).toString(), '1');
-      return l.length > 0 && l[0].linkTarget ? l : null;
-    });
-    assert.ok(links, 'ModernGain has a resolved param link');
-    assert.strictEqual(links!.length, 1);
-    assert.strictEqual(links![0].property, 'Gain');
-    assert.strictEqual(links![0].paramName, 'Kp');
-    assert.strictEqual(links![0].source, DICT);
-    assert.strictEqual(links![0].linkTarget, `Kp@${legacyUri(DICT).toString()}`);
-  });
-
-  test('the dictionary’s own Usage column lists blocks from BOTH .mdl flavours', async () => {
-    // The reverse direction, and the sharpest single assertion in the suite: one
-    // variable, two models, two different on-disk framings, one edge list. If either
-    // flavour were dropped, Kp would look as though only one model used it.
-    await openAllFixtures();
-    const usedBy = await pollRebuilt('both blocks that use Kp', async () => {
-      const u = await blocksUsingVariable(legacyUri(DICT).toString(), 'Kp');
-      return u.length >= 2 ? u : null;
-    });
-    assert.ok(usedBy, 'Kp has reverse edges');
-    const blocks = usedBy!.map((b) => b.blockName).sort();
-    assert.deepStrictEqual(blocks, ['ClassicGain', 'ModernGain']);
-
-    // The model LABEL drops the extension, the same way it does for a .slx: the
-    // label is the model name MATLAB uses internally, and a row reading
-    // `legacyClassic.mdl` would not match the block paths recorded inside the file.
-    const labels = usedBy!.map((b) => b.modelName).sort();
-    assert.deepStrictEqual(labels, ['legacyClassic', 'legacyModern']);
-
-    // Uo is used by the classic model only, so a passing test above cannot be a
-    // both-models-collapsed-into-one artefact.
-    const uoUsers = await blocksUsingVariable(legacyUri(DICT).toString(), 'Uo');
-    assert.strictEqual(uoUsers.length, 1);
-    assert.strictEqual(uoUsers[0].blockName, 'ClassicConst');
-    assert.strictEqual(uoUsers[0].modelUri, legacyUri(CLASSIC).toString());
-  });
-
   test('with no tabs open, none of it resolves', async () => {
-    // The control: the edges above exist because these files were opened, not
-    // because something in the workspace happens to define `Kp`.
+    // The fixtures are outside the workspace, so with no tab open the graph never sees
+    // them: nothing in the workspace defines `Kp`.
     invalidateUsageGraph();
     // `key` is each block's own: a name in the classic file, which records no SID, and
     // the SID in the modern one.

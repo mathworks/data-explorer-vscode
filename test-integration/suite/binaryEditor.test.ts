@@ -11,7 +11,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
-import { waitFor } from './tools/hostHarness';
+import { fakePanel, waitFor } from './tools/hostHarness';
 
 const TABLE_VIEW = 'dataExplorer.tableView';
 const BINARY_SLDD_VIEW = 'dataExplorer.binarySlddView';
@@ -164,13 +164,26 @@ suite('BinaryEditorProvider', () => {
     assert.ok(found(), 'the editable JSON .sldd was redirected into the table view');
   });
 
-  test('the onSelect relay is invoked wiring (defaults to undefined until set)', () => {
+  test('the onSelect relay is invoked wiring (defaults to undefined until set)', async () => {
     // The provider exposes an optional onSelect hook wired by extension.ts to feed
-    // the Property Inspector. It is undefined until assigned; assigning it is safe.
+    // the Property Inspector. It is undefined until assigned; once it is, a row the
+    // view selects reaches it with the document the view shows.
     assert.strictEqual(provider.onSelect, undefined);
-    let called: unknown = null;
-    provider.onSelect = (uriString, rowIds) => (called = { uriString, rowIds });
-    provider.onSelect!('file:///x', ['row1']);
-    assert.deepStrictEqual(called, { uriString: 'file:///x', rowIds: ['row1'] });
+    const selected: [string, string[]][] = [];
+    provider.onSelect = (uriString, rowIds) => selected.push([uriString, rowIds]);
+    const uri = wsUri('model.slx');
+    const token = new vscode.CancellationTokenSource().token;
+    const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token);
+    const view = fakePanel();
+    try {
+      await provider.resolveCustomEditor(doc, view.panel, token);
+      view.send({ type: 'ready' });
+      await waitFor('the first paint', () => view.posts.some((m) => m.type === 'setRows'));
+      const rowId: string = view.posts.find((m) => m.type === 'setRows').rows[0].ID;
+      view.send({ type: 'select', rowIds: [rowId] });
+      assert.deepStrictEqual(selected, [[uri.toString(), [rowId]]]);
+    } finally {
+      view.close();
+    }
   });
 });
