@@ -103,7 +103,6 @@ describe('a beforeAll that imports a whole webview entry passes its own timeout'
       'addEntryWiring.test.ts',
       'linkRoute.test.ts',
       'nameSelectTarget.test.ts',
-      'pasteOneSectionWiring.test.ts',
       'readonlyEditorGate.test.ts',
       'tableMainChildRows.test.ts',
       'piMainVariableEditor.test.ts',

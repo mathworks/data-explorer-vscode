@@ -1,10 +1,10 @@
 // Copyright 2026 The MathWorks, Inc.
-// Regression guard: every icon id the extension statically references must ship
-// as an SVG in dist/webview/icons/, which copy:icons fills from data-explorer-view's
-// icons/ (tools/shippedIcons.ts). Missing files silently fall
-// back to a generic icon (tree) or render as a broken image (webview), which is hard
-// to catch by eye. This test pins the known-critical ids so a future edit that
-// references a new icon without adding the file fails fast.
+// Regression guard: every icon the extension's own code names must ship as an SVG in
+// dist/webview/icons/, which copy:icons fills from data-explorer-view's icons/
+// (tools/shippedIcons.ts). A missing file silently falls back to a generic icon (tree) or
+// renders as a broken image (webview), which is hard to catch by eye. The ids core's rows and
+// view's widgets ask for are view's to pin, by name (its iconSet.test.ts and
+// coreIconIds.test.ts); what is left here is the sidebar tree's, and the directory they ship in.
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -15,70 +15,6 @@ import { ICON_SOURCES, iconsIn, shippedIcon } from './tools/shippedIcons.js';
 function repoFile(rel: string): string {
   return readFileSync(fileURLToPath(new URL(`../${rel}`, import.meta.url)), 'utf8');
 }
-
-// Tree node-kind icons (view's FolderHierarchy, which names a row's icon for SectionsTreeProvider).
-const TREE_KIND_ICONS = ['simulink', 'simulink_database', 'matlabWorkspaceFile', 'link_database'];
-
-// SLDD dictionary + section icons (SlddNode: file icon + SECTION_DEFS).
-const SLDD_ICONS = [
-  'simulink_database', // JSON .sldd file
-  'simulink_server',   // XML-format .sldd file
-  'databaseFolderDesign',
-  'databaseFolderArchitecture',
-  'databaseFolderConfiguration',
-  'databaseFolder',
-];
-
-// Model section + entry icons (ModelNode SECTION_DEFS + entry node getters).
-const MODEL_ICONS = [
-  'blocks',              // Model Elements section
-  'block',               // block entries
-  'databaseFolderWorkspace',
-  'databaseFolderConfiguration',
-  'modelReference',      // Model References section + entries
-  'link_database',       // External Data section
-  'matlabWorkspaceFile', // mat data-source entries
-  'simulinkDataDictionary_FT', // .sldd data-source entries
-  'simulinkModel_FT',    // .slx data-source entries
-];
-
-// Design Data entry-node icons whose ids are referenced only from node getters
-// (bus/connection elements, enum items, variant entries). These render in the
-// webview, so a missing file shows a broken image rather than a fallback.
-const DATA_NODE_ICONS = [
-  'ws3d',                    // any object whose class has no icon of its own (core's OBJECT_ICON)
-  'wsBusElement',            // Design Data Simulink.Bus element
-  'typeBusElement',          // Architectural Data DataInterface element
-  'typeStructElement',       // StructType element
-  'wsConnectionElement',     // Design Data Simulink.ConnectionBus element
-  'typeConnectionElement',   // Architectural Data PhysicalInterface element
-  'wsElement',               // Design Data enum "current" item
-  'typeElement',             // Architectural Data enum "current" item
-  'busElement',              // non-current enum item
-  'variantSettings',         // Simulink.VariantConfigurationData
-  'twoConnected_wsDefault',  // Simulink.VariantControl
-  'variant_wsParameters',    // Simulink.VariantVariable
-];
-
-// Icons the webview components name directly, rather than through a row's
-// iconId. A missing asset here is a blank glyph, not a fallback.
-const WEBVIEW_GLYPH_ICONS = [
-  'wsTable',                 // dex-matrix-open: open the Variable Editor
-];
-
-const ALL_REQUIRED = [
-  ...new Set([...TREE_KIND_ICONS, ...SLDD_ICONS, ...MODEL_ICONS, ...DATA_NODE_ICONS, ...WEBVIEW_GLYPH_ICONS]),
-];
-
-describe('icon assets', () => {
-  it.each(ALL_REQUIRED)('%s.svg ships', (id) => {
-    expect(shippedIcon(id), `${id}.svg is in none of ${ICON_SOURCES.join(', ')}`).toBeDefined();
-  });
-
-  it('the generic fallback icon exists (svgIconFor default)', () => {
-    expect(shippedIcon('typeGeneric')).toBeDefined();
-  });
-});
 
 // Every id the sidebar tree hands svgIconFor, read off the code rather than listed, so a new
 // group kind or file kind is checked the day it is written: every icon a hierarchy row can name

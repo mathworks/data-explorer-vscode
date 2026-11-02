@@ -2,13 +2,14 @@
 // The edges of a save's write over the user's file (src/host/safeWrite.ts) that
 // test/safeWrite.test.ts beside this does not reach: the entry point a provider calls, and the
 // same-file question a Save As asks, both through this host's uris. Where the temporary file is
-// made for a path of either platform, and what each failure the replace can meet leaves behind,
-// are core's replace, and pinned there (test/safeReplaceEdges.test.ts in data-explorer-core).
+// made for a path of either platform, what each failure the replace can meet leaves behind, and
+// which paths are one file (a hard or a symbolic link, a file that is not there), are core's, and
+// pinned there (test/safeReplaceEdges.test.ts in data-explorer-core).
 //
 // The rule every case here holds the write to: a failure leaves the user's file as it was, and a
 // refusal of the replace is never handed on to the provider's write.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { chmodSync, linkSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { sameFile, writeFileSafely } from '../src/host/safeWrite.js';
@@ -62,28 +63,15 @@ describe('writeFileSafely', () => {
   });
 });
 
+// What is left here is the wrapper's: it answers for file: uris, by their paths, and for no other
+// scheme.
 describe('sameFile', () => {
-  it('is true for one path, and for a hard link or a symbolic link to the same file', async () => {
+  it('is true for one file named by two file: uris', async () => {
     expect(await sameFile(file(path), file(path))).toBe(true);
-    const hard = join(dir, 'hard.mat');
-    linkSync(path, hard);
-    expect(await sameFile(file(path), file(hard))).toBe(true);
-    if (posix) {
-      const soft = join(dir, 'soft.mat');
-      symlinkSync(path, soft);
-      expect(await sameFile(file(soft), file(path))).toBe(true);
-    }
   });
 
-  it('is false for two files, even with the same bytes', async () => {
-    const other = join(dir, 'other.mat');
-    writeFileSync(other, 'old bytes');
-    expect(await sameFile(file(path), file(other))).toBe(false);
-  });
-
-  it('is false where it cannot be told: another scheme, or a file that is not there', async () => {
+  it('is false for a uri of another scheme, which it cannot tell', async () => {
     expect(await sameFile({ scheme: 'vscode-vfs', fsPath: path }, file(path))).toBe(false);
     expect(await sameFile(file(path), { scheme: 'untitled', fsPath: path })).toBe(false);
-    expect(await sameFile(file(path), file(join(dir, 'missing.mat')))).toBe(false);
   });
 });
