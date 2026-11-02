@@ -31,6 +31,7 @@ test-integration/**
 bench/**
 dist-test/**
 coverage/**
+coverage-integration/**
 .vscode-test/**
 .vscode-test-web/**
 demo-workspace/**

@@ -33,7 +33,7 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 // join(import.meta.dirname, …), not fileURLToPath(import.meta.url): under happy-dom
 // import.meta.url is an http URL, which fileURLToPath rejects. Same reason as
-// linkRoute.test.ts and blockSidIdentity.test.ts.
+// linkRoute.test.ts.
 import { join } from 'node:path';
 import { unzipSync } from 'fflate';
 import { DataModel } from 'data-explorer-core';
