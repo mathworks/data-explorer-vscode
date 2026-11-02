@@ -14,6 +14,7 @@ import { NameIndex, type NameReader, type NameRecord } from 'data-explorer-view/
 import { toArrayBuffer } from '../common/bytes.js';
 import { GRAPH_GLOB } from '../common/fileTypes.js';
 import { readerFor, sourceCache, sourceFilesOf } from './sourceReads.js';
+import { textOverDisk } from './documentText.js';
 
 export type { EntryKind, NameRecord } from 'data-explorer-view/model';
 
@@ -27,22 +28,25 @@ export type { EntryKind, NameRecord } from 'data-explorer-view/model';
 // new one, until the file was saved. The reindex looked like it worked, because
 // it did run — it just re-read the wrong bytes.
 //
-// A dirty document is only ever text: VS Code cannot mirror a compressed-binary
-// .sldd as a TextDocument, and the writable binary editor keeps its edits in its
-// own edit stack rather than a TextDocument, so `isDirty` here always implies the
-// JSON format and encoding the string back to bytes is lossless. A clean (or
-// unopened) document has no in-memory state worth preferring, so it reads disk —
-// which also keeps the full build unaffected.
+// Which text counts is documentText.ts's: the document whose content change the reindex
+// answers, whatever its dirty flag says yet (VS Code reports the first edit of a clean
+// document while it still reads clean), and any other open document while it is dirty.
+//
+// Such a document is only ever text: VS Code cannot mirror a compressed-binary .sldd as a
+// TextDocument, and the writable binary editor keeps its edits in its own edit stack
+// rather than a TextDocument, so this is always the JSON format and encoding the string
+// back to bytes is lossless. A clean (or unopened) document has no in-memory state worth
+// preferring, so it reads disk — which also keeps the full build unaffected.
 //
 // Answering `null` rather than the disk bytes is what lets view's nameScan tell the two
 // cases apart, and it has to: buffer bytes must never be stored in the shared
 // cache, whose keys are the DISK file's `mtime:size`.
 function dirtyBytesOf(file: SourceFile): ArrayBuffer | null {
-  const open = vscode.workspace.textDocuments.find((d) => d.uri.toString() === file.uriString);
-  if (!open?.isDirty) return null;
+  const text = textOverDisk(file.uriString, changing.get(file.uriString)?.doc, vscode.workspace.textDocuments);
+  if (text === undefined) return null;
   // Already in memory and already bounded — VS Code will not mirror a document
   // this scan's cap would exclude (its own sync limit is far below it).
-  return toArrayBuffer(new TextEncoder().encode(open.getText()));
+  return toArrayBuffer(new TextEncoder().encode(text));
 }
 
 // How this index reads: the shared cache's own scan reader — same cap, same
@@ -57,6 +61,11 @@ function nameReader(uris: readonly vscode.Uri[]): NameReader {
 // is the Uri `reindexFile` was given, by its string.
 const listed = new WeakMap<readonly SourceFile[], readonly vscode.Uri[]>();
 const reindexed = new Map<string, vscode.Uri>();
+
+// The document whose content change a reindex in flight answers, by file, and how many such
+// reindexes are in flight: held for those reindexes alone, so a reindex for any other reason (the
+// folder's watcher) reads the file as it did.
+const changing = new Map<string, { doc: vscode.TextDocument; pending: number }>();
 
 /** The window's name index. */
 export const nameIndex = new NameIndex({
@@ -96,10 +105,21 @@ export function listEntries(): Promise<NameRecord[]> {
 // this is a no-op — building an index off a single file would give incomplete answers, so the
 // first listEntries() does the full scan instead. Once built, this keeps the index current after
 // an edit without a full rebuild.
-export function reindexFile(uri: vscode.Uri): Promise<void> {
+//
+// `changed` is the document when the reindex answers its content change: its text is read, not
+// the file (see dirtyBytesOf).
+export function reindexFile(uri: vscode.Uri, changed?: vscode.TextDocument): Promise<void> {
   const [file] = sourceFilesOf([uri]);
   reindexed.set(file.uriString, uri);
-  return nameIndex.reindex(file);
+  if (!changed) return nameIndex.reindex(file);
+  const key = file.uriString;
+  const held = changing.get(key);
+  if (held?.doc === changed) held.pending++;
+  else changing.set(key, { doc: changed, pending: 1 });
+  return nameIndex.reindex(file).finally(() => {
+    const now = changing.get(key);
+    if (now?.doc === changed && --now.pending === 0) changing.delete(key);
+  });
 }
 
 // Drop one file's bucket (e.g. the file was deleted). Safe before build.

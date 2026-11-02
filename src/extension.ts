@@ -306,9 +306,11 @@ export function activate(context: vscode.ExtensionContext): void {
       // A dirty-state transition on any supported file changes the "modified"
       // health badge, so refresh decorations for supported docs. Also re-sync
       // the name index for live entry-name edits (e.g. renaming an entry in an
-      // open .sldd); reindexFile is a no-op until the index is first built.
+      // open .sldd); reindexFile is a no-op until the index is first built. Handed the
+      // document, because the first edit of a clean one arrives while it still reads
+      // clean: the index reads its text, not the file (documentText.ts).
       if (isSupportedPath(e.document.uri.path)) {
-        void reindexFile(e.document.uri);
+        void reindexFile(e.document.uri, e.document);
         refreshBadges();
       }
     }),
