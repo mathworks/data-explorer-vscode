@@ -133,10 +133,11 @@ export class EditStackCopy extends EditStackIndex {
     if (this.armed) this.tell();
   }
 
-  override saved(at?: number): void {
+  /** `state`: the state the save read (`state()`), which EditStackIndex holds its save point to. */
+  override saved(at?: number, state?: number): void {
     this.changedOffStack = false;
     this.restored = false;
-    super.saved(at);
+    super.saved(at, state);
     this.savePoint = at ?? this.here();
     this.armed = this.indexStale;
   }
