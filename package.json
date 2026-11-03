@@ -38,9 +38,6 @@
             "filenamePattern": "*.sldd"
           },
           {
-            "filenamePattern": "*.slx"
-          },
-          {
             "filenamePattern": "*.mdl"
           },
           {
@@ -75,6 +72,16 @@
         "selector": [
           {
             "filenamePattern": "*.mat"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "dataExplorer.modelView",
+        "displayName": "Data Explorer",
+        "selector": [
+          {
+            "filenamePattern": "*.slx"
           }
         ],
         "priority": "default"
@@ -200,7 +207,7 @@
         },
         {
           "command": "dataExplorer.addEntry",
-          "when": "activeCustomEditorId == dataExplorer.tableView || activeCustomEditorId == dataExplorer.binarySlddView || activeCustomEditorId == dataExplorer.matView"
+          "when": "activeCustomEditorId == dataExplorer.tableView || activeCustomEditorId == dataExplorer.binarySlddView || activeCustomEditorId == dataExplorer.matView || activeCustomEditorId == dataExplorer.modelView"
         }
       ],
       "view/title": [
@@ -221,7 +228,7 @@
         "command": "dataExplorer.addEntry",
         "key": "ctrl+alt+a",
         "mac": "cmd+alt+a",
-        "when": "activeCustomEditorId == dataExplorer.tableView || activeCustomEditorId == dataExplorer.binarySlddView || activeCustomEditorId == dataExplorer.matView"
+        "when": "activeCustomEditorId == dataExplorer.tableView || activeCustomEditorId == dataExplorer.binarySlddView || activeCustomEditorId == dataExplorer.matView || activeCustomEditorId == dataExplorer.modelView"
       }
     ]
   },
@@ -244,8 +251,8 @@
   },
   "dependencies": {
     "@lit/context": "^1.1.6",
-    "data-explorer-core": "github:mathworks/data-explorer-core#v1.54.2",
-    "data-explorer-view": "github:mathworks/data-explorer-view#v1.3.0",
+    "data-explorer-core": "github:mathworks/data-explorer-core#v1.55.0",
+    "data-explorer-view": "github:mathworks/data-explorer-view#v1.4.0",
     "fast-xml-parser": "^5.8.0",
     "fflate": "^0.8.3",
     "highlight.js": "^11.11.1",

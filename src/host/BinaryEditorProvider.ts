@@ -37,6 +37,7 @@ import { wireNavigateSelect, drainNavigateSelect } from './navigate.js';
 import { toArrayBuffer } from '../common/bytes.js';
 import { seededRead } from './seededRead.js';
 import {
+  extOf,
   isMatFile,
   isModelFile,
   isProjectFile,
@@ -51,6 +52,7 @@ import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 const TABLE_VIEW_TYPE = 'dataExplorer.tableView';
 const BINARY_SLDD_VIEW_TYPE = 'dataExplorer.binarySlddView';
 const MAT_VIEW_TYPE = 'dataExplorer.matView';
+const MODEL_VIEW_TYPE = 'dataExplorer.modelView';
 
 /**
  * The folder a project's paths are relative to: the one holding the marker — the `.prj`, or
@@ -292,9 +294,12 @@ export class BinaryEditorProvider implements vscode.CustomReadonlyEditorProvider
     // existed, or an editor association. Send it there, as a zip .sldd is sent to its writable
     // view below, so a .mat is never read-only in one tab and editable in another. A file that
     // editor cannot save it opens read-only itself, saying why.
-    if (isMatFile(name)) {
+    //
+    // And a `.slx` model has its own: the same engine's model editor, its Model Workspace
+    // editable, sent there on the same terms (a `.mdl` stays here, read-only).
+    if (isMatFile(name) || extOf(name) === '.slx') {
       const preview = this.isPanelPreview(document.uri);
-      await vscode.commands.executeCommand('vscode.openWith', document.uri, MAT_VIEW_TYPE, {
+      await vscode.commands.executeCommand('vscode.openWith', document.uri, isMatFile(name) ? MAT_VIEW_TYPE : MODEL_VIEW_TYPE, {
         preview,
         pinned: !preview,
       });

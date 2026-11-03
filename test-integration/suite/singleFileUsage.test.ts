@@ -21,7 +21,7 @@ import {
 } from '../../src/host/usageGraph';
 import { waitFor } from './tools/hostHarness';
 
-const BINARY_VIEW = 'dataExplorer.binaryView';
+const MODEL_VIEW = 'dataExplorer.modelView';
 
 // A block is asked for by its KEY, which is its SID — the fixture writes `SID="1"` on
 // Gain1 and `SID="2"` on Const1. A name identifies a block only within one system, so
@@ -95,7 +95,8 @@ suite('single-file Usage (open-tab union)', () => {
 
   test('opening the model in a tab resolves its intra-model Usage', async () => {
     const uri = standaloneUri();
-    await vscode.commands.executeCommand('vscode.openWith', uri, BINARY_VIEW);
+    // A `.slx` opens in the model editor, which registers its model as the read-only view did.
+    await vscode.commands.executeCommand('vscode.openWith', uri, MODEL_VIEW);
 
     // Forward edge (block-view Usage cell): Gain1's `Gain` param resolves to the
     // model-workspace variable Bp. Rebuild the graph so it unions in the now-open

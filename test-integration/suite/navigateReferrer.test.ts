@@ -11,6 +11,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
+import { MatEditorProvider, MODEL_EDITOR } from '../../src/host/MatEditorProvider';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { PropertiesViewProvider } from '../../src/host/PropertiesViewProvider';
 import { ctx, fakePanel, token, wsUri } from './tools/hostHarness';
@@ -18,8 +19,26 @@ import { ctx, fakePanel, token, wsUri } from './tools/hostHarness';
 type Click = [target: string, referrer: string | undefined];
 
 suite('a link click names the document it was clicked in', () => {
-  test('the model view (BinaryEditorProvider) passes its model', async () => {
+  test("the model editor (MatEditorProvider's MODEL_EDITOR) passes its model", async () => {
     const uri = wsUri('model.slx');
+    const provider = new MatEditorProvider(ctx(), MODEL_EDITOR);
+    const clicks: Click[] = [];
+    provider.onNavigate = (target, referrer) => clicks.push([target, referrer]);
+    const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
+    const view = fakePanel();
+    try {
+      await provider.resolveCustomEditor(doc, view.panel, token());
+      view.send({ type: 'navigate', target: 'plant.slx' });
+      assert.deepStrictEqual(clicks, [['plant.slx', uri.toString()]]);
+    } finally {
+      view.close();
+      doc.dispose();
+    }
+  });
+
+  test('the read-only model view (BinaryEditorProvider) passes its .mdl', async () => {
+    // test-integration/fixtures/legacy, beside the workspace folder: a `.slx` is the model editor's.
+    const uri = vscode.Uri.joinPath(wsUri('.'), '..', 'legacy', 'legacyClassic.mdl');
     const provider = new BinaryEditorProvider(ctx());
     const clicks: Click[] = [];
     provider.onNavigate = (target, referrer) => clicks.push([target, referrer]);

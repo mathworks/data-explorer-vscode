@@ -29,6 +29,12 @@ function wsUri(name: string): vscode.Uri {
   return vscode.Uri.joinPath(ws.uri, name);
 }
 
+// A classic `.mdl` beside the workspace folder (test-integration/fixtures/legacy): a model this
+// view shows read-only, which it hands on to no other editor, as it now hands on a `.slx`.
+function mdlUri(): vscode.Uri {
+  return vscode.Uri.joinPath(wsUri('.'), '..', 'legacy', 'legacyClassic.mdl');
+}
+
 // A throwaway webview panel to resolve the editor into. Any viewType works: the
 // provider only touches webviewPanel.webview / .dispose() / .onDidDispose().
 function makePanel(): vscode.WebviewPanel {
@@ -62,8 +68,8 @@ suite('BinaryEditorProvider', () => {
     doc.dispose(); // no-op, but exercises the CustomDocument contract
   });
 
-  test('resolving a binary .slx renders the read-only webview shell (CSP + nonce)', async () => {
-    const uri = wsUri('model.slx');
+  test('resolving a .mdl renders the read-only webview shell (CSP + nonce)', async () => {
+    const uri = mdlUri();
     const token = new vscode.CancellationTokenSource().token;
     const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token);
     const panel = makePanel();
@@ -90,7 +96,7 @@ suite('BinaryEditorProvider', () => {
     // checks the string a REAL webview was handed, which is what the renderer sees.
     // An absent element makes renderBanners a no-op — a file that opened short then
     // says so nowhere.
-    const uri = wsUri('model.slx');
+    const uri = mdlUri();
     const token = new vscode.CancellationTokenSource().token;
     const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token);
     const panel = makePanel();
@@ -108,6 +114,26 @@ suite('BinaryEditorProvider', () => {
     } finally {
       panel.dispose();
     }
+  });
+
+  test('resolving a .slx redirects to the model editor and disposes the binary panel', async () => {
+    const uri = wsUri('model.slx');
+    const token = new vscode.CancellationTokenSource().token;
+    const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token);
+    const panel = makePanel();
+    let disposed = false;
+    panel.onDidDispose(() => (disposed = true));
+
+    await provider.resolveCustomEditor(doc, panel, token);
+
+    // A `.slx` has its own editor, the default for *.slx, which edits its Model Workspace: one that
+    // lands here (a restored tab, an editor association) is sent there, as a .mat is to its own.
+    assert.ok(disposed, 'the redundant binary panel disposes itself after redirect');
+    const found = () =>
+      vscode.window.tabGroups.all
+        .flatMap((g) => g.tabs)
+        .some((t) => (t.input as { viewType?: string } | undefined)?.viewType === 'dataExplorer.modelView');
+    await waitFor('the model editor tab the redirect opened', found);
   });
 
   test('resolving a binary (zip) .sldd redirects to the writable binary-sldd view and disposes the binary panel', async () => {
@@ -171,7 +197,7 @@ suite('BinaryEditorProvider', () => {
     assert.strictEqual(provider.onSelect, undefined);
     const selected: [string, string[]][] = [];
     provider.onSelect = (uriString, rowIds) => selected.push([uriString, rowIds]);
-    const uri = wsUri('model.slx');
+    const uri = mdlUri();
     const token = new vscode.CancellationTokenSource().token;
     const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token);
     const view = fakePanel();

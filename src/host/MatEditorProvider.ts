@@ -34,7 +34,28 @@ import { toArrayBuffer } from '../common/bytes.js';
 import type { TableToHostMessage } from '../common/protocol.js';
 import { dispatchCommon, type CommonHandlers } from './tableDispatch.js';
 import { engineTable, matRows } from './engineTable.js';
-import { MatDocument, SharedBackup, type DiskRead } from './matDocument.js';
+import { MAT_DOCUMENT, MatDocument, SharedBackup, type DiskRead, type DocumentKind } from './matDocument.js';
+import { MODEL_DOCUMENT } from './modelDocument.js';
+
+/**
+ * Which editor of the MAT-file engine a provider is: its view type, the kind of document it opens,
+ * and whether its tables are repainted on a usage repost (a MAT-file's variables are used by models
+ * that come and go; a model's Usage names its own blocks and its own workspace).
+ */
+export interface EditorKind {
+  readonly viewType: string;
+  readonly document: DocumentKind;
+  readonly reposts: boolean;
+}
+
+/** The MAT-file editor (dataExplorer.matView, the default for *.mat). */
+export const MAT_EDITOR: EditorKind = { viewType: 'dataExplorer.matView', document: MAT_DOCUMENT, reposts: true };
+
+/**
+ * The model editor (dataExplorer.modelView, the default for *.slx): a `.slx` model, its Model
+ * Workspace edited by a MAT-file's rules and the rest of it shown, saved as the model's package.
+ */
+export const MODEL_EDITOR: EditorKind = { viewType: 'dataExplorer.modelView', document: MODEL_DOCUMENT, reposts: false };
 
 async function readDisk(uri: vscode.Uri): Promise<DiskRead> {
   const { stamp, bytes } = await readStamped(uri);
@@ -42,7 +63,8 @@ async function readDisk(uri: vscode.Uri): Promise<DiskRead> {
 }
 
 export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocument> {
-  public static readonly viewType = 'dataExplorer.matView';
+  public static readonly viewType = MAT_EDITOR.viewType;
+  public static readonly modelViewType = MODEL_EDITOR.viewType;
 
   // Relay selection to the Property Inspector (wired in extension.ts).
   public onSelect?: (uriString: string, rowIds: string[]) => void;
@@ -79,7 +101,16 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
    */
   showError: (message: string) => void = (message) => void vscode.window.showErrorMessage(message);
 
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  /** `editor`: which editor of the engine this is, the MAT-file editor by default. */
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly editor: EditorKind = MAT_EDITOR,
+  ) {}
+
+  /** This editor's view type. */
+  get viewType(): string {
+    return this.editor.viewType;
+  }
 
   async openCustomDocument(
     uri: vscode.Uri,
@@ -89,7 +120,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     // A hot-exit backup is a whole MAT-file (backupCustomDocument), so a restore opens it as the
     // document, held to the stamp the backup recorded (diskFollow.readForOpen).
     const { stamp, bytes } = await readForOpen(uri, openContext.backupId);
-    const doc = new MatDocument(uri, toArrayBuffer(bytes), !!openContext.backupId, () => this.onChanged?.(uri.toString()));
+    const doc = new MatDocument(uri, toArrayBuffer(bytes), !!openContext.backupId, () => this.onChanged?.(uri.toString()), this.editor.document);
     doc.stamp = stamp;
     doc.onDidChangeCustomDocument((e) => this._onDidChangeCustomDocument.fire(e));
     doc.track(watchDisk(doc, () => followDisk(doc, () => readDisk(doc.uri), (read) => doc.replace(read))));
@@ -169,7 +200,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     const navSub = wireNavigateSelect(webview, uriString);
     // A model created or deleted elsewhere can add or remove a block that uses one of this file's
     // variables, which its own watcher never hears of (usageRepostWatch.ts).
-    const usageSub = subscribeUsageRepost(() => void table.repaintAll());
+    const usageSub = this.editor.reposts ? subscribeUsageRepost(() => void table.repaintAll()) : { dispose: () => {} };
 
     webview.html = renderTableWebview(webview, distRoot);
 
@@ -207,7 +238,7 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
     try {
       // Before the first await, so the bytes are the document the save was asked for.
       save = document.engine.beginSave();
-      await refuseIfChangedOnDisk(document, MatEditorProvider.viewType, (m) => this.askSaveConflict(m));
+      await refuseIfChangedOnDisk(document, this.editor.viewType, (m) => this.askSaveConflict(m));
       // What a later save and the watcher compare the disk with, read off the written file itself
       // where the write could: a stat after it would take an outside write landing just after
       // for this one. The watcher's event for this write then finds the disk matching. The one

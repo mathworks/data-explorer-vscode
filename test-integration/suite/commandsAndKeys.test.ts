@@ -94,8 +94,11 @@ suite('Show Properties, and Add an Entry', () => {
 
   test('Add an Entry over the read-only model view opens nothing', async () => {
     const json = await openTab(tap, wsUri('data.sldd'), 'dataExplorer.tableView');
-    const model = await openTab(tap, wsUri('model.slx'), 'dataExplorer.binaryView');
-    await inFront(model, 'model.slx');
+    // A `.mdl`, beside the workspace folder (test-integration/fixtures/legacy): the read-only view
+    // shows a `.mdl`, and a `.slx` opens in the model editor.
+    const mdl = vscode.Uri.joinPath(wsUri('.'), '..', 'legacy', 'legacyClassic.mdl');
+    const model = await openTab(tap, mdl, 'dataExplorer.binaryView');
+    await inFront(model, 'legacyClassic.mdl');
     await vscode.commands.executeCommand('dataExplorer.addEntry');
     await quiet(500, 'an Add gallery opening where nothing can be added');
     assert.deepStrictEqual([galleries(json), galleries(model)], [0, 0]);

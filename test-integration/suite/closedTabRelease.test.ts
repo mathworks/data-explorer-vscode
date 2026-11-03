@@ -41,6 +41,10 @@ suite('a closed tab releases what it registered', () => {
 
   teardown(() => rmSync(dir, { recursive: true, force: true }));
 
+  // The read-only model view shows a `.mdl` (and a project's page); a `.slx` opens in the model
+  // editor. A `.mdl` beside the workspace folder (test-integration/fixtures/legacy).
+  const MDL = '../legacy/legacyClassic.mdl';
+
   /** A copy of a workspace fixture in this test's tmpdir. */
   const copyOf = (fixture: string, as: string): vscode.Uri => {
     const path = join(dir, as);
@@ -49,7 +53,7 @@ suite('a closed tab releases what it registered', () => {
   };
 
   test('a read-only document releases its source when VS Code disposes it', async () => {
-    const uri = copyOf('model.slx', 'released.slx');
+    const uri = copyOf(MDL, 'released.mdl');
     const provider = new BinaryEditorProvider(ctx());
     const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
     const view = fakePanel();
@@ -68,7 +72,7 @@ suite('a closed tab releases what it registered', () => {
   });
 
   test('a read that finishes after its document closed registers nothing and paints nothing', async () => {
-    const uri = copyOf('model.slx', 'late.slx');
+    const uri = copyOf(MDL, 'late.mdl');
     const provider = new BinaryEditorProvider(ctx());
     const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
     const view = fakePanel();

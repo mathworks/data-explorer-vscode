@@ -149,3 +149,8 @@ export function annotateDataRowsNow(sourceUri: string, rows: any[]): boolean {
 export function annotateModelRows(modelUri: string, rows: any[]): Promise<boolean> {
   return usageGraphs.annotateModelRows(modelUri, rows);
 }
+
+/** The same, without the await, from the graph a fill already built — or false (see annotateDataRowsNow). */
+export function annotateModelRowsNow(modelUri: string, rows: any[]): boolean {
+  return usageGraphs.annotateModelRowsNow(modelUri, rows);
+}

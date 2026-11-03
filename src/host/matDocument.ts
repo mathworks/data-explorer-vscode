@@ -13,12 +13,33 @@
 import * as vscode from 'vscode';
 import { DataModel } from 'data-explorer-core';
 import { basename, type Notify } from 'data-explorer-view/model';
-import { MatEngine } from 'data-explorer-view/host';
+import { MatEngine, type EngineFile } from 'data-explorer-view/host';
 import type { DiskStamp } from './diskConflict.js';
 import type { FollowedDocument } from './diskFollow.js';
 import { EditStackCopy } from './settledSave.js';
 import { registers } from './windowRegisters.js';
 import { annotateDataRows, annotateDataRowsNow } from './usageGraph.js';
+
+/**
+ * What kind of file an editor on the MAT-file engine edits: a MAT-file (MAT_DOCUMENT), or a `.slx`
+ * model whose Model Workspace is edited by a MAT-file's rules (modelDocument.ts). Its file kind
+ * (view's EngineFile), and how its Usage column is filled: a MAT-file's variables take the blocks
+ * that use them, a model's rows its blocks' parameters and its workspace variables' users.
+ */
+export interface DocumentKind {
+  /** The file kind the engine edits; a MAT-file by default. */
+  file?: EngineFile;
+  /** Fill `rows`' Usage cells for the document `uri`, awaiting the graph. */
+  fill(uri: string, rows: any[]): Promise<unknown>;
+  /** Fill them now from the graph the last fill used, if there is one. */
+  fillNow(uri: string, rows: any[]): void;
+}
+
+/** A MAT-file's document: its variables' Usage, the blocks that use them. */
+export const MAT_DOCUMENT: DocumentKind = {
+  fill: (uri, rows) => annotateDataRows(uri, rows),
+  fillNow: (uri, rows) => void annotateDataRowsNow(uri, rows),
+};
 
 /** One read of the file behind a document, with the stamp it was read under (diskFollow.readStamped). */
 export interface DiskRead {
@@ -101,12 +122,16 @@ export class MatDocument implements vscode.CustomDocument, FollowedDocument {
   readonly onDidChangeCustomDocument = this._onDidChange.event;
   private readonly disposables: vscode.Disposable[] = [];
 
-  /** `changed`: after every change to the tree, once every view is told (the Property Inspector's). */
+  /**
+   * `changed`: after every change to the tree, once every view is told (the Property Inspector's).
+   * `kind`: what kind of file it is (a MAT-file by default).
+   */
   constructor(
     public readonly uri: vscode.Uri,
     bytes: ArrayBuffer,
     fromBackup: boolean,
     changed: () => void,
+    kind: DocumentKind = MAT_DOCUMENT,
   ) {
     this.onDisk = fromBackup ? null : new Uint8Array(bytes);
     // VS Code reports a document restored from a hot-exit backup as dirty, though it has no edits,
@@ -128,9 +153,10 @@ export class MatDocument implements vscode.CustomDocument, FollowedDocument {
       registers,
       notify,
       usage: {
-        fill: (rows) => annotateDataRows(uriString, rows),
-        fillNow: (rows) => void annotateDataRowsNow(uriString, rows),
+        fill: (rows) => kind.fill(uriString, rows),
+        fillNow: (rows) => kind.fillNow(uriString, rows),
       },
+      ...(kind.file ? { file: kind.file } : {}),
       appName: 'VS Code',
       changed,
       // Its rows are posted and awaited before what follows them (engineTable.ts).

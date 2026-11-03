@@ -97,11 +97,14 @@ export function sourceFilesOf(uris: readonly vscode.Uri[]): SourceFile[] {
  * not kept, because an entry no `stat` can re-check could never be refreshed.
  *
  * DISK bytes, like every other entry in this cache. That is what makes an entry filled here
- * usable by the folder passes and vice versa, and it is safe for exactly one reason: a model
- * has no editable view in this extension. Every model tab is `BinaryEditorProvider`, which is
- * read-only and reads the file, so there is no unsaved buffer for a model that could disagree
- * with what is cached. The editable views are `.sldd` only, they render from the document TEXT,
- * and they do not come through here.
+ * usable by the folder passes and vice versa, and it is safe for exactly one reason: no model
+ * tab that comes through here is editable. Every such tab is `BinaryEditorProvider`'s (a `.mdl`),
+ * which is read-only and reads the file, so there is no unsaved buffer for a model that could
+ * disagree with what is cached. The one editable model view, a `.slx`'s (the model editor,
+ * MatEditorProvider's MODEL_EDITOR), registers ITS OWN parse of the document's bytes in the
+ * session, as a MAT-file's does, and never reads or fills this cache: its edits stay in its own
+ * tree. The other editable views are `.sldd`, render from the document TEXT, and do not come
+ * through here either.
  *
  * Through `parsedModelForOpenTab` rather than `parsedModelOf`, which is the same parse plus the
  * eviction pin — and the difference is this module's to make, because "a TAB asked" is the one

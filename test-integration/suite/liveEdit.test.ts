@@ -16,11 +16,12 @@ import { ctx, fakePanel, token, waitFor } from './tools/hostHarness';
 // the table is a view of the native TextDocument, so there is ONE document and
 // one native undo stack shared by the table and any text view of the same URI.
 const TABLE_VIEW = 'dataExplorer.tableView';
-// .slx/.mat/.prj remain in the read-only binaryView.
+// .mdl/.prj remain in the read-only binaryView; a .mat and a .slx have editors of their own.
 const BINARY_VIEW = 'dataExplorer.binaryView';
 // A compressed-binary (zip/OPC) .sldd is editable in its own writable view; the
 // read-only binaryView redirects such a file here (mirroring the JSON redirect).
 const BINARY_SLDD_VIEW = 'dataExplorer.binarySlddView';
+const MODEL_VIEW = 'dataExplorer.modelView';
 
 function slddUri(): vscode.Uri {
   const ws = vscode.workspace.workspaceFolders?.[0];
@@ -141,17 +142,19 @@ suite('Data Explorer .sldd live edit', () => {
     );
   });
 
-  test('a binary .slx opens read-only without error and stays clean', async () => {
-    // model.slx is a binary (zip) fixture in the workspace; it opens in the
-    // read-only binaryView (never editable, never dirty).
+  test('a .slx opened in the read-only view is handed to the model editor, and stays clean', async () => {
+    // model.slx is a binary (zip) fixture in the workspace. Its default editor is the model editor
+    // (modelView), and one opened in the read-only binaryView is handed on to it. It names none of
+    // its parts (it was made by hand), so its Model Workspace takes no edit there, and it is never
+    // dirty.
     const uri = slxUri();
     await vscode.workspace.fs.stat(uri); // fixture must exist
     await vscode.commands.executeCommand('vscode.openWith', uri, BINARY_VIEW);
-    await waitForActiveViewType(BINARY_VIEW);
+    await waitForActiveViewType(MODEL_VIEW);
 
     const tab = activeTab();
     assert.ok(tab, 'an .slx tab is active');
-    assert.strictEqual(tab!.isDirty, false, 'a read-only binary tab is not dirty');
+    assert.strictEqual(tab!.isDirty, false, 'a model editor tab with no edit is not dirty');
     assert.ok(
       vscode.extensions.getExtension('mathworks.simulink-data-explorer')?.isActive,
       'extension is active after opening the binary .slx',

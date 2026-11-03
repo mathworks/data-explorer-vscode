@@ -21,8 +21,10 @@
 // see read back: the rows the provider posted, and the names the index lists.
 //
 // The fixture is built in the test rather than checked in, because the point is a PAIR of contents
-// that are byte-for-byte the same length: two stored (level 0) zips differing only in a same-length
-// block name. For the tab, it lives in tmpdir, outside the workspace folder, for the reason every
+// that are byte-for-byte the same length, differing only in a same-length block name: for the tab,
+// two classic `.mdl` texts (the read-only model view shows a `.mdl`; a `.slx` is the model editor's,
+// which registers its own parse and never reads the shared cache); with no tab, two stored (level 0)
+// `.slx` zips. For the tab, it lives in tmpdir, outside the workspace folder, for the reason every
 // fixture here does — `findFiles` must not return it and the tree/index assertions must not see it.
 // The workspace watcher only reports files inside the workspace, so for it the file sits in the
 // fixture workspace for the length of one test and is deleted after.
@@ -64,6 +66,14 @@ function modelBytes(block: string): Uint8Array {
 const OLD = modelBytes('GainOld');
 const NEW = modelBytes('GainNew');
 
+// A classic `.mdl` of one block, its name in it: two names of one length are two texts of one size.
+function mdlBytes(block: string): Uint8Array {
+  return strToU8(`Model {\n  Name "restored"\n  System {\n    Name "restored"\n    Block {\n      BlockType Gain\n      Name "${block}"\n      SID "1"\n      Gain "K"\n    }\n  }\n}\n`);
+}
+
+const OLD_MDL = mdlBytes('GainOld');
+const NEW_MDL = mdlBytes('GainNew');
+
 const rowsOf = (posts: any[]): any[] => {
   const last = [...posts].reverse().find((p) => p.type === 'setRows');
   return (last?.rows ?? []) as any[];
@@ -81,16 +91,16 @@ suite('a write no stat can see, on the tab that is looking at it', () => {
 
   setup(() => {
     dir = mkdtempSync(join(tmpdir(), 'dex-samestat-'));
-    path = join(dir, 'restored.slx');
+    path = join(dir, 'restored.mdl');
     uri = vscode.Uri.file(path);
-    writeFileSync(path, OLD);
+    writeFileSync(path, OLD_MDL);
   });
 
   teardown(() => rmSync(dir, { recursive: true, force: true }));
 
   test('re-reads the model when its bytes change under an unchanged mtime and size', async () => {
     // The two contents have to be indistinguishable to a `stat` for this test to be about anything.
-    assert.strictEqual(OLD.byteLength, NEW.byteLength, 'the pair is the same size');
+    assert.strictEqual(OLD_MDL.byteLength, NEW_MDL.byteLength, 'the pair is the same size');
 
     const provider = new BinaryEditorProvider(ctx());
     const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
@@ -112,7 +122,7 @@ suite('a write no stat can see, on the tab that is looking at it', () => {
       };
       const before = statSync(path);
       const version = await seen();
-      writeFileSync(path, NEW);
+      writeFileSync(path, NEW_MDL);
       utimesSync(path, before.atime, before.mtime);
       assert.strictEqual(await seen(), version, 'the version key the cache would compute did not move');
 

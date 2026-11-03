@@ -21,9 +21,8 @@
 // the dense twins stay here, through the real providers.
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
 import { BinarySlddEditorProvider } from '../../src/host/BinarySlddEditorProvider';
-import { MatEditorProvider } from '../../src/host/MatEditorProvider';
+import { MatEditorProvider, MODEL_EDITOR } from '../../src/host/MatEditorProvider';
 import { SlddTextEditorProvider } from '../../src/host/SlddTextEditorProvider';
 import { ctx, fakePanel, token, waitFor } from './tools/hostHarness';
 
@@ -50,7 +49,8 @@ interface Opened {
 // TextDocument; the others are custom documents.
 const VENUES: { file: string; open: (uri: vscode.Uri) => Promise<Opened> }[] = [
   { file: 'sparse_values.mat', open: (uri) => openCustom(new MatEditorProvider(ctx()), uri) },
-  { file: 'sparse_ws.slx', open: (uri) => openCustom(new BinaryEditorProvider(ctx()), uri) },
+  // A `.slx` opens in the model editor, which edits its Model Workspace.
+  { file: 'sparse_ws.slx', open: (uri) => openCustom(new MatEditorProvider(ctx(), MODEL_EDITOR), uri) },
   { file: 'sparse_binary.sldd', open: (uri) => openCustom(new BinarySlddEditorProvider(ctx()), uri) },
   {
     file: 'sparse_text.sldd',
