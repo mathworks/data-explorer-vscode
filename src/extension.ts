@@ -7,7 +7,7 @@ import { invalidate, findNode } from 'data-explorer-view/host';
 import { BinaryEditorProvider } from './host/BinaryEditorProvider.js';
 import { SlddTextEditorProvider } from './host/SlddTextEditorProvider.js';
 import { BinarySlddEditorProvider } from './host/BinarySlddEditorProvider.js';
-import { MatEditorProvider } from './host/MatEditorProvider.js';
+import { MODEL_EDITOR, MatEditorProvider } from './host/MatEditorProvider.js';
 import { HealthDecorationProvider } from './host/HealthDecorationProvider.js';
 import { isEditableJsonSlddBytes, exceedsTextSyncLimit, isZipBytes } from './host/slddFormat.js';
 import { handleNavigate, requestSelect } from './host/navigate.js';
@@ -23,7 +23,7 @@ import {
   invalidate as invalidateNameIndex,
 } from './host/nameIndex.js';
 import { SUPPORTED_GLOB } from './common/fileTypes.js';
-import { isMatFile, isSlddFile, isSupportedPath, isTomlProjectFile } from 'data-explorer-core';
+import { extOf, isMatFile, isSlddFile, isSupportedPath, isTomlProjectFile } from 'data-explorer-core';
 
 function isSlddUri(uri: vscode.Uri | undefined): boolean {
   return !!uri && isSlddFile(uri.path);
@@ -59,6 +59,8 @@ async function bestViewType(uri: vscode.Uri): Promise<string> {
   // open: that entry's selector does not match `matlab.toml`, so VS Code has nothing to resolve.
   if (isTomlProjectFile(uri.path)) return BinaryEditorProvider.projectViewType;
   if (isMatFile(uri.path)) return MatEditorProvider.viewType;
+  // A `.slx` opens in the model editor, its Model Workspace editable (a `.mdl` stays read-only).
+  if (extOf(uri.path) === '.slx') return MatEditorProvider.modelViewType;
   if (!isSlddFile(uri.path)) return BinaryEditorProvider.viewType;
   let bytes: Uint8Array;
   try {
@@ -147,6 +149,13 @@ export function activate(context: vscode.ExtensionContext): void {
   matProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
   matProvider.onNavigate = navigate;
   matProvider.onChanged = refreshInspector;
+
+  // A `.slx` model opens in the same engine's model editor: its Model Workspace edited by a
+  // MAT-file's rules, the rest of the model shown, a save the model's package. Same wiring.
+  const modelProvider = new MatEditorProvider(context, MODEL_EDITOR);
+  modelProvider.onSelect = (uriString, rowIds) => showSelection(uriString, rowIds);
+  modelProvider.onNavigate = navigate;
+  modelProvider.onChanged = refreshInspector;
 
   // Health badges/colors on tree rows (missing/cycle/modified). The tree
   // encodes each row's state into its resourceUri; this provider renders it.
@@ -261,6 +270,13 @@ export function activate(context: vscode.ExtensionContext): void {
       matProvider,
       // One panel per document, for the binary .sldd editor's reason: one edit stack. So Split
       // Right opens no second view of a MAT-file, as it opens none of a binary .sldd.
+      { webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: false },
+    ),
+    vscode.window.registerCustomEditorProvider(
+      MatEditorProvider.modelViewType,
+      modelProvider,
+      // One panel per document, for the MAT-file editor's reason: one edit stack. So Split Right
+      // opens no second view of a `.slx`, which the read-only view it replaces did.
       { webviewOptions: { retainContextWhenHidden: true }, supportsMultipleEditorsPerDocument: false },
     ),
     vscode.window.registerTreeDataProvider('dataExplorer.sections', provider),

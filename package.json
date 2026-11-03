@@ -38,9 +38,6 @@
             "filenamePattern": "*.sldd"
           },
           {
-            "filenamePattern": "*.slx"
-          },
-          {
             "filenamePattern": "*.mdl"
           },
           {
@@ -75,6 +72,16 @@
         "selector": [
           {
             "filenamePattern": "*.mat"
+          }
+        ],
+        "priority": "default"
+      },
+      {
+        "viewType": "dataExplorer.modelView",
+        "displayName": "Data Explorer",
+        "selector": [
+          {
+            "filenamePattern": "*.slx"
           }
         ],
         "priority": "default"
@@ -200,7 +207,7 @@
         },
         {
           "command": "dataExplorer.addEntry",
-          "when": "activeCustomEditorId == dataExplorer.tableView || activeCustomEditorId == dataExplorer.binarySlddView || activeCustomEditorId == dataExplorer.matView"
+          "when": "activeCustomEditorId == dataExplorer.tableView || activeCustomEditorId == dataExplorer.binarySlddView || activeCustomEditorId == dataExplorer.matView || activeCustomEditorId == dataExplorer.modelView"
         }
       ],
       "view/title": [
@@ -221,7 +228,7 @@
         "command": "dataExplorer.addEntry",
         "key": "ctrl+alt+a",
         "mac": "cmd+alt+a",
-        "when": "activeCustomEditorId == dataExplorer.tableView || activeCustomEditorId == dataExplorer.binarySlddView || activeCustomEditorId == dataExplorer.matView"
+        "when": "activeCustomEditorId == dataExplorer.tableView || activeCustomEditorId == dataExplorer.binarySlddView || activeCustomEditorId == dataExplorer.matView || activeCustomEditorId == dataExplorer.modelView"
       }
     ]
   },
