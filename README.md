@@ -75,7 +75,7 @@ A textual Simulink data dictionary (SLDD) file is backed by a JSON text document
 | Files | Formats | Support |
 | --- | --- | --- |
 | Simulink data dictionaries | `.sldd` JSON and compressed-binary | Read and write |
-| Simulink models | `.slx`, `.mdl` | Read only, but the Model Workspace of an `.slx`: read and write |
+| Simulink models | `.slx`, `.mdl` | Read only, but the Model Workspace and the active configuration of an `.slx`: read and write |
 | MAT-files | `.mat` Level 5 (`-v6`/`-v7`) | Read and write |
 | MATLAB Projects | `.prj`, `matlab.toml` | Read only |
 
@@ -83,6 +83,7 @@ A textual Simulink data dictionary (SLDD) file is backed by a JSON text document
 
 - Requires Visual Studio Code 1.106.0 or later.
 - Editing supports Simulink data dictionary (SLDD) files, MAT-files and the Model Workspace of an SLX model. The rest of a model, MDL models and project files are read only. A model workspace loaded from a MAT-file or made by MATLAB code is read only; edit its source instead.
+- To make another configuration of an SLX model the active one, right-click it in the Configurations section and choose **Set as Active Configuration**. A configuration reference is made active in MATLAB, which finds the configuration it refers to.
 - `.mat` support covers the Level 5 format only. **`-v7.3`** files, which are HDF5 and are required by MATLAB for variables above 2 GB, are not supported.
 - Large textual (JSON) `.sldd` files are limited by size. Above **50 MB**, the file opens as a read only table. Above **512 MB**, the file opens in Visual Studio Code's text editor instead.
 - Paste creates a new top level entry in the target section. Pasting as a child of a structure or bus is not supported.
