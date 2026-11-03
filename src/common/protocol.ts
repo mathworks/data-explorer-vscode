@@ -373,6 +373,15 @@ export interface RequestEditTextMessage {
   rowId: string;
 }
 
+/**
+ * Set as Active Configuration, chosen on a model's configuration set: make it the active one. The
+ * model editor's engine marks the sets that take it (`_canSetActive`), and answers it.
+ */
+export interface SetActiveConfigSetMessage {
+  type: 'setActiveConfigSet';
+  rowId: string;
+}
+
 /** Every message the host receives from the table webview. */
 export type TableToHostMessage =
   | ReadyMessage
@@ -392,7 +401,8 @@ export type TableToHostMessage =
   | DropMessage
   | RequestMatrixMessage
   | RequestChildrenMessage
-  | RequestEditTextMessage;
+  | RequestEditTextMessage
+  | SetActiveConfigSetMessage;
 
 /**
  * A link on the project page was activated: open what it names.

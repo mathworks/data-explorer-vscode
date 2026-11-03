@@ -5,6 +5,7 @@ All notable changes to the Simulink Data Explorer extension.
 ## Unreleased
 
 - You can now edit the Model Workspace of a Simulink model (.slx), and save it.
+- You can now choose which configuration of a Simulink model (.slx) is active.
 
 ## [1.54.1] — 2026-11-02
 

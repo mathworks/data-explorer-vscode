@@ -183,6 +183,8 @@ export class MatEditorProvider implements vscode.CustomEditorProvider<MatDocumen
       else if (msg?.type === 'dragStart') table.dragStart?.(msg.rowIds);
       else if (msg?.type === 'dragEnd') table.dragEnd?.();
       else if (msg?.type === 'drop') table.drop?.(msg.rowId, msg.mode);
+      // Set as Active Configuration, which only a model's configuration sets offer.
+      else if (msg?.type === 'setActiveConfigSet') table.setActiveConfigSet?.(msg.rowId);
     };
 
     // A message that throws is said, as a gesture's throw is, over every row painted again from

@@ -130,6 +130,12 @@ const TEXT_BACKED_ONLY = ['locateInText'];
 // stops deferring them has to drop it.
 const DEFERS_ROWS_ONLY = ['requestChildren'];
 
+// Make a model's configuration set the active one. Only meaningful for a provider that edits
+// models, whose engine marks the sets (view's MODEL_FILE) and makes the change through core: a
+// dictionary's Configurations hold no active set, and a MAT-file none at all. Read off the
+// provider, as the others are: one that edits models opens them with the model editor's kind.
+const EDITS_MODELS_ONLY = ['setActiveConfigSet'];
+
 // What only the project PAGE can say. Derived rather than listed, so a message added to
 // `ProjectToHostMessage` lands here automatically and the per-provider test below starts
 // demanding it of whoever renders the page. `ready` is in both protocols and stays in
@@ -145,6 +151,8 @@ interface Provider {
   rendersPage: boolean;
   /** Whether its payload is planned to a row budget, and so can defer a row's children. */
   defersRows: boolean;
+  /** Whether it edits models, and so can make one of a model's configuration sets active. */
+  editsModels: boolean;
   /** The message types its own chain branches on. */
   branches: Set<string>;
   /** The keys of its CommonHandlers table, or null where it has none (and dispatches them itself). */
@@ -225,6 +233,8 @@ const PROVIDERS: Provider[] = [
     // jsonDocument.ts's `openJsonTable`) is planned by the engine's own view, which takes the same
     // planner (data-explorer-view's MatView, BinaryView and JsonView).
     defersRows: /rowPlannerFor\(/.test(source) || /\.engine\.view\(\)|\bopenJsonTable\(/.test(source),
+    // The model editor's kind (MatEditorProvider's MODEL_EDITOR), which opens a `.slx`.
+    editsModels: /\bMODEL_EDITOR\b/.test(source),
     ...answered(source),
   };
 });
@@ -258,6 +268,7 @@ describe('the message vocabulary and the editors that speak it are both still he
   it('reads the union out of the protocol', () => {
     // A parse that quietly returned nothing would make every test below vacuous.
     expect(VOCABULARY.length).toBeGreaterThan(10);
+    expect(PROVIDERS.filter((p) => p.editsModels).map((p) => p.file)).toEqual(['MatEditorProvider.ts']);
     expect(VOCABULARY).toContain('undo');
     expect(VOCABULARY).toContain('redo');
   });
@@ -306,7 +317,7 @@ describe('every message belongs to exactly one capability tier', () => {
     // no tier, so this fails and the question "which of the three editors should answer
     // it, and why not the others?" has to be answered before the build is green. Without
     // it, a new message wired into the JSON editor alone looks finished.
-    const tiered = [...ALWAYS, ...EDITING, ...TEXT_BACKED_ONLY, ...DEFERS_ROWS_ONLY];
+    const tiered = [...ALWAYS, ...EDITING, ...TEXT_BACKED_ONLY, ...DEFERS_ROWS_ONLY, ...EDITS_MODELS_ONLY];
     expect([...tiered].sort()).toEqual([...VOCABULARY].sort());
     expect(new Set(tiered).size, 'and no message is in two tiers').toBe(tiered.length);
   });
@@ -358,6 +369,14 @@ describe('each editor answers everything its contract makes meaningful', () => {
         expect(provider.handled.has(t), `${provider.file} ${provider.defersRows ? 'ignores' : 'answers'} ${t}`).toBe(
           provider.defersRows,
         );
+      }
+    });
+
+    it(`${provider.file} answers setActiveConfigSet only if it edits models`, () => {
+      // Both directions: an editor of models that ignores it ships a menu item that does nothing,
+      // and one of anything else has a branch no row of its can reach.
+      for (const t of EDITS_MODELS_ONLY) {
+        expect(provider.handled.has(t), `${provider.file} ${provider.editsModels ? 'ignores' : 'answers'} ${t}`).toBe(provider.editsModels);
       }
     });
 
