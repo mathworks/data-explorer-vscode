@@ -19,6 +19,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { requestSelect } from '../../src/host/navigate';
 import { BinaryEditorProvider } from '../../src/host/BinaryEditorProvider';
+import { MatEditorProvider, MODEL_EDITOR } from '../../src/host/MatEditorProvider';
 import { ctx, fakePanel, quiet, token, waitFor, wsUri } from './tools/hostHarness';
 import { closeAll, fixturePath, matFixture, openBinary, openJson, openMat, type Opened } from './tools/tables';
 import { closeAllEditors, openTab, paintedView, tabsOn, tapWebviews, typesOf, viewTypeOf, type TappedView, type WebviewTap } from './tools/webviewTap';
@@ -27,6 +28,7 @@ import { closeAllEditors, openTab, paintedView, tabsOn, tapWebviews, typesOf, vi
 
 const TABLE_VIEW = 'dataExplorer.tableView';
 const BINARY_VIEW = 'dataExplorer.binaryView';
+const MODEL_VIEW = 'dataExplorer.modelView';
 const BINARY_SLDD_VIEW = 'dataExplorer.binarySlddView';
 
 /** The names a view was asked to select, in order. */
@@ -65,7 +67,7 @@ suite('a Usage link clicked in a real tab selects its row in the tab it opens', 
 
   test("a link in a model's tab opens the JSON dictionary in its table, and selects the entry there", async () => {
     const dict = wsUri('data.sldd');
-    const model = await openTab(tap, wsUri('model.slx'), BINARY_VIEW);
+    const model = await openTab(tap, wsUri('model.slx'), MODEL_VIEW);
     const table = await click(model, `Hybrid@${dict.toString()}`, dict);
     assert.deepStrictEqual(tabsOn(dict).map(viewTypeOf), [TABLE_VIEW], 'the dictionary opened in the editable table');
     await selectedIn(table, 'Hybrid');
@@ -75,13 +77,13 @@ suite('a Usage link clicked in a real tab selects its row in the tab it opens', 
     const model = wsUri('model.slx');
     const table = await openTab(tap, wsUri('data.sldd'), TABLE_VIEW);
     const view = await click(table, `blocks:Gain1@${model.toString()}`, model);
-    assert.deepStrictEqual(tabsOn(model).map(viewTypeOf), [BINARY_VIEW], 'the model opened in its read-only view');
+    assert.deepStrictEqual(tabsOn(model).map(viewTypeOf), [MODEL_VIEW], 'the model opened in the model editor');
     await selectedIn(view, 'Gain1');
   });
 
   test('a link to a compressed dictionary opens it in its own editor, and selects the entry there', async () => {
     const dict = wsUri('binary.sldd');
-    const model = await openTab(tap, wsUri('model.slx'), BINARY_VIEW);
+    const model = await openTab(tap, wsUri('model.slx'), MODEL_VIEW);
     const table = await click(model, `Kp@${dict.toString()}`, dict);
     assert.deepStrictEqual(tabsOn(dict).map(viewTypeOf), [BINARY_SLDD_VIEW], 'the dictionary opened in its writable editor');
     await selectedIn(table, 'Kp');
@@ -90,7 +92,7 @@ suite('a Usage link clicked in a real tab selects its row in the tab it opens', 
   test('with the dictionary already open, the link selects the entry in that tab at once, and opens no other', async () => {
     const dict = wsUri('data.sldd');
     const table = await openTab(tap, dict, TABLE_VIEW);
-    const model = await openTab(tap, wsUri('model.slx'), BINARY_VIEW);
+    const model = await openTab(tap, wsUri('model.slx'), MODEL_VIEW);
     const mark = tap.mark();
     tap.send(model, { type: 'navigate', target: `Number@${dict.toString()}` });
     await waitFor('the selection to reach the open table', () => selected(table.posts).length > 0, 20000, () => typesOf(table));
@@ -146,14 +148,36 @@ const KINDS: Kind[] = [
     open: (opened, dir, as) => openMat(opened, dir, as, matFixture('cases.mat')),
   },
   {
-    // No opener in tools/tables: the read-only view has no edits to drive.
-    name: 'the read-only model view (BinaryEditorProvider)',
-    repaints: true,
+    // A `.slx`, in the model editor: the MAT-file editor's engine over the model's Model Workspace,
+    // which answers a second `ready` with the paint it already sent, as the MAT-file editor does.
+    name: "the model editor (MatEditorProvider's MODEL_EDITOR)",
+    repaints: false,
     ext: 'slx',
-    row: 'Gain',
+    row: 'Gain1',
     async open(opened, dir, as) {
       const path = join(dir, as);
       copyFileSync(fixturePath('standalone', 'selfContained.slx'), path);
+      const uri = vscode.Uri.file(path);
+      const provider = new MatEditorProvider(ctx(), MODEL_EDITOR);
+      const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());
+      const view = fakePanel();
+      opened.push(() => doc.dispose(), () => view.close());
+      await provider.resolveCustomEditor(doc, view.panel, token());
+      view.send({ type: 'ready' });
+      await waitFor(`${as}'s first rows`, () => paints(view.posts) > 0, 20000, () => types(view.posts));
+      return { uri, view };
+    },
+  },
+  {
+    // No opener in tools/tables: the read-only view has no edits to drive. It shows a `.mdl` (and a
+    // project's page): a `.slx` is the model editor's.
+    name: 'the read-only model view (BinaryEditorProvider)',
+    repaints: true,
+    ext: 'mdl',
+    row: 'ClassicGain',
+    async open(opened, dir, as) {
+      const path = join(dir, as);
+      copyFileSync(fixturePath('legacy', 'legacyClassic.mdl'), path);
       const uri = vscode.Uri.file(path);
       const provider = new BinaryEditorProvider(ctx());
       const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token());

@@ -197,7 +197,7 @@ suite('BinaryEditorProvider', () => {
     assert.strictEqual(provider.onSelect, undefined);
     const selected: [string, string[]][] = [];
     provider.onSelect = (uriString, rowIds) => selected.push([uriString, rowIds]);
-    const uri = wsUri('model.slx');
+    const uri = mdlUri();
     const token = new vscode.CancellationTokenSource().token;
     const doc = await provider.openCustomDocument(uri, {} as vscode.CustomDocumentOpenContext, token);
     const view = fakePanel();
