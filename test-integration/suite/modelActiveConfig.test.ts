@@ -3,8 +3,10 @@
 // Set as Active Configuration in the model editor (MatEditorProvider's MODEL_EDITOR): the message
 // the table's menu sends (setActiveConfigSet) reaches the model's engine, makes the set active as
 // one edit on VS Code's stack, undone and redone with it, and a save writes it into the file, every
-// other part as read. A reference to a set is refused, saying why, and nothing changes. Driven
-// through the provider with a fake panel, as the MAT-file editor's suite is (matEdit.test.ts).
+// other part as read. A reference to a set is made active too, with VS Code's warning of what that
+// cannot check without MATLAB (read off `vscode.window.showWarningMessage`, wrapped for this suite:
+// the extension's `vscode` module is one object for every file of it). Driven through the provider
+// with a fake panel, as the MAT-file editor's suite is (matEdit.test.ts).
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
@@ -50,13 +52,22 @@ suite('Model editor: Set as Active Configuration', () => {
   let dir: string;
   let provider: MatEditorProvider;
   const opened: { doc: any; view: ReturnType<typeof fakePanel> }[] = [];
+  const warned: string[] = [];
+  const window = vscode.window as any;
+  const warn = window.showWarningMessage;
 
   setup(() => {
     dir = mkdtempSync(join(tmpdir(), 'dex-activeconfig-'));
     provider = new MatEditorProvider(ctx(), MODEL_EDITOR);
+    warned.length = 0;
+    window.showWarningMessage = (message: string) => {
+      warned.push(message);
+      return Promise.resolve(undefined);
+    };
   });
 
   teardown(async () => {
+    window.showWarningMessage = warn;
     for (const { doc, view } of opened.splice(0)) {
       view.close();
       doc.dispose();
@@ -108,16 +119,18 @@ suite('Model editor: Set as Active Configuration', () => {
     assert.strictEqual(o.doc.edits.dirty, false);
   });
 
-  test('a reference to a set is refused, saying why, and nothing changes', async () => {
+  test('a reference to a set is made active, with a warning that MATLAB alone can check it, and saved', async () => {
     const o = await open('acs_ref.slx');
     const ref = setRow(o.view.posts, 'RefFromDict');
-    assert.strictEqual(ref._canSetActive, false);
+    assert.strictEqual(ref._canSetActive, true);
     o.view.send({ type: 'setActiveConfigSet', rowId: ref.ID });
-    await waitFor('the refusal', () => o.view.posts.some((p) => p.type === 'refused'));
-    const refused = o.view.posts.find((p) => p.type === 'refused');
-    assert.strictEqual(refused.title, 'Cannot Set Active Configuration');
-    assert.match(refused.reason, /^Cannot make "RefFromDict" the active configuration set: it refers to "dictCfg"/);
-    assert.strictEqual(o.events.length, 0);
-    assert.strictEqual(o.doc.edits.dirty, false);
+    await waitFor('the reference painted active', () => setRow(o.view.posts, 'RefFromDict').Name.iconId === 'check_configurationReference');
+    assert.strictEqual(o.events.length, 1);
+    assert.deepStrictEqual(warned, [
+      '"RefFromDict" refers to the configuration set "dictCfg" in the data dictionary "acs_dict.sldd". Without MATLAB this editor ' +
+        'cannot check that the set is there: open the model in MATLAB to confirm.',
+    ]);
+    await provider.saveCustomDocument(o.doc, token());
+    assert.deepStrictEqual(activeIn(new Uint8Array(readFileSync(o.path))), ['RefFromDict']);
   });
 });

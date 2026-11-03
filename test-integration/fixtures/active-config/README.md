@@ -9,4 +9,4 @@ Copied from data-explorer-core's `test/fixtures/active-config`, where
 | File | What it holds |
 |---|---|
 | `acs_sets.slx` | three configuration sets, Configuration (active), Fast and Slow |
-| `acs_ref.slx` | Configuration (active) and RefFromDict, a `Simulink.ConfigSetRef` into `acs_dict.sldd` (not copied) |
+| `acs_ref.slx` | Configuration (active) and RefFromDict, a `Simulink.ConfigSetRef` into `acs_dict.sldd` (not copied: the editor does not look for it) |
