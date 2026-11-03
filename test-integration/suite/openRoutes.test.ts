@@ -40,7 +40,7 @@ interface Route {
 
 const ROUTES: Route[] = [
   { file: 'cases.mat', viewType: 'dataExplorer.matView', shell: 'table' },
-  { file: 'selfContained.slx', viewType: 'dataExplorer.binaryView', shell: 'table' },
+  { file: 'selfContained.slx', viewType: 'dataExplorer.modelView', shell: 'table' },
   { file: 'legacyClassic.mdl', viewType: 'dataExplorer.binaryView', shell: 'table' },
   { file: 'MyProj/MyProj.prj', viewType: 'dataExplorer.binaryView', shell: 'project', page: 'MyProj' },
   { file: 'tomlproject/matlab.toml', viewType: 'dataExplorer.projectView', shell: 'project', page: 'parityProject' },

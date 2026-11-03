@@ -29,6 +29,7 @@ const TABLE_VIEW = 'dataExplorer.tableView';
 const BINARY_SLDD_VIEW = 'dataExplorer.binarySlddView';
 const PROJECT_VIEW = 'dataExplorer.projectView';
 const MAT_VIEW = 'dataExplorer.matView';
+const MODEL_VIEW = 'dataExplorer.modelView';
 
 describe('customEditors: text-backed table for JSON .sldd + byte-backed binary editor', () => {
   const editors = contributes.customEditors as Array<{
@@ -38,9 +39,9 @@ describe('customEditors: text-backed table for JSON .sldd + byte-backed binary e
     priority: string;
   }>;
 
-  it('registers exactly five custom editors: table, binary, binary sldd, MAT-file, project', () => {
+  it('registers exactly six custom editors: table, binary, binary sldd, MAT-file, model, project', () => {
     const viewTypes = editors.map((e) => e.viewType).sort();
-    expect(viewTypes).toEqual([BINARY_VIEW, TABLE_VIEW, BINARY_SLDD_VIEW, MAT_VIEW, PROJECT_VIEW].sort());
+    expect(viewTypes).toEqual([BINARY_VIEW, TABLE_VIEW, BINARY_SLDD_VIEW, MAT_VIEW, MODEL_VIEW, PROJECT_VIEW].sort());
   });
 
   // A MAT-file's editor is decided by NAME, unlike a .sldd's, which its bytes decide: every
@@ -57,6 +58,19 @@ describe('customEditors: text-backed table for JSON .sldd + byte-backed binary e
     expect(claimers.map((e) => e.viewType)).toEqual([MAT_VIEW]);
   });
 
+  // A `.slx` model's editor, by NAME as a MAT-file's: its Model Workspace is edited by a MAT-file's
+  // rules, and one it cannot save opens read-only in it, saying why. A `.mdl` stays with the
+  // read-only view, which hands on a `.slx` that lands there anyway.
+  it('the model editor owns *.slx at priority default, and nothing else', () => {
+    const view = editors.find((e) => e.viewType === MODEL_VIEW)!;
+    expect(view, 'the modelView editor must be declared').toBeTruthy();
+    expect(view.selector.map((s) => s.filenamePattern)).toEqual(['*.slx']);
+    expect(view.priority).toBe('default');
+    expect(view.displayName).toBe(editors.find((e) => e.viewType === BINARY_VIEW)!.displayName);
+    const claimers = editors.filter((e) => e.priority === 'default' && e.selector.some((s) => s.filenamePattern === '*.slx'));
+    expect(claimers.map((e) => e.viewType)).toEqual([MODEL_VIEW]);
+  });
+
   it('the writable binary-sldd table view owns *.sldd at priority option (reached via redirect)', () => {
     const view = editors.find((e) => e.viewType === BINARY_SLDD_VIEW)!;
     expect(view, 'the binarySlddView editor must be declared').toBeTruthy();
@@ -66,7 +80,7 @@ describe('customEditors: text-backed table for JSON .sldd + byte-backed binary e
     expect(view.priority).toBe('option');
   });
 
-  it('the byte-backed binary editor is DEFAULT for every supported format incl *.sldd, but *.mat', () => {
+  it('the byte-backed binary editor is DEFAULT for every supported format incl *.sldd, but *.mat and *.slx', () => {
     // binaryView must be the default for *.sldd because it can open ANY bytes —
     // a CustomTextEditorProvider (tableView) cannot open binary/zip .sldd (it
     // fails to load as a TextDocument: "cannot open as text"). binaryView opens
@@ -74,7 +88,8 @@ describe('customEditors: text-backed table for JSON .sldd + byte-backed binary e
     const binary = editors.find((e) => e.viewType === BINARY_VIEW)!;
     expect(binary, 'the binaryView editor must be declared').toBeTruthy();
     const patterns = binary.selector.map((s) => s.filenamePattern);
-    expect(patterns).toEqual(expect.arrayContaining(SUPPORTED_EXTS.filter((e) => e !== 'mat').map((e) => `*.${e}`)));
+    expect(patterns).toEqual(expect.arrayContaining(SUPPORTED_EXTS.filter((e) => e !== 'mat' && e !== 'slx').map((e) => `*.${e}`)));
+    expect(patterns).not.toContain('*.slx');
     expect(binary.priority).toBe('default');
   });
 
