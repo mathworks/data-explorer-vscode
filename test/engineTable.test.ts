@@ -262,6 +262,15 @@ function dictionary() {
   });
 }
 
+describe("the MAT-file editor's setRows", () => {
+  const view = { docUri: 'file:///m.slx', rows: [], columns: ['Name'], columnLabels: {}, columnGroups: {}, editable: true, add: { classes: ['double'] } } as any;
+
+  it("carries a model's sections beside its classes, whose tiles the gallery offers too, and a MAT-file's none", () => {
+    expect(matRows({ ...view, addSections: ['config'] })).toMatchObject({ add: { classes: ['double'] }, addSections: ['config'] });
+    expect('addSections' in matRows(view)).toBe(false);
+  });
+});
+
 describe("the compressed dictionary editor's panel of the engine's table (rows not awaited)", () => {
   it("posts a paint as the editor's post() did: the rows, then in the same run what follows them, then the drain", async () => {
     const engine = dictionary();

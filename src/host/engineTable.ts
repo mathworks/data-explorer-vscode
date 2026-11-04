@@ -52,7 +52,9 @@ export interface EngineTableOptions {
 
 /**
  * A whole paint's rows, as the MAT-file editor's `post()` spelled its `setRows`: `notice`, `add` and
- * `warnings` present even when they are undefined.
+ * `warnings` present even when they are undefined. And a model's `addSections`, the sections beside
+ * its workspace's classes whose tiles the gallery offers too (its configuration sets), only where
+ * there are some.
  */
 export const matRows = (view: TableView) => ({
   type: 'setRows',
@@ -64,6 +66,7 @@ export const matRows = (view: TableView) => ({
   editable: view.editable,
   notice: view.notice,
   add: view.add,
+  ...(view.addSections ? { addSections: view.addSections } : {}),
   warnings: view.warnings,
 });
 

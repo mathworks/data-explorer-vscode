@@ -3,7 +3,9 @@
 // Set as Active Configuration in the model editor (MatEditorProvider's MODEL_EDITOR): the message
 // the table's menu sends (setActiveConfigSet) reaches the model's engine, makes the set active as
 // one edit on VS Code's stack, undone and redone with it, and a save writes it into the file, every
-// other part as read. A reference to a set is made active too, with VS Code's warning of what that
+// other part as read. And the edits of the sets themselves: a set added from the gallery's
+// Configurations tile (the first paint offers it, `addSections`), renamed and deleted, each one
+// edit on VS Code's stack, and saved. A reference to a set is made active too, with VS Code's warning of what that
 // cannot check without MATLAB (read off `vscode.window.showWarningMessage`, wrapped for this suite:
 // the extension's `vscode` module is one object for every file of it). Driven through the provider
 // with a fake panel, as the MAT-file editor's suite is (matEdit.test.ts).
@@ -48,7 +50,7 @@ const setRow = (posts: any[], name: string): any => {
   return row;
 };
 
-suite('Model editor: Set as Active Configuration', () => {
+suite('Model editor: configuration sets', () => {
   let dir: string;
   let provider: MatEditorProvider;
   const opened: { doc: any; view: ReturnType<typeof fakePanel> }[] = [];
@@ -132,5 +134,27 @@ suite('Model editor: Set as Active Configuration', () => {
     ]);
     await provider.saveCustomDocument(o.doc, token());
     assert.deepStrictEqual(activeIn(new Uint8Array(readFileSync(o.path))), ['RefFromDict']);
+  });
+
+  test('a set added from the gallery, renamed and another deleted, is one edit each on VS Code’s stack, and saved', async () => {
+    const o = await open('acs_sets.slx');
+    const names = () => tableOf(o.view.posts).filter((r) => r.parent === 'section:config').map(nameOf);
+    const first = o.view.posts.find((p) => p.type === 'setRows');
+    assert.deepStrictEqual(first.addSections, ['config'], 'the gallery offers the Configurations tiles');
+    o.view.send({ type: 'addEntry', className: 'Simulink.ConfigSet', section: 'config', rename: false });
+    await waitFor('the added set', () => names().includes('Configuration1'));
+    o.view.send({ type: 'edit', rowId: setRow(o.view.posts, 'Configuration1').ID, columnId: 'Name', oldValue: 'Configuration1', newValue: 'Newest' });
+    await waitFor('the renamed set', () => names().includes('Newest'));
+    o.view.send({ type: 'delete', rowIds: [setRow(o.view.posts, 'Slow').ID] });
+    await waitFor('the deleted set', () => !names().includes('Slow'));
+    assert.strictEqual(o.events.length, 3, 'three edits on the stack');
+    await o.events[2].undo();
+    await waitFor('the delete undone', () => names().includes('Slow'));
+    await o.events[2].redo();
+    await waitFor('the delete redone', () => !names().includes('Slow'));
+    await provider.saveCustomDocument(o.doc, token());
+    const sets = parseSlx(buffer(new Uint8Array(readFileSync(o.path))), 'saved.slx').configSets.map((c: any) => c.name);
+    assert.deepStrictEqual(sets, ['Configuration', 'Fast', 'Newest']);
+    assert.strictEqual(o.doc.edits.dirty, false);
   });
 });

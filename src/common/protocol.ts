@@ -72,7 +72,8 @@ export interface SetRowsMessage extends WireSetRowsMessage {
   /**
    * What the Add gallery offers. Absent: every tile, a dictionary's, each naming its section.
    * `{classes}`: a MAT-file's, the tiles of the classes core says the file can take a new
-   * variable of (MatNode.getAllowedTypes), in no section.
+   * variable of (MatNode.getAllowedTypes), in no section; a model's too, with `addSections`, the
+   * sections beside them whose tiles it offers as well (its configuration sets).
    */
   add?: { classes: readonly string[] };
 }
