@@ -10,3 +10,4 @@ Copied from data-explorer-core's `test/fixtures/active-config`, where
 |---|---|
 | `acs_sets.slx` | three configuration sets, Configuration (active), Fast and Slow |
 | `acs_ref.slx` | Configuration (active) and RefFromDict, a `Simulink.ConfigSetRef` into `acs_dict.sldd` (not copied: the editor does not look for it) |
+| `one.slx` | one configuration set, as `new_system` makes it: core's `test/fixtures/config-set-edits/one__none.slx` (`probe_config_set_writes.m`), whose JSON index lists its one set inline |

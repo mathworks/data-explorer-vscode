@@ -136,6 +136,18 @@ suite('Model editor: configuration sets', () => {
     assert.deepStrictEqual(activeIn(new Uint8Array(readFileSync(o.path))), ['RefFromDict']);
   });
 
+  test('a model of one set, as most are, offers the gallery’s Configurations tiles and takes a set added', async () => {
+    const o = await open('one.slx');
+    const first = o.view.posts.find((p) => p.type === 'setRows');
+    assert.deepStrictEqual(first.addSections, ['config']);
+    assert.strictEqual(setRow(o.view.posts, 'Configuration').Name.editable, true);
+    o.view.send({ type: 'addEntry', className: 'Simulink.ConfigSet', section: 'config', rename: false });
+    await waitFor('the added set', () => tableOf(o.view.posts).some((r) => r.parent === 'section:config' && nameOf(r) === 'Configuration1'));
+    await provider.saveCustomDocument(o.doc, token());
+    const sets = parseSlx(buffer(new Uint8Array(readFileSync(o.path))), 'saved.slx').configSets.map((c: any) => c.name);
+    assert.deepStrictEqual(sets, ['Configuration', 'Configuration1']);
+  });
+
   test('a set added from the gallery, renamed and another deleted, is one edit each on VS Code’s stack, and saved', async () => {
     const o = await open('acs_sets.slx');
     const names = () => tableOf(o.view.posts).filter((r) => r.parent === 'section:config').map(nameOf);
