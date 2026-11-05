@@ -4,8 +4,8 @@
 // the table's menu sends (setActiveConfigSet) reaches the model's engine, makes the set active as
 // one edit on VS Code's stack, undone and redone with it, and a save writes it into the file, every
 // other part as read. And the edits of the sets themselves: a set added from the gallery's
-// Configurations tile (the first paint offers it, `addSections`), renamed and deleted, each one
-// edit on VS Code's stack, and saved. A reference to a set is made active too, with VS Code's warning of what that
+// Configurations tile (the first paint offers it, `addSections`), copied and pasted, renamed and
+// deleted, each one edit on VS Code's stack, and saved. A reference to a set is made active too, with VS Code's warning of what that
 // cannot check without MATLAB (read off `vscode.window.showWarningMessage`, wrapped for this suite:
 // the extension's `vscode` module is one object for every file of it). Driven through the provider
 // with a fake panel, as the MAT-file editor's suite is (matEdit.test.ts).
@@ -146,6 +146,19 @@ suite('Model editor: configuration sets', () => {
     await provider.saveCustomDocument(o.doc, token());
     const sets = parseSlx(buffer(new Uint8Array(readFileSync(o.path))), 'saved.slx').configSets.map((c: any) => c.name);
     assert.deepStrictEqual(sets, ['Configuration', 'Configuration1']);
+  });
+
+  test('a set copied and pasted into Configurations is named as MATLAB names a duplicate, one edit, and saved', async () => {
+    const o = await open('acs_sets.slx');
+    const rules = [...o.view.posts].reverse().find((p) => p.type === 'sectionRules');
+    assert.deepStrictEqual(rules.rules.map((r: any) => r.sectionName), ['workspace', 'config'], 'the sets take a paste');
+    o.view.send({ type: 'copy', rowIds: [setRow(o.view.posts, 'Fast').ID] });
+    o.view.send({ type: 'paste', rowId: 'section:config' });
+    await waitFor('the pasted set', () => tableOf(o.view.posts).some((r) => r.parent === 'section:config' && nameOf(r) === 'Fast1'));
+    assert.strictEqual(o.events.length, 1, 'one edit on the stack');
+    await provider.saveCustomDocument(o.doc, token());
+    const sets = parseSlx(buffer(new Uint8Array(readFileSync(o.path))), 'saved.slx').configSets.map((c: any) => c.name);
+    assert.deepStrictEqual(sets, ['Configuration', 'Fast', 'Slow', 'Fast1']);
   });
 
   test('a set added from the gallery, renamed and another deleted, is one edit each on VS Code’s stack, and saved', async () => {

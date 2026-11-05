@@ -5,6 +5,7 @@ All notable changes to the Simulink Data Explorer extension.
 ## Unreleased
 
 - You can now add, rename, describe and delete the configurations of a Simulink model (.slx).
+- You can now copy and paste configurations between Simulink models (R2026b or later) and data dictionaries, with all their settings.
 
 ## [1.55.0] — 2026-11-03
 
