@@ -327,6 +327,32 @@
   --dex-row-height: 28px;
   --dex-matrix-max-height: 320px;
   --dex-matrix-max-width: 640px;
+  /* The app shell's parts and the relationship graph (data-explorer-view/app-shell). No webview
+     here draws them; mapped so that one that does takes VS Code's colours, as every other token. */
+  --dex-activity-fg: var(--vscode-activityBar-inactiveForeground, var(--vscode-descriptionForeground));
+  --dex-activity-active: var(--vscode-activityBar-activeBorder, var(--vscode-focusBorder));
+  --dex-bg-toolbar: var(--vscode-editor-background);
+  --dex-bg-tabbar: var(--vscode-editorGroupHeader-tabsBackground, var(--vscode-sideBar-background));
+  --dex-shell-resizer-hover: var(--vscode-sash-hoverBorder, var(--vscode-focusBorder));
+  --dex-graph-model-bg: color-mix(in srgb, var(--vscode-charts-blue) 12%, var(--vscode-editor-background));
+  --dex-graph-model-border: color-mix(in srgb, var(--vscode-charts-blue) 70%, var(--vscode-editor-background));
+  --dex-graph-model-selected: var(--vscode-charts-blue);
+  --dex-graph-sldd-bg: color-mix(in srgb, var(--vscode-charts-green) 12%, var(--vscode-editor-background));
+  --dex-graph-sldd-border: color-mix(in srgb, var(--vscode-charts-green) 70%, var(--vscode-editor-background));
+  --dex-graph-sldd-selected: var(--vscode-charts-green);
+  --dex-graph-mat-bg: color-mix(in srgb, var(--vscode-charts-orange) 12%, var(--vscode-editor-background));
+  --dex-graph-mat-border: color-mix(in srgb, var(--vscode-charts-orange) 70%, var(--vscode-editor-background));
+  --dex-graph-mat-selected: var(--vscode-charts-orange);
+  --dex-graph-edge-model-ref: var(--vscode-charts-blue);
+  --dex-graph-edge-sldd-ref: var(--vscode-charts-green);
+  --dex-graph-edge-data-link: var(--vscode-charts-yellow);
+  --dex-graph-edge-param-usage: var(--vscode-charts-purple);
+  --dex-graph-edge-ws-usage: color-mix(in srgb, var(--vscode-charts-green) 70%, var(--vscode-charts-blue));
+  --dex-graph-item-bg: color-mix(in srgb, var(--vscode-foreground) 4%, transparent);
+  --dex-graph-item-border: color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
+  --dex-graph-ws-item-bg: color-mix(in srgb, var(--vscode-charts-green) 8%, transparent);
+  --dex-graph-ws-item-border: color-mix(in srgb, var(--vscode-charts-green) 25%, transparent);
+  --dex-graph-ghost-fg: var(--vscode-descriptionForeground);
 
   /* The shade the table's columns slide under once its frozen Name column holds content back:
      one whole box-shadow layer, no var() in it — one unusable value invalidates the table's
