@@ -353,6 +353,16 @@
   --dex-graph-ws-item-bg: color-mix(in srgb, var(--vscode-charts-green) 8%, transparent);
   --dex-graph-ws-item-border: color-mix(in srgb, var(--vscode-charts-green) 25%, transparent);
   --dex-graph-ghost-fg: var(--vscode-descriptionForeground);
+  /* A compare's marks (the tree table's diffMarks): VS Code's diff and gutter colours. No webview
+     here draws them. */
+  --dex-diff-added: var(--vscode-editorGutter-addedBackground, var(--vscode-gitDecoration-addedResourceForeground));
+  --dex-diff-removed: var(--vscode-editorGutter-deletedBackground, var(--vscode-gitDecoration-deletedResourceForeground));
+  --dex-diff-changed: var(--vscode-editorGutter-modifiedBackground, var(--vscode-gitDecoration-modifiedResourceForeground));
+  --dex-diff-added-bg: var(--vscode-diffEditor-insertedLineBackground, var(--vscode-diffEditor-insertedTextBackground));
+  --dex-diff-removed-bg: var(--vscode-diffEditor-removedLineBackground, var(--vscode-diffEditor-removedTextBackground));
+  --dex-diff-changed-bg: color-mix(in srgb, var(--vscode-editorGutter-modifiedBackground) 12%, transparent);
+  --dex-diff-cell-bg: color-mix(in srgb, var(--vscode-editorGutter-modifiedBackground) 28%, transparent);
+  --dex-diff-gap-stripe: var(--vscode-diffEditor-diagonalFill);
 
   /* The shade the table's columns slide under once its frozen Name column holds content back:
      one whole box-shadow layer, no var() in it — one unusable value invalidates the table's
