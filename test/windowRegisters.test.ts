@@ -39,6 +39,9 @@ const files = (dir: string, ext: string): string[] =>
 const VIEW_REGISTER_MAKERS: Record<string, string[]> = {
   // createWorkspace({ registers }) defaults to a createRegisters() of its own.
   'model/source/workspace.js': ['createWorkspace'],
+  // connectShell makes the registers of the whole app it connects (data-explorer-view/app-shell),
+  // which no webview here is.
+  'widgets/app-shell/connect/connectShell.js': ['connectShell'],
 };
 
 describe("the window's registers", () => {
