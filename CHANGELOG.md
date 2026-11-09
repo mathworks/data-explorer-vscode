@@ -2,6 +2,10 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## [1.56.1] — 2026-11-09
+
+- Bug fixes.
+
 ## [1.56.0] — 2026-11-05
 
 The 1.55 pre-release's changes and more, as a stable release:
