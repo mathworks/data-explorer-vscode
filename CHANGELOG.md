@@ -2,6 +2,11 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## Unreleased
+
+- You can now show any property of your objects as a table column: type its name under Other Properties in the Columns menu.
+- In the Columns menu, Reset is at the top, Other Properties stays at the bottom, and a column moves only within its group.
+
 ## [1.56.1] — 2026-11-09
 
 - Bug fixes.
