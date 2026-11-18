@@ -2,6 +2,10 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
+## Unreleased
+
+- Security updates.
+
 ## [1.57.0] — 2026-11-18
 
 - You can now show any property of your objects, or a storage class attribute such as GetFunction, as a table column: type its name under Other Properties in the Columns menu.
