@@ -2,9 +2,15 @@
 
 All notable changes to the Simulink Data Explorer extension.
 
-## Unreleased
+## [1.58.0] — 2026-11-18
 
-- Security updates.
+The 1.57 pre-release's changes, as a stable release:
+
+- You can now show any property of your objects, or a storage class attribute such as GetFunction, as a table column: type its name under Other Properties in the Columns menu.
+- In the Columns menu, each group folds and has a box that shows or hides all its columns; Reset is at the top and Other Properties stays at the bottom.
+- Move a column within its group by dragging it, or with Alt+Up and Alt+Down.
+- The Definition File column now shows a Parameter's or Signal's definition file.
+- Bug fixes and security updates.
 
 ## [1.57.0] — 2026-11-18
 
